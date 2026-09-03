@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recibo de Pagamento - Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body { background-color: white !important; margin: 0; padding: 0; }
+      .no-print { display: none !important; }
+      .recibo-wrapper { page-break-inside: avoid; page-break-after: always; height: 132mm; overflow: hidden; margin: 0 auto !important; border: 2px solid #000 !important; }
+      * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+    }
+    
+    body {
+      background-color: #cbd5e1;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    .recibo-wrapper {
+      width: 198mm;
+      height: 132mm;
+      background: #fff;
+      border: 2px solid #000;
+      margin: 0 auto 1.5rem auto;
+      position: relative;
+      display: flex;
+      box-sizing: border-box;
+    }
+
+    .recibo-conteudo {
+      width: 162mm;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+
+    .linha-borda { border-bottom: 1px solid #000; }
+    .col-borda { border-right: 1px solid #000; }
+
+    /* Canhoto Lateral Direito Padronizado */
+    .assinatura-lateral {
+      width: 36mm;
+      height: 100%;
+      border-left: 2px solid #000;
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+      font-size: 8px;
+      box-sizing: border-box;
+    }
+
+    .coluna-vertical-texto {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      text-align: left;
+      padding: 6px 2px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      border-right: 1px solid #000;
+      letter-spacing: 0.2px;
+    }
+
+    .coluna-vertical-assinatura {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      text-align: center;
+      padding: 6px 2px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid #000;
+      font-weight: bold;
+    }
+
+    .coluna-vertical-data {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      text-align: center;
+      padding: 6px 2px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+
+    /* Tabela de Eventos Unificada */
+    .tabela-holerite {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .tabela-holerite th {
+      border-bottom: 1px solid #000;
+      border-right: 1px solid #000;
+      font-weight: normal;
+      font-size: 10px;
+      padding: 2px 4px;
+      text-align: center;
+      background: #fff;
+    }
+
+    .tabela-holerite th:last-child { border-right: none; }
+
+    .tabela-holerite td {
+      border-right: 1px solid #000;
+      padding: 1px 4px;
+      height: 15px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tabela-holerite td:last-child { border-right: none; }
+
+    .th-cod, .td-cod { width: 45px; text-align: center; }
+    .th-desc, .td-desc { width: 215px; text-align: left; }
+    .th-ref, .td-ref { width: 75px; text-align: center; }
+    .th-venc, .td-venc { width: 105px; text-align: right; }
+    .th-descval, .td-descval { width: 105px; text-align: right; }
+  </style>
+</head>
+<body class="p-4 sm:p-8">
+
+  <!-- Painel de Controle Fixo (Sticky Header Organizado) -->
+  <div class="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-slate-200 shadow-md no-print font-sans py-2.5 px-6">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
+      
+      <!-- Título -->
+      <div class="shrink-0">
+        <h1 class="text-xs font-bold text-slate-900 uppercase tracking-wide">Emissão de Recibos</h1>
+        <p class="text-[10px] text-slate-500">Holerites Não Contábeis</p>
+      </div>
+      
+      <!-- Controles Alinhados -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        
+        <!-- 1. Colaborador (Tamanho Expandido) -->
+        <div class="flex flex-col">
+          <span class="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Colaborador</span>
+          <select id="selectFuncionario" onchange="gerarHTMLRecibos()" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium w-72 focus:outline-none focus:border-emerald-600">
+            <option value="">Todos os Colaboradores</option>
+          </select>
+        </div>
+
+        <!-- 2. Empresa / Filial (Razão Social + CNPJ e Tamanho Expandido) -->
+        <div class="flex flex-col">
+          <span class="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Empresa / Filial</span>
+          <select id="selectEmpresa" onchange="aoMudarEmpresa()" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium w-96 truncate focus:outline-none focus:border-emerald-600 font-mono">
+            <option value="">Todas as Empresas</option>
+          </select>
+        </div>
+
+        <!-- 3. Período / Competência -->
+        <div class="flex flex-col">
+          <span class="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Competência</span>
+          <select id="selectPeriodo" onchange="carregarDados()" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold font-mono w-28 focus:outline-none focus:border-emerald-600">
+            <!-- Populado via Banco de Dados -->
+          </select>
+        </div>
+
+        <!-- Botões de Ação (Com o padrão de layout oficial) -->
+        <div class="flex items-center gap-2 self-end mt-1 md:mt-4">
+          <button onclick="window.print()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition cursor-pointer shadow-xs whitespace-nowrap">
+            🖨️ Imprimir
+          </button>
+          <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs whitespace-nowrap">
+            ← PAINEL PRINCIPAL
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Elemento Separador -->
+  <div class="no-print" style="height: 100px;"></div>
+
+  <!-- Container onde os recibos serão injetados -->
+  <div id="containerRecibos" class="pb-12 flex flex-col items-center">
+    <div class="text-center text-slate-500 py-10 font-sans">Carregando dados para emissão...</div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
+    let dadosBrutosRecibos = [];
+    let listaGlobalEmpresas = [];
+    let listaGlobalFuncionarios = [];
+    
+    function converterCompetenciaParaMMYYYY(texto) {
+      const mesesMap = {
+        'JANEIRO': '01', 'FEVEREIRO': '02', 'MARÇO': '03', 'MARCO': '03',
+        'ABRIL': '04', 'MAIO': '05', 'JUNHO': '06', 'JULHO': '07',
+        'AGOSTO': '08', 'SETEMBRO': '09', 'OUTUBRO': '10', 'NOVEMBRO': '11', 'DEZEMBRO': '12'
+      };
+      const partes = texto.split('/');
+      if (partes.length >= 2) {
+        const mesNome = partes[0].trim().toUpperCase();
+        const ano = partes[1].trim();
+        const mesNum = mesesMap[mesNome] || '08';
+        return `${mesNum}/${ano}`;
+      }
+      return '08/2026';
+    }
+
+    function formatarMoeda(valor) {
+      if (!valor || parseFloat(valor) === 0) return '';
+      return parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    async function inicializar() {
+      await carregarPeriodosDoBanco();
+      await carregarEmpresasDoBanco();
+      await carregarFuncionariosDoBanco();
+      carregarDados();
+    }
+
+    async function carregarPeriodosDoBanco() {
+      const selectPeriodo = document.getElementById('selectPeriodo');
+      selectPeriodo.innerHTML = '';
+
+      let periodosList = [];
+      const { data } = await _supabase
+        .from('competencias')
+        .select('ano, mes')
+        .order('ano', { ascending: false })
+        .order('mes', { ascending: false });
+
+      if (data && data.length > 0) {
+        periodosList = data.map(p => `${String(p.mes).padStart(2, '0')}/${p.ano}`);
+      } else {
+        const { data: itens } = await _supabase.from('folha_itens').select('competencia');
+        if (itens) {
+          const setComp = new Set(itens.map(i => i.competencia).filter(Boolean));
+          periodosList = Array.from(setComp).sort().reverse();
+        }
+      }
+
+      if (periodosList.length === 0) {
+        periodosList = ['08/2026'];
+      }
+
+      periodosList.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.text = p;
+        selectPeriodo.add(opt);
+      });
+
+      const compAtivaStorage = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
+      if (periodosList.includes(compAtivaStorage)) {
+        selectPeriodo.value = compAtivaStorage;
+      }
+    }
+
+    async function carregarEmpresasDoBanco() {
+      const selectEmp = document.getElementById('selectEmpresa');
+      selectEmp.innerHTML = '<option value="">Todas as Empresas</option>';
+
+      // Busca robusta com * para evitar erro de nome de coluna
+      const { data: empresas } = await _supabase.from('empresas').select('*').order('razao_social');
+      if (empresas) {
+        listaGlobalEmpresas = empresas;
+        empresas.forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          const razao = e.razao_social || e.nome_fantasia || 'EMPRESA';
+          const cnpjStr = e.cnpj ? ` — CNPJ: ${e.cnpj}` : '';
+          opt.text = `${razao}${cnpjStr}`;
+          selectEmp.add(opt);
+        });
+      }
+    }
+
+    async function carregarFuncionariosDoBanco() {
+      const { data: funcionarios } = await _supabase.from('funcionarios').select('*').order('nome_registro');
+      if (funcionarios) {
+        listaGlobalFuncionarios = funcionarios;
+        atualizarSelectFuncionarios();
+      }
+    }
+
+    function aoMudarEmpresa() {
+      atualizarSelectFuncionarios();
+      carregarDados();
+    }
+
+    function atualizarSelectFuncionarios() {
+      const selectFunc = document.getElementById('selectFuncionario');
+      const filtroEmpresaId = document.getElementById('selectEmpresa').value;
+      const funcAtual = selectFunc.value;
+
+      selectFunc.innerHTML = '<option value="">Todos os Colaboradores</option>';
+
+      let funcionariosFiltrados = listaGlobalFuncionarios;
+      if (filtroEmpresaId) {
+        funcionariosFiltrados = listaGlobalFuncionarios.filter(f => {
+          let empresaMatch = null;
+          if (f.empresa_id) empresaMatch = listaGlobalEmpresas.find(e => String(e.id) === String(f.empresa_id));
+          if (!empresaMatch && f.cnpj) {
+            const cnpjLimpo = String(f.cnpj).replace(/\D/g, '');
+            empresaMatch = listaGlobalEmpresas.find(e => (e.cnpj || '').replace(/\D/g, '') === cnpjLimpo);
+          }
+          if (!empresaMatch && f.empresa_registro) empresaMatch = listaGlobalEmpresas.find(e => e.cnpj && f.empresa_registro.includes(e.cnpj));
+          if (!empresaMatch && f.empresa_registro) empresaMatch = listaGlobalEmpresas.find(e => f.empresa_registro.includes(e.razao_social));
+          
+          return empresaMatch && String(empresaMatch.id) === String(filtroEmpresaId);
+        });
+      }
+
+      funcionariosFiltrados.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.text = f.nome_registro;
+        selectFunc.add(opt);
+      });
+
+      if (funcAtual && funcionariosFiltrados.some(f => String(f.id) === String(funcAtual))) {
+        selectFunc.value = funcAtual;
+      } else {
+        selectFunc.value = "";
+      }
+    }
+
+    async function carregarDados() {
+      const periodo = document.getElementById('selectPeriodo').value;
+      const filtroEmpresaId = document.getElementById('selectEmpresa').value;
+      const container = document.getElementById('containerRecibos');
+      container.innerHTML = '<div class="text-center text-slate-500 py-10 font-sans">Buscando lançamentos extra-folha...</div>';
+
+      try {
+        const [resFolha, resEventos] = await Promise.all([
+          _supabase.from('folha_itens').select('*').eq('competencia', periodo),
+          _supabase.from('tipos_eventos').select('*')
+        ]);
+
+        const itensFolha = resFolha.data || [];
+        const eventos = resEventos.data || [];
+        const funcionarios = listaGlobalFuncionarios;
+        const empresas = listaGlobalEmpresas;
+
+        const mapaNatureza = {};
+        const mapaTipos = {};
+        eventos.forEach(e => {
+          mapaNatureza[String(e.codigo_evento)] = e.natureza_do_evento || 'CONTABIL';
+          mapaNatureza[String(e.descricao_do_evento || '').toUpperCase()] = e.natureza_do_evento || 'CONTABIL';
+
+          mapaTipos[String(e.codigo_evento)] = (e.tipo || 'PROVENTO').toUpperCase();
+          mapaTipos[String(e.descricao_do_evento || '').toUpperCase()] = (e.tipo || 'PROVENTO').toUpperCase();
+        });
+
+        const recibosMap = {};
+
+        itensFolha.forEach(item => {
+          const rubrica = String(item.rubrica || '').toUpperCase();
+          
+          let codigo = '';
+          let desc = rubrica;
+          const partes = rubrica.split('-');
+          if (partes.length > 1 && !isNaN(parseInt(partes[0].trim()))) {
+            codigo = partes[0].trim();
+            desc = partes.slice(1).join('-').trim();
+          }
+
+          let natureza = 'CONTABIL';
+          if (mapaNatureza[codigo]) natureza = mapaNatureza[codigo];
+          else if (mapaNatureza[desc]) natureza = mapaNatureza[desc];
+          else {
+            for (let key in mapaNatureza) {
+              if (rubrica.includes(key)) {
+                natureza = mapaNatureza[key];
+                break;
+              }
+            }
+          }
+          if (natureza === 'NAO_CONTABIL' || rubrica.includes('FORA')) natureza = 'NAO_CONTABIL';
+
+          if (natureza !== 'NAO_CONTABIL') return;
+
+          let tipo = (item.tipo || '').toUpperCase();
+          if (!tipo || tipo === 'PROVENTO') {
+            if (mapaTipos[codigo]) tipo = mapaTipos[codigo];
+            else if (mapaTipos[desc]) tipo = mapaTipos[desc];
+            else tipo = 'PROVENTO';
+          }
+
+          const fId = item.funcionario_id;
+          const f = funcionarios.find(x => String(x.id) === String(fId));
+          if (!f) return;
+
+          let empresaMatch = null;
+          if (f.empresa_id) empresaMatch = empresas.find(e => String(e.id) === String(f.empresa_id));
+          if (!empresaMatch && f.cnpj) {
+            const cnpjLimpo = String(f.cnpj).replace(/\D/g, '');
+            empresaMatch = empresas.find(e => (e.cnpj || '').replace(/\D/g, '') === cnpjLimpo);
+          }
+          if (!empresaMatch && f.empresa_registro) empresaMatch = empresas.find(e => e.cnpj && f.empresa_registro.includes(e.cnpj));
+          if (!empresaMatch && f.empresa_registro) empresaMatch = empresas.find(e => f.empresa_registro.includes(e.razao_social));
+
+          if (filtroEmpresaId && (!empresaMatch || String(empresaMatch.id) !== String(filtroEmpresaId))) {
+            return; 
+          }
+
+          if (!recibosMap[fId]) {
+            let nomeEmpresa = '';
+            let cnpjEmpresa = f.cnpj || '';
+            let codEmpresa = '0003';
+            
+            if (empresaMatch) {
+              nomeEmpresa = empresaMatch.razao_social || empresaMatch.nome_fantasia || '';
+              cnpjEmpresa = empresaMatch.cnpj || cnpjEmpresa;
+              const codigoContabilBanco = empresaMatch.cod_contabil || empresaMatch.codigo_contabil;
+              if (codigoContabilBanco) {
+                codEmpresa = String(codigoContabilBanco).padStart(4, '0');
+              }
+            }
+            
+            if (!nomeEmpresa && f.empresa_registro) {
+              nomeEmpresa = f.empresa_registro;
+            }
+            nomeEmpresa = nomeEmpresa.replace(/^\d+\s*-\s*/, '').trim();
+
+            recibosMap[fId] = {
+              fId: fId,
+              nome_funcionario: f.nome_registro,
+              matricula: f.matricula || f.id.toString().substring(0,4).padStart(4, '0'),
+              cargo: f.cargo || '-',
+              razao_social: nomeEmpresa.toUpperCase(),
+              cod_empresa: codEmpresa,
+              cnpj: cnpjEmpresa,
+              itens: []
+            };
+          }
+
+          const val = parseFloat(item.valor || 0);
+
+          recibosMap[fId].itens.push({
+            codigo: codigo,
+            descricao: desc,
+            referencia: '',
+            vencimento: tipo === 'PROVENTO' ? val : 0,
+            desconto: tipo === 'DESCONTO' ? val : 0
+          });
+        });
+
+        dadosBrutosRecibos = Object.values(recibosMap).sort((a, b) => a.nome_funcionario.localeCompare(b.nome_funcionario));
+        gerarHTMLRecibos();
+
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = `<div class="text-center text-rose-600 font-bold py-10 font-sans">Erro crítico ao gerar recibos: ${err.message}</div>`;
+      }
+    }
+
+    function gerarHTMLRecibos() {
+      const container = document.getElementById('containerRecibos');
+      const filtroFunc = document.getElementById('selectFuncionario').value;
+      const periodo = document.getElementById('selectPeriodo').value;
+      
+      const partesPeriodo = periodo.split('/');
+      const mesNum = partesPeriodo[0];
+      const anoNum = partesPeriodo[1];
+      const mesesObj = { '01':'janeiro', '02':'fevereiro', '03':'março', '04':'abril', '05':'maio', '06':'junho', '07':'julho', '08':'agosto', '09':'setembro', '10':'outubro', '11':'novembro', '12':'dezembro' };
+      const mesNome = mesesObj[mesNum] || 'mês';
+      const refPeriodo = `${mesNome}/${anoNum}`;
+
+      let recibosExibir = dadosBrutosRecibos;
+      if (filtroFunc) {
+        recibosExibir = dadosBrutosRecibos.filter(r => String(r.fId) === String(filtroFunc));
+      }
+
+      if (recibosExibir.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 py-10 font-sans">Nenhum lançamento NÃO CONTÁBIL encontrado para os filtros selecionados.</div>';
+        return;
+      }
+
+      let paginasRecibos = [];
+
+      recibosExibir.forEach(recibo => {
+        let itensRestantes = [...recibo.itens];
+        
+        if (itensRestantes.length === 0) {
+          itensRestantes.push({ codigo: '', descricao: '', referencia: '', vencimento: 0, desconto: 0 });
+        }
+
+        while (itensRestantes.length > 0) {
+          let fatiaItens = itensRestantes.splice(0, 16);
+          
+          let totVenc = 0;
+          let totDesc = 0;
+          fatiaItens.forEach(it => {
+            totVenc += it.vencimento;
+            totDesc += it.desconto;
+          });
+
+          paginasRecibos.push({
+            ...recibo,
+            itens: fatiaItens,
+            total_vencimentos: totVenc,
+            total_descontos: totDesc
+          });
+        }
+      });
+
+      let htmlFinal = '';
+      
+      paginasRecibos.forEach((recibo) => {
+        const liquido = recibo.total_vencimentos - recibo.total_descontos;
+        
+        let linhasHtml = '';
+        for (let i = 0; i < 16; i++) {
+          const item = recibo.itens[i];
+          if (item) {
+            linhasHtml += `
+              <tr>
+                <td class="td-cod">${item.codigo}</td>
+                <td class="td-desc">${item.descricao}</td>
+                <td class="td-ref">${item.referencia}</td>
+                <td class="td-venc">${formatarMoeda(item.vencimento)}</td>
+                <td class="td-descval">${formatarMoeda(item.desconto)}</td>
+              </tr>
+            `;
+          } else {
+             linhasHtml += `
+              <tr>
+                <td class="td-cod">&nbsp;</td>
+                <td class="td-desc"></td>
+                <td class="td-ref"></td>
+                <td class="td-venc"></td>
+                <td class="td-descval"></td>
+              </tr>
+            `;
+          }
+        }
+
+        const holeriteHtml = `
+          <div class="recibo-wrapper">
+            <div class="recibo-conteudo">
+              
+              <!-- Topo / Cabeçalho da Empresa -->
+              <div class="flex justify-between items-start p-1.5 linha-borda text-xs">
+                <div class="font-bold leading-tight max-w-[60%]">
+                  <div>${recibo.cod_empresa} - ${recibo.razao_social}</div>
+                  <div class="font-normal mt-0.5">CNPJ: ${recibo.cnpj}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-bold">Recibo de Pagamento de Salário</div>
+                  <div class="text-xs mt-0.5 font-normal">${refPeriodo}</div>
+                </div>
+              </div>
+
+              <!-- Dados do Funcionário -->
+              <div class="flex text-xs linha-borda">
+                <div class="p-1.5 col-borda flex-1">
+                  <div class="text-[9px] text-gray-500 mb-0.5">Código   Nome do Funcionário</div>
+                  <div class="font-bold">${recibo.matricula}   ${recibo.nome_funcionario}</div>
+                </div>
+                <div class="p-1.5 w-1/3">
+                  <div class="text-[9px] text-gray-500 mb-0.5">CBO   Emp.   Local   Depto.   Setor   Seção</div>
+                  <div class="font-bold truncate">${recibo.cargo}</div>
+                </div>
+              </div>
+
+              <!-- Tabela Unificada de Eventos -->
+              <div class="w-full bg-white flex-1 overflow-hidden">
+                <table class="tabela-holerite">
+                  <thead>
+                    <tr>
+                      <th class="th-cod">Cód.</th>
+                      <th class="th-desc">Descrição</th>
+                      <th class="th-ref">Referência</th>
+                      <th class="th-venc">Vencimentos</th>
+                      <th class="th-descval">Descontos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${linhasHtml}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Rodapé de Totais -->
+              <div class="flex border-t border-black linha-borda text-[10px] bg-white">
+                <div class="flex-1 col-borda"></div>
+                <div class="th-venc py-0.5 text-center font-normal text-gray-600 border-r border-black">Total de Vencimentos</div>
+                <div class="th-descval py-0.5 text-center font-normal text-gray-600">Total de Descontos</div>
+              </div>
+              <div class="flex border-b border-black text-xs font-bold bg-white">
+                <div class="flex-1 col-borda"></div>
+                <div class="th-venc py-1 px-2 text-right border-r border-black">${formatarMoeda(recibo.total_vencimentos)}</div>
+                <div class="th-descval py-1 px-2 text-right">${formatarMoeda(recibo.total_descontos)}</div>
+              </div>
+
+              <!-- Linha do Valor Líquido -->
+              <div class="flex border-b border-black h-7 items-center justify-between px-3 bg-white">
+                 <div class="text-xs font-semibold text-gray-700">Valor Líquido ⇨</div>
+                 <div class="font-bold text-sm">${formatarMoeda(liquido)}</div>
+              </div>
+
+              <!-- Linha de Bases de Cálculo -->
+              <div class="flex text-[9px] text-center p-1 bg-white">
+                <div class="flex-1 col-borda"><div class="text-gray-500 font-normal">Salário Base</div><div class="mt-0.5 font-bold">0,00</div></div>
+                <div class="flex-1 col-borda"><div class="text-gray-500 font-normal">Sal. Contr. INSS</div><div class="mt-0.5 font-bold">0,00</div></div>
+                <div class="flex-1 col-borda"><div class="text-gray-500 font-normal">Base Cálc. FGTS</div><div class="mt-0.5 font-bold">0,00</div></div>
+                <div class="flex-1 col-borda"><div class="text-gray-500 font-normal">Base Cálc. IRRF</div><div class="mt-0.5 font-bold">0,00</div></div>
+                <div class="flex-1"><div class="text-gray-500 font-normal">Faixa IRRF</div><div class="mt-0.5 font-bold">00</div></div>
+              </div>
+
+            </div>
+
+            <!-- Canhoto Lateral Direito Padronizado -->
+            <div class="assinatura-lateral">
+              <div class="coluna-vertical-texto">DECLARO TER RECEBIDO A IMPORTÂNCIA LÍQUIDA DISCRIMINADA NESTE RECIBO</div>
+              <div class="coluna-vertical-assinatura">ASSINATURA DO FUNCIONÁRIO</div>
+              <div class="coluna-vertical-data">DATA ___/___/_____</div>
+            </div>
+          </div>
+        `;
+        
+        htmlFinal += holeriteHtml;
+      });
+      
+      container.innerHTML = htmlFinal;
+    }
+
+    inicializar();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

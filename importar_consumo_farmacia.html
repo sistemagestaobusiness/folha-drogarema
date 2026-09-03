@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importação de Consumo Farmácia - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 p-6">
+
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Cabeçalho -->
+    <div class="flex justify-between items-center border-b border-slate-700 pb-4">
+      <div>
+        <a href="index.html" class="text-xs text-cyan-400 hover:underline mb-1 inline-block">← Voltar ao Menu</a>
+        <h1 class="text-2xl font-bold text-white">Importação de Consumo Farmácia</h1>
+        <p class="text-sm text-slate-400">Leitura de Extrato de Crediário por Cliente (Evento Fixo: 3018 - CONSUMO FARMACIA)</p>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-right">
+        <span class="text-[10px] text-slate-400 block uppercase">Competência de Lançamento (Ativa)</span>
+        <span id="labelCompetencia" class="text-emerald-400 font-bold text-xs font-mono">Carregando...</span>
+      </div>
+    </div>
+
+    <!-- 1. Área de Upload -->
+    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg space-y-4">
+      <h2 class="text-sm font-bold text-cyan-400 uppercase tracking-wider">1. Selecionar Planilha de Consumo Farmácia (.xls / .xlsx)</h2>
+      
+      <div class="border-2 border-dashed border-slate-600 hover:border-cyan-500 rounded-xl p-8 text-center cursor-pointer transition bg-slate-900/50 relative">
+        <input type="file" id="inputFile" accept=".xlsx, .xls, .csv" onchange="processarPlanilha(event)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+        <div class="space-y-2">
+          <div class="text-3xl">📂</div>
+          <p class="text-sm font-semibold text-white">Arraste e solte a planilha aqui ou clique para selecionar</p>
+          <p class="text-xs text-slate-400">Extrato de Crediário Detalhado por Cliente</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Área de Conferência e Vínculos -->
+    <div id="secaoConferencia" class="hidden bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg space-y-6">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <div>
+          <h2 class="text-lg font-bold text-white">2. Conferência e Vinculação dos Descontos</h2>
+          <p class="text-xs text-slate-400">Verifique os valores e colaboradores antes de gravar em <span class="font-mono text-cyan-300">folha_itens</span></p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="limparImportacao()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold rounded-lg text-xs transition">Cancelar</button>
+          <button onclick="salvarLancamentosLote()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs transition shadow-lg flex items-center gap-1.5">
+            ✓ Confirmar e Salvar Descontos
+          </button>
+        </div>
+      </div>
+
+      <!-- Cards Resumo -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
+          <span class="text-[10px] text-slate-400 font-bold block uppercase">Total de Clientes</span>
+          <span id="statTotal" class="text-2xl font-extrabold text-white font-mono">0</span>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
+          <span class="text-[10px] text-slate-400 font-bold block uppercase">Valor Total Débitos (-)</span>
+          <span id="statValor" class="text-2xl font-extrabold text-rose-400 font-mono">R$ 0,00</span>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
+          <span class="text-[10px] text-slate-400 font-bold block uppercase">Colaboradores Pendentes</span>
+          <span id="statPendentesFunc" class="text-2xl font-extrabold text-amber-400 font-mono">0</span>
+        </div>
+      </div>
+
+      <!-- Tabela de Conferência -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-slate-900 text-slate-400 border-b border-slate-700">
+              <th class="p-3">#</th>
+              <th class="p-3">CLIENTE (PLANILHA)</th>
+              <th class="p-3">COLABORADOR VINCULADO (SISTEMA)</th>
+              <th class="p-3">EVENTO FIXO</th>
+              <th class="p-3 text-right">VALOR DÉBITO</th>
+              <th class="p-3 text-center">AÇÃO</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaPreview" class="divide-y divide-slate-700">
+            <!-- Preenchido via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let funcionariosSistema = [];
+    let dadosProcessados = [];
+    
+    let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
+
+    function converterCompetenciaParaMMYYYY(texto) {
+      const mesesMap = {
+        'JANEIRO': '01', 'FEVEREIRO': '02', 'MARÇO': '03', 'MARCO': '03',
+        'ABRIL': '04', 'MAIO': '05', 'JUNHO': '06', 'JULHO': '07',
+        'AGOSTO': '08', 'SETEMBRO': '09', 'OUTUBRO': '10', 'NOVEMBRO': '11', 'DEZEMBRO': '12'
+      };
+      const partes = texto.split('/');
+      if (partes.length >= 2) {
+        const mesNome = partes[0].trim().toUpperCase();
+        const ano = partes[1].trim();
+        const mesNum = mesesMap[mesNome] || '08';
+        return `${mesNum}/${ano}`;
+      }
+      return '08/2026';
+    }
+
+    let competenciaRegraLancamento = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
+    document.getElementById('labelCompetencia').innerText = `${competenciaRegraLancamento} (ABERTA)`;
+
+    async function carregarFuncionarios() {
+      const { data } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7').eq('status', 'ATIVO');
+      funcionariosSistema = data || [];
+    }
+
+    carregarFuncionarios();
+
+    function processarPlanilha(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          analisarLinhasConsumo(rows);
+        } catch (err) {
+          alert('Erro ao ler o arquivo Excel: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function analisarLinhasConsumo(rows) {
+      let headerIdx = -1;
+      let colCliente = -1;
+      let colTotalDebito = -1;
+
+      // Localiza dinamicamente as colunas "Cliente" e "Total Débito"
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        for (let j = 0; j < row.length; j++) {
+          const val = String(row[j] || '').trim();
+          if (val === 'Cliente') colCliente = j;
+          if (val === 'Total Débito') colTotalDebito = j;
+        }
+        if (colCliente !== -1 && colTotalDebito !== -1) {
+          headerIdx = i;
+          break;
+        }
+      }
+
+      if (headerIdx === -1) {
+        alert('Não foi possível encontrar as colunas "Cliente" e "Total Débito" na planilha.');
+        return;
+      }
+
+      dadosProcessados = [];
+
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const cliente = String(row[colCliente] || '').trim();
+        let valorDebito = row[colTotalDebito];
+
+        // Se o valor vier como string formatada em pt-BR (ex: "695,00") ou número
+        if (typeof valorDebito === 'string') {
+          valorDebito = parseFloat(valorDebito.replace(/\./g, '').replace(',', '.'));
+        }
+
+        // Ignora linhas vazias, rodapés como "Total Crediário:" ou valores zerados/inválidos
+        if (!cliente || cliente.toUpperCase().includes('TOTAL') || isNaN(valorDebito) || valorDebito <= 0) continue;
+
+        // Tenta vincular automaticamente o funcionário pelo nome exato ou parcial
+        let funcEncontrado = funcionariosSistema.find(f => f.nome_registro.toUpperCase() === cliente.toUpperCase());
+        if (!funcEncontrado) {
+          funcEncontrado = funcionariosSistema.find(f => f.nome_registro.toUpperCase().includes(cliente.toUpperCase()) || cliente.toUpperCase().includes(f.nome_registro.toUpperCase()));
+        }
+
+        dadosProcessados.push({
+          id: Math.random().toString(36).substr(2, 9),
+          cliente: cliente,
+          funcionario_id: funcEncontrado ? funcEncontrado.id : '',
+          rubrica: '3018 - CONSUMO FARMACIA',
+          tipo: 'DESCONTO',
+          valor: valorDebito
+        });
+      }
+
+      renderizarConferencia();
+    }
+
+    function renderizarConferencia() {
+      if (dadosProcessados.length === 0) {
+        alert('Nenhum dado válido de consumo foi encontrado na planilha.');
+        return;
+      }
+
+      document.getElementById('secaoConferencia').classList.remove('hidden');
+      document.getElementById('statTotal').innerText = dadosProcessados.length;
+
+      const totalVal = dadosProcessados.reduce((acc, curr) => acc + curr.valor, 0);
+      document.getElementById('statValor').innerText = 'R$ ' + totalVal.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+      let pendentesFunc = dadosProcessados.filter(d => !d.funcionario_id).length;
+      document.getElementById('statPendentesFunc').innerText = pendentesFunc;
+
+      const tbody = document.getElementById('tabelaPreview');
+      tbody.innerHTML = dadosProcessados.map((item, idx) => `
+        <tr class="hover:bg-slate-700/40 transition">
+          <td class="p-3 text-slate-500 font-mono">${idx + 1}</td>
+          <td class="p-3 font-bold text-white">${item.cliente}</td>
+          <td class="p-3">
+            <select onchange="atualizarVinculoFunc('${item.id}', this.value)" class="bg-slate-900 border ${item.funcionario_id ? 'border-slate-700 text-white' : 'border-amber-500 text-amber-300'} rounded p-1.5 w-full text-xs font-mono">
+              <option value="">-- SELECIONAR COLABORADOR --</option>
+              ${funcionariosSistema.map(f => `<option value="${f.id}" ${f.id === item.funcionario_id ? 'selected' : ''}>${f.nome_registro}</option>`).join('')}
+            </select>
+          </td>
+          <td class="p-3 font-mono font-bold text-rose-400">${item.rubrica}</td>
+          <td class="p-3 text-right font-mono font-bold text-rose-400">R$ ${item.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+          <td class="p-3 text-center">
+            <button onclick="removerItem(${idx})" class="text-slate-500 hover:text-rose-400 font-bold">✕</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function atualizarVinculoFunc(id, funcId) {
+      const item = dadosProcessados.find(d => d.id === id);
+      if (item) item.funcionario_id = funcId;
+      let pendentesFunc = dadosProcessados.filter(d => !d.funcionario_id).length;
+      document.getElementById('statPendentesFunc').innerText = pendentesFunc;
+    }
+
+    function removerItem(idx) {
+      dadosProcessados.splice(idx, 1);
+      renderizarConferencia();
+    }
+
+    function limparImportacao() {
+      document.getElementById('secaoConferencia').classList.add('hidden');
+      dadosProcessados = [];
+    }
+
+    async function salvarLancamentosLote() {
+      const naoVinculados = dadosProcessados.filter(d => !d.funcionario_id);
+      if (naoVinculados.length > 0) {
+        alert('Existem registros sem colaborador vinculado. Por favor, vincule todos antes de salvar.');
+        return;
+      }
+
+      const registrosParaSalvar = dadosProcessados.map(d => ({
+        funcionario_id: d.funcionario_id,
+        rubrica: d.rubrica,
+        tipo: d.tipo, // 'DESCONTO' (-)
+        valor: d.valor,
+        competencia: competenciaRegraLancamento
+      }));
+
+      const { error } = await _supabase.from('folha_itens').insert(registrosParaSalvar);
+
+      if (error) {
+        alert('Erro ao salvar no banco: ' + error.message);
+      } else {
+        alert(`Descontos de Consumo Farmácia importados e salvos com sucesso na competência ${competenciaRegraLancamento}!`);
+        window.location.href = 'lancamentos.html';
+      }
+    }
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

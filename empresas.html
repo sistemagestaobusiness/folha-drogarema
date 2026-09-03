@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro de Empresas - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <!-- Proteção de Acesso -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Cabeçalho Fixo (Sticky Header) - Sem botão Sair para evitar cliques acidentais -->
+    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">CADASTRO DE EMPRESAS</h1>
+        <p class="text-xs text-slate-500">Gerenciamento de razões sociais e filiais contábeis</p>
+      </div>
+      <div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← PAINEL PRINCIPAL</a>
+      </div>
+    </div>
+
+    <!-- Layout Superior (Formulário Otimizado) -->
+    <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+      <h2 id="tituloForm" class="font-bold text-emerald-700 text-sm border-b border-slate-100 pb-2">+ NOVA EMPRESA</h2>
+
+      <form id="formEmpresa" onsubmit="salvarEmpresa(event)" class="space-y-4">
+        <input type="hidden" id="empresaId">
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <!-- Razão Social (Maior espaço para nomes longos) -->
+          <div class="md:col-span-5">
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Razão Social *</label>
+            <input type="text" id="inputRazao" required placeholder="Ex: DROGAREMA DROGARIA LTDA" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
+          </div>
+
+          <!-- CNPJ -->
+          <div class="md:col-span-3">
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">CNPJ *</label>
+            <input type="text" id="inputCnpj" required placeholder="Ex: 12.003.055/0001-34" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+          </div>
+
+          <!-- Cód. Contábil -->
+          <div class="md:col-span-1">
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Cód.</label>
+            <input type="text" id="inputCodContabil" placeholder="Ex: 57" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+          </div>
+
+          <!-- Nome Fantasia -->
+          <div class="md:col-span-3">
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nome Fantasia *</label>
+            <input type="text" id="inputFantasia" required placeholder="Ex: LOJA 01" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="resetarFormulario()" id="btnCancelar" class="hidden px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-lg transition text-xs cursor-pointer">
+            Cancelar
+          </button>
+          <button type="submit" id="btnSalvar" class="px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer">
+            ✓ SALVAR EMPRESA
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Layout Inferior (Tabela de Listagem de Empresas) -->
+    <div class="bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
+      
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-3 gap-3">
+        <h2 class="font-bold text-slate-900 text-sm">EMPRESAS CADASTRADAS</h2>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-500 font-medium">FILTRAR:</span>
+          <select id="filtroStatus" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium">
+            <option value="Ativo">APENAS ATIVAS</option>
+            <option value="Inativo">APENAS INATIVAS</option>
+            <option value="TODOS">TODAS</option>
+          </select>
+          <span id="contadorRegistros" class="text-xs text-slate-500 font-mono ml-2">0 registro(s)</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-500">
+              <th class="p-3">RAZÃO SOCIAL</th>
+              <th class="p-3">CNPJ</th>
+              <th class="p-3">CÓD. CONTÁBIL</th>
+              <th class="p-3">NOME FANTASIA</th>
+              <th class="p-3">STATUS</th>
+              <th class="p-3 text-right">AÇÕES</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaEmpresas" class="divide-y divide-slate-100">
+            <tr><td colspan="6" class="p-6 text-center text-slate-400">Carregando empresas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let listaGlobalEmpresas = [];
+
+    async function carregarEmpresas() {
+      const { data, error } = await _supabase.from('empresas').select('*').order('cnpj');
+      if (!error) {
+        listaGlobalEmpresas = data || [];
+        renderizarTabela();
+      } else {
+        alert('Erro ao carregar dados do banco.');
+      }
+    }
+
+    function renderizarTabela() {
+      const statusFiltro = document.getElementById('filtroStatus').value;
+      let dados = listaGlobalEmpresas;
+
+      if (statusFiltro !== 'TODOS') {
+        dados = dados.filter(e => String(e.status || 'Ativo').toLowerCase() === statusFiltro.toLowerCase());
+      }
+
+      document.getElementById('contadorRegistros').innerText = `${dados.length} registro(s)`;
+
+      const tbody = document.getElementById('tabelaEmpresas');
+      if (dados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhuma empresa encontrada.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = dados.map(e => {
+        const statusStr = e.status || 'Ativo';
+        const isAtivo = statusStr.toLowerCase() === 'ativo';
+        const badgeClass = isAtivo ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
+        const btnTexto = isAtivo ? '🔒 Inativar' : '🔓 Ativar';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-900">${e.razao_social || '-'}</td>
+            <td class="p-3 font-mono text-slate-600">${e.cnpj || '-'}</td>
+            <td class="p-3 font-mono text-slate-600">${e.cod_contabil || '-'}</td>
+            <td class="p-3 text-emerald-700 font-medium">${e.nome_fantasia || '-'}</td>
+            <td class="p-3">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${statusStr}</span>
+            </td>
+            <td class="p-3 text-right whitespace-nowrap space-x-1">
+              <button onclick="prepararEdicao('${e.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition cursor-pointer">✏️ Editar</button>
+              <button onclick="alternarStatusEmpresa('${e.id}', '${statusStr}')" class="px-2 py-1 ${isAtivo ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'} rounded font-bold text-[10px] transition cursor-pointer">${btnTexto}</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function prepararEdicao(id) {
+      const e = listaGlobalEmpresas.find(item => String(item.id) === String(id));
+      if (!e) return;
+
+      document.getElementById('tituloForm').innerText = 'EDITAR EMPRESA';
+      document.getElementById('empresaId').value = e.id;
+      document.getElementById('inputRazao').value = e.razao_social || '';
+      document.getElementById('inputCnpj').value = e.cnpj || '';
+      document.getElementById('inputCodContabil').value = e.cod_contabil || '';
+      document.getElementById('inputFantasia').value = e.nome_fantasia || '';
+      document.getElementById('btnSalvar').innerText = '✓ ATUALIZAR EMPRESA';
+      document.getElementById('btnCancelar').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetarFormulario() {
+      document.getElementById('tituloForm').innerText = '+ NOVA EMPRESA';
+      document.getElementById('formEmpresa').reset();
+      document.getElementById('empresaId').value = '';
+      document.getElementById('btnSalvar').innerText = '✓ SALVAR EMPRESA';
+      document.getElementById('btnCancelar').classList.add('hidden');
+    }
+
+    async function salvarEmpresa(e) {
+      e.preventDefault();
+      const id = document.getElementById('empresaId').value;
+      const razao_social = document.getElementById('inputRazao').value.toUpperCase();
+      const cnpj = document.getElementById('inputCnpj').value;
+      const cod_contabil = document.getElementById('inputCodContabil').value;
+      const nome_fantasia = document.getElementById('inputFantasia').value.toUpperCase();
+
+      const payload = { razao_social, cnpj, cod_contabil, nome_fantasia };
+
+      if (id) {
+        const { error } = await _supabase.from('empresas').update(payload).eq('id', id);
+        if (error) alert('Erro ao atualizar: ' + error.message);
+        else { resetarFormulario(); carregarEmpresas(); }
+      } else {
+        payload.status = 'Ativo';
+        const { error } = await _supabase.from('empresas').insert([payload]);
+        if (error) alert('Erro ao cadastrar: ' + error.message);
+        else { resetarFormulario(); carregarEmpresas(); }
+      }
+    }
+
+    async function alternarStatusEmpresa(id, statusAtual) {
+      const novoStatus = (statusAtual.toLowerCase() === 'ativo') ? 'Inativo' : 'Ativo';
+      const acao = novoStatus === 'Inativo' ? 'inativar' : 'ativar';
+
+      if (confirm(`Deseja realmente ${acao} esta empresa? O histórico será preservado.`)) {
+        const { error } = await _supabase.from('empresas').update({ status: novoStatus }).eq('id', id);
+        if (error) alert('Erro ao alterar status: ' + error.message);
+        else carregarEmpresas();
+      }
+    }
+
+    function sair() {
+      localStorage.removeItem('usuario_drogarema');
+      window.location.href = 'login.html';
+    }
+
+    carregarEmpresas();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

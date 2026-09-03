@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auditoria de Alterações - Sistema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 font-sans min-h-screen p-4 sm:p-8">
+
+  <div class="max-w-7xl mx-auto">
+    
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">🛡️ Trilha de Auditoria</h1>
+        <p class="text-xs text-slate-500 mt-0.5">Histórico completo de inserções, edições e exclusões realizadas no sistema</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="carregarAuditoria()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs transition shadow-xs cursor-pointer">
+          🔄 Atualizar Registros
+        </button>
+        <a href="index.html" class="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">
+          ← Voltar ao Painel
+        </a>
+      </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-wrap gap-4 items-center">
+      <div class="flex flex-col">
+        <label class="text-[10px] font-bold text-slate-500 uppercase mb-1">Filtrar por Operação</label>
+        <select id="filtroOperacao" onchange="filtrarLogs()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-emerald-600">
+          <option value="">Todas as Operações</option>
+          <option value="INSERT">Inserção (INSERT)</option>
+          <option value="UPDATE">Alteração (UPDATE)</option>
+          <option value="DELETE">Exclusão (DELETE)</option>
+        </select>
+      </div>
+      <div class="flex flex-col flex-1 min-w-[240px]">
+        <label class="text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar por ID, Rubrica ou E-mail</label>
+        <input type="text" id="filtroTexto" onkeyup="filtrarLogs()" placeholder="Digite para filtrar..." class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-emerald-600">
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase text-[10px] tracking-wider">
+              <th class="py-3 px-4 font-bold">Data / Hora</th>
+              <th class="py-3 px-4 font-bold">Operação</th>
+              <th class="py-3 px-4 font-bold">Usuário / Sistema</th>
+              <th class="py-3 px-4 font-bold">Registro ID</th>
+              <th class="py-3 px-4 font-bold">O que mudou (Detalhes)</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaLogs" class="divide-y divide-slate-200 text-slate-700">
+            <tr>
+              <td colspan="5" class="text-center py-8 text-slate-400">Carregando histórico de auditoria...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let listaGlobalLogs = [];
+
+    async function carregarAuditoria() {
+      const tbody = document.getElementById('tabelaLogs');
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-400">Buscando dados no banco...</td></tr>`;
+
+      const { data, error } = await _supabase
+        .from('audit_logs')
+        .select('*')
+        .order('changed_at', { ascending: false })
+        .limit(150); // Traz os últimos 150 eventos
+
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-rose-600 font-bold">Erro ao carregar auditoria: ${error.message}</td></tr>`;
+        return;
+      }
+
+      listaGlobalLogs = data || [];
+      renderizarTabela(listaGlobalLogs);
+    }
+
+    function renderizarTabela(logs) {
+      const tbody = document.getElementById('tabelaLogs');
+      
+      if (logs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-400">Nenhum registro de auditoria encontrado.</td></tr>`;
+        return;
+      }
+
+      let html = '';
+      logs.forEach(log => {
+        const dataObj = new Date(log.changed_at);
+        const dataFormatada = !isNaN(dataObj) ? dataObj.toLocaleString('pt-BR') : log.changed_at;
+
+        // Estilo da etiqueta de operação
+        let badgeClass = 'bg-slate-100 text-slate-700 border-slate-300';
+        if (log.operation === 'INSERT') badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        if (log.operation === 'UPDATE') badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+        if (log.operation === 'DELETE') badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+
+        // Formatador de detalhes amigável
+        let detalhesHtml = '';
+        if (log.operation === 'INSERT') {
+          detalhesHtml = `<span class="text-emerald-600 font-semibold">Novo registro criado.</span> 
+                          <span class="text-slate-500">Rubrica: <b>${log.new_data?.rubrica || '-'}</b> | Valor: <b>R$ ${log.new_data?.valor || '0,00'}</b></span>`;
+        } else if (log.operation === 'DELETE') {
+          detalhesHtml = `<span class="text-rose-600 font-semibold">Registro excluído.</span> 
+                          <span class="text-slate-500">Rubrica: <b>${log.old_data?.rubrica || '-'}</b> | Valor: <b>R$ ${log.old_data?.valor || '0,00'}</b></span>`;
+        } else if (log.operation === 'UPDATE') {
+          let mudancas = [];
+          const oldD = log.old_data || {};
+          const newD = log.new_data || {};
+          
+          // Compara campos principais
+          ['rubrica', 'valor', 'competencia', 'tipo'].forEach(campo => {
+            if (oldD[campo] !== newD[campo]) {
+              mudancas.push(`<br>• <b>${campo}</b>: <span class="text-rose-500 line-through">${oldD[campo] ?? 'vazio'}</span> ➔ <span class="text-emerald-600 font-bold">${newD[campo] ?? 'vazio'}</span>`);
+            }
+          });
+
+          if (mudancas.length > 0) {
+            detalhesHtml = `<span class="text-amber-700 font-semibold">Campos alterados:</span> ${mudancas.join('')}`;
+          } else {
+            detalhesHtml = `<span class="text-slate-500">Atualização sem alteração nos campos principais.</span>`;
+          }
+        }
+
+        html += `
+          <tr class="hover:bg-slate-50/70 transition">
+            <td class="py-3 px-4 font-mono whitespace-nowrap text-slate-600">${dataFormatada}</td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="px-2.5 py-1 rounded-md text-[10px] font-bold border ${badgeClass}">${log.operation}</span>
+            </td>
+            <td class="py-3 px-4 text-slate-600">${log.changed_by || 'Sistema / Anon'}</td>
+            <td class="py-3 px-4 font-mono text-slate-500">${log.record_id || '-'}</td>
+            <td class="py-3 px-4 leading-relaxed">${detalhesHtml}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    function filtrarLogs() {
+      const opFiltro = document.getElementById('filtroOperacao').value;
+      const textoFiltro = document.getElementById('filtroTexto').value.toLowerCase();
+
+      let filtrados = listaGlobalLogs.filter(log => {
+        const matchOp = !opFiltro || log.operation === opFiltro;
+        
+        const stringBusca = JSON.stringify(log).toLowerCase();
+        const matchTexto = !textoFiltro || stringBusca.includes(textoFiltro);
+
+        return matchOp && matchTexto;
+      });
+
+      renderizarTabela(filtrados);
+    }
+
+    // Carregar ao abrir a página
+    carregarAuditoria();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

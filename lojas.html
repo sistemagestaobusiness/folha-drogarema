@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lojas - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <!-- Proteção de Acesso -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Cabeçalho Fixo (Sticky Header) - Apenas com Painel Principal -->
+    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">CADASTRO DE LOJAS</h1>
+        <p class="text-xs text-slate-500">Gerenciamento de unidades e pontos de venda</p>
+      </div>
+      <div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← PAINEL PRINCIPAL</a>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Formulário -->
+      <div class="bg-white border border-slate-200 p-6 rounded-xl shadow-sm h-fit space-y-4">
+        <h2 id="tituloForm" class="font-bold text-emerald-700 text-sm border-b border-slate-100 pb-2">+ NOVA LOJA</h2>
+        <form id="lojaForm" class="space-y-4">
+          <input type="hidden" id="loja_id">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">NOME DA LOJA *</label>
+            <input type="text" id="nome_loja" required placeholder="EX: LOJA 01 - CENTRO" oninput="this.value = this.value.toUpperCase()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-2.5 px-4 rounded-lg transition text-xs shadow-sm cursor-pointer">
+              ✓ SALVAR
+            </button>
+            <button type="button" id="btnCancelar" onclick="limparFormulario()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 px-3 rounded-lg transition text-xs cursor-pointer">
+              CANCELAR
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tabela de Lojas -->
+      <div class="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-4">
+        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+          <h2 class="font-bold text-slate-900 text-sm">LOJAS CADASTRADAS</h2>
+          <span id="totalRegistros" class="text-xs bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full text-slate-600 font-mono">0 unidade(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500">
+                <th class="p-3">NOME DA LOJA</th>
+                <th class="p-3">STATUS</th>
+                <th class="p-3 text-right">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaLojas" class="divide-y divide-slate-100">
+              <tr>
+                <td colSpan="3" class="p-6 text-center text-slate-400">Carregando lojas...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function carregarLojas() {
+      const { data, error } = await _supabase.from('lojas').select('*').order('nome_loja', { ascending: true });
+      const tbody = document.getElementById('tabelaLojas');
+      const totalSpan = document.getElementById('totalRegistros');
+      
+      if (error) {
+        tbody.innerHTML = `<tr><td colSpan="3" class="p-4 text-center text-rose-600">Erro: ${error.message}</td></tr>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colSpan="3" class="p-4 text-center text-slate-400">Nenhuma loja cadastrada.</td></tr>`;
+        totalSpan.innerText = '0 unidade(s)';
+        return;
+      }
+
+      totalSpan.innerText = `${data.length} unidade(s)`;
+
+      tbody.innerHTML = data.map(l => {
+        const isAtiva = l.ativo;
+        const badgeClass = isAtiva ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
+        const btnTexto = isAtiva ? '🔒 Inativar' : '🔓 Ativar';
+        const btnAcaoClass = isAtiva ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-900 ${!isAtiva ? 'line-through text-slate-400' : ''}">${l.nome_loja}</td>
+            <td class="p-3">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">
+                ${isAtiva ? 'ATIVA' : 'INATIVA'}
+              </span>
+            </td>
+            <td class="p-3 text-right space-x-1 whitespace-nowrap">
+              <button onclick="editarLoja('${l.id}', '${l.nome_loja}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition cursor-pointer">
+                ✏️ Editar
+              </button>
+              <button onclick="alternarStatus('${l.id}', ${isAtiva})" class="px-2 py-1 ${btnAcaoClass} rounded font-bold text-[10px] transition cursor-pointer">
+                ${btnTexto}
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    document.getElementById('lojaForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btnSalvar = document.getElementById('btnSalvar');
+      const id = document.getElementById('loja_id').value;
+      const nome_loja = document.getElementById('nome_loja').value.trim();
+
+      if (!nome_loja) return;
+
+      btnSalvar.disabled = true;
+      btnSalvar.innerText = 'SALVANDO...';
+
+      if (id) {
+        const { error } = await _supabase.from('lojas').update({ nome_loja }).eq('id', id);
+        if (error) alert('Erro ao atualizar: ' + error.message);
+        else alert('Loja atualizada com sucesso!');
+      } else {
+        const { error } = await _supabase.from('lojas').insert([{ nome_loja, ativo: true }]);
+        if (error) alert('Erro ao cadastrar: ' + error.message);
+        else alert('Loja cadastrada com sucesso!');
+      }
+
+      btnSalvar.disabled = false;
+      limparFormulario();
+      carregarLojas();
+    });
+
+    function editarLoja(id, nome) {
+      document.getElementById('loja_id').value = id;
+      document.getElementById('nome_loja').value = nome;
+      document.getElementById('tituloForm').innerText = 'EDITAR LOJA';
+      document.getElementById('btnSalvar').innerText = '✓ ATUALIZAR';
+      document.getElementById('btnCancelar').classList.remove('hidden');
+    }
+
+    async function alternarStatus(id, statusAtual) {
+      const acao = statusAtual ? 'inativar' : 'ativar';
+      if (confirm(`Deseja realmente ${acao} esta loja?`)) {
+        const { error } = await _supabase.from('lojas').update({ ativo: !statusAtual }).eq('id', id);
+        if (error) alert('Erro: ' + error.message);
+        else carregarLojas();
+      }
+    }
+
+    function limparFormulario() {
+      document.getElementById('loja_id').value = '';
+      document.getElementById('nome_loja').value = '';
+      document.getElementById('tituloForm').innerText = '+ NOVA LOJA';
+      document.getElementById('btnSalvar').innerText = '✓ SALVAR';
+      document.getElementById('btnCancelar').classList.add('hidden');
+    }
+
+    carregarLojas();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

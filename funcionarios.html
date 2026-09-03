@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão de Colaboradores - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <!-- Proteção de Acesso -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Cabeçalho Fixo (Sticky Header) - Apenas com Painel Principal -->
+    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">GESTÃO DE COLABORADORES</h1>
+        <p class="text-xs text-slate-500">Vincule funcionários às empresas e lojas cadastradas</p>
+      </div>
+      <div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← PAINEL PRINCIPAL</a>
+      </div>
+    </div>
+
+    <!-- Grid Principal -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Coluna Esquerda: Formulário de Edição / Cadastro -->
+      <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm h-fit">
+        <h2 id="tituloForm" class="font-bold text-emerald-700 text-sm border-b border-slate-100 pb-2">ADICIONAR COLABORADOR</h2>
+
+        <form id="formFuncionario" onsubmit="salvarFuncionario(event)" class="space-y-4">
+          <input type="hidden" id="funcId">
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nome de Registro *</label>
+            <input type="text" id="inputNome" required placeholder="Nome completo" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Usuário Alpha7</label>
+            <input type="text" id="inputUsuarioAlpha7" placeholder="Ex: ALINE SILVA - 10" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Cargo *</label>
+              <input type="text" id="inputCargo" required placeholder="Ex: CAIXA" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Matrícula (Automática)</label>
+              <input type="text" id="inputMatricula" readonly placeholder="Auto" class="w-full bg-slate-100 border border-slate-300 rounded-lg p-2.5 text-slate-600 text-sm focus:outline-none font-mono cursor-not-allowed">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Empresa de Registro *</label>
+            <select id="selectEmpresa" onchange="aoSelecionarEmpresa()" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+              <option value="">-- SELECIONE A EMPRESA --</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div>
+              <span class="text-[10px] text-slate-400 block uppercase font-bold">CNPJ</span>
+              <span id="infoCnpj" class="text-xs text-slate-700 font-mono">-</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 block uppercase font-bold">Empresa (Fantasia)</span>
+              <span id="infoFantasia" class="text-xs text-emerald-700 font-bold">-</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Loja que Trabalha *</label>
+            <select id="selectLoja" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono" disabled>
+              <option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>
+            </select>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer">
+              ✓ ADICIONAR COLABORADOR
+            </button>
+            <button type="button" onclick="resetarFormulario()" class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-lg transition text-xs cursor-pointer">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Coluna Direita: Listagem de Colaboradores com Filtros Avançados -->
+      <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
+        
+        <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center border-b border-slate-200 pb-3 gap-3">
+          <h2 class="font-bold text-slate-900 text-sm">COLABORADORES CADASTRADOS</h2>
+          
+          <!-- Área de Filtros -->
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Filtro Status -->
+            <select id="filtroStatus" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium">
+              <option value="ATIVO">ATIVOS</option>
+              <option value="INATIVO">INATIVOS</option>
+              <option value="TODOS">TODOS OS STATUS</option>
+            </select>
+
+            <!-- Filtro Empresa (Baseado no CNPJ exato) -->
+            <select id="filtroEmpresa" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[220px]">
+              <option value="">TODAS AS EMPRESAS</option>
+            </select>
+
+            <!-- Filtro Loja -->
+            <select id="filtroLoja" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[140px]">
+              <option value="">TODAS AS LOJAS</option>
+            </select>
+
+            <span id="contadorRegistros" class="text-xs text-slate-500 font-mono ml-1">0 reg.</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500">
+                <th class="p-3">MAT.</th>
+                <th class="p-3">NOME / USUÁRIO</th>
+                <th class="p-3">CARGO</th>
+                <th class="p-3">EMPRESA / LOJA / CNPJ</th>
+                <th class="p-3">STATUS</th>
+                <th class="p-3 text-right">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaFuncionarios" class="divide-y divide-slate-100">
+              <tr><td colspan="6" class="p-6 text-center text-slate-400">Carregando colaboradores...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let listaGlobalEmpresas = [];
+    let listaGlobalLojas = [];
+    let listaGlobalFuncionarios = [];
+
+    async function inicializar() {
+      await carregarEmpresas();
+      await carregarLojas();
+      await carregarFuncionarios();
+    }
+
+    async function carregarEmpresas() {
+      const { data, error } = await _supabase.from('empresas').select('id, cnpj, razao_social, nome_fantasia').order('cnpj');
+      if (!error) {
+        listaGlobalEmpresas = data || [];
+        
+        // Select do Formulário
+        const selectForm = document.getElementById('selectEmpresa');
+        selectForm.innerHTML = '<option value="">-- SELECIONE A EMPRESA --</option>' + 
+          listaGlobalEmpresas.map(e => `
+            <option value="${e.id}" data-cnpj="${e.cnpj || ''}" data-fantasia="${e.nome_fantasia || ''}" data-razao="${e.razao_social}">
+              ${e.cnpj ? e.cnpj + ' - ' : ''}${e.nome_fantasia ? '[' + e.nome_fantasia + '] ' : ''}${e.razao_social}
+            </option>
+          `).join('');
+
+        // Select do Filtro Superior
+        const filtroEmpresa = document.getElementById('filtroEmpresa');
+        filtroEmpresa.innerHTML = '<option value="">TODAS AS EMPRESAS</option>' + 
+          listaGlobalEmpresas.map(e => `
+            <option value="${e.cnpj || ''}">${e.cnpj ? e.cnpj + ' - ' : ''}${e.razao_social}</option>
+          `).join('');
+      }
+    }
+
+    async function carregarLojas() {
+      const { data, error } = await _supabase.from('lojas').select('*');
+      if (!error) {
+        listaGlobalLojas = data || [];
+
+        // Select do Filtro Superior de Lojas
+        const filtroLoja = document.getElementById('filtroLoja');
+        filtroLoja.innerHTML = '<option value="">TODAS AS LOJAS</option>' + 
+          listaGlobalLojas.map(l => {
+            const nomeL = l.nome_loja || l.loja || l.nome || 'Loja';
+            return `<option value="${nomeL}">${nomeL}</option>`;
+          }).join('');
+      }
+    }
+
+    function aoSelecionarEmpresa(lojaValorParaSelecionar = null) {
+      const selectEmpresa = document.getElementById('selectEmpresa');
+      const empresaId = selectEmpresa.value;
+      const selectLoja = document.getElementById('selectLoja');
+      const infoCnpj = document.getElementById('infoCnpj');
+      const infoFantasia = document.getElementById('infoFantasia');
+      const inputMatricula = document.getElementById('inputMatricula');
+      const funcId = document.getElementById('funcId').value;
+
+      if (!empresaId) {
+        infoCnpj.innerText = '-';
+        infoFantasia.innerText = '-';
+        selectLoja.innerHTML = '<option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>';
+        selectLoja.disabled = true;
+        if (!funcId) inputMatricula.value = '';
+        return;
+      }
+
+      const opt = selectEmpresa.selectedOptions[0];
+      const cnpj = opt.getAttribute('data-cnpj') || '';
+      const fantasia = opt.getAttribute('data-fantasia') || '-';
+      const razaoSocial = opt.getAttribute('data-razao') || '';
+
+      infoCnpj.innerText = cnpj || '-';
+      infoFantasia.innerText = fantasia;
+
+      selectLoja.innerHTML = '<option value="">-- SELECIONE A LOJA --</option>' + 
+        listaGlobalLojas.map(l => {
+          const nomeL = l.nome_loja || l.loja || l.nome || 'Loja';
+          return `<option value="${nomeL}">${nomeL}</option>`;
+        }).join('');
+
+      selectLoja.disabled = false;
+      if (lojaValorParaSelecionar !== null && lojaValorParaSelecionar !== undefined && lojaValorParaSelecionar !== '') {
+        selectLoja.value = lojaValorParaSelecionar;
+      }
+
+      // Geração automática da matrícula para novos cadastros por empresa
+      if (!funcId) {
+        const cnpjLimpo = cnpj.replace(/\D/g, '');
+        const funcDaEmpresa = listaGlobalFuncionarios.filter(f => {
+          const fCnpjLimpo = String(f.cnpj || '').replace(/\D/g, '');
+          if (fCnpjLimpo && fCnpjLimpo === cnpjLimpo) return true;
+          if (String(f.empresa_registro || '').includes(razaoSocial)) return true;
+          return false;
+        });
+
+        let maxMatricula = 1000; // Valor base padrão inicial
+        funcDaEmpresa.forEach(f => {
+          const matNum = parseInt(f.matricula, 10);
+          if (!isNaN(matNum) && matNum > maxMatricula) {
+            maxMatricula = matNum;
+          }
+        });
+
+        inputMatricula.value = maxMatricula + 1;
+      }
+    }
+
+    async function carregarFuncionarios() {
+      const { data, error } = await _supabase.from('funcionarios').select('*').order('nome_registro');
+      if (!error) {
+        listaGlobalFuncionarios = data || [];
+        renderizarTabela();
+      }
+    }
+
+    function renderizarTabela() {
+      const statusFiltro = document.getElementById('filtroStatus').value;
+      const cnpjFiltro = document.getElementById('filtroEmpresa').value;
+      const lojaFiltro = document.getElementById('filtroLoja').value;
+
+      let dados = listaGlobalFuncionarios;
+
+      // Filtro por Status
+      if (statusFiltro !== 'TODOS') {
+        dados = dados.filter(f => String(f.status || 'ATIVO').toUpperCase() === statusFiltro);
+      }
+
+      // Filtro por Empresa (CNPJ exato)
+      if (cnpjFiltro) {
+        const cnpjFiltroLimpo = cnpjFiltro.replace(/\D/g, '');
+        dados = dados.filter(f => {
+          const funcCnpjLimpo = String(f.cnpj || '').replace(/\D/g, '');
+          if (funcCnpjLimpo && funcCnpjLimpo === cnpjFiltroLimpo) return true;
+          if (String(f.empresa_registro || '').replace(/\D/g, '').includes(cnpjFiltroLimpo)) return true;
+          return false;
+        });
+      }
+
+      // Filtro por Loja
+      if (lojaFiltro) {
+        dados = dados.filter(f => String(f.loja_trabalha || '').toUpperCase().includes(lojaFiltro.toUpperCase()));
+      }
+
+      document.getElementById('contadorRegistros').innerText = `${dados.length} reg.`;
+
+      const tbody = document.getElementById('tabelaFuncionarios');
+      if (dados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhum colaborador encontrado com esses filtros.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = dados.map(f => {
+        const statusStr = f.status || 'ATIVO';
+        const isAtivo = statusStr.toUpperCase() === 'ATIVO';
+        const badgeClass = isAtivo ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
+        
+        let nomeLoja = f.loja_trabalha || '-';
+        if (f.loja_trabalha) {
+          const numLojaStr = String(f.loja_trabalha).trim();
+          const lojaEncontrada = listaGlobalLojas.find(l => {
+            const lNome = String(l.nome_loja || l.loja || '').trim();
+            return lNome.includes(numLojaStr) || lNome.endsWith(numLojaStr);
+          });
+          if (lojaEncontrada) {
+            nomeLoja = lojaEncontrada.nome_loja || lojaEncontrada.loja;
+          }
+        }
+
+        let cnpjEmpresa = f.cnpj || '';
+        if (!cnpjEmpresa && f.empresa_id) {
+          const empMatch = listaGlobalEmpresas.find(e => String(e.id) === String(f.empresa_id));
+          if (empMatch) cnpjEmpresa = empMatch.cnpj || '';
+        }
+        if (!cnpjEmpresa && f.empresa_registro) {
+          const empMatch = listaGlobalEmpresas.find(e => f.empresa_registro.includes(e.razao_social));
+          if (empMatch) cnpjEmpresa = empMatch.cnpj || '';
+        }
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-mono text-slate-600">${f.matricula || '-'}</td>
+            <td class="p-3">
+              <div class="font-bold text-slate-900">${f.nome_registro}</div>
+              <div class="text-[10px] text-slate-400 font-mono">${f.usuario_alpha7 || ''}</div>
+            </td>
+            <td class="p-3 text-slate-700">${f.cargo || '-'}</td>
+            <td class="p-3">
+              <div class="text-xs text-slate-700 font-mono">${f.empresa_registro || '-'}</div>
+              <div class="text-[11px] text-emerald-700 font-medium">Loja: ${nomeLoja}</div>
+              <div class="text-[11px] text-slate-400 font-mono">CNPJ: ${cnpjEmpresa || 'Não informado'}</div>
+            </td>
+            <td class="p-3">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${statusStr}</span>
+            </td>
+            <td class="p-3 text-right whitespace-nowrap space-x-1">
+              <button onclick="prepararEdicao('${f.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition cursor-pointer">✏️ Editar</button>
+              <button onclick="alternarStatusFunc('${f.id}', '${statusStr}')" class="px-2 py-1 ${isAtivo ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'} rounded font-bold text-[10px] transition cursor-pointer">${isAtivo ? '🔒 Inativar' : '🔓 Ativar'}</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function alternarStatusFunc(id, statusAtual) {
+      const novoStatus = String(statusAtual).toUpperCase() === 'ATIVO' ? 'INATIVO' : 'ATIVO';
+      const acaoTexto = novoStatus === 'INATIVO' ? 'inativar' : 'ativar';
+
+      if (confirm(`Deseja realmente ${acaoTexto} este colaborador?`)) {
+        const { error } = await _supabase.from('funcionarios').update({ status: novoStatus }).eq('id', id);
+        if (error) {
+          alert('Erro ao alterar status: ' + error.message);
+        } else {
+          carregarFuncionarios();
+        }
+      }
+    }
+
+    function prepararEdicao(id) {
+      const f = listaGlobalFuncionarios.find(item => String(item.id) === String(id));
+      if (!f) return;
+
+      document.getElementById('tituloForm').innerText = 'EDITAR COLABORADOR';
+      document.getElementById('funcId').value = f.id;
+      document.getElementById('inputNome').value = f.nome_registro || '';
+      document.getElementById('inputUsuarioAlpha7').value = f.usuario_alpha7 || '';
+      document.getElementById('inputCargo').value = f.cargo || '';
+      document.getElementById('inputMatricula').value = f.matricula || '';
+
+      let empresaMatch = null;
+
+      if (f.empresa_id) {
+        empresaMatch = listaGlobalEmpresas.find(e => String(e.id) === String(f.empresa_id));
+      }
+      if (!empresaMatch && f.cnpj) {
+        const cnpjLimpo = String(f.cnpj).replace(/\D/g, '');
+        empresaMatch = listaGlobalEmpresas.find(e => (e.cnpj || '').replace(/\D/g, '') === cnpjLimpo);
+      }
+      if (!empresaMatch && f.empresa_registro) {
+        empresaMatch = listaGlobalEmpresas.find(e => e.cnpj && f.empresa_registro.includes(e.cnpj));
+      }
+      if (!empresaMatch && f.empresa_registro) {
+        empresaMatch = listaGlobalEmpresas.find(e => f.empresa_registro.includes(e.razao_social));
+      }
+
+      if (empresaMatch) {
+        document.getElementById('selectEmpresa').value = empresaMatch.id;
+        
+        let lojaAlvo = f.loja_trabalha || '';
+        const lojaObj = listaGlobalLojas.find(l => {
+          const lNome = String(l.nome_loja || l.loja || '').trim();
+          return lNome.includes(String(lojaAlvo)) || lNome.endsWith(String(lojaAlvo));
+        });
+        if (lojaObj) {
+          lojaAlvo = lojaObj.nome_loja || lojaObj.loja;
+        }
+
+        aoSelecionarEmpresa(lojaAlvo);
+      } else {
+        document.getElementById('selectEmpresa').value = '';
+        aoSelecionarEmpresa();
+      }
+
+      document.getElementById('btnSalvar').innerText = '✓ ATUALIZAR COLABORADOR';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetarFormulario() {
+      document.getElementById('tituloForm').innerText = 'ADICIONAR COLABORADOR';
+      document.getElementById('formFuncionario').reset();
+      document.getElementById('funcId').value = '';
+      document.getElementById('inputMatricula').value = '';
+      document.getElementById('infoCnpj').innerText = '-';
+      document.getElementById('infoFantasia').innerText = '-';
+      document.getElementById('selectLoja').innerHTML = '<option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>';
+      document.getElementById('selectLoja').disabled = true;
+      document.getElementById('btnSalvar').innerText = '✓ ADICIONAR COLABORADOR';
+    }
+
+    async function salvarFuncionario(e) {
+      e.preventDefault();
+      const id = document.getElementById('funcId').value;
+      const nome_registro = document.getElementById('inputNome').value.toUpperCase();
+      const usuario_alpha7 = document.getElementById('inputUsuarioAlpha7').value.toUpperCase();
+      const cargo = document.getElementById('inputCargo').value.toUpperCase();
+      const matricula = document.getElementById('inputMatricula').value;
+      
+      const selectEmpresa = document.getElementById('selectEmpresa');
+      const empresa_registro = selectEmpresa.selectedOptions[0]?.text || '';
+      
+      const loja_trabalha = document.getElementById('selectLoja').value || null;
+      const cnpj = selectEmpresa.selectedOptions[0]?.getAttribute('data-cnpj') || null;
+
+      const payload = {
+        nome_registro,
+        usuario_alpha7,
+        cargo,
+        matricula,
+        empresa_registro,
+        loja_trabalha,
+        cnpj
+      };
+
+      if (id) {
+        const { error } = await _supabase.from('funcionarios').update(payload).eq('id', id);
+        if (error) alert('Erro ao atualizar: ' + error.message);
+        else { resetarFormulario(); carregarFuncionarios(); }
+      } else {
+        payload.status = 'ATIVO';
+        const { error } = await _supabase.from('funcionarios').insert([payload]);
+        if (error) alert('Erro ao cadastrar: ' + error.message);
+        else { resetarFormulario(); carregarFuncionarios(); }
+      }
+    }
+
+    inicializar();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

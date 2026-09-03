@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lançamentos e Histórico - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <!-- Proteção de Acesso -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Cabeçalho Fixo (Sticky Header) - Apenas com Painel Principal -->
+    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs px-2">
+      <div>
+        <a href="index.html" class="text-xs text-emerald-700 hover:underline mb-1 inline-block font-bold">← VOLTAR AO DASHBOARD</a>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">LANÇAMENTOS DE PROVENTOS E DESCONTOS</h1>
+        <p class="text-xs text-slate-500">Gerenciamento e Consulta na tabela <span class="font-mono text-emerald-700">folha_itens</span></p>
+      </div>
+      <div class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-right shadow-2xs">
+        <span class="text-[10px] text-slate-400 block uppercase font-semibold">COMPETÊNCIA DE LANÇAMENTO</span>
+        <span id="labelCompetenciaAtiva" class="text-emerald-700 font-bold text-xs font-mono uppercase">08/2026 (ABERTA)</span>
+      </div>
+    </div>
+
+    <!-- Grid Principal -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Coluna Esquerda: Abas e Formulários -->
+      <div class="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-5 shadow-sm h-fit">
+        
+        <!-- Botões de Alternância de Abas -->
+        <div class="grid grid-cols-2 border-b border-slate-200 pb-3 gap-2">
+          <button type="button" id="tabBtnNovo" onclick="alternarAba('novo')" class="py-2 px-3 text-center text-xs font-bold text-emerald-700 border-b-2 border-emerald-600 transition cursor-pointer">
+            + NOVO LANÇAMENTO
+          </button>
+          <button type="button" id="tabBtnConsulta" onclick="alternarAba('consulta')" class="py-2 px-3 text-center text-xs font-bold text-slate-400 hover:text-slate-700 transition cursor-pointer">
+            🔍 CONSULTAR HISTÓRICO
+          </button>
+        </div>
+
+        <!-- ABA 1: NOVO LANÇAMENTO -->
+        <div id="abaNovo" class="space-y-4">
+          <div id="alertaCompetenciaFechada" class="hidden bg-rose-50 border border-rose-300 text-rose-800 p-3 rounded-lg text-xs font-bold flex flex-col items-center gap-2">
+            <span>⚠️ O PERÍODO ATIVO ESTÁ FECHADO. LANÇAMENTOS BLOQUEADOS.</span>
+            <button type="button" onclick="tentarDesbloquearPeriodoComSenha()" class="bg-rose-700 hover:bg-rose-800 text-white font-bold px-3 py-1.5 rounded transition text-[11px] cursor-pointer">
+              🔒 Desbloquear com Senha de Gestor
+            </button>
+          </div>
+
+          <form id="formLancamento" onsubmit="salvarLancamento(event)" class="space-y-4">
+            <input type="hidden" id="editLancamentoId" value="">
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">1. Empresa / Filial (CNPJ) *</label>
+              <select id="selectEmpresaNovo" onchange="carregarFuncionariosPorEmpresa('Novo')" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+                <option value="">-- SELECIONE A EMPRESA --</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">2. Colaborador Alvo *</label>
+              <select id="selectFuncionarioNovo" onchange="carregarLancamentosNovo()" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 disabled:opacity-50" disabled>
+                <option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>
+              </select>
+            </div>
+
+            <div class="relative">
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">3. Evento / Rubrica (Busca por Código ou Nome) *</label>
+              <input type="text" id="inputRubrica" required autocomplete="off" placeholder="Digite código ou min. 3 letras (ex: 2001)..." 
+                class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase"
+                oninput="buscarEventosInteligente(this.value)">
+              
+              <div id="listaSugestoes" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 divide-y divide-slate-100"></div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Lançamento *</label>
+              <select id="tipoLancamento" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600">
+                <option value="PROVENTO">PROVENTO / CRÉDITO (+)</option>
+                <option value="DESCONTO">DESCONTO / DÉBITO (-)</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="block text-xs font-bold text-slate-600 uppercase">4. Valor do Lançamento (R$) *</label>
+                <button type="button" onclick="alternarCampoAbatimento()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-1.5 py-0.5 rounded cursor-pointer" title="">+</button>
+              </div>
+              <input type="number" step="0.01" id="valorLancamento" required placeholder="0.00" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+            </div>
+
+            <!-- Painel Oculto 1 de Ajuste Interno e Parcelamento -->
+            <div id="containerAbatimento" class="hidden bg-slate-50 border border-slate-200 p-3 rounded-lg space-y-3">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Valor do Ajuste / Desconto (R$)</label>
+                <input type="number" step="0.01" id="valorAbatimento" value="0.00" placeholder="0.00" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono">
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Motivo / Histórico Interno</label>
+                <input type="text" id="inputMotivo" placeholder="Ex: Acordo interno, adiantamento..." class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 uppercase">
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Parcela Atual</label>
+                  <input type="number" id="inputParcelaAtual" value="1" min="1" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-mono">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Total de Parcelas</label>
+                  <input type="number" id="inputTotalParcelas" value="1" min="1" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-mono">
+                </div>
+              </div>
+            </div>
+
+            <!-- Checkbox de Lançamento Fixo (Recorrente) + Botão + minimalista para 2º Abatimento -->
+            <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-1">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="checkFixo" class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer">
+                  <label for="checkFixo" class="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    📌 Manter este lançamento fixo (repetir no próximo mês)
+                  </label>
+                </div>
+                <button type="button" onclick="alternarCampoAbatimento2()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-1.5 py-0.5 rounded cursor-pointer" title="">+</button>
+              </div>
+            </div>
+
+            <!-- Painel Oculto 2 de Ajuste Interno e Parcelamento -->
+            <div id="containerAbatimento2" class="hidden bg-slate-50 border border-slate-200 p-3 rounded-lg space-y-3">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Valor do 2º Ajuste / Desconto (R$)</label>
+                <input type="number" step="0.01" id="valorAbatimento2" value="0.00" placeholder="0.00" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono">
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Motivo / Histórico Interno (2º)</label>
+                <input type="text" id="inputMotivo2" placeholder="Ex: Segundo acordo, farmácia..." class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 uppercase">
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Parcela Atual (2º)</label>
+                  <input type="number" id="inputParcelaAtual2" value="1" min="1" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-mono">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Total de Parcelas (2º)</label>
+                  <input type="number" id="inputTotalParcelas2" value="1" min="1" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-mono">
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-2">
+              <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer">
+                ✓ CONFIRMAR LANÇAMENTO
+              </button>
+              <button type="button" id="btnCancelarEdicao" onclick="cancelarEdicao()" class="hidden bg-slate-300 hover:bg-slate-400 text-slate-700 font-bold px-3 py-3 rounded-lg transition text-xs cursor-pointer" title="Cancelar Edição">✕</button>
+            </div>
+          </form>
+
+          <!-- Botão para Replicar Fixos do Mês Anterior -->
+          <div class="pt-2 border-t border-slate-200">
+            <button type="button" onclick="importarItensFixosMesAnterior()" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer flex items-center justify-center gap-1.5">
+              📥 Importar Lançamentos Fixos do Mês Anterior
+            </button>
+          </div>
+        </div>
+
+        <!-- ABA 2: CONSULTAR HISTÓRICO -->
+        <div id="abaConsulta" class="hidden space-y-4">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">1. Período / Competência *</label>
+              <select id="selectCompetenciaConsulta" onchange="dispararConsultaHistorico()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+                <option value="08/2026">08/2026</option>
+                <option value="07/2026">07/2026</option>
+                <option value="06/2026">06/2026</option>
+                <option value="05/2026">05/2026</option>
+                <option value="04/2026">04/2026</option>
+                <option value="03/2026">03/2026</option>
+                <option value="02/2026">02/2026</option>
+                <option value="01/2026">01/2026</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">2. Empresa / Filial (CNPJ) *</label>
+              <select id="selectEmpresaConsulta" onchange="carregarFuncionariosPorEmpresa('Consulta')" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+                <option value="">-- SELECIONE A EMPRESA --</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">3. Funcionário *</label>
+              <select id="selectFuncionarioConsulta" onchange="dispararConsultaHistorico()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 disabled:opacity-50" disabled>
+                <option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>
+              </select>
+            </div>
+
+            <div class="pt-2">
+              <button type="button" onclick="dispararConsultaHistorico()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer">
+                🔍 PESQUISAR HISTÓRICO
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Coluna Direita: Listagem Limpa e Objetiva -->
+      <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-6 shadow-sm">
+        
+        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+          <div>
+            <h2 id="tituloPainelDireito" class="font-bold text-slate-900 text-sm">ITENS DA COMPETÊNCIA ATIVA</h2>
+            <p id="subtituloContexto" class="text-[11px] text-emerald-700 font-mono mt-0.5">Selecione uma empresa e funcionário</p>
+          </div>
+          <span id="resumoContador" class="text-xs text-slate-500 font-mono">LANÇAMENTOS: 0 | TOTAL LÍQUIDO: R$ 0,00</span>
+        </div>
+
+        <!-- Seção Proventos -->
+        <div class="space-y-2">
+          <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded text-xs font-bold">
+            ▲ PROVENTOS / CRÉDITOS (+)
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-500">
+                  <th class="p-2.5">EVENTO / RUBRICA</th>
+                  <th class="p-2.5 text-right">VALOR</th>
+                  <th id="thAcaoProv" class="p-2.5 text-center w-24">AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaProventos" class="divide-y divide-slate-100">
+                <tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="text-right text-xs font-bold text-emerald-700 pt-1 font-mono">
+            SUBTOTAL PROVENTOS (CRÉDITOS): <span id="subtotalProventos">R$ 0,00</span>
+          </div>
+        </div>
+
+        <!-- Seção Descontos -->
+        <div class="space-y-2 pt-4">
+          <div class="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-1.5 rounded text-xs font-bold">
+            ▼ DESCONTOS / DÉBITOS (-)
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-500">
+                  <th class="p-2.5">EVENTO / RUBRICA</th>
+                  <th class="p-2.5 text-right">VALOR</th>
+                  <th id="thAcaoDesc" class="p-2.5 text-center w-24">AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaDescontos" class="divide-y divide-slate-100">
+                <tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="text-right text-xs font-bold text-rose-700 pt-1 font-mono">
+            SUBTOTAL DESCONTOS (DÉBITOS): <span id="subtotalDescontos">R$ 0,00</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let listaGlobalEmpresas = [];
+    let listaGlobalFuncionarios = [];
+    let listaGlobalEventos = [];
+    let abaAtiva = 'novo';
+    let competenciaEstaFechada = false;
+    let periodoForcadoDesbloqueado = false; // Controle de liberação por senha de gestor
+    
+    let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
+    
+    function converterCompetenciaParaMMYYYY(texto) {
+      const mesesMap = {
+        'JANEIRO': '01', 'FEVEREIRO': '02', 'MARÇO': '03', 'MARCO': '03',
+        'ABRIL': '04', 'MAIO': '05', 'JUNHO': '06', 'JULHO': '07',
+        'AGOSTO': '08', 'SETEMBRO': '09', 'OUTUBRO': '10', 'NOVEMBRO': '11', 'DEZEMBRO': '12'
+      };
+      const partes = texto.split('/');
+      if (partes.length >= 2) {
+        const mesNome = partes[0].trim().toUpperCase();
+        const ano = partes[1].trim();
+        const mesNum = mesesMap[mesNome] || '08';
+        return `${mesNum}/${ano}`;
+      }
+      return '08/2026';
+    }
+
+    let competenciaRegraLancamento = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
+    document.getElementById('labelCompetenciaAtiva').innerText = `${competenciaRegraLancamento} (ABERTA)`;
+
+    function removerAcentosEColocarMaiuscula(texto) {
+      if (!texto) return '';
+      return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    }
+
+    function obterMesAnterior(compAtual) {
+      const partes = compAtual.split('/');
+      let mes = parseInt(partes[0], 10);
+      let ano = parseInt(partes[1], 10);
+      mes--;
+      if (mes < 1) {
+        mes = 12;
+        ano--;
+      }
+      return `${String(mes).padStart(2, '0')}/${ano}`;
+    }
+
+    function alternarCampoAbatimento() {
+      const container = document.getElementById('containerAbatimento');
+      container.classList.toggle('hidden');
+    }
+
+    function alternarCampoAbatimento2() {
+      const container = document.getElementById('containerAbatimento2');
+      container.classList.toggle('hidden');
+    }
+
+    // Função para desbloquear período fechado mediante senha de gestor
+    function tentarDesbloquearPeriodoComSenha() {
+      const senhaInformada = prompt("Digite a Senha Mestra de Gestor para desbloquear a edição deste período fechado:");
+      // Senha padrão configurada (você pode alterar para a que preferir)
+      const senhaCorreta = "DRG@2026";
+
+      if (senhaInformada === senhaCorreta) {
+        periodoForcadoDesbloqueado = true;
+        competenciaEstaFechada = false;
+        document.getElementById('alertaCompetenciaFechada').classList.add('hidden');
+        const btnSalvar = document.getElementById('btnSalvar');
+        btnSalvar.disabled = false;
+        btnSalvar.classList.remove('opacity-50', 'cursor-not-allowed');
+        carregarLancamentosNovo();
+        alert("🔒 Período desbloqueado temporariamente com sucesso para manutenções autorizadas!");
+      } else if (senhaInformada !== null) {
+        alert("❌ Senha incorreta! Acesso negado.");
+      }
+    }
+
+    async function inicializarTela() {
+      try {
+        periodoForcadoDesbloqueado = false;
+        await verificarStatusCompetenciaNoBanco(competenciaRegraLancamento);
+        await carregarEmpresas();
+        await carregarFuncionariosGeral();
+        await carregarEventosGeral();
+        
+        const selComp = document.getElementById('selectCompetenciaConsulta');
+        if (selComp) selComp.value = competenciaRegraLancamento;
+      } catch (err) {
+        console.error('Erro na inicialização:', err);
+      }
+    }
+
+    async function verificarStatusCompetenciaNoBanco(competenciaStr) {
+      const partes = (competenciaStr || competenciaRegraLancamento).split('/');
+      const mesNum = parseInt(partes[0], 10);
+      const anoNum = parseInt(partes[1], 10);
+
+      const { data } = await _supabase.from('competencias').select('status').eq('ano', anoNum).eq('mes', mesNum);
+      
+      let status = 'ABERTO';
+      if (data && data.length > 0) {
+        status = data[0].status;
+      }
+
+      if (periodoForcadoDesbloqueado) {
+        competenciaEstaFechada = false;
+        return;
+      }
+
+      competenciaEstaFechada = (status === 'FECHADO');
+
+      const alerta = document.getElementById('alertaCompetenciaFechada');
+      const btnSalvar = document.getElementById('btnSalvar');
+
+      if (competenciaEstaFechada) {
+        if (alerta) alerta.classList.remove('hidden');
+        if (btnSalvar) {
+          btnSalvar.disabled = true;
+          btnSalvar.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+      } else {
+        if (alerta) alerta.classList.add('hidden');
+        if (btnSalvar) {
+          btnSalvar.disabled = false;
+          btnSalvar.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+      }
+    }
+
+    function alternarAba(aba) {
+      abaAtiva = aba;
+      const btnNovo = document.getElementById('tabBtnNovo');
+      const btnConsulta = document.getElementById('tabBtnConsulta');
+      const divNovo = document.getElementById('abaNovo');
+      const divConsulta = document.getElementById('abaConsulta');
+      const tituloDir = document.getElementById('tituloPainelDireito');
+
+      if (aba === 'novo') {
+        btnNovo.className = "py-2 px-3 text-center text-xs font-bold text-emerald-700 border-b-2 border-emerald-600 transition cursor-pointer";
+        btnConsulta.className = "py-2 px-3 text-center text-xs font-bold text-slate-400 hover:text-slate-700 transition cursor-pointer";
+        divNovo.classList.remove('hidden');
+        divConsulta.classList.add('hidden');
+        tituloDir.innerText = `ITENS DA COMPETÊNCIA ATIVA (${competenciaRegraLancamento})`;
+        verificarStatusCompetenciaNoBanco(competenciaRegraLancamento).then(() => carregarLancamentosNovo());
+      } else {
+        btnConsulta.className = "py-2 px-3 text-center text-xs font-bold text-emerald-700 border-b-2 border-emerald-600 transition cursor-pointer";
+        btnNovo.className = "py-2 px-3 text-center text-xs font-bold text-slate-400 hover:text-slate-700 transition cursor-pointer";
+        divConsulta.classList.remove('hidden');
+        divNovo.classList.add('hidden');
+        tituloDir.innerText = "HISTÓRICO DE LANÇAMENTOS - CONSULTA";
+        limparTabelasDireita();
+      }
+    }
+
+    async function carregarEmpresas() {
+      const { data, error } = await _supabase.from('empresas').select('id, cnpj, razao_social, nome_fantasia').order('cnpj');
+      if (error) { console.error('Erro empresas:', error); return; }
+
+      listaGlobalEmpresas = data || [];
+      const optionsHtml = '<option value="">-- SELECIONE A EMPRESA --</option>' + 
+        listaGlobalEmpresas.map(e => `
+          <option value="${e.id}" data-cnpj="${e.cnpj || ''}">
+            ${e.cnpj ? e.cnpj + ' - ' : ''}${e.nome_fantasia ? '[' + e.nome_fantasia + '] ' : ''}${e.razao_social}
+          </option>
+        `).join('');
+
+      const selNovo = document.getElementById('selectEmpresaNovo');
+      const selConsulta = document.getElementById('selectEmpresaConsulta');
+      if (selNovo) selNovo.innerHTML = optionsHtml;
+      if (selConsulta) selConsulta.innerHTML = optionsHtml;
+    }
+
+    async function carregarFuncionariosGeral() {
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj').order('nome_registro');
+      if (!error) {
+        listaGlobalFuncionarios = data || [];
+      }
+    }
+
+    async function carregarEventosGeral() {
+      const { data, error } = await _supabase.from('tipos_eventos').select('*').order('codigo_evento');
+      if (!error) {
+        listaGlobalEventos = data || [];
+      }
+    }
+
+    function carregarFuncionariosPorEmpresa(tipoAba) {
+      const selectEmpresa = document.getElementById(tipoAba === 'Novo' ? 'selectEmpresaNovo' : 'selectEmpresaConsulta');
+      const selectFunc = document.getElementById(tipoAba === 'Novo' ? 'selectFuncionarioNovo' : 'selectFuncionarioConsulta');
+      const empresaId = selectEmpresa.value;
+
+      if (!empresaId) {
+        selectFunc.innerHTML = '<option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>';
+        selectFunc.disabled = true;
+        limparTabelasDireita();
+        return;
+      }
+
+      const selectedOption = selectEmpresa.selectedOptions[0];
+      const cnpjSelecionado = (selectedOption.getAttribute('data-cnpj') || '').replace(/\D/g, '');
+
+      selectFunc.innerHTML = '<option value="">Carregando colaboradores...</option>';
+      selectFunc.disabled = true;
+
+      const filtrados = listaGlobalFuncionarios.filter(f => {
+        const funcCnpj = String(f.cnpj || '').replace(/\D/g, '');
+        return cnpjSelecionado && funcCnpj === cnpjSelecionado;
+      });
+
+      if (filtrados.length === 0) {
+        selectFunc.innerHTML = '<option value="">-- NENHUM COLABORADOR NESSA UNIDADE/CNPJ --</option>';
+        selectFunc.disabled = false;
+        limparTabelasDireita();
+        return;
+      }
+
+      selectFunc.innerHTML = '<option value="">-- SELECIONE O COLABORADOR --</option>' + 
+        filtrados.map(f => `<option value="${f.id}">${f.nome_registro}</option>`).join('');
+      selectFunc.disabled = false;
+
+      if (tipoAba === 'Novo') {
+        selectFunc.onchange = carregarLancamentosNovo;
+      } else {
+        selectFunc.onchange = dispararConsultaHistorico;
+      }
+    }
+
+    function buscarEventosInteligente(termo) {
+      const termoLimpo = removerAcentosEColocarMaiuscula(termo).trim();
+      const divSugestoes = document.getElementById('listaSugestoes');
+
+      if (termoLimpo.length < 2) {
+        divSugestoes.classList.add('hidden');
+        divSugestoes.innerHTML = '';
+        return;
+      }
+
+      const resultados = listaGlobalEventos.filter(ev => {
+        const codigoStr = String(ev.codigo_evento || '');
+        const descStr = String(ev.descricao_do_evento || '').toUpperCase();
+        return codigoStr.includes(termoLimpo) || descStr.includes(termoLimpo);
+      });
+
+      if (resultados.length === 0) {
+        divSugestoes.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">Nenhum evento encontrado</div>`;
+        divSugestoes.classList.remove('hidden');
+        return;
+      }
+
+      divSugestoes.innerHTML = resultados.map(ev => `
+        <div onclick="selecionarEvento('${ev.codigo_evento}', '${ev.descricao_do_evento}', '${ev.tipo_evento}')" 
+          class="p-2.5 hover:bg-slate-50 cursor-pointer text-xs flex justify-between items-center transition">
+          <div>
+            <span class="font-mono font-bold text-emerald-700 mr-2">${ev.codigo_evento}</span>
+            <span class="text-slate-800 font-medium">${ev.descricao_do_evento}</span>
+          </div>
+          <span class="text-[10px] text-slate-500 font-bold uppercase">${ev.tipo_evento}</span>
+        </div>
+      `).join('');
+
+      divSugestoes.classList.remove('hidden');
+    }
+
+    function selecionarEvento(codigo, descricao, tipo) {
+      document.getElementById('inputRubrica').value = `${codigo} - ${descricao}`;
+      document.getElementById('tipoLancamento').value = tipo === 'DESCONTO' ? 'DESCONTO' : 'PROVENTO';
+      document.getElementById('listaSugestoes').classList.add('hidden');
+    }
+
+    document.addEventListener('click', function(e) {
+      const input = document.getElementById('inputRubrica');
+      const lista = document.getElementById('listaSugestoes');
+      if (input && lista && !input.contains(e.target) && !lista.contains(e.target)) {
+        lista.classList.add('hidden');
+      }
+    });
+
+    async function carregarLancamentosNovo() {
+      if (abaAtiva !== 'novo') return;
+      const funcionarioId = document.getElementById('selectFuncionarioNovo').value;
+      if (!funcionarioId) {
+        limparTabelasDireita();
+        return;
+      }
+
+      const funcNome = document.getElementById('selectFuncionarioNovo').selectedOptions[0]?.text || '';
+      document.getElementById('subtituloContexto').innerText = `Competência Ativa: ${competenciaRegraLancamento} | Colaborador: ${funcNome}`;
+
+      const { data, error } = await _supabase
+        .from('folha_itens')
+        .select('*')
+        .eq('funcionario_id', funcionarioId)
+        .eq('competencia', competenciaRegraLancamento);
+
+      if (!error) renderizarListas(data || []);
+    }
+
+    async function dispararConsultaHistorico() {
+      if (abaAtiva !== 'consulta') return;
+      const periodo = document.getElementById('selectCompetenciaConsulta').value;
+      const empresaId = document.getElementById('selectEmpresaConsulta').value;
+      const funcionarioId = document.getElementById('selectFuncionarioConsulta').value;
+
+      if (!periodo || !empresaId || !funcionarioId) {
+        limparTabelasDireita();
+        return;
+      }
+
+      await verificarStatusCompetenciaNoBanco(periodo);
+
+      const funcNome = document.getElementById('selectFuncionarioConsulta').selectedOptions[0]?.text || '';
+      document.getElementById('subtituloContexto').innerText = `Histórico - Período: ${periodo} | Colaborador: ${funcNome}`;
+
+      const { data, error } = await _supabase
+        .from('folha_itens')
+        .select('*')
+        .eq('funcionario_id', funcionarioId)
+        .eq('competencia', periodo);
+
+      if (!error) renderizarListas(data || []);
+    }
+
+    function limparTabelasDireita() {
+      document.getElementById('subtituloContexto').innerText = 'Selecione uma empresa e funcionário';
+      document.getElementById('tabelaProventos').innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
+      document.getElementById('tabelaDescontos').innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
+      document.getElementById('subtotalProventos').innerText = 'R$ 0,00';
+      document.getElementById('subtotalDescontos').innerText = 'R$ 0,00';
+      document.getElementById('resumoContador').innerText = `LANÇAMENTOS: 0 | TOTAL LÍQUIDO: R$ 0,00`;
+    }
+
+    function renderizarListas(lancamentos) {
+      const proventos = lancamentos.filter(l => l.tipo === 'PROVENTO');
+      const descontos = lancamentos.filter(l => l.tipo === 'DESCONTO');
+      const totalLancamentos = lancamentos.length;
+
+      const thProv = document.getElementById('thAcaoProv');
+      const thDesc = document.getElementById('thAcaoDesc');
+      if (competenciaEstaFechada) {
+        if (thProv) thProv.style.display = 'none';
+        if (thDesc) thDesc.style.display = 'none';
+      } else {
+        if (thProv) thProv.style.display = '';
+        if (thDesc) thDesc.style.display = '';
+      }
+
+      const tbodyProv = document.getElementById('tabelaProventos');
+      if (proventos.length === 0) {
+        tbodyProv.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 2 : 3}" class="p-3 text-center text-slate-400">Nenhum provento encontrado.</td></tr>`;
+        document.getElementById('subtotalProventos').innerText = 'R$ 0,00';
+      } else {
+        tbodyProv.innerHTML = proventos.map(p => {
+          const temAbatimento = p.abatimento_sigiloso && parseFloat(p.abatimento_sigiloso) > 0;
+          const abatimentoValStr = temAbatimento ? parseFloat(p.abatimento_sigiloso).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00';
+          const motivoStr = p.motivo_ajuste ? p.motivo_ajuste : 'Não informado';
+          const parcelaStr = p.total_parcelas > 1 ? `${p.parcela_atual}/${p.total_parcelas}` : '1/1';
+          
+          const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
+          const badgeFixo = p.fixo ? `<span class="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
+
+          const botoesAcao = competenciaEstaFechada ? '' : `
+            <td class="p-2.5 text-center flex justify-center gap-1">
+              <button type="button" onclick='prepararEdicao(${JSON.stringify(p)})' class="text-slate-400 hover:text-sky-600 font-bold px-1.5 py-1 cursor-pointer" title="Editar lançamento">✎</button>
+              <button type="button" onclick="excluirLancamento('${p.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1.5 py-1 cursor-pointer" title="Remover lançamento">✕</button>
+            </td>
+          `;
+
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="p-2.5 text-slate-700 font-medium">
+                ${p.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
+              </td>
+              <td class="p-2.5 text-right text-emerald-700 font-mono font-bold">R$ ${parseFloat(p.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+              ${botoesAcao}
+            </tr>
+          `;
+        }).join('');
+        const totalP = proventos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+        document.getElementById('subtotalProventos').innerText = 'R$ ' + totalP.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      }
+
+      const tbodyDesc = document.getElementById('tabelaDescontos');
+      if (descontos.length === 0) {
+        tbodyDesc.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 2 : 3}" class="p-3 text-center text-slate-400">Nenhum desconto encontrado.</td></tr>`;
+        document.getElementById('subtotalDescontos').innerText = 'R$ 0,00';
+      } else {
+        tbodyDesc.innerHTML = descontos.map(d => {
+          const temAbatimento = d.abatimento_sigiloso && parseFloat(d.abatimento_sigiloso) > 0;
+          const abatimentoValStr = temAbatimento ? parseFloat(d.abatimento_sigiloso).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00';
+          const motivoStr = d.motivo_ajuste ? d.motivo_ajuste : 'Não informado';
+          const parcelaStr = d.total_parcelas > 1 ? `${d.parcela_atual}/${d.total_parcelas}` : '1/1';
+          
+          const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
+          const badgeFixo = d.fixo ? `<span class="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
+
+          const botoesAcao = competenciaEstaFechada ? '' : `
+            <td class="p-2.5 text-center flex justify-center gap-1">
+              <button type="button" onclick='prepararEdicao(${JSON.stringify(d)})' class="text-slate-400 hover:text-sky-600 font-bold px-1.5 py-1 cursor-pointer" title="Editar lançamento">✎</button>
+              <button type="button" onclick="excluirLancamento('${d.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1.5 py-1 cursor-pointer" title="Remover lançamento">✕</button>
+            </td>
+          `;
+
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="p-2.5 text-slate-700 font-medium">
+                ${d.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
+              </td>
+              <td class="p-2.5 text-right text-rose-700 font-mono font-bold">R$ ${parseFloat(d.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+              ${botoesAcao}
+            </tr>
+          `;
+        }).join('');
+        const totalD = descontos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+        document.getElementById('subtotalDescontos').innerText = 'R$ ' + totalD.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      }
+
+      const totalP = proventos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+      const totalD = descontos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+      const liquido = totalP - totalD;
+      document.getElementById('resumoContador').innerText = `LANÇAMENTOS: ${totalLancamentos} | TOTAL LÍQUIDO: R$ ${liquido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+    }
+
+    function prepararEdicao(item) {
+      document.getElementById('editLancamentoId').value = item.id;
+      document.getElementById('inputRubrica').value = item.rubrica || '';
+      document.getElementById('tipoLancamento').value = item.tipo || 'PROVENTO';
+      
+      const valorBrutoOriginal = item.valor_bruto !== undefined && item.valor_bruto !== null ? item.valor_bruto : item.valor;
+      document.getElementById('valorLancamento').value = valorBrutoOriginal;
+
+      if (item.abatimento_sigiloso && parseFloat(item.abatimento_sigiloso) > 0) {
+        document.getElementById('valorAbatimento').value = item.abatimento_sigiloso;
+        document.getElementById('inputMotivo').value = item.motivo_ajuste || '';
+        document.getElementById('inputParcelaAtual').value = item.parcela_atual || 1;
+        document.getElementById('inputTotalParcelas').value = item.total_parcelas || 1;
+        document.getElementById('containerAbatimento').classList.remove('hidden');
+      } else {
+        document.getElementById('valorAbatimento').value = '0.00';
+        document.getElementById('inputMotivo').value = '';
+        document.getElementById('inputParcelaAtual').value = '1';
+        document.getElementById('inputTotalParcelas').value = '1';
+        document.getElementById('containerAbatimento').classList.add('hidden');
+      }
+
+      document.getElementById('checkFixo').checked = !!item.fixo;
+
+      const btnSalvar = document.getElementById('btnSalvar');
+      btnSalvar.innerText = '✓ ATUALIZAR LANÇAMENTO';
+      btnSalvar.className = 'flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer';
+      document.getElementById('btnCancelarEdicao').classList.remove('hidden');
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelarEdicao() {
+      document.getElementById('editLancamentoId').value = '';
+      document.getElementById('inputRubrica').value = '';
+      document.getElementById('valorLancamento').value = '';
+      document.getElementById('valorAbatimento').value = '0.00';
+      document.getElementById('inputMotivo').value = '';
+      document.getElementById('inputParcelaAtual').value = '1';
+      document.getElementById('inputTotalParcelas').value = '1';
+      document.getElementById('checkFixo').checked = false;
+      document.getElementById('containerAbatimento').classList.add('hidden');
+
+      const btnSalvar = document.getElementById('btnSalvar');
+      btnSalvar.innerText = '✓ CONFIRMAR LANÇAMENTO';
+      btnSalvar.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer';
+      document.getElementById('btnCancelarEdicao').classList.add('hidden');
+    }
+
+    async function salvarLancamento(e) {
+      e.preventDefault();
+      if (competenciaEstaFechada) {
+        alert("Atenção: Este período está fechado. Alterações são proibidas.");
+        return;
+      }
+
+      const idEdicao = document.getElementById('editLancamentoId').value;
+      const funcionario_id = document.getElementById('selectFuncionarioNovo').value;
+      let rubrica = removerAcentosEColocarMaiuscula(document.getElementById('inputRubrica').value);
+      const tipo = document.getElementById('tipoLancamento').value;
+      
+      const valorBruto = parseFloat(document.getElementById('valorLancamento').value) || 0;
+      const abatimentoSigiloso = parseFloat(document.getElementById('valorAbatimento').value) || 0;
+      const motivo_ajuste = removerAcentosEColocarMaiuscula(document.getElementById('inputMotivo').value);
+      const parcela_atual = parseInt(document.getElementById('inputParcelaAtual').value) || 1;
+      const total_parcelas = parseInt(document.getElementById('inputTotalParcelas').value) || 1;
+      const fixo = document.getElementById('checkFixo').checked;
+      
+      const valorFinal = Math.max(0, valorBruto - abatimentoSigiloso);
+
+      if (!funcionario_id) {
+        alert("Selecione um funcionário válido!");
+        return;
+      }
+
+      if (abatimentoSigiloso > 0 && total_parcelas > 1) {
+        const tagParcela = ` (${String(parcela_atual).padStart(2, '0')}/${String(total_parcelas).padStart(2, '0')})`;
+        if (!rubrica.includes('/')) {
+          rubrica += tagParcela;
+        }
+      }
+
+      if (idEdicao) {
+        // Atualizar registro existente
+        const { error } = await _supabase.from('folha_itens').update({
+          rubrica, 
+          tipo, 
+          valor: valorFinal,
+          valor_bruto: valorBruto,
+          abatimento_sigiloso: abatimentoSigiloso,
+          motivo_ajuste: motivo_ajuste,
+          parcela_atual: parcela_atual,
+          total_parcelas: total_parcelas,
+          fixo: fixo
+        }).eq('id', idEdicao);
+
+        if (error) {
+          alert('Erro ao atualizar lançamento: ' + error.message);
+        } else {
+          cancelarEdicao();
+          carregarLancamentosNovo();
+        }
+      } else {
+        // Inserir novo registro
+        const { error } = await _supabase.from('folha_itens').insert([{ 
+          funcionario_id, 
+          rubrica, 
+          tipo, 
+          valor: valorFinal,
+          valor_bruto: valorBruto,
+          abatimento_sigiloso: abatimentoSigiloso,
+          motivo_ajuste: motivo_ajuste,
+          parcela_atual: parcela_atual,
+          total_parcelas: total_parcelas,
+          fixo: fixo,
+          competencia: competenciaRegraLancamento 
+        }]);
+
+        if (error) {
+          alert('Erro ao salvar lançamento: ' + error.message);
+        } else {
+          document.getElementById('inputRubrica').value = '';
+          document.getElementById('valorLancamento').value = '';
+          document.getElementById('valorAbatimento').value = '0.00';
+          document.getElementById('inputMotivo').value = '';
+          document.getElementById('inputParcelaAtual').value = '1';
+          document.getElementById('inputTotalParcelas').value = '1';
+          document.getElementById('checkFixo').checked = false;
+          document.getElementById('containerAbatimento').classList.add('hidden');
+          carregarLancamentosNovo();
+        }
+      }
+    }
+
+    async function importarItensFixosMesAnterior() {
+      if (competenciaEstaFechada) {
+        alert("Atenção: O período ativo está fechado. Importações bloqueadas.");
+        return;
+      }
+
+      const funcionarioId = document.getElementById('selectFuncionarioNovo').value;
+      if (!funcionarioId) {
+        alert("Selecione um colaborador primeiro!");
+        return;
+      }
+
+      const mesAnterior = obterMesAnterior(competenciaRegraLancamento);
+      
+      if (!confirm(`Deseja importar os lançamentos fixos do colaborador do mês ${mesAnterior} para ${competenciaRegraLancamento}?`)) {
+        return;
+      }
+
+      const { data: itensFixos, error: errBusca } = await _supabase
+        .from('folha_itens')
+        .select('*')
+        .eq('funcionario_id', funcionarioId)
+        .eq('competencia', mesAnterior)
+        .eq('fixo', true);
+
+      if (errBusca) {
+        alert("Erro ao buscar itens fixos do mês anterior: " + errBusca.message);
+        return;
+      }
+
+      if (!itensFixos || itensFixos.length === 0) {
+        alert(`Nenhum lançamento fixo encontrado para este colaborador no mês ${mesAnterior}.`);
+        return;
+      }
+
+      const { data: itensAtuais } = await _supabase
+        .from('folha_itens')
+        .select('rubrica, tipo')
+        .eq('funcionario_id', funcionarioId)
+        .eq('competencia', competenciaRegraLancamento);
+
+      const chavesAtuais = new Set((itensAtuais || []).map(i => `${i.rubrica}|${i.tipo}`));
+
+      let inseridosCount = 0;
+      for (const item of itensFixos) {
+        let novaParcela = item.parcela_atual || 1;
+        let totalP = item.total_parcelas || 1;
+
+        if (totalP > 1) {
+          if (novaParcela >= totalP) {
+            continue; 
+          }
+          novaParcela++; 
+        }
+
+        let novaRubrica = item.rubrica;
+        if (totalP > 1) {
+          const regexParcela = /\(\d{2}\/\d{2}\)/;
+          const novaTag = `(${String(novaParcela).padStart(2, '0')}/${String(totalP).padStart(2, '0')})`;
+          if (regexParcela.test(novaRubrica)) {
+            novaRubrica = novaRubrica.replace(regexParcela, novaTag);
+          } else {
+            novaRubrica += ` ${novaTag}`;
+          }
+        }
+
+        const chave = `${novaRubrica}|${item.tipo}`;
+        if (!chavesAtuais.has(chave)) {
+          const { error: errIns } = await _supabase.from('folha_itens').insert([{
+            funcionario_id: item.funcionario_id,
+            rubrica: novaRubrica,
+            tipo: item.tipo,
+            valor: item.valor,
+            valor_bruto: item.valor_bruto || item.valor,
+            abatimento_sigiloso: item.abatimento_sigiloso || 0,
+            motivo_ajuste: item.motivo_ajuste || '',
+            parcela_atual: novaParcela,
+            total_parcelas: totalP,
+            fixo: true,
+            competencia: competenciaRegraLancamento
+          }]);
+          if (!errIns) inseridosCount++;
+        }
+      }
+
+      alert(`Importação concluída! ${inseridosCount} item(ns) fixo(s) importado(s) com sucesso.`);
+      carregarLancamentosNovo();
+    }
+
+    async function excluirLancamento(id) {
+      if (competenciaEstaFechada) {
+        alert("Atenção: Este período está fechado. Exclusões são proibidas por hipótese alguma.");
+        return;
+      }
+
+      if (confirm('Deseja realmente remover este lançamento?')) {
+        const { error } = await _supabase.from('folha_itens').delete().eq('id', id);
+        if (error) {
+          alert('Erro ao excluir: ' + error.message);
+        } else {
+          if (abaAtiva === 'novo') carregarLancamentosNovo();
+          else dispararConsultaHistorico();
+        }
+      }
+    }
+
+    inicializarTela();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

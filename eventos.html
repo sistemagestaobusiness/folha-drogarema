@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro de Eventos e Rubricas - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <!-- Proteção de Acesso -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-6xl mx-auto space-y-6">
+    <!-- Cabeçalho Fixo (Sticky Header) - Apenas com Painel Principal -->
+    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">CADASTRO DE EVENTOS E RUBRICAS</h1>
+        <p class="text-xs text-slate-500">Gerenciamento integrado com a tabela <span class="font-mono text-emerald-700">tipos_eventos</span></p>
+      </div>
+      <div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← PAINEL PRINCIPAL</a>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Formulário de Cadastro/Edição -->
+      <div class="bg-white border border-slate-200 p-6 rounded-xl shadow-sm h-fit space-y-4">
+        <h2 id="tituloForm" class="font-bold text-emerald-700 text-sm border-b border-slate-100 pb-2">+ NOVO EVENTO</h2>
+        
+        <form id="formEvento" onsubmit="salvarEvento(event)" class="space-y-3">
+          <input type="hidden" id="eventoId">
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Evento *</label>
+            <select id="tipoEvento" required onchange="sugerirCodigo()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600">
+              <option value="PROVENTO">PROVENTO (Série 2000)</option>
+              <option value="DESCONTO">DESCONTO (Série 3000)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Código do Evento (Automático)</label>
+            <input type="number" id="codigoEvento" readonly placeholder="Auto" class="w-full bg-slate-100 border border-slate-300 rounded-lg p-2.5 text-slate-600 text-sm focus:outline-none font-mono cursor-not-allowed">
+            <span class="text-[10px] text-slate-400 block mt-1">Série 2000-2999 (Proventos) | Série 3000-3999 (Descontos)</span>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Descrição do Evento *</label>
+            <input type="text" id="descricaoEvento" required placeholder="Ex: SALARIO, FALTAS..." 
+              class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase"
+              oninput="this.value = removerAcentosEColocarMaiuscula(this.value)">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Natureza do Evento *</label>
+            <select id="naturezaEvento" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600">
+              <option value="CONTABIL">CONTABIL</option>
+              <option value="NAO_CONTABIL">NAO CONTABIL ("FORA")</option>
+            </select>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer">
+              ✓ SALVAR EVENTO
+            </button>
+            <button type="button" id="btnCancelar" onclick="limparFormulario()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-3 rounded-lg transition text-xs cursor-pointer">
+              CANCELAR
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tabela de Listagem -->
+      <div class="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-4">
+        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+          <h2 class="font-bold text-slate-900 text-sm">EVENTOS CADASTRADOS</h2>
+          <span id="totalEventos" class="text-xs bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full text-slate-600 font-mono">0 evento(s)</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500">
+                <th class="p-3 w-1/12">CÓDIGO</th>
+                <th class="p-3 w-4/12">DESCRIÇÃO</th>
+                <th class="p-3 w-2/12">TIPO</th>
+                <th class="p-3 w-2/12">NATUREZA</th>
+                <th class="p-3 w-1/12">STATUS</th>
+                <th class="p-3 w-2/12 text-right">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaEventos" class="divide-y divide-slate-100">
+              <tr><td colspan="6" class="p-6 text-center text-slate-400">Carregando eventos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Script de Conexão e Lógica -->
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let listaGlobalEventos = [];
+
+    function removerAcentosEColocarMaiuscula(texto) {
+      if (!texto) return '';
+      return texto
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase();
+    }
+
+    async function carregarEventos() {
+      const { data, error } = await _supabase
+        .from('tipos_eventos')
+        .select('*')
+        .order('codigo_evento', { ascending: true });
+
+      const tbody = document.getElementById('tabelaEventos');
+      const totalSpan = document.getElementById('totalEventos');
+
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-600">Erro ao carregar: ${error.message}</td></tr>`;
+        return;
+      }
+
+      listaGlobalEventos = data || [];
+      totalSpan.innerText = `${listaGlobalEventos.length} evento(s)`;
+
+      if (listaGlobalEventos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhum evento cadastrado.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = listaGlobalEventos.map(ev => {
+        const isProvento = ev.tipo_evento === 'PROVENTO';
+        const isContabil = ev.natureza_do_evento === 'CONTABIL';
+        const statusStr = ev.status || 'Ativo';
+        const isAtivo = statusStr.toLowerCase() === 'ativo';
+
+        const badgeTipo = isProvento ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
+        const badgeNatureza = isContabil ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-amber-100 text-amber-800 border border-amber-200';
+        const badgeStatus = isAtivo ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
+        
+        const btnTexto = isAtivo ? '🔒 Inativar' : '🔓 Ativar';
+        const btnAcaoClass = isAtivo ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-mono font-bold text-slate-700 whitespace-nowrap">${ev.codigo_evento}</td>
+            <td class="p-3 font-bold text-slate-900">${ev.descricao_do_evento}</td>
+            <td class="p-3 whitespace-nowrap">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${badgeTipo}">
+                ${ev.tipo_evento}
+              </span>
+            </td>
+            <td class="p-3 whitespace-nowrap">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${badgeNatureza}">
+                ${ev.natureza_do_evento === 'CONTABIL' ? 'CONTABIL' : 'NAO CONTABIL'}
+              </span>
+            </td>
+            <td class="p-3 whitespace-nowrap">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${badgeStatus}">
+                ${statusStr.toUpperCase()}
+              </span>
+            </td>
+            <td class="p-3 text-right whitespace-nowrap space-x-1">
+              <button onclick="editarEvento('${ev.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition cursor-pointer">✏️ Editar</button>
+              <button onclick="alternarStatusEvento('${ev.id}', '${statusStr}')" class="px-2 py-1 ${btnAcaoClass} rounded font-bold text-[10px] transition cursor-pointer">${btnTexto}</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function sugerirCodigo() {
+      const tipo = document.getElementById('tipoEvento').value;
+      const inputCodigo = document.getElementById('codigoEvento');
+      const idAtual = document.getElementById('eventoId').value;
+
+      if (idAtual) return;
+
+      // Inicia da base de proventos (2000) ou descontos (3000)
+      let codigoSugerido = tipo === 'PROVENTO' ? 2000 : 3000;
+      
+      // Coleta todos os códigos já existentes no sistema
+      const codigosExistentes = listaGlobalEventos
+        .map(e => parseInt(e.codigo_evento, 10))
+        .filter(c => !isNaN(c));
+
+      // Se o código sugerido já estiver em uso, incrementa automaticamente até achar um livre
+      while (codigosExistentes.includes(codigoSugerido)) {
+        codigoSugerido++;
+      }
+
+      inputCodigo.value = codigoSugerido;
+    }
+
+    async function salvarEvento(e) {
+      e.preventDefault();
+      const id = document.getElementById('eventoId').value;
+      
+      const payload = {
+        tipo_evento: document.getElementById('tipoEvento').value,
+        codigo_evento: parseInt(document.getElementById('codigoEvento').value, 10),
+        descricao_do_evento: removerAcentosEColocarMaiuscula(document.getElementById('descricaoEvento').value),
+        natureza_do_evento: document.getElementById('naturezaEvento').value
+      };
+
+      if (id) {
+        const { error } = await _supabase.from('tipos_eventos').update(payload).eq('id', id);
+        if (error) alert('Erro ao atualizar: ' + error.message);
+        else alert('Evento atualizado com sucesso!');
+      } else {
+        payload.status = 'Ativo';
+        const { error } = await _supabase.from('tipos_eventos').insert([payload]);
+        if (error) alert('Erro ao cadastrar: ' + error.message);
+        else alert('Evento cadastrado com sucesso!');
+      }
+
+      limparFormulario();
+      await carregarEventos();
+      sugerirCodigo();
+    }
+
+    function editarEvento(id) {
+      const ev = listaGlobalEventos.find(item => item.id === id);
+      if (!ev) return;
+
+      document.getElementById('eventoId').value = ev.id;
+      document.getElementById('tipoEvento').value = ev.tipo_evento;
+      document.getElementById('codigoEvento').value = ev.codigo_evento;
+      document.getElementById('descricaoEvento').value = ev.descricao_do_evento;
+      document.getElementById('naturezaEvento').value = ev.natureza_do_evento;
+
+      document.getElementById('tituloForm').innerText = 'EDITAR EVENTO';
+      document.getElementById('btnSalvar').innerText = '✓ ATUALIZAR EVENTO';
+      document.getElementById('btnCancelar').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function alternarStatusEvento(id, statusAtual) {
+      const novoStatus = (statusAtual.toLowerCase() === 'ativo') ? 'Inativo' : 'Ativo';
+      const acao = novoStatus === 'Inativo' ? 'inativar' : 'ativar';
+
+      if (confirm(`Deseja realmente ${acao} este evento? O histórico será preservado.`)) {
+        const { error } = await _supabase.from('tipos_eventos').update({ status: novoStatus }).eq('id', id);
+        if (error) alert('Erro ao alterar status: ' + error.message);
+        else carregarEventos();
+      }
+    }
+
+    function limparFormulario() {
+      document.getElementById('eventoId').value = '';
+      document.getElementById('formEvento').reset();
+      document.getElementById('tituloForm').innerText = '+ NOVO EVENTO';
+      document.getElementById('btnSalvar').innerText = '✓ SALVAR EVENTO';
+      document.getElementById('btnCancelar').classList.add('hidden');
+      sugerirCodigo();
+    }
+
+    async function inicializar() {
+      await carregarEventos();
+      sugerirCodigo();
+    }
+
+    inicializar();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

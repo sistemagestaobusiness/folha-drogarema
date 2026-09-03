@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro de Rubricas - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <!-- Proteção de Acesso -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Cabeçalho Fixo (Sticky Header) -->
+    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">GERENCIAMENTO DE RUBRICAS</h1>
+        <p class="text-xs text-slate-500">Mapeamento de regras do Alpha7 para o Resumo de Comissões</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="abrirModalNova()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs transition border border-emerald-700 shadow-sm cursor-pointer">
+          + NOVA RUBRICA
+        </button>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-sm">
+          ← PAINEL PRINCIPAL
+        </a>
+      </div>
+    </div>
+
+    <!-- Barra de Pesquisa -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <input type="text" id="inputBusca" oninput="filtrarRubricas()" placeholder="Buscar por Rubrica Alpha7 ou Resumo Mapeado..." 
+        class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 text-sm focus:outline-none focus:border-emerald-600">
+    </div>
+
+    <!-- Tabela de Listagem -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+        <h2 class="font-bold text-slate-900 text-sm">RUBRICAS MAPEADAS</h2>
+        <span id="contadorRegistros" class="text-xs bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full text-slate-600 font-mono">0 registro(s)</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-500">
+              <th class="p-3 w-5/12">RUBRICA (ALPHA7)</th>
+              <th class="p-3 w-4/12">RESUMO MAPEADO</th>
+              <th class="p-3 w-1/12">STATUS</th>
+              <th class="p-3 w-2/12 text-right">AÇÕES</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaRubricas" class="divide-y divide-slate-100">
+            <tr><td colspan="4" class="p-6 text-center text-slate-400">Carregando rubricas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Cadastro / Edição -->
+  <div id="modalRubrica" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 id="modalTitulo" class="font-bold text-slate-900 text-sm">NOVA RUBRICA</h3>
+        <button onclick="fecharModal()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+      </div>
+      
+      <form id="formRubrica" onsubmit="salvarRubrica(event)" class="space-y-4">
+        <input type="hidden" id="rubricaId">
+        
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Rubrica (Alpha7) *</label>
+          <input type="text" id="inputAlpha7" required placeholder="Ex: UN. Neg. 01 - SIDNEY" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase font-mono">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Resumo Mapeado *</label>
+          <input type="text" id="inputResumo" required placeholder="Ex: SIDNEY OLIVEIRA" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase font-mono">
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="fecharModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs transition cursor-pointer">Cancelar</button>
+          <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition shadow-sm cursor-pointer">✓ Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let listaGlobalRubricas = [];
+
+    async function carregarRubricas() {
+      const { data, error } = await _supabase.from('rubricas').select('*').order('rubrica_alpha7');
+      if (error) {
+        alert('Erro ao carregar dados do banco.');
+        console.error(error);
+        return;
+      }
+      listaGlobalRubricas = data || [];
+      renderizarTabela(listaGlobalRubricas);
+    }
+
+    function renderizarTabela(dados) {
+      document.getElementById('contadorRegistros').innerText = `${dados.length} registro(s)`;
+      const tbody = document.getElementById('tabelaRubricas');
+      
+      if (dados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400">Nenhuma rubrica encontrada.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = dados.map(r => {
+        const statusStr = r.status || 'Ativo';
+        const isAtivo = statusStr.toLowerCase() === 'ativo';
+        const badgeClass = isAtivo ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
+        const btnInativarTexto = isAtivo ? '🔒 Inativar' : '🔓 Ativar';
+        const btnInativarClass = isAtivo ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-900 font-mono">${r.rubrica_alpha7 || '-'}</td>
+            <td class="p-3 text-emerald-700 font-bold font-mono">${r.resumo_mapeado || '-'}</td>
+            <td class="p-3">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${statusStr}</span>
+            </td>
+            <td class="p-3 text-right whitespace-nowrap space-x-1">
+              <button onclick="abrirModalEditar('${r.id}', '${r.rubrica_alpha7 || ''}', '${r.resumo_mapeado || ''}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition cursor-pointer">✏️ Editar</button>
+              <button onclick="alternarStatus('${r.id}', '${statusStr}')" class="px-2 py-1 ${btnInativarClass} rounded font-bold text-[10px] transition cursor-pointer">${btnInativarTexto}</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filtrarRubricas() {
+      const termo = document.getElementById('inputBusca').value.toLowerCase();
+      const filtrados = listaGlobalRubricas.filter(r => 
+        String(r.rubrica_alpha7 || '').toLowerCase().includes(termo) || 
+        String(r.resumo_mapeado || '').toLowerCase().includes(termo)
+      );
+      renderizarTabela(filtrados);
+    }
+
+    function abrirModalNova() {
+      document.getElementById('modalTitulo').innerText = 'NOVA RUBRICA';
+      document.getElementById('rubricaId').value = '';
+      document.getElementById('inputAlpha7').value = '';
+      document.getElementById('inputResumo').value = '';
+      document.getElementById('modalRubrica').classList.remove('hidden');
+    }
+
+    function abrirModalEditar(id, alpha7, resumo) {
+      document.getElementById('modalTitulo').innerText = 'EDITAR RUBRICA';
+      document.getElementById('rubricaId').value = id;
+      document.getElementById('inputAlpha7').value = alpha7;
+      document.getElementById('inputResumo').value = resumo;
+      document.getElementById('modalRubrica').classList.remove('hidden');
+    }
+
+    function fecharModal() {
+      document.getElementById('modalRubrica').classList.add('hidden');
+    }
+
+    async function salvarRubrica(e) {
+      e.preventDefault();
+      const id = document.getElementById('rubricaId').value;
+      const rubrica_alpha7 = document.getElementById('inputAlpha7').value.toUpperCase();
+      const resumo_mapeado = document.getElementById('inputResumo').value.toUpperCase();
+
+      if (id) {
+        // Atualizar
+        const { error } = await _supabase.from('rubricas').update({ rubrica_alpha7, resumo_mapeado }).eq('id', id);
+        if (error) alert('Erro ao atualizar: ' + error.message);
+        else { fecharModal(); carregarRubricas(); }
+      } else {
+        // Inserir Nova
+        const { error } = await _supabase.from('rubricas').insert([{ rubrica_alpha7, resumo_mapeado, status: 'Ativo' }]);
+        if (error) alert('Erro ao cadastrar: ' + error.message);
+        else { fecharModal(); carregarRubricas(); }
+      }
+    }
+
+    async function alternarStatus(id, statusAtual) {
+      const novoStatus = (statusAtual.toLowerCase() === 'ativo') ? 'Inativo' : 'Ativo';
+      const acaoStr = novoStatus === 'Inativo' ? 'inativar' : 'ativar';
+
+      if (confirm(`Deseja realmente ${acaoStr} esta rubrica?`)) {
+        const { error } = await _supabase.from('rubricas').update({ status: novoStatus }).eq('id', id);
+        if (error) {
+          alert('Erro ao alterar status: ' + error.message);
+        } else {
+          carregarRubricas();
+        }
+      }
+    }
+
+    carregarRubricas();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resumo Executivo da Diretoria - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+    .no-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .no-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .no-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .shadow-fixa { box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.05); }
+    .z-canto { z-index: 60 !important; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
+
+  <!-- Proteção de Acesso -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <!-- Cabeçalho Principal -->
+  <div class="sticky top-0 z-[70] bg-white/95 backdrop-blur-sm py-4 px-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xs">
+    <div>
+      <h1 class="text-xl font-black text-slate-900 tracking-wide uppercase">Resumo Executivo - Diretoria</h1>
+      <p class="text-xs text-slate-500 font-medium">Comparativo Mensal | Competência: <span id="labelCompetencia" class="text-emerald-600 font-bold font-mono">...</span></p>
+    </div>
+    
+    <div class="flex items-center gap-3 w-full md:w-auto">
+      <button onclick="window.print()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition shadow-sm cursor-pointer whitespace-nowrap">
+        🖨️ IMPRIMIR
+      </button>
+      <a href="index.html" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs whitespace-nowrap">
+        ← PAINEL
+      </a>
+    </div>
+  </div>
+
+  <!-- Container da Tabela Executiva -->
+  <div class="p-4 sm:p-6">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
+      <div class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead id="tabelaCabecalho" class="sticky top-0 z-50 bg-slate-50 shadow-sm">
+            <!-- Cabeçalho Fixo Gerado via JS -->
+          </thead>
+          <tbody id="tabelaCorpo" class="divide-y divide-slate-100">
+            <tr><td class="p-8 text-center text-slate-400 font-mono">Processando relatório comparativo executivo...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script de Inteligência da Tabela -->
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
+    let compAtual = '';
+    let compAnterior = '';
+    
+    let glob_dadosFunc = [];
+    let glob_grandTotals = initTotals();
+
+    // Mapeamento de Colunas Estratégicas da Diretoria
+    const metricas = [
+      { key: 'bruto', label: 'TOTAL BRUTO', colorH: 'bg-emerald-100/70', colorB: 'bg-emerald-50/20', colorD: 'bg-emerald-100/50' },
+      { key: 'descontos', label: 'TOTAL DESCONTOS', colorH: 'bg-rose-100/70', colorB: 'bg-rose-50/20', colorD: 'bg-rose-100/50' },
+      { key: 'liquido', label: 'LÍQUIDO RECEBIDO', colorH: 'bg-slate-200/80', colorB: 'bg-slate-50', colorD: 'bg-slate-200/60' },
+      { key: 'custo_empresa', label: 'CUSTO EMPRESA', colorH: 'bg-teal-100/70', colorB: 'bg-teal-50/20', colorD: 'bg-teal-100/50' },
+      { key: 'sm_gn', label: 'COM. SM E GN (2018)', colorH: 'bg-blue-100/60', colorB: 'bg-blue-50/20', colorD: 'bg-blue-100/40' },
+      { key: 'perfumaria', label: 'COM. PERFUMARIA (2019)', colorH: 'bg-indigo-100/60', colorB: 'bg-indigo-50/20', colorD: 'bg-indigo-100/40' },
+      { key: 'sidney', label: 'COM. SIDNEY (2020)', colorH: 'bg-purple-100/60', colorB: 'bg-purple-50/20', colorD: 'bg-purple-100/40' },
+      { key: 'vitaminas', label: 'VITAMINAS+FIXO (21/22)', colorH: 'bg-amber-100/60', colorB: 'bg-amber-50/20', colorD: 'bg-amber-100/40' },
+      { key: 'he_fora', label: 'HE POR FORA (2005)', colorH: 'bg-slate-100', colorB: 'bg-white', colorD: 'bg-slate-100/60' },
+      { key: 'freelance', label: 'FREELANCE (2014)', colorH: 'bg-slate-100', colorB: 'bg-white', colorD: 'bg-slate-100/60' }
+    ];
+
+    function converterCompetenciaParaMMYYYY(texto) {
+      const mesesMap = {
+        'JANEIRO': '01', 'FEVEREIRO': '02', 'MARÇO': '03', 'MARCO': '03',
+        'ABRIL': '04', 'MAIO': '05', 'JUNHO': '06', 'JULHO': '07',
+        'AGOSTO': '08', 'SETEMBRO': '09', 'OUTUBRO': '10', 'NOVEMBRO': '11', 'DEZEMBRO': '12'
+      };
+      const partes = texto.split('/');
+      if (partes.length >= 2) {
+        const mesNome = partes[0].trim().toUpperCase();
+        const ano = partes[1].trim();
+        const mesNum = mesesMap[mesNome] || '08';
+        return `${mesNum}/${ano}`;
+      }
+      return '08/2026';
+    }
+
+    function getMesAnterior(mm_yyyy) {
+      let [mes, ano] = mm_yyyy.split('/');
+      mes = parseInt(mes, 10) - 1;
+      ano = parseInt(ano, 10);
+      if (mes === 0) {
+        mes = 12;
+        ano -= 1;
+      }
+      return String(mes).padStart(2, '0') + '/' + ano;
+    }
+
+    function formatarMesCurto(mm_yyyy) {
+      const meses = { '01':'Jan', '02':'Fev', '03':'Mar', '04':'Abr', '05':'Mai', '06':'Jun', '07':'Jul', '08':'Ago', '09':'Set', '10':'Out', '11':'Nov', '12':'Dez' };
+      let [m, y] = mm_yyyy.split('/');
+      return meses[m] + '-' + y.slice(2);
+    }
+
+    // Formatação de Contabilidade (Valores negativos com parênteses igual Excel)
+    function formatarDiferenca(valor) {
+      if (Math.abs(valor) < 0.01) return '<span class="text-slate-300">-</span>';
+      let formatado = Math.abs(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (valor < 0) {
+        return `<span class="text-rose-600">(${formatado})</span>`;
+      } else {
+        return `<span class="text-emerald-700">${formatado}</span>`;
+      }
+    }
+
+    function formatarMoeda(valor) {
+      if (!valor || Math.abs(valor) < 0.01) return '<span class="text-slate-300">-</span>';
+      return parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function initMetrics() {
+      return { bruto: 0, bruto_contabil: 0, bruto_nao_contabil: 0, descontos: 0, liquido: 0, custo_empresa: 0, sm_gn: 0, perfumaria: 0, sidney: 0, vitaminas: 0, he_fora: 0, freelance: 0 };
+    }
+
+    function initTotals() {
+      return { atual: initMetrics(), anterior: initMetrics() };
+    }
+
+    function accumulate(totObj, f) {
+      Object.keys(f.atual).forEach(k => {
+        totObj.atual[k] += f.atual[k];
+        totObj.anterior[k] += f.anterior[k];
+      });
+    }
+
+    async function processarDadosBanco() {
+      compAtual = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
+      compAnterior = getMesAnterior(compAtual);
+      document.getElementById('labelCompetencia').innerText = `${compAtual} (vs ${compAnterior})`;
+
+      try {
+        const [resFunc, resFolha, resEventos, resEmpresas] = await Promise.all([
+          _supabase.from('funcionarios').select('*'),
+          // Busca lançamentos dos DOIS meses
+          _supabase.from('folha_itens').select('*').in('competencia', [compAtual, compAnterior]),
+          _supabase.from('tipos_eventos').select('*'),
+          _supabase.from('empresas').select('*')
+        ]);
+
+        const funcionarios = resFunc.data || [];
+        const itensFolha = resFolha.data || [];
+        const eventos = resEventos.data || [];
+        const empresas = resEmpresas.data || [];
+
+        const mapaEventos = {};
+        eventos.forEach(e => {
+          mapaEventos[String(e.codigo_evento)] = e.natureza_do_evento || 'CONTABIL';
+          mapaEventos[String(e.descricao_do_evento || '').toUpperCase()] = e.natureza_do_evento || 'CONTABIL';
+        });
+
+        const dadosFuncMap = {};
+
+        itensFolha.forEach(item => {
+          const fId = item.funcionario_id;
+          const isAtual = item.competencia === compAtual;
+          
+          if (!dadosFuncMap[fId]) {
+            const f = funcionarios.find(x => String(x.id) === String(fId));
+            if (!f) return;
+
+            // Identifica Empresa via CNPJ (Hierarquia Inteligente)
+            let empresaMatch = null;
+            if (f.empresa_id) empresaMatch = empresas.find(e => String(e.id) === String(f.empresa_id));
+            if (!empresaMatch && f.cnpj) {
+              const cnpjLimpo = String(f.cnpj).replace(/\D/g, '');
+              empresaMatch = empresas.find(e => (e.cnpj || '').replace(/\D/g, '') === cnpjLimpo);
+            }
+            if (!empresaMatch && f.empresa_registro) empresaMatch = empresas.find(e => e.cnpj && f.empresa_registro.includes(e.cnpj));
+            if (!empresaMatch && f.empresa_registro) empresaMatch = empresas.find(e => f.empresa_registro.includes(e.razao_social));
+
+            let nomeEmpresa = f.empresa_registro || '-';
+            if (empresaMatch) {
+              nomeEmpresa = empresaMatch.nome_fantasia || empresaMatch.razao_social || nomeEmpresa;
+            }
+
+            dadosFuncMap[fId] = {
+              nome: f.nome_registro,
+              empresa: nomeEmpresa.toUpperCase(),
+              atual: initMetrics(),
+              anterior: initMetrics()
+            };
+          }
+
+          const target = isAtual ? dadosFuncMap[fId].atual : dadosFuncMap[fId].anterior;
+          const val = parseFloat(item.valor || 0);
+          const rubrica = String(item.rubrica || '').toUpperCase();
+          const tipo = (item.tipo || 'PROVENTO').toUpperCase();
+
+          let natureza = 'CONTABIL';
+          for (let key in mapaEventos) {
+            if (rubrica.includes(key)) {
+              natureza = mapaEventos[key];
+              break;
+            }
+          }
+          if (natureza === 'NAO_CONTABIL' || rubrica.includes('FORA')) natureza = 'NAO_CONTABIL';
+
+          // Consolidação Base
+          if (tipo === 'PROVENTO') {
+            target.bruto += val;
+            if (natureza === 'CONTABIL') target.bruto_contabil += val;
+            else target.bruto_nao_contabil += val;
+          } else if (tipo === 'DESCONTO') {
+            target.descontos += val;
+          }
+
+          // Filtros Específicos
+          if (rubrica.includes('2018') || rubrica.includes('SM E GN') || rubrica.includes('SM / GN') || rubrica.includes('SIMILAR') || rubrica.includes('GENERICO')) target.sm_gn += val;
+          if (rubrica.includes('2019') || rubrica.includes('PERFUMARIA')) target.perfumaria += val;
+          if (rubrica.includes('2020') || rubrica.includes('SIDNEY')) target.sidney += val;
+          if (rubrica.includes('2021') || rubrica.includes('VALOR FIXO') || rubrica.includes('2022') || rubrica.includes('VITAMINA')) target.vitaminas += val;
+          if (rubrica.includes('2005') || rubrica.includes('HORA EXTRA POR FORA')) target.he_fora += val;
+          if (rubrica.includes('2014') || rubrica.includes('FREELANCE')) target.freelance += val;
+        });
+
+        if (Object.keys(dadosFuncMap).length === 0) {
+          document.getElementById('tabelaCorpo').innerHTML = `<tr><td class="p-8 text-center text-slate-400">Nenhum lançamento processado.</td></tr>`;
+          document.getElementById('tabelaCabecalho').innerHTML = '';
+          return;
+        }
+
+        // Calcula Líquido e Custo Empresa para Atual e Anterior
+        glob_dadosFunc = Object.values(dadosFuncMap).map(f => {
+          ['atual', 'anterior'].forEach(per => {
+            f[per].liquido = f[per].bruto - f[per].descontos;
+            
+            const fgts = f[per].bruto_contabil * 0.08;
+            let inssPatronal = 0;
+            if (f.empresa.includes('DROGAREMA')) {
+              inssPatronal = f[per].bruto_contabil * 0.25;
+            }
+            f[per].custo_empresa = f[per].bruto + fgts + inssPatronal;
+          });
+          return f;
+        });
+
+        // Ordenação
+        glob_dadosFunc.sort((a, b) => {
+          if (a.empresa < b.empresa) return -1;
+          if (a.empresa > b.empresa) return 1;
+          return a.nome.localeCompare(b.nome);
+        });
+
+        glob_grandTotals = initTotals();
+        glob_dadosFunc.forEach(f => accumulate(glob_grandTotals, f));
+
+        renderizarCabecalho();
+        renderizarTabelaCorpo();
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('tabelaCorpo').innerHTML = `<tr><td class="p-8 text-center text-rose-600 font-bold">Erro crítico: ${err.message}</td></tr>`;
+      }
+    }
+
+    function renderizarCabecalho() {
+      const styC1 = `sticky z-canto bg-white border-r border-slate-200 shadow-fixa align-bottom`; 
+      const widthC1 = `left: 0; min-width: 220px; max-width: 220px;`;
+      const styC2 = `sticky z-canto bg-white border-r border-slate-300 shadow-fixa align-bottom`; 
+      const widthC2 = `left: 220px; min-width: 140px; max-width: 140px;`;
+
+      const txtAnt = formatarMesCurto(compAnterior);
+      const txtAtu = formatarMesCurto(compAtual);
+
+      let tr1 = `<tr class="text-[9px] uppercase tracking-wider text-slate-600 border-b border-white">`;
+      tr1 += `<th class="${styC1} py-2 px-3 bg-slate-100" style="${widthC1}" rowspan="2">Colaborador</th>`;
+      tr1 += `<th class="${styC2} py-2 px-3 bg-slate-100" style="${widthC2}" rowspan="2">Empresa (Fantasia)</th>`;
+      
+      metricas.forEach(m => {
+        tr1 += `<th class="py-2 px-2 text-center font-bold border-x border-white ${m.colorH}" colspan="3">${m.label}</th>`;
+      });
+      tr1 += `</tr>`;
+
+      let tr2 = `<tr class="text-[9px] uppercase tracking-wider text-slate-500 border-b border-slate-300">`;
+      metricas.forEach(m => {
+        tr2 += `<th class="py-1.5 px-2 text-center font-medium ${m.colorH} border-l border-white opacity-80">${txtAnt}</th>`;
+        tr2 += `<th class="py-1.5 px-2 text-center font-bold ${m.colorH} opacity-90">${txtAtu}</th>`;
+        tr2 += `<th class="py-1.5 px-2 text-center font-black ${m.colorH} border-r border-white">DIFERENÇA</th>`;
+      });
+      tr2 += `</tr>`;
+
+      // TOTAL GERAL
+      let tr3 = `<tr class="text-[10px] bg-slate-200 font-bold text-slate-800 border-b-2 border-slate-400 shadow-sm">`;
+      tr3 += `<th class="py-2 px-3 sticky z-canto bg-slate-200 border-r border-slate-300 shadow-fixa" style="${widthC1}">TOTAL GERAL</th>`;
+      tr3 += `<th class="py-2 px-3 sticky z-canto bg-slate-200 border-r border-slate-400 shadow-fixa text-center" style="${widthC2}">-</th>`;
+      
+      metricas.forEach(m => {
+        let ant = glob_grandTotals.anterior[m.key];
+        let atu = glob_grandTotals.atual[m.key];
+        let dif = atu - ant;
+        tr3 += `<th class="py-2 px-2 text-right ${m.colorD} border-l border-white">${formatarMoeda(ant)}</th>`;
+        tr3 += `<th class="py-2 px-2 text-right ${m.colorD} font-black">${formatarMoeda(atu)}</th>`;
+        tr3 += `<th class="py-2 px-2 text-right ${m.colorD} border-r border-white">${formatarDiferenca(dif)}</th>`;
+      });
+      tr3 += `</tr>`;
+
+      document.getElementById('tabelaCabecalho').innerHTML = tr1 + tr2 + tr3;
+    }
+
+    function renderizarTabelaCorpo() {
+      let tbodyHtml = '';
+      let currentGroup = null;
+      let groupTotals = initTotals();
+
+      const styLeft1 = `sticky z-20 bg-white border-r border-slate-100 shadow-fixa`;
+      const styLeft2 = `sticky z-20 bg-white border-r border-slate-300 shadow-fixa`;
+      const wC1 = `left: 0; min-width: 220px; max-width: 220px;`;
+      const wC2 = `left: 220px; min-width: 140px; max-width: 140px;`;
+
+      glob_dadosFunc.forEach((f, idx) => {
+        const groupVal = f.empresa;
+
+        if (currentGroup !== null && currentGroup !== groupVal) {
+          tbodyHtml += gerarHTMLSubtotal(currentGroup, groupTotals, wC1, wC2);
+          groupTotals = initTotals();
+        }
+        currentGroup = groupVal;
+        accumulate(groupTotals, f);
+
+        let tr = `<tr class="hover:bg-slate-50 text-[11px] text-slate-700 font-mono transition">`;
+        tr += `<td class="py-2 px-3 whitespace-nowrap font-sans font-bold text-slate-800 truncate ${styLeft1}" style="${wC1}" title="${f.nome}">${f.nome}</td>`;
+        tr += `<td class="py-2 px-3 whitespace-nowrap font-sans text-slate-500 truncate ${styLeft2}" style="${wC2}" title="${f.empresa}">${f.empresa}</td>`;
+
+        metricas.forEach(m => {
+          let ant = f.anterior[m.key];
+          let atu = f.atual[m.key];
+          let dif = atu - ant;
+          tr += `<td class="py-2 px-2 text-right whitespace-nowrap ${m.colorB} border-l border-white opacity-80">${formatarMoeda(ant)}</td>`;
+          tr += `<td class="py-2 px-2 text-right whitespace-nowrap font-bold ${m.colorB}">${formatarMoeda(atu)}</td>`;
+          tr += `<td class="py-2 px-2 text-right whitespace-nowrap font-bold ${m.colorB} border-r border-white">${formatarDiferenca(dif)}</td>`;
+        });
+
+        tr += `</tr>`;
+        tbodyHtml += tr;
+
+        if (idx === glob_dadosFunc.length - 1) {
+          tbodyHtml += gerarHTMLSubtotal(currentGroup, groupTotals, wC1, wC2);
+        }
+      });
+
+      document.getElementById('tabelaCorpo').innerHTML = tbodyHtml;
+    }
+
+    function gerarHTMLSubtotal(groupName, t, wC1, wC2) {
+      let html = `<tr class="bg-slate-100 font-bold text-[10px] text-slate-800 border-y-2 border-slate-300 shadow-sm">`;
+      html += `<td class="py-2 px-3 sticky z-20 bg-slate-100 border-r border-slate-200 shadow-fixa" style="${wC1}">SUBTOTAL:</td>`;
+      html += `<td class="py-2 px-3 sticky z-20 bg-slate-100 border-r border-slate-300 shadow-fixa text-slate-900 uppercase truncate" style="${wC2}">${groupName}</td>`;
+      
+      metricas.forEach(m => {
+        let ant = t.anterior[m.key];
+        let atu = t.atual[m.key];
+        let dif = atu - ant;
+        html += `<td class="py-2 px-2 text-right border-l border-white ${m.colorH}">${formatarMoeda(ant)}</td>`;
+        html += `<td class="py-2 px-2 text-right font-black ${m.colorH}">${formatarMoeda(atu)}</td>`;
+        html += `<td class="py-2 px-2 text-right font-black border-r border-white ${m.colorH}">${formatarDiferenca(dif)}</td>`;
+      });
+      
+      html += `</tr>`;
+      return html;
+    }
+
+    processarDadosBanco();
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>

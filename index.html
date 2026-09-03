@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Executivo - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-5">
+    
+    <!-- TOPO / HEADER EXECUTIVO -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+          <h1 class="text-lg font-bold text-slate-900 tracking-wide">DROGAREMA PHARMA</h1>
+          <span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono border border-slate-200">Gestão de Folha</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-0.5">Painel de Fechamento e Inteligência Contábil</p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="text-right hidden sm:block">
+          <span class="text-[10px] text-slate-400 block uppercase font-semibold">Banco de Dados</span>
+          <span class="text-xs text-emerald-600 font-mono font-bold">● Sincronizado</span>
+        </div>
+        <button onclick="sair()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition cursor-pointer border border-slate-300">
+          SAIR
+        </button>
+      </div>
+    </div>
+
+    <!-- PAINEL DE COMANDO CENTRAL -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      
+      <!-- Coluna Principal (Esquerda: 8 Cols) -->
+      <div class="lg:col-span-8 space-y-5">
+        
+        <!-- Banner de Período Ativo & Ação de Alto Impacto (Lançamentos e Resumo) -->
+        <div class="bg-white border border-slate-200 p-5 rounded-xl shadow-sm flex flex-col justify-between">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PERÍODO EM ANÁLISE</span>
+              <div class="flex items-center gap-3 mt-1">
+                <h2 id="competenciaAtivaDisplay" class="text-2xl font-black text-slate-900 font-mono">CARREGANDO...</h2>
+                <span id="badgeStatusCompetencia" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200">...</span>
+              </div>
+            </div>
+            <div id="infoFechamentoAudit" class="text-xs text-slate-500 font-mono bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">
+              Auditoria: -
+            </div>
+          </div>
+
+          <!-- BOTÕES EM EVIDÊNCIA: LANÇAMENTOS E RESUMO -->
+          <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+            <button onclick="toggleModalLancamentos()" class="flex-1 flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3.5 rounded-xl transition shadow-sm text-xs cursor-pointer">
+              <span class="text-lg">⚡</span>
+              <div class="text-left">
+                <div class="tracking-wide">REALIZAR LANÇAMENTOS</div>
+                <div class="text-[10px] sm:text-[11px] text-emerald-100 font-normal">Manual, Planilha ou Farmácia</div>
+              </div>
+            </button>
+            
+            <a href="resumo_folha.html" class="flex-1 flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white font-bold p-3.5 rounded-xl transition shadow-sm text-xs cursor-pointer">
+              <span class="text-lg">📊</span>
+              <div class="text-left">
+                <div class="tracking-wide">RESUMO DA COMPETÊNCIA</div>
+                <div class="text-[10px] sm:text-[11px] text-blue-100 font-normal">Visualizar relatório completo da folha</div>
+              </div>
+            </a>
+          </div>
+        </div>
+
+        <!-- INDICADORES GERENCIAIS -->
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">INDICADORES FINANCEIROS DO PERÍODO</h3>
+            <span class="text-[10px] text-slate-400 font-mono">Tempo real</span>
+          </div>
+
+          <!-- Grid de Indicadores Principais -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <!-- Card 1: Salário Líquido (Destaque Principal) -->
+            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-sm">
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">SALÁRIO LÍQUIDO A PAGAR</span>
+                <span class="text-sm">💰</span>
+              </div>
+              <div id="valLiquidoConsolidado" class="text-2xl font-black text-emerald-600 font-mono">R$ 0,00</div>
+              <div class="pt-2 border-t border-slate-100 flex justify-between text-xs font-mono">
+                <span class="text-slate-500">Total Descontos:</span>
+                <span id="valTotalDescontos" class="text-rose-600 font-bold">R$ 0,00</span>
+              </div>
+            </div>
+
+            <!-- Card 2: Volume Bruto da Folha -->
+            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-sm">
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-slate-500 font-bold uppercase">Volume Bruto Folha</span>
+                <span class="text-sm">📊</span>
+              </div>
+              <div id="valTotalFolha" class="text-2xl font-black text-slate-900 font-mono">R$ 0,00</div>
+              <div class="space-y-0.5 pt-2 border-t border-slate-100 text-xs font-mono">
+                <div class="flex justify-between text-slate-500">
+                  <span>Contábil:</span>
+                  <span id="valContabil" class="font-bold text-slate-700">R$ 0,00</span>
+                </div>
+                <div class="flex justify-between text-slate-500">
+                  <span>Não Contábil:</span>
+                  <span id="valNaoContabil" class="font-bold text-slate-700">R$ 0,00</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: Funcionários Ativos -->
+            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-sm">
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-slate-500 font-bold uppercase">Colaboradores Ativos</span>
+                <span class="text-sm">👔</span>
+              </div>
+              <div id="qtdFuncionariosAtivos" class="text-2xl font-black text-slate-900 font-mono">0</div>
+              <p class="text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                Aptos para proventos e descontos.
+              </p>
+            </div>
+
+          </div>
+
+          <!-- Radiografia de Comissões -->
+          <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
+            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Detalhamento de Comissões (Global)</span>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
+                <span class="text-[10px] text-slate-500 block">Perfumaria</span>
+                <span id="comPerf" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
+              </div>
+              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
+                <span class="text-[10px] text-slate-500 block">Similar / Gen.</span>
+                <span id="comSim" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
+              </div>
+              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
+                <span class="text-[10px] text-slate-500 block">Vitaminas</span>
+                <span id="comVit" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
+              </div>
+              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
+                <span class="text-[10px] text-slate-500 block">Valor Fixo</span>
+                <span id="comFix" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
+              </div>
+              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center col-span-2 sm:col-span-1">
+                <span class="text-[10px] text-slate-500 block">Sidney Oliveira</span>
+                <span id="comSid" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Consolidado por Empresa / Filial (Formato Planilha Excel Alinhado com Totalizador de Linha e Coluna) -->
+          <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
+            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Consolidado por Empresa / Filial</span>
+            <div id="listaEmpresasResumo" class="overflow-x-auto text-xs">
+              <div class="text-slate-400 text-center py-2">Carregando dados das empresas...</div>
+            </div>
+          </div>
+
+          <!-- Admissões na Competência -->
+          <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
+            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Novos Cadastros na Competência</span>
+            <div id="listaNovosColaboradores" class="space-y-1.5 pt-1 text-xs">
+              <div class="text-slate-400 text-center py-2 text-xs">Nenhum novo colaborador cadastrado nesta competência.</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Coluna Lateral (Direita: 4 Cols) -->
+      <div class="lg:col-span-4 space-y-5">
+        
+        <!-- Gestão de Períodos da Folha -->
+        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+            <h3 class="font-bold text-slate-700 text-xs uppercase tracking-wider">SELECIONAR COMPETÊNCIA</h3>
+            <select id="anoReferencia" onchange="carregarPeriodos()" class="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-slate-800 text-xs font-mono">
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+          <p class="text-[11px] text-slate-500">Clique no mês para analisar ou na engrenagem (⚙️) para gerenciar o status.</p>
+
+          <div id="listaPeriodos" class="grid grid-cols-3 gap-1.5 pt-1">
+            <!-- Preenchido via JS compacto -->
+          </div>
+        </div>
+
+        <!-- Relatórios & Documentos -->
+        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2">
+          <h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100 pb-2">Relatórios & Documentos</h3>
+          <div class="flex flex-col space-y-1 text-xs font-medium pt-1">
+            <a href="resumo_diretoria.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>📈 Resumo Executivo (Diretoria)</span>
+              <span class="text-slate-400">→</span>
+            </a>
+            <a href="recibo_pagamento.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>📄 Emissão de Recibos</span>
+              <span class="text-slate-400">→</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Configurações & Cadastros -->
+        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2">
+          <h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100 pb-2">Cadastros do Sistema</h3>
+          <div class="flex flex-col space-y-1 text-xs font-medium pt-1">
+            <a href="funcionarios.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>👥 Funcionários</span>
+              <span class="text-slate-400">→</span>
+            </a>
+            <a href="empresas.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>🏢 Empresas</span>
+              <span class="text-slate-400">→</span>
+            </a>
+            <a href="lojas.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>🏪 Lojas e Unidades</span>
+              <span class="text-slate-400">→</span>
+            </a>
+            <a href="rubricas.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>📋 Rubricas e De>Para</span>
+              <span class="text-slate-400">→</span>
+            </a>
+            <a href="eventos.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>⚡ Tipos de Eventos</span>
+              <span class="text-slate-400">→</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL DE GERENCIAMENTO DE STATUS DO MÊS (ABRIR / FECHAR) -->
+  <div id="modalGerenciarMes" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 id="modalMesTitulo" class="font-bold text-slate-900 text-sm">GERENCIAR COMPETÊNCIA</h3>
+          <p class="text-[11px] text-slate-500">Alterar status operacional do mês</p>
+        </div>
+        <button onclick="fecharModalMes()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="space-y-2">
+        <button onclick="executarAcaoCompetencia('ABERTO')" class="w-full text-left p-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition flex items-center justify-between cursor-pointer">
+          <div>
+            <div class="font-bold text-emerald-900 text-xs">🔓 Abrir / Iniciar Período</div>
+            <div class="text-[10px] text-emerald-700">Permitir lançamentos e importações</div>
+          </div>
+        </button>
+
+        <button onclick="executarAcaoCompetencia('FECHADO')" class="w-full text-left p-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center justify-between cursor-pointer">
+          <div>
+            <div class="font-bold text-rose-900 text-xs">🔒 Fechar Competência</div>
+            <div class="text-[10px] text-rose-700">Bloquear novos lançamentos (Congelar folha)</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE ESCOLHA DE LANÇAMENTO -->
+  <div id="modalLancamentos" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">CENTRAL DE LANÇAMENTOS</h3>
+          <p class="text-[11px] text-slate-500">Escolha o método de inserção</p>
+        </div>
+        <button onclick="toggleModalLancamentos()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="grid grid-cols-1 gap-2">
+        <a href="lancamentos.html" class="flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 p-3 rounded-xl transition">
+          <span class="text-lg p-2 bg-emerald-100 text-emerald-700 rounded-lg">✍️</span>
+          <div>
+            <div class="font-bold text-slate-800 text-xs">Lançamento Manual Individual</div>
+            <div class="text-[10px] text-slate-500">Adicione proventos ou descontos por funcionário</div>
+          </div>
+        </a>
+
+        <a href="importar_alpha7.html" class="flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 p-3 rounded-xl transition">
+          <span class="text-lg p-2 bg-blue-100 text-blue-700 rounded-lg">📂</span>
+          <div>
+            <div class="font-bold text-slate-800 text-xs">Importar Planilha Alpha7</div>
+            <div class="text-[10px] text-slate-500">Leitura automatizada de comissões</div>
+          </div>
+        </a>
+
+        <a href="importar_consumo_farmacia.html" class="flex items-center gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 p-3 rounded-xl transition">
+          <span class="text-lg p-2 bg-purple-100 text-purple-700 rounded-lg">💊</span>
+          <div>
+            <div class="font-bold text-slate-800 text-xs">Importar Consumo Farmácia</div>
+            <div class="text-[10px] text-slate-500">Extrato de crediário para desconto em folha</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT DE INTELIGÊNCIA DO DASHBOARD -->
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const mesesNomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const mesesNomesCompletos = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+    let mesSelecionadoContexto = { mesNome: '', ano: '', mesNum: 0 };
+
+    function toggleModalLancamentos() {
+      const modal = document.getElementById('modalLancamentos');
+      modal.classList.toggle('hidden');
+    }
+
+    function abrirModalMes(event, mesNome, ano, mesNum) {
+      event.stopPropagation();
+      mesSelecionadoContexto = { mesNome, ano, mesNum };
+      document.getElementById('modalMesTitulo').innerText = `MÊS: ${mesNome.toUpperCase()} / ${ano}`;
+      document.getElementById('modalGerenciarMes').classList.remove('hidden');
+    }
+
+    function fecharModalMes() {
+      document.getElementById('modalGerenciarMes').classList.add('hidden');
+    }
+
+    async function executarAcaoCompetencia(acao) {
+      const { mesNome, ano, mesNum } = mesSelecionadoContexto;
+      fecharModalMes();
+
+      const dataAtual = new Date().toISOString();
+      let payload = { status: acao };
+      if (acao === 'FECHADO') {
+        payload.fechado_em = dataAtual;
+      } else {
+        payload.fechado_em = null;
+      }
+
+      const { data } = await _supabase.from('competencias').select('*').eq('ano', ano).eq('mes', mesNum);
+      if (data && data.length > 0) {
+        await _supabase.from('competencias').update(payload).eq('ano', ano).eq('mes', mesNum);
+      } else {
+        await _supabase.from('competencias').insert([{ ano, mes: mesNum, ...payload }]);
+      }
+
+      carregarPeriodos();
+    }
+
+    async function carregarPeriodos() {
+      const ano = document.getElementById('anoReferencia').value;
+      const { data } = await _supabase.from('competencias').select('*').eq('ano', ano);
+      
+      let periodosMap = {};
+      let auditMap = {};
+      if (data) {
+        data.forEach(p => {
+          periodosMap[p.mes] = p.status;
+          auditMap[p.mes] = p.fechado_em;
+        });
+      }
+
+      const container = document.getElementById('listaPeriodos');
+      container.innerHTML = '';
+
+      let competenciaAbertaStr = "NENHUMA / 2026";
+      let competenciaMMYYYY = "08/2026";
+      let temMesAberto = false;
+      let auditStr = "-";
+
+      let storedComp = localStorage.getItem('competencia_ativa');
+
+      for (let i = 1; i <= 12; i++) {
+        const mesNomeCurto = mesesNomes[i-1];
+        const mesNomeCompleto = mesesNomesCompletos[i-1];
+        let status = periodosMap[i];
+
+        if (!status) {
+          status = (i === 8 && ano === '2026') ? 'ABERTO' : 'PENDENTE';
+        }
+
+        let isAtivaVisual = false;
+        const compStrFormatada = `${mesNomeCompleto} / ${ano}`;
+
+        if (!storedComp && status === 'ABERTO') {
+          storedComp = compStrFormatada;
+          localStorage.setItem('competencia_ativa', storedComp);
+        }
+
+        if (storedComp && storedComp.toUpperCase() === compStrFormatada.toUpperCase()) {
+          isAtivaVisual = true;
+          if (status === 'ABERTO') temMesAberto = true;
+          competenciaAbertaStr = compStrFormatada;
+          const mesNumStr = String(i).padStart(2, '0');
+          competenciaMMYYYY = `${mesNumStr}/${ano}`;
+          if (auditMap[i]) {
+            const dt = new Date(auditMap[i]);
+            auditStr = `Fechado em: ${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`;
+          }
+        }
+
+        let statusCor = "text-slate-400";
+        if (status === 'ABERTO') statusCor = "text-emerald-600 font-bold";
+        else if (status === 'FECHADO') statusCor = "text-slate-500";
+
+        let cardStyle = "border-slate-200 bg-white text-slate-600 hover:border-slate-300";
+        
+        if (status === 'ABERTO') {
+          cardStyle = "border-emerald-300 bg-emerald-50/80 text-emerald-950 shadow-xs";
+        }
+        
+        if (isAtivaVisual) {
+          cardStyle += " ring-2 ring-slate-900 border-slate-900 font-semibold";
+        }
+
+        container.innerHTML += `
+          <div class="p-2 rounded-lg border ${cardStyle} transition flex flex-col justify-between text-center relative group">
+            <div onclick="selecionarPeriodoAtivo('${mesNomeCompleto}', '${ano}')" class="cursor-pointer flex-1">
+              <span class="font-bold text-xs block">${mesNomeCurto}</span>
+              <span class="text-[9px] font-mono uppercase ${statusCor} mt-1 block">${status}</span>
+            </div>
+            <button onclick="abrirModalMes(event, '${mesNomeCompleto}', '${ano}', ${i})" title="Gerenciar status do mês" class="absolute top-1 right-1 text-slate-400 hover:text-slate-700 p-1 text-[10px] cursor-pointer opacity-70 group-hover:opacity-100 transition">
+              ⚙️
+            </button>
+          </div>
+        `;
+      }
+
+      document.getElementById('competenciaAtivaDisplay').innerText = competenciaAbertaStr.toUpperCase();
+      document.getElementById('infoFechamentoAudit').innerText = auditStr;
+
+      const badgeComp = document.getElementById('badgeStatusCompetencia');
+      if (temMesAberto || storedComp) {
+        badgeComp.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-200";
+        badgeComp.innerText = "PERÍODO ATIVO";
+      } else {
+        badgeComp.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-rose-100 text-rose-800 border border-rose-200";
+        badgeComp.innerText = "NENHUM PERÍODO";
+      }
+
+      await calcularIndicadoresDashboard(competenciaMMYYYY);
+    }
+
+    function selecionarPeriodoAtivo(mesNome, ano) {
+      const compStr = `${mesNome} / ${ano}`;
+      localStorage.setItem('competencia_ativa', compStr);
+      carregarPeriodos();
+    }
+
+    async function calcularIndicadoresDashboard(competenciaMMYYYY) {
+      try {
+        const { data: empresas } = await _supabase.from('empresas').select('*');
+        const { data: funcionarios } = await _supabase.from('funcionarios').select('*');
+        const { data: itensFolha } = await _supabase.from('folha_itens').select('*').eq('competencia', competenciaMMYYYY);
+        const { data: eventos } = await _supabase.from('tipos_eventos').select('*');
+
+        const emps = empresas || [];
+        const funcs = funcionarios || [];
+        const itens = itensFolha || [];
+        const evs = eventos || [];
+
+        const ativos = funcs.filter(f => String(f.status || 'ATIVO').toUpperCase() === 'ATIVO');
+        document.getElementById('qtdFuncionariosAtivos').innerText = ativos.length;
+
+        const mapaEventos = {};
+        evs.forEach(e => {
+          mapaEventos[String(e.codigo_evento)] = e.natureza_do_evento || 'CONTABIL';
+          mapaEventos[String(e.descricao_do_evento || '').toUpperCase()] = e.natureza_do_evento || 'CONTABIL';
+        });
+
+        let totalGeralFolha = 0;
+        let totalContabil = 0;
+        let totalNaoContabil = 0;
+        let totalDescontos = 0;
+        let totalProventos = 0;
+
+        let cPerf = 0, cSim = 0, cVit = 0, cFix = 0, cSid = 0;
+
+        let resumoEmpresas = {};
+        emps.forEach(e => {
+          const nomeFantasia = e.nome_fantasia || e.razao_social;
+          resumoEmpresas[e.id] = { nome: nomeFantasia, contabil: 0, naoContabil: 0, ativosCount: 0, cnpj: e.cnpj };
+        });
+
+        ativos.forEach(f => {
+          let empId = f.empresa_id;
+          if (!empId && f.cnpj) {
+            const match = emps.find(e => e.cnpj === f.cnpj);
+            if (match) empId = match.id;
+          }
+          if (empId && resumoEmpresas[empId]) {
+            resumoEmpresas[empId].ativosCount++;
+          }
+        });
+
+        itens.forEach(item => {
+          const val = parseFloat(item.valor || 0);
+          const tipo = (item.tipo || 'PROVENTO').toUpperCase();
+          const rubricaStr = String(item.rubrica || '').toUpperCase();
+
+          if (tipo === 'DESCONTO') {
+            totalDescontos += val;
+          } else {
+            totalProventos += val;
+            totalGeralFolha += val;
+          }
+
+          let natureza = 'CONTABIL';
+          for (let key in mapaEventos) {
+            if (rubricaStr.includes(key)) {
+              natureza = mapaEventos[key];
+              break;
+            }
+          }
+
+          if (tipo === 'PROVENTO') {
+            if (natureza === 'NAO_CONTABIL' || rubricaStr.includes('FORA')) {
+              totalNaoContabil += val;
+            } else {
+              totalContabil += val;
+            }
+          }
+
+          if (rubricaStr.includes('PERFUMARIA')) cPerf += val;
+          if (rubricaStr.includes('2018') || rubricaStr.includes('SM E GN') || rubricaStr.includes('SM / GN') || rubricaStr.includes('SIMILAR') || rubricaStr.includes('GENERICO')) cSim += val;
+          if (rubricaStr.includes('VITAMINA')) cVit += val;
+          if (rubricaStr.includes('VALOR FIXO') || rubricaStr.includes('UNITARIO')) cFix += val;
+          if (rubricaStr.includes('SIDNEY')) cSid += val;
+
+          const funcObj = funcs.find(f => String(f.id) === String(item.funcionario_id));
+          if (funcObj) {
+            let empIdDestino = funcObj.empresa_id;
+            if (!empIdDestino && funcObj.cnpj) {
+              const matchEmp = emps.find(e => e.cnpj === funcObj.cnpj);
+              if (matchEmp) empIdDestino = matchEmp.id;
+            }
+            if (empIdDestino && resumoEmpresas[empIdDestino]) {
+              if (tipo === 'PROVENTO') {
+                if (natureza === 'NAO_CONTABIL' || rubricaStr.includes('FORA')) {
+                  resumoEmpresas[empIdDestino].naoContabil += val;
+                } else {
+                  resumoEmpresas[empIdDestino].contabil += val;
+                }
+              }
+            }
+          }
+        });
+
+        const liquidoEst = totalProventos - totalDescontos;
+
+        document.getElementById('valLiquidoConsolidado').innerText = 'R$ ' + liquidoEst.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('valTotalDescontos').innerText = 'R$ ' + totalDescontos.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('valTotalFolha').innerText = 'R$ ' + totalGeralFolha.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('valContabil').innerText = 'R$ ' + totalContabil.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('valNaoContabil').innerText = 'R$ ' + totalNaoContabil.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+        document.getElementById('comPerf').innerText = 'R$ ' + cPerf.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('comSim').innerText = 'R$ ' + cSim.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('comVit').innerText = 'R$ ' + cVit.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('comFix').innerText = 'R$ ' + cFix.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('comSid').innerText = 'R$ ' + cSid.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+        // Consolidado por Empresa / Filial com Coluna de Total por Linha e Totais Gerais no Rodapé
+        const containerEmp = document.getElementById('listaEmpresasResumo');
+        const listaEmpArr = Object.values(resumoEmpresas);
+        if (listaEmpArr.length === 0) {
+          containerEmp.innerHTML = `<div class="text-slate-400 text-center py-2 text-xs">Nenhuma empresa encontrada.</div>`;
+        } else {
+          let totalAtivosEmp = 0;
+          let totalContabilEmp = 0;
+          let totalNaoContabilEmp = 0;
+          let totalGeralEmp = 0;
+
+          listaEmpArr.forEach(e => {
+            totalAtivosEmp += e.ativosCount;
+            totalContabilEmp += e.contabil;
+            totalNaoContabilEmp += e.naoContabil;
+            totalGeralEmp += (e.contabil + e.naoContabil);
+          });
+
+          containerEmp.innerHTML = `
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="text-[10px] text-slate-400 uppercase border-b border-slate-200">
+                  <th class="py-1.5 px-2 font-semibold w-44">Unidade / Loja</th>
+                  <th class="py-1.5 px-2 font-semibold text-center w-24">Funcionários Ativos</th>
+                  <th class="py-1.5 px-2 font-semibold text-right w-28">Contábil</th>
+                  <th class="py-1.5 px-2 font-semibold text-right w-28">Não Contábil</th>
+                  <th class="py-1.5 px-2 font-semibold text-right w-32">Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${listaEmpArr.map(e => {
+                  const totalLinha = e.contabil + e.naoContabil;
+                  return `
+                    <tr class="hover:bg-slate-50 transition text-xs">
+                      <td class="py-2 px-2 font-bold text-slate-800 truncate max-w-[180px]">${e.nome}</td>
+                      <td class="py-2 px-2 text-center text-slate-600 font-mono">${e.ativosCount}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-700">R$ ${e.contabil.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-600">R$ ${e.naoContabil.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700">R$ ${totalLinha.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+              <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-bold text-xs">
+                <tr>
+                  <td class="py-2.5 px-2 text-slate-900 uppercase">Total Geral</td>
+                  <td class="py-2.5 px-2 text-center font-mono text-slate-800">${totalAtivosEmp}</td>
+                  <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalNaoContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2.5 px-2 text-right font-mono text-emerald-800">R$ ${totalGeralEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                </tr>
+              </tfoot>
+            </table>
+          `;
+        }
+
+        const [mesAtivoNum, anoAtivoStr] = competenciaMMYYYY.split('/');
+        const novosColab = funcs.filter(f => {
+          if (!f.created_at) return false;
+          const dtC = new Date(f.created_at);
+          const mC = String(dtC.getMonth() + 1).padStart(2, '0');
+          const aC = String(dtC.getFullYear());
+          return mC === mesAtivoNum && aC === anoAtivoStr;
+        });
+
+        const containerNovos = document.getElementById('listaNovosColaboradores');
+        if (novosColab.length === 0) {
+          containerNovos.innerHTML = `<div class="text-slate-400 text-center py-2 text-xs">Nenhum novo colaborador cadastrado nesta competência.</div>`;
+        } else {
+          containerNovos.innerHTML = novosColab.map(nc => `
+            <div class="py-1 px-1 flex justify-between items-center text-xs">
+              <div>
+                <span class="font-bold text-slate-800">${nc.nome_registro}</span>
+                <span class="text-[10px] text-slate-500 ml-2">${nc.cargo || ''}</span>
+              </div>
+              <span class="text-[11px] text-slate-600 font-mono">${nc.empresa_registro || ''}</span>
+            </div>
+          `).join('');
+        }
+
+      } catch (err) {
+        console.error('Erro ao calcular indicadores:', err);
+      }
+    }
+
+    carregarPeriodos();
+
+    function sair() {
+      localStorage.removeItem('usuario_drogarema');
+      window.location.href = 'login.html';
+    }
+  </script>
+<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <script>
+    let tempoInatividade;
+    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+
+    function resetarTemporizador() {
+      clearTimeout(tempoInatividade);
+      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    }
+
+    function fazerLogoutPorInatividade() {
+      // Remove a credencial salva
+      localStorage.removeItem('usuario_drogarema');
+      
+      // Alerta o usuário e redireciona para o login
+      alert('Sessão expirada por inatividade. Faça login novamente.');
+      window.location.href = 'login.html';
+    }
+
+    // Monitora eventos de movimento do mouse, cliques e digitação
+    window.onload = resetarTemporizador;
+    window.onmousemove = resetarTemporizador;
+    window.onkeypress = resetarTemporizador;
+    window.onclick = resetarTemporizador;
+    window.onscroll = resetarTemporizador;
+  </script>
+</body>
+</html>
