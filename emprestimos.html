@@ -9,7 +9,6 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
 
-  <!-- Proteção de Acesso -->
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
       alert('Acesso negado! Faça login primeiro.');
@@ -19,7 +18,6 @@
 
   <div class="max-w-7xl mx-auto space-y-6">
     
-    <!-- Cabeçalho Fixo -->
     <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs px-2">
       <div>
         <a href="lancamentos.html" class="text-xs text-amber-700 hover:underline mb-1 inline-block font-bold">← VOLTAR AOS LANÇAMENTOS</a>
@@ -33,76 +31,75 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- Coluna Esquerda: Novo Empréstimo -->
-      <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 space-y-5 shadow-sm h-fit">
-        <h2 class="font-bold text-amber-700 text-sm border-b border-slate-100 pb-2">CONCEDER NOVO EMPRÉSTIMO</h2>
+      <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm h-fit">
+        <h2 class="font-bold text-amber-700 text-sm border-b border-slate-100 pb-2">CONTRATO DE EMPRÉSTIMO</h2>
         
         <form id="formEmprestimo" onsubmit="salvarEmprestimo(event)" class="space-y-4">
+          <input type="hidden" id="editEmprestimoId" value="">
           
           <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">1. Colaborador (Apenas Ativos) *</label>
-            <select id="selectFuncionario" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-amber-600 font-mono">
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">1. Colaborador (Apenas Ativos) *</label>
+            <select id="selectFuncionario" required class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-amber-600 font-mono">
               <option value="">Carregando...</option>
             </select>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Data do Contrato *</label>
-              <input type="date" id="inputData" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-amber-600 font-mono">
+              <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Data do Contrato *</label>
+              <input type="date" id="inputData" required class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-amber-600 font-mono">
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Início (MM/AAAA) *</label>
-              <input type="text" id="inputCompetencia" required placeholder="Ex: 09/2026" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-amber-600 font-mono text-center" maxlength="7" oninput="formatarCompetencia(this)">
+              <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Início (MM/AAAA) *</label>
+              <input type="text" id="inputCompetencia" required placeholder="Ex: 09/2026" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-amber-600 font-mono text-center" maxlength="7" oninput="formatarCompetencia(this)">
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">2. Valor Total do Empréstimo (R$) *</label>
-            <input type="number" step="0.01" id="inputValorTotal" required placeholder="0.00" oninput="calcularParcela()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-amber-600 font-mono text-right">
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">2. Valor Total do Empréstimo (R$) *</label>
+            <input type="number" step="0.01" id="inputValorTotal" required placeholder="0.00" oninput="calcularParcela()" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-sm focus:outline-none focus:border-amber-600 font-mono text-right">
           </div>
 
-          <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+          <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded border border-slate-200">
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qtd. Parcelas *</label>
-              <input type="number" id="inputQtdParcelas" required min="1" value="1" oninput="calcularParcela()" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-sm font-mono text-center focus:outline-none focus:border-amber-600">
+              <input type="number" id="inputQtdParcelas" required min="1" value="1" oninput="calcularParcela()" class="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-mono text-center focus:outline-none focus:border-amber-600">
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Valor Parcela (R$)</label>
-              <input type="number" step="0.01" id="inputValorParcela" readonly class="w-full bg-slate-200 border border-slate-300 rounded p-2 text-slate-700 text-sm font-mono text-right cursor-not-allowed">
+              <input type="number" step="0.01" id="inputValorParcela" readonly class="w-full bg-slate-200 border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-mono text-right cursor-not-allowed">
             </div>
           </div>
 
-          <div class="pt-2">
-            <button type="submit" id="btnSalvar" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer">
-              ✓ REGISTRAR EMPRÉSTIMO
+          <div class="flex gap-2 pt-1">
+            <button type="submit" id="btnSalvar" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded transition text-xs shadow-sm cursor-pointer">
+              ✓ REGISTRAR
             </button>
+            <button type="button" id="btnCancelarEdicao" onclick="cancelarEdicao()" class="hidden bg-slate-300 hover:bg-slate-400 text-slate-700 font-bold px-3 py-2.5 rounded transition text-xs cursor-pointer" title="Cancelar Edição">✕</button>
           </div>
         </form>
       </div>
 
-      <!-- Coluna Direita: Listagem e Histórico -->
-      <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
+      <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
         
-        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
           <div class="flex space-x-4">
-            <button onclick="alternarAba('ativos')" id="btnAbaAtivos" class="text-sm font-bold text-amber-700 border-b-2 border-amber-600 pb-1 px-1 transition">EMPRÉSTIMOS ATIVOS</button>
-            <button onclick="alternarAba('historico')" id="btnAbaHistorico" class="text-sm font-bold text-slate-400 hover:text-slate-600 pb-1 px-1 transition">HISTÓRICO (FINALIZADOS)</button>
+            <button onclick="alternarAba('ativos')" id="btnAbaAtivos" class="text-xs font-bold text-amber-700 border-b-2 border-amber-600 pb-1 px-1 transition">EMPRÉSTIMOS ATIVOS</button>
+            <button onclick="alternarAba('historico')" id="btnAbaHistorico" class="text-xs font-bold text-slate-400 hover:text-slate-600 pb-1 px-1 transition">HISTÓRICO (FINALIZADOS)</button>
           </div>
-          <span id="contadorRegistros" class="text-xs text-slate-500 font-mono">0 reg.</span>
+          <span id="contadorRegistros" class="text-[10px] text-slate-500 font-mono">0 reg.</span>
         </div>
 
-        <!-- Tabela Ativos -->
         <div id="abaAtivos" class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
+          <table class="w-full text-left text-[11px] border-collapse">
             <thead>
               <tr class="border-b border-slate-200 text-slate-500">
-                <th class="p-2">COLABORADOR</th>
-                <th class="p-2 text-center">DATA / INÍCIO</th>
-                <th class="p-2 text-right">VALOR TOTAL</th>
-                <th class="p-2 text-center">PARCELAMENTO</th>
-                <th class="p-2 text-right">VALOR PARCELA</th>
-                <th class="p-2 text-center">AÇÕES</th>
+                <th class="py-1 px-2">COLABORADOR</th>
+                <th class="py-1 px-2 text-center">DATA/INÍCIO</th>
+                <th class="py-1 px-2 text-right">VALOR TOTAL</th>
+                <th class="py-1 px-2 text-center">PARCELAS</th>
+                <th class="py-1 px-2 text-right">VALOR PARCELA</th>
+                <th class="py-1 px-2 text-center">AÇÕES</th>
               </tr>
             </thead>
             <tbody id="tabelaAtivos" class="divide-y divide-slate-100">
@@ -111,16 +108,15 @@
           </table>
         </div>
 
-        <!-- Tabela Histórico -->
         <div id="abaHistorico" class="overflow-x-auto hidden">
-          <table class="w-full text-left text-xs border-collapse">
+          <table class="w-full text-left text-[11px] border-collapse">
             <thead>
               <tr class="border-b border-slate-200 text-slate-500">
-                <th class="p-2">COLABORADOR</th>
-                <th class="p-2 text-center">DATA / INÍCIO</th>
-                <th class="p-2 text-right">VALOR TOTAL</th>
-                <th class="p-2 text-center">PARCELAMENTO</th>
-                <th class="p-2 text-center">STATUS</th>
+                <th class="py-1 px-2">COLABORADOR</th>
+                <th class="py-1 px-2 text-center">DATA/INÍCIO</th>
+                <th class="py-1 px-2 text-right">VALOR TOTAL</th>
+                <th class="py-1 px-2 text-center">PARCELAS</th>
+                <th class="py-1 px-2 text-center">STATUS</th>
               </tr>
             </thead>
             <tbody id="tabelaHistorico" class="divide-y divide-slate-100">
@@ -133,40 +129,38 @@
     </div>
   </div>
 
-  <!-- Modal de Detalhes / Cronograma de Parcelas -->
+  <!-- Modal Compacto -->
   <div id="modalDetalhes" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4 border border-slate-200">
-      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+    <div class="bg-white rounded-xl shadow-xl max-w-xl w-full p-5 space-y-3 border border-slate-200">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2">
         <div>
-          <h3 class="font-bold text-slate-900 text-sm">CRONOGRAMA DE PARCELAS (DETALHES)</h3>
-          <p id="modalSubtitulo" class="text-xs text-amber-700 font-medium"></p>
+          <h3 class="font-bold text-slate-900 text-sm">CRONOGRAMA DE PARCELAS</h3>
+          <p id="modalSubtitulo" class="text-[10px] text-amber-700 font-medium uppercase"></p>
         </div>
-        <button onclick="fecharModal()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-2 py-1 rounded bg-slate-100 cursor-pointer">✕ Fechar</button>
+        <button onclick="fecharModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xs px-2 py-1 rounded bg-slate-100 cursor-pointer">✕ Fechar</button>
       </div>
 
-      <div class="overflow-x-auto max-h-96 border border-slate-200 rounded-lg">
-        <table class="w-full text-left text-xs border-collapse">
+      <div class="overflow-x-auto max-h-80 border border-slate-200 rounded">
+        <table class="w-full text-left text-[11px] border-collapse">
           <thead>
             <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 sticky top-0">
-              <th class="p-2.5 text-center">PARCELA</th>
-              <th class="p-2.5 text-center">COMPETÊNCIA</th>
-              <th class="p-2.5 text-right">VALOR (R$)</th>
-              <th class="p-2.5 text-center">STATUS PREVISTO</th>
+              <th class="py-1.5 px-2 text-center">PARCELA</th>
+              <th class="py-1.5 px-2 text-center">COMPETÊNCIA</th>
+              <th class="py-1.5 px-2 text-right">VALOR (R$)</th>
+              <th class="py-1.5 px-2 text-center">STATUS PREVISTO</th>
             </tr>
           </thead>
           <tbody id="tabelaCronograma" class="divide-y divide-slate-100 font-mono">
-            <!-- Inserido via JS -->
           </tbody>
         </table>
       </div>
 
-      <div class="flex justify-end pt-2">
-        <button onclick="fecharModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs cursor-pointer">Fechar Janela</button>
+      <div class="flex justify-end pt-1">
+        <button onclick="fecharModal()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs cursor-pointer">OK</button>
       </div>
     </div>
   </div>
 
-  <!-- Scripts -->
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
@@ -204,13 +198,13 @@
       const divHist = document.getElementById('abaHistorico');
 
       if (aba === 'ativos') {
-        btnAtivos.className = "text-sm font-bold text-amber-700 border-b-2 border-amber-600 pb-1 px-1 transition";
-        btnHist.className = "text-sm font-bold text-slate-400 hover:text-slate-600 pb-1 px-1 transition";
+        btnAtivos.className = "text-xs font-bold text-amber-700 border-b-2 border-amber-600 pb-1 px-1 transition";
+        btnHist.className = "text-xs font-bold text-slate-400 hover:text-slate-600 pb-1 px-1 transition";
         divAtivos.classList.remove('hidden');
         divHist.classList.add('hidden');
       } else {
-        btnHist.className = "text-sm font-bold text-slate-700 border-b-2 border-slate-600 pb-1 px-1 transition";
-        btnAtivos.className = "text-sm font-bold text-slate-400 hover:text-slate-600 pb-1 px-1 transition";
+        btnHist.className = "text-xs font-bold text-slate-700 border-b-2 border-slate-600 pb-1 px-1 transition";
+        btnAtivos.className = "text-xs font-bold text-slate-400 hover:text-slate-600 pb-1 px-1 transition";
         divHist.classList.remove('hidden');
         divAtivos.classList.add('hidden');
       }
@@ -218,20 +212,13 @@
     }
 
     async function inicializar() {
-      // Define a data de hoje como padrão no campo
       document.getElementById('inputData').valueAsDate = new Date();
-      
       await carregarFuncionarios();
       await carregarEmprestimos();
     }
 
     async function carregarFuncionarios() {
-      const { data, error } = await _supabase
-        .from('funcionarios')
-        .select('id, nome_registro, matricula')
-        .eq('status', 'ATIVO')
-        .order('nome_registro');
-
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, matricula').eq('status', 'ATIVO').order('nome_registro');
       if (!error) {
         listaFuncionarios = data || [];
         const select = document.getElementById('selectFuncionario');
@@ -241,11 +228,7 @@
     }
 
     async function carregarEmprestimos() {
-      const { data, error } = await _supabase
-        .from('emprestimos')
-        .select('*')
-        .order('data_contrato', { ascending: false });
-
+      const { data, error } = await _supabase.from('emprestimos').select('*').order('data_contrato', { ascending: false });
       if (!error) {
         listaEmprestimos = data || [];
         renderizarTabelas();
@@ -258,7 +241,6 @@
 
       document.getElementById('contadorRegistros').innerText = abaAtual === 'ativos' ? `${ativos.length} reg.` : `${finalizados.length} reg.`;
 
-      // Renderiza Ativos
       const tbodyAtivos = document.getElementById('tabelaAtivos');
       if (ativos.length === 0) {
         tbodyAtivos.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum empréstimo ativo no momento.</td></tr>`;
@@ -269,25 +251,25 @@
           
           return `
             <tr class="hover:bg-slate-50 border-b border-slate-50 last:border-0">
-              <td class="p-2 font-bold text-slate-800">${nomeFunc}</td>
-              <td class="p-2 text-center">
-                <div class="text-[10px] text-slate-500">Data: ${formatarDataBR(e.data_contrato)}</div>
-                <div class="font-mono text-emerald-700 font-bold text-xs">Início: ${e.competencia_inicio}</div>
+              <td class="py-1 px-2 font-bold text-slate-800 leading-tight">${nomeFunc}</td>
+              <td class="py-1 px-2 text-center leading-tight">
+                <div class="text-[9px] text-slate-500">Data: ${formatarDataBR(e.data_contrato)}</div>
+                <div class="font-mono text-emerald-700 font-bold text-[10px]">Início: ${e.competencia_inicio}</div>
               </td>
-              <td class="p-2 text-right font-mono font-bold text-slate-700">R$ ${parseFloat(e.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-              <td class="p-2 text-center font-mono bg-slate-100/50 rounded">${e.qtd_parcelas}x</td>
-              <td class="p-2 text-right font-mono font-bold text-amber-700">R$ ${parseFloat(e.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-              <td class="p-2 text-center whitespace-nowrap">
-                <button onclick="abrirCronograma('${e.id}')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded font-bold text-[10px] transition cursor-pointer" title="Ver parcelas detalhadas">📊 Detalhes</button>
-                <button onclick="finalizarEmprestimo('${e.id}')" class="ml-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer" title="Marcar como totalmente quitado/finalizado">✔ Finalizar</button>
-                <button onclick="excluirEmprestimo('${e.id}')" class="ml-1 text-rose-400 hover:text-rose-600 font-bold px-1 transition cursor-pointer" title="Excluir erro de lançamento">✕</button>
+              <td class="py-1 px-2 text-right font-mono font-bold text-slate-700">R$ ${parseFloat(e.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+              <td class="py-1 px-2 text-center font-mono bg-slate-100/50 rounded">${e.qtd_parcelas}x</td>
+              <td class="py-1 px-2 text-right font-mono font-bold text-amber-700">R$ ${parseFloat(e.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+              <td class="py-1 px-2 text-center whitespace-nowrap">
+                <button onclick="editarEmprestimo('${e.id}')" class="px-1.5 py-0.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded font-bold text-[9px] transition cursor-pointer" title="Editar Contrato">✎ Edit</button>
+                <button onclick="abrirCronograma('${e.id}')" class="ml-1 px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded font-bold text-[9px] transition cursor-pointer" title="Ver parcelas">📊 Detalhes</button>
+                <button onclick="finalizarEmprestimo('${e.id}')" class="ml-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-1.5 py-0.5 rounded text-[9px] font-bold transition cursor-pointer" title="Marcar como quitado">✔ Fin.</button>
+                <button onclick="excluirEmprestimo('${e.id}')" class="ml-1 text-rose-400 hover:text-rose-600 font-bold px-1 transition cursor-pointer" title="Excluir">✕</button>
               </td>
             </tr>
           `;
         }).join('');
       }
 
-      // Renderiza Histórico
       const tbodyHist = document.getElementById('tabelaHistorico');
       if (finalizados.length === 0) {
         tbodyHist.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">O histórico está vazio.</td></tr>`;
@@ -298,21 +280,53 @@
           
           return `
             <tr class="hover:bg-slate-50 opacity-70 border-b border-slate-50 last:border-0">
-              <td class="p-2 font-bold text-slate-600">${nomeFunc}</td>
-              <td class="p-2 text-center">
-                <div class="text-[10px] text-slate-500">Data: ${formatarDataBR(e.data_contrato)}</div>
-                <div class="font-mono text-slate-600 text-xs">Início: ${e.competencia_inicio}</div>
+              <td class="py-1 px-2 font-bold text-slate-600">${nomeFunc}</td>
+              <td class="py-1 px-2 text-center">
+                <div class="text-[9px] text-slate-500">Data: ${formatarDataBR(e.data_contrato)}</div>
+                <div class="font-mono text-slate-600 text-[10px]">Início: ${e.competencia_inicio}</div>
               </td>
-              <td class="p-2 text-right font-mono font-bold text-slate-600">R$ ${parseFloat(e.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-              <td class="p-2 text-center font-mono">${e.qtd_parcelas}x</td>
-              <td class="p-2 text-center">
-                <span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">FINALIZADO</span>
-                <button onclick="abrirCronograma('${e.id}')" class="ml-2 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer transition">📊 Ver</button>
+              <td class="py-1 px-2 text-right font-mono font-bold text-slate-600">R$ ${parseFloat(e.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+              <td class="py-1 px-2 text-center font-mono">${e.qtd_parcelas}x</td>
+              <td class="py-1 px-2 text-center">
+                <span class="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[9px] font-bold">FINALIZADO</span>
+                <button onclick="abrirCronograma('${e.id}')" class="ml-1 px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[9px] font-bold cursor-pointer transition">📊 Ver</button>
               </td>
             </tr>
           `;
         }).join('');
       }
+    }
+
+    function editarEmprestimo(id) {
+      const emp = listaEmprestimos.find(item => String(item.id) === String(id));
+      if (!emp) return;
+
+      document.getElementById('editEmprestimoId').value = emp.id;
+      document.getElementById('selectFuncionario').value = emp.funcionario_id;
+      document.getElementById('inputData').value = emp.data_contrato;
+      document.getElementById('inputCompetencia').value = emp.competencia_inicio;
+      document.getElementById('inputValorTotal').value = emp.valor_total;
+      document.getElementById('inputQtdParcelas').value = emp.qtd_parcelas;
+      calcularParcela();
+
+      const btnSalvar = document.getElementById('btnSalvar');
+      btnSalvar.innerText = '✓ ATUALIZAR';
+      btnSalvar.className = 'flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded transition text-xs shadow-sm cursor-pointer';
+      document.getElementById('btnCancelarEdicao').classList.remove('hidden');
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelarEdicao() {
+      document.getElementById('editEmprestimoId').value = '';
+      document.getElementById('formEmprestimo').reset();
+      document.getElementById('inputData').valueAsDate = new Date();
+      document.getElementById('inputQtdParcelas').value = 1;
+      
+      const btnSalvar = document.getElementById('btnSalvar');
+      btnSalvar.innerText = '✓ REGISTRAR';
+      btnSalvar.className = 'flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded transition text-xs shadow-sm cursor-pointer';
+      document.getElementById('btnCancelarEdicao').classList.add('hidden');
     }
 
     function abrirCronograma(id) {
@@ -338,27 +352,24 @@
         const compStr = `${String(mesAtual).padStart(2, '0')}/${anoAtual}`;
         const numCompParcela = anoAtual * 12 + mesAtual;
 
-        let badgeStatus = '<span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">PREVISTA</span>';
+        let badgeStatus = '<span class="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">PREVISTA</span>';
         if (numCompParcela < numCompAtual) {
-          badgeStatus = '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold">PAGA / DESCONTADA</span>';
+          badgeStatus = '<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold">PAGA</span>';
         } else if (numCompParcela === numCompAtual) {
-          badgeStatus = '<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">COMPETÊNCIA ATUAL</span>';
+          badgeStatus = '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">MÊS ATUAL</span>';
         }
 
         htmlLinhas += `
           <tr class="hover:bg-slate-50">
-            <td class="p-2.5 text-center font-bold text-slate-700">${i} / ${emp.qtd_parcelas}</td>
-            <td class="p-2.5 text-center font-bold text-slate-800">${compStr}</td>
-            <td class="p-2.5 text-right font-bold text-slate-700">R$ ${parseFloat(emp.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-            <td class="p-2.5 text-center">${badgeStatus}</td>
+            <td class="py-1 px-2 text-center font-bold text-slate-700">${i}/${emp.qtd_parcelas}</td>
+            <td class="py-1 px-2 text-center font-bold text-slate-800">${compStr}</td>
+            <td class="py-1 px-2 text-right font-bold text-slate-700">R$ ${parseFloat(emp.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td class="py-1 px-2 text-center">${badgeStatus}</td>
           </tr>
         `;
 
         mesAtual++;
-        if (mesAtual > 12) {
-          mesAtual = 1;
-          anoAtual++;
-        }
+        if (mesAtual > 12) { mesAtual = 1; anoAtual++; }
       }
 
       document.getElementById('tabelaCronograma').innerHTML = htmlLinhas;
@@ -372,6 +383,7 @@
     async function salvarEmprestimo(e) {
       e.preventDefault();
       
+      const idEdicao = document.getElementById('editEmprestimoId').value;
       const funcionario_id = document.getElementById('selectFuncionario').value;
       const data_contrato = document.getElementById('inputData').value;
       const valor_total = parseFloat(document.getElementById('inputValorTotal').value);
@@ -384,48 +396,37 @@
         return;
       }
 
-      const payload = {
-        funcionario_id,
-        data_contrato,
-        valor_total,
-        qtd_parcelas,
-        valor_parcela,
-        competencia_inicio,
-        status: 'ATIVO'
-      };
+      const payload = { funcionario_id, data_contrato, valor_total, qtd_parcelas, valor_parcela, competencia_inicio };
 
-      const { error } = await _supabase.from('emprestimos').insert([payload]);
-
-      if (error) {
-        alert('Erro ao salvar empréstimo: ' + error.message);
+      if (idEdicao) {
+        const { error } = await _supabase.from('emprestimos').update(payload).eq('id', idEdicao);
+        if (error) alert('Erro ao atualizar: ' + error.message);
+        else {
+          cancelarEdicao();
+          await carregarEmprestimos();
+        }
       } else {
-        document.getElementById('formEmprestimo').reset();
-        document.getElementById('inputData').valueAsDate = new Date();
-        document.getElementById('inputQtdParcelas').value = 1;
-        document.getElementById('inputValorParcela').value = '';
-        await carregarEmprestimos();
+        payload.status = 'ATIVO';
+        const { error } = await _supabase.from('emprestimos').insert([payload]);
+        if (error) alert('Erro ao salvar: ' + error.message);
+        else {
+          cancelarEdicao();
+          await carregarEmprestimos();
+        }
       }
     }
 
     async function finalizarEmprestimo(id) {
-      if (confirm('Este colaborador quitou todas as parcelas deste empréstimo? A ação o moverá para o histórico.')) {
+      if (confirm('Marcar como totalmente quitado?')) {
         const { error } = await _supabase.from('emprestimos').update({ status: 'FINALIZADO' }).eq('id', id);
-        if (error) {
-          alert('Erro ao finalizar: ' + error.message);
-        } else {
-          carregarEmprestimos();
-        }
+        if (!error) carregarEmprestimos();
       }
     }
 
     async function excluirEmprestimo(id) {
-      if (confirm('Atenção: Deseja apagar este registro do banco de dados? Faça isso apenas se lançou por engano.')) {
+      if (confirm('Atenção: Deseja apagar este registro permanentemente?')) {
         const { error } = await _supabase.from('emprestimos').delete().eq('id', id);
-        if (error) {
-          alert('Erro ao excluir: ' + error.message);
-        } else {
-          carregarEmprestimos();
-        }
+        if (!error) carregarEmprestimos();
       }
     }
 
