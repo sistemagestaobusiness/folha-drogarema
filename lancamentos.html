@@ -226,69 +226,71 @@
             <h2 id="tituloPainelDireito" class="font-bold text-slate-900 text-xs uppercase">ITENS DA COMPETÊNCIA ATIVA</h2>
             <p id="subtituloContexto" class="text-[11px] text-emerald-700 font-mono mt-0.5">Selecione uma empresa e funcionário</p>
           </div>
-          <div id="resumoContador" class="text-[11px] text-slate-600 font-mono text-right leading-tight">
-            <!-- Resumo estruturado compacto -->
-            P.Cont: R$ 0,00 | D.Cont: R$ 0,00 | <span class="font-bold">Líq.Cont: R$ 0,00</span><br>
-            P.NãoCont: R$ 0,00 | D.NãoCont: R$ 0,00 | <span class="font-bold">Líq.NãoCont: R$ 0,00</span><br>
-            <span class="text-emerald-700 font-bold">TOTAL LÍQ: R$ 0,00</span>
+          <!-- Resumo Destaque Principal -->
+          <div id="resumoContador" class="text-right leading-tight">
+            <span class="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Total Líquido a Pagar</span><br>
+            <span class="text-emerald-700 font-bold text-lg font-mono">R$ 0,00</span>
           </div>
         </div>
 
         <!-- BLOCO 1: CONTÁBIL -->
-        <div class="space-y-2">
-          <div class="bg-slate-800 text-white px-3 py-1.5 rounded text-[11px] font-bold tracking-wide uppercase flex justify-between items-center">
+        <div class="space-y-0 shadow-sm rounded">
+          <div class="bg-slate-800 text-white px-3 py-1.5 rounded-t text-[11px] font-bold tracking-wide uppercase flex justify-between items-center">
             <span>🔹 EVENTOS CONTÁBEIS</span>
           </div>
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto border-x border-slate-200">
             <table class="w-full text-left text-[11px] border-collapse">
               <thead>
-                <tr class="border-b border-slate-200 text-slate-400 font-semibold">
+                <tr class="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
                   <th class="py-1.5 px-2">EVENTO / RUBRICA</th>
                   <th class="py-1.5 px-2 text-right text-emerald-700 w-24">CRÉDITO (+)</th>
                   <th class="py-1.5 px-2 text-right text-rose-700 w-24">DÉBITO (-)</th>
                   <th id="thAcaoContabil" class="py-1.5 px-2 text-center w-16">AÇÕES</th>
                 </tr>
               </thead>
-              <tbody id="tabelaContabil" class="divide-y divide-slate-100">
+              <tbody id="tabelaContabil" class="divide-y divide-slate-100 bg-white">
                 <tr><td colspan="4" class="p-2 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
               </tbody>
             </table>
           </div>
-          <!-- Subtotal Contábil Limpo -->
-          <div class="bg-slate-50 border border-slate-200 rounded p-1.5 text-[11px] flex justify-end items-center font-mono font-bold">
-            <div class="text-slate-800 px-2 py-0.5">
-              TOTAL A PAGAR: <span id="subLiquidoContabil" class="text-emerald-700 ml-1">R$ 0,00</span>
+          <!-- Subtotais Contábil Alinhados -->
+          <div class="bg-slate-100 border border-slate-200 rounded-b p-2 text-[11px] flex justify-end gap-2 font-mono font-bold items-center">
+            <div class="text-slate-500 mr-2 uppercase text-[10px]">Totais:</div>
+            <div class="w-24 text-right text-emerald-700" id="subCreditoContabil">R$ 0,00</div>
+            <div class="w-24 text-right text-rose-700" id="subDebitoContabil">R$ 0,00</div>
+            <div class="w-20 text-center text-slate-800 bg-slate-200/80 rounded py-0.5 ml-2" title="Líquido Contábil">
+              <span id="subLiquidoContabil">R$ 0,00</span>
             </div>
           </div>
         </div>
 
-        <!-- Linha Divisória -->
-        <hr class="border-t border-dashed border-slate-300 my-2">
-
         <!-- BLOCO 2: NÃO CONTÁBIL -->
-        <div class="space-y-2">
-          <div class="bg-amber-600 text-white px-3 py-1.5 rounded text-[11px] font-bold tracking-wide uppercase flex justify-between items-center">
+        <div class="space-y-0 shadow-sm rounded mt-6">
+          <div class="bg-amber-600 text-white px-3 py-1.5 rounded-t text-[11px] font-bold tracking-wide uppercase flex justify-between items-center">
             <span>🔸 EVENTOS NÃO CONTÁBEIS (EXIBIDOS NO HOLERITE)</span>
           </div>
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto border-x border-slate-200">
             <table class="w-full text-left text-[11px] border-collapse">
               <thead>
-                <tr class="border-b border-slate-200 text-slate-400 font-semibold">
+                <tr class="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
                   <th class="py-1.5 px-2">EVENTO / RUBRICA</th>
                   <th class="py-1.5 px-2 text-right text-emerald-700 w-24">CRÉDITO (+)</th>
                   <th class="py-1.5 px-2 text-right text-rose-700 w-24">DÉBITO (-)</th>
                   <th id="thAcaoNaoContabil" class="py-1.5 px-2 text-center w-16">AÇÕES</th>
                 </tr>
               </thead>
-              <tbody id="tabelaNaoContabil" class="divide-y divide-slate-100">
+              <tbody id="tabelaNaoContabil" class="divide-y divide-slate-100 bg-white">
                 <tr><td colspan="4" class="p-2 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
               </tbody>
             </table>
           </div>
-          <!-- Subtotal Não Contábil Limpo -->
-          <div class="bg-slate-50 border border-slate-200 rounded p-1.5 text-[11px] flex justify-end items-center font-mono font-bold">
-            <div class="text-slate-800 px-2 py-0.5">
-              TOTAL A PAGAR: <span id="subLiquidoNaoContabil" class="text-amber-700 ml-1">R$ 0,00</span>
+          <!-- Subtotais Não Contábil Alinhados -->
+          <div class="bg-slate-100 border border-slate-200 rounded-b p-2 text-[11px] flex justify-end gap-2 font-mono font-bold items-center">
+            <div class="text-slate-500 mr-2 uppercase text-[10px]">Totais:</div>
+            <div class="w-24 text-right text-emerald-700" id="subCreditoNaoContabil">R$ 0,00</div>
+            <div class="w-24 text-right text-rose-700" id="subDebitoNaoContabil">R$ 0,00</div>
+            <div class="w-20 text-center text-amber-900 bg-amber-200/60 rounded py-0.5 ml-2" title="Líquido Não Contábil">
+              <span id="subLiquidoNaoContabil">R$ 0,00</span>
             </div>
           </div>
         </div>
@@ -626,13 +628,17 @@
       document.getElementById('tabelaContabil').innerHTML = `<tr><td colspan="4" class="p-2 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
       document.getElementById('tabelaNaoContabil').innerHTML = `<tr><td colspan="4" class="p-2 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
       
+      document.getElementById('subCreditoContabil').innerText = 'R$ 0,00';
+      document.getElementById('subDebitoContabil').innerText = 'R$ 0,00';
       document.getElementById('subLiquidoContabil').innerText = 'R$ 0,00';
+
+      document.getElementById('subCreditoNaoContabil').innerText = 'R$ 0,00';
+      document.getElementById('subDebitoNaoContabil').innerText = 'R$ 0,00';
       document.getElementById('subLiquidoNaoContabil').innerText = 'R$ 0,00';
 
       document.getElementById('resumoContador').innerHTML = `
-        P.Cont: R$ 0,00 | D.Cont: R$ 0,00 | <span class="font-bold">Líq.Cont: R$ 0,00</span><br>
-        P.NãoCont: R$ 0,00 | D.NãoCont: R$ 0,00 | <span class="font-bold">Líq.NãoCont: R$ 0,00</span><br>
-        <span class="text-emerald-700 font-bold">TOTAL LÍQ: R$ 0,00</span>
+        <span class="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Total Líquido a Pagar</span><br>
+        <span class="text-emerald-700 font-bold text-lg font-mono">R$ 0,00</span>
       `;
     }
 
@@ -659,11 +665,10 @@
         if (thNaoCont) thNaoCont.style.display = '';
       }
 
-      // Renderizar Tabela Contábil com padding reduzido (py-1)
+      // Renderizar Tabela Contábil
       const tbodyCont = document.getElementById('tabelaContabil');
       if (contabilItens.length === 0) {
         tbodyCont.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 3 : 4}" class="p-2 text-center text-slate-400">Nenhum evento contábil encontrado.</td></tr>`;
-        document.getElementById('subLiquidoContabil').innerText = 'R$ 0,00';
       } else {
         tbodyCont.innerHTML = contabilItens.map(item => {
           const valorNum = parseFloat(item.valor || 0);
@@ -688,22 +693,21 @@
 
           return `
             <tr class="hover:bg-slate-50">
-              <td class="py-1 px-2 text-slate-700 font-medium">
+              <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
                 ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
               </td>
-              <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
-              <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
+              <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
+              <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               ${botoesAcao}
             </tr>
           `;
         }).join('');
       }
 
-      // Renderizar Tabela Não Contábil com padding reduzido (py-1)
+      // Renderizar Tabela Não Contábil
       const tbodyNaoCont = document.getElementById('tabelaNaoContabil');
       if (naoContabilItens.length === 0) {
         tbodyNaoCont.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 3 : 4}" class="p-2 text-center text-slate-400">Nenhum evento não contábil encontrado.</td></tr>`;
-        document.getElementById('subLiquidoNaoContabil').innerText = 'R$ 0,00';
       } else {
         tbodyNaoCont.innerHTML = naoContabilItens.map(item => {
           const valorNum = parseFloat(item.valor || 0);
@@ -728,11 +732,11 @@
 
           return `
             <tr class="hover:bg-slate-50">
-              <td class="py-1 px-2 text-slate-700 font-medium">
+              <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
                 ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
               </td>
-              <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
-              <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
+              <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
+              <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               ${botoesAcao}
             </tr>
           `;
@@ -750,13 +754,19 @@
 
       const liquidoTotalGeral = liqCont + liqNaoCont;
 
+      // Populando os rodapés (tfoot virtuais)
+      document.getElementById('subCreditoContabil').innerText = 'R$ ' + credCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      document.getElementById('subDebitoContabil').innerText = 'R$ ' + debCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
       document.getElementById('subLiquidoContabil').innerText = 'R$ ' + liqCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+      document.getElementById('subCreditoNaoContabil').innerText = 'R$ ' + credNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      document.getElementById('subDebitoNaoContabil').innerText = 'R$ ' + debNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
       document.getElementById('subLiquidoNaoContabil').innerText = 'R$ ' + liqNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
 
+      // Populando o destaque superior
       document.getElementById('resumoContador').innerHTML = `
-        P.Cont: R$ ${credCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | D.Cont: R$ ${debCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | <span class="font-bold">Líq.Cont: R$ ${liqCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span><br>
-        P.NãoCont: R$ ${credNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | D.NãoCont: R$ ${debNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | <span class="font-bold">Líq.NãoCont: R$ ${liqNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span><br>
-        <span class="text-emerald-700 font-bold">TOTAL LÍQ: R$ ${liquidoTotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+        <span class="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Total Líquido a Pagar</span><br>
+        <span class="text-emerald-700 font-bold text-lg font-mono">R$ ${liquidoTotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
       `;
     }
 
