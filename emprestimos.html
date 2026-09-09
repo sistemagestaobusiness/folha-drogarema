@@ -133,6 +133,39 @@
     </div>
   </div>
 
+  <!-- Modal de Detalhes / Cronograma de Parcelas -->
+  <div id="modalDetalhes" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4 border border-slate-200">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">CRONOGRAMA DE PARCELAS (DETALHES)</h3>
+          <p id="modalSubtitulo" class="text-xs text-amber-700 font-medium"></p>
+        </div>
+        <button onclick="fecharModal()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-2 py-1 rounded bg-slate-100 cursor-pointer">✕ Fechar</button>
+      </div>
+
+      <div class="overflow-x-auto max-h-96 border border-slate-200 rounded-lg">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 sticky top-0">
+              <th class="p-2.5 text-center">PARCELA</th>
+              <th class="p-2.5 text-center">COMPETÊNCIA</th>
+              <th class="p-2.5 text-right">VALOR (R$)</th>
+              <th class="p-2.5 text-center">STATUS PREVISTO</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaCronograma" class="divide-y divide-slate-100 font-mono">
+            <!-- Inserido via JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="fecharModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs cursor-pointer">Fechar Janela</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
@@ -244,11 +277,10 @@
               <td class="p-2 text-right font-mono font-bold text-slate-700">R$ ${parseFloat(e.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
               <td class="p-2 text-center font-mono bg-slate-100/50 rounded">${e.qtd_parcelas}x</td>
               <td class="p-2 text-right font-mono font-bold text-amber-700">R$ ${parseFloat(e.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-              <td class="p-2 text-center">
-                <button onclick="finalizarEmprestimo(${e.id})" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer" title="Marcar como totalmente quitado/finalizado">
-                  ✔ Finalizar
-                </button>
-                <button onclick="excluirEmprestimo(${e.id})" class="ml-1 text-rose-400 hover:text-rose-600 font-bold px-1 transition cursor-pointer" title="Excluir erro de lançamento">✕</button>
+              <td class="p-2 text-center whitespace-nowrap">
+                <button onclick="abrirCronograma('${e.id}')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded font-bold text-[10px] transition cursor-pointer" title="Ver parcelas detalhadas">📊 Detalhes</button>
+                <button onclick="finalizarEmprestimo('${e.id}')" class="ml-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer" title="Marcar como totalmente quitado/finalizado">✔ Finalizar</button>
+                <button onclick="excluirEmprestimo('${e.id}')" class="ml-1 text-rose-400 hover:text-rose-600 font-bold px-1 transition cursor-pointer" title="Excluir erro de lançamento">✕</button>
               </td>
             </tr>
           `;
@@ -275,11 +307,66 @@
               <td class="p-2 text-center font-mono">${e.qtd_parcelas}x</td>
               <td class="p-2 text-center">
                 <span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">FINALIZADO</span>
+                <button onclick="abrirCronograma('${e.id}')" class="ml-2 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-bold cursor-pointer transition">📊 Ver</button>
               </td>
             </tr>
           `;
         }).join('');
       }
+    }
+
+    function abrirCronograma(id) {
+      const emp = listaEmprestimos.find(item => String(item.id) === String(id));
+      if (!emp) return;
+
+      const func = listaFuncionarios.find(f => String(f.id) === String(emp.funcionario_id));
+      const nomeFunc = func ? func.nome_registro : 'Colaborador';
+
+      document.getElementById('modalSubtitulo').innerText = `${nomeFunc} — Total: R$ ${parseFloat(emp.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})} (${emp.qtd_parcelas}x de R$ ${parseFloat(emp.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})})`;
+
+      const partesComp = emp.competencia_inicio.split('/');
+      let mesAtual = parseInt(partesComp[0], 10);
+      let anoAtual = parseInt(partesComp[1], 10);
+
+      const dataHoje = new Date();
+      const mesReal = dataHoje.getMonth() + 1;
+      const anoReal = dataHoje.getFullYear();
+      const numCompAtual = anoReal * 12 + mesReal;
+
+      let htmlLinhas = '';
+      for (let i = 1; i <= emp.qtd_parcelas; i++) {
+        const compStr = `${String(mesAtual).padStart(2, '0')}/${anoAtual}`;
+        const numCompParcela = anoAtual * 12 + mesAtual;
+
+        let badgeStatus = '<span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">PREVISTA</span>';
+        if (numCompParcela < numCompAtual) {
+          badgeStatus = '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold">PAGA / DESCONTADA</span>';
+        } else if (numCompParcela === numCompAtual) {
+          badgeStatus = '<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">COMPETÊNCIA ATUAL</span>';
+        }
+
+        htmlLinhas += `
+          <tr class="hover:bg-slate-50">
+            <td class="p-2.5 text-center font-bold text-slate-700">${i} / ${emp.qtd_parcelas}</td>
+            <td class="p-2.5 text-center font-bold text-slate-800">${compStr}</td>
+            <td class="p-2.5 text-right font-bold text-slate-700">R$ ${parseFloat(emp.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+            <td class="p-2.5 text-center">${badgeStatus}</td>
+          </tr>
+        `;
+
+        mesAtual++;
+        if (mesAtual > 12) {
+          mesAtual = 1;
+          anoAtual++;
+        }
+      }
+
+      document.getElementById('tabelaCronograma').innerHTML = htmlLinhas;
+      document.getElementById('modalDetalhes').classList.remove('hidden');
+    }
+
+    function fecharModal() {
+      document.getElementById('modalDetalhes').classList.add('hidden');
     }
 
     async function salvarEmprestimo(e) {
