@@ -599,7 +599,8 @@
     });
 
     // -------------------------------------------------------------------------
-    // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA DE EMPRÉSTIMOS NA FOLHA
+// -------------------------------------------------------------------------
+    // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA COM LEITURA DE EXCEÇÕES
     // -------------------------------------------------------------------------
     async function sincronizarEmprestimos(funcionarioId, competencia) {
       // 1. Busca todos os empréstimos ativos deste funcionário
@@ -636,20 +637,34 @@
         // Se o mês atual está dentro do período de parcelamento do empréstimo
         if (deltaMeses >= 0 && deltaMeses < emp.qtd_parcelas) {
           const parcelaAtual = deltaMeses + 1;
+          
+          // LÊ O JSON DE EXCEÇÕES DO BANCO DE DADOS
+          const excecoes = emp.excecoes || {};
+          const excParcela = excecoes[parcelaAtual] || {};
+
+          // Regra 1: Se a parcela foi "Pulada/Cancelada" lá no modal, aborta e não lança nada!
+          if (excParcela.status === 'cancelada') {
+            continue; 
+          }
+
+          // Regra 2: Pega o valor (se foi editado no modal usa o novo, senão usa o original do contrato)
+          const valorReal = excParcela.valor !== undefined ? parseFloat(excParcela.valor) : parseFloat(emp.valor_parcela);
+
           const tagParcela = `(${String(parcelaAtual).padStart(2, '0')}/${String(emp.qtd_parcelas).padStart(2, '0')})`;
           const rubricaExata = `3007 - ${desc3007} ${tagParcela}`;
 
-          // Confere se esse desconto específico (mesma parcela e mesmo valor) já foi inserido
-          const jaExiste = lancamentosExistentes?.some(l => l.rubrica.includes(tagParcela) && parseFloat(l.valor) === parseFloat(emp.valor_parcela));
+          // Regra 3: Confere se o desconto da parcela X já foi inserido (checando APENAS a tag)
+          // Isso garante que, se você editar o valor na tela de folha, ele não insira de novo.
+          const jaExiste = lancamentosExistentes?.some(l => l.rubrica.includes(tagParcela));
 
           if (!jaExiste) {
-            // Injeta o desconto automaticamente direto no banco de dados!
+            // Injeta o desconto automaticamente direto no banco de dados com o valor corrigido!
             await _supabase.from('folha_itens').insert([{
               funcionario_id: funcionarioId,
               rubrica: rubricaExata,
               tipo: 'DESCONTO',
-              valor: emp.valor_parcela,
-              valor_bruto: emp.valor_parcela,
+              valor: valorReal,
+              valor_bruto: valorReal,
               abatimento_sigiloso: 0,
               motivo_ajuste: `Automação Empréstimo #${emp.id}`,
               parcela_atual: parcelaAtual,
@@ -661,6 +676,7 @@
         }
       }
     }
+  
     // -------------------------------------------------------------------------
 
     async function carregarLancamentosNovo() {
