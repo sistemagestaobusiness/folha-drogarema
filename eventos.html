@@ -80,21 +80,69 @@
 
       <!-- Tabela de Listagem -->
       <div class="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-xl shadow-sm space-y-4">
-        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+        
+        <div class="flex justify-between items-center pb-2">
           <h2 class="font-bold text-slate-900 text-sm">EVENTOS CADASTRADOS</h2>
           <span id="totalEventos" class="text-xs bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full text-slate-600 font-mono">0 evento(s)</span>
+        </div>
+
+        <!-- Barra de Filtros e Ordenação -->
+        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3 mb-2">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <!-- Filtro de Busca -->
+            <div class="sm:col-span-4">
+              <input type="text" id="filtroBusca" placeholder="Buscar por código ou nome (min. 3 letras)..." class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 uppercase" oninput="aplicarFiltrosEOrdenar()">
+            </div>
+            
+            <!-- Filtro Tipo -->
+            <div>
+              <select id="filtroTipo" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-[11px] font-bold focus:outline-none focus:border-emerald-600" onchange="aplicarFiltrosEOrdenar()">
+                <option value="">TODOS OS TIPOS</option>
+                <option value="PROVENTO">PROVENTOS</option>
+                <option value="DESCONTO">DESCONTOS</option>
+              </select>
+            </div>
+
+            <!-- Filtro Natureza -->
+            <div>
+              <select id="filtroNatureza" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-[11px] font-bold focus:outline-none focus:border-emerald-600" onchange="aplicarFiltrosEOrdenar()">
+                <option value="">TODA NATUREZA</option>
+                <option value="CONTABIL">CONTÁBIL</option>
+                <option value="NAO_CONTABIL">NÃO CONTÁBIL</option>
+              </select>
+            </div>
+
+            <!-- Filtro Status -->
+            <div>
+              <select id="filtroStatus" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-[11px] font-bold focus:outline-none focus:border-emerald-600" onchange="aplicarFiltrosEOrdenar()">
+                <option value="">TODOS STATUS</option>
+                <option value="ATIVO">ATIVOS</option>
+                <option value="INATIVO">INATIVOS</option>
+              </select>
+            </div>
+
+            <!-- Ordenação -->
+            <div>
+              <select id="ordenacao" class="w-full bg-slate-200 border border-slate-300 rounded p-2 text-slate-800 text-[11px] font-bold focus:outline-none focus:border-emerald-600 cursor-pointer" onchange="aplicarFiltrosEOrdenar()">
+                <option value="codigo_asc">⬇ CÓDIGO CRESCENTE</option>
+                <option value="codigo_desc">⬆ CÓDIGO DECRESCENTE</option>
+                <option value="nome_asc">⬇ NOME (A-Z)</option>
+                <option value="nome_desc">⬆ NOME (Z-A)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse text-xs">
             <thead>
               <tr class="border-b border-slate-200 text-slate-500">
-                <th class="p-3 w-1/12">CÓDIGO</th>
-                <th class="p-3 w-4/12">DESCRIÇÃO</th>
-                <th class="p-3 w-2/12">TIPO</th>
-                <th class="p-3 w-2/12">NATUREZA</th>
-                <th class="p-3 w-1/12">STATUS</th>
-                <th class="p-3 w-2/12 text-right">AÇÕES</th>
+                <th class="py-2 px-3 w-1/12">CÓDIGO</th>
+                <th class="py-2 px-3 w-4/12">DESCRIÇÃO</th>
+                <th class="py-2 px-3 w-2/12 text-center">TIPO</th>
+                <th class="py-2 px-3 w-2/12 text-center">NATUREZA</th>
+                <th class="py-2 px-3 w-1/12 text-center">STATUS</th>
+                <th class="py-2 px-3 w-2/12 text-right">AÇÕES</th>
               </tr>
             </thead>
             <tbody id="tabelaEventos" class="divide-y divide-slate-100">
@@ -126,26 +174,75 @@
     async function carregarEventos() {
       const { data, error } = await _supabase
         .from('tipos_eventos')
-        .select('*')
-        .order('codigo_evento', { ascending: true });
-
-      const tbody = document.getElementById('tabelaEventos');
-      const totalSpan = document.getElementById('totalEventos');
+        .select('*'); // A ordenação agora será feita via JS
 
       if (error) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-600">Erro ao carregar: ${error.message}</td></tr>`;
+        document.getElementById('tabelaEventos').innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-600">Erro ao carregar: ${error.message}</td></tr>`;
         return;
       }
 
       listaGlobalEventos = data || [];
-      totalSpan.innerText = `${listaGlobalEventos.length} evento(s)`;
+      aplicarFiltrosEOrdenar(); // Chama a função que desenha a tabela aplicando os filtros
+    }
 
-      if (listaGlobalEventos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhum evento cadastrado.</td></tr>`;
+    // NOVA FUNÇÃO: Aplica filtros e ordenação na lista global
+    function aplicarFiltrosEOrdenar() {
+      const busca = removerAcentosEColocarMaiuscula(document.getElementById('filtroBusca').value.trim());
+      const tipo = document.getElementById('filtroTipo').value;
+      const natureza = document.getElementById('filtroNatureza').value;
+      const status = document.getElementById('filtroStatus').value;
+      const ordem = document.getElementById('ordenacao').value;
+
+      let filtrados = [...listaGlobalEventos];
+
+      // Filtro de Texto (Só executa se tiver 3 letras ou se for um número de código)
+      if (busca.length >= 3 || (!isNaN(parseInt(busca)) && busca.length > 0)) {
+        filtrados = filtrados.filter(ev => {
+          const codStr = String(ev.codigo_evento || '');
+          const descStr = String(ev.descricao_do_evento || '').toUpperCase();
+          return codStr.includes(busca) || descStr.includes(busca);
+        });
+      }
+
+      // Filtros exatos (Selects)
+      if (tipo) {
+        filtrados = filtrados.filter(ev => ev.tipo_evento === tipo);
+      }
+      if (natureza) {
+        filtrados = filtrados.filter(ev => ev.natureza_do_evento === natureza);
+      }
+      if (status) {
+        filtrados = filtrados.filter(ev => {
+          const st = ev.status ? ev.status.toUpperCase() : 'ATIVO';
+          return st === status;
+        });
+      }
+
+      // Ordenação
+      filtrados.sort((a, b) => {
+        if (ordem === 'codigo_asc') return a.codigo_evento - b.codigo_evento;
+        if (ordem === 'codigo_desc') return b.codigo_evento - a.codigo_evento;
+        if (ordem === 'nome_asc') return a.descricao_do_evento.localeCompare(b.descricao_do_evento);
+        if (ordem === 'nome_desc') return b.descricao_do_evento.localeCompare(a.descricao_do_evento);
+        return 0;
+      });
+
+      renderizarTabela(filtrados);
+    }
+
+    // Desenha a tabela com base na lista já filtrada e ordenada
+    function renderizarTabela(dados) {
+      const tbody = document.getElementById('tabelaEventos');
+      const totalSpan = document.getElementById('totalEventos');
+
+      totalSpan.innerText = `${dados.length} evento(s)`;
+
+      if (dados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhum evento corresponde aos filtros.</td></tr>`;
         return;
       }
 
-      tbody.innerHTML = listaGlobalEventos.map(ev => {
+      tbody.innerHTML = dados.map(ev => {
         const isProvento = ev.tipo_evento === 'PROVENTO';
         const isContabil = ev.natureza_do_evento === 'CONTABIL';
         const statusStr = ev.status || 'Ativo';
@@ -160,24 +257,24 @@
 
         return `
           <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 font-mono font-bold text-slate-700 whitespace-nowrap">${ev.codigo_evento}</td>
-            <td class="p-3 font-bold text-slate-900">${ev.descricao_do_evento}</td>
-            <td class="p-3 whitespace-nowrap">
-              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${badgeTipo}">
+            <td class="py-2 px-3 font-mono font-bold text-slate-700 whitespace-nowrap">${ev.codigo_evento}</td>
+            <td class="py-2 px-3 font-bold text-slate-900">${ev.descricao_do_evento}</td>
+            <td class="py-2 px-3 whitespace-nowrap text-center">
+              <span class="inline-block px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap ${badgeTipo}">
                 ${ev.tipo_evento}
               </span>
             </td>
-            <td class="p-3 whitespace-nowrap">
-              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${badgeNatureza}">
+            <td class="py-2 px-3 whitespace-nowrap text-center">
+              <span class="inline-block px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap ${badgeNatureza}">
                 ${ev.natureza_do_evento === 'CONTABIL' ? 'CONTABIL' : 'NAO CONTABIL'}
               </span>
             </td>
-            <td class="p-3 whitespace-nowrap">
-              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${badgeStatus}">
+            <td class="py-2 px-3 whitespace-nowrap text-center">
+              <span class="inline-block px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap ${badgeStatus}">
                 ${statusStr.toUpperCase()}
               </span>
             </td>
-            <td class="p-3 text-right whitespace-nowrap space-x-1">
+            <td class="py-2 px-3 text-right whitespace-nowrap space-x-1">
               <button onclick="editarEvento('${ev.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition cursor-pointer">✏️ Editar</button>
               <button onclick="alternarStatusEvento('${ev.id}', '${statusStr}')" class="px-2 py-1 ${btnAcaoClass} rounded font-bold text-[10px] transition cursor-pointer">${btnTexto}</button>
             </td>
@@ -193,15 +290,12 @@
 
       if (idAtual) return;
 
-      // Inicia da base de proventos (2000) ou descontos (3000)
       let codigoSugerido = tipo === 'PROVENTO' ? 2000 : 3000;
       
-      // Coleta todos os códigos já existentes no sistema
       const codigosExistentes = listaGlobalEventos
         .map(e => parseInt(e.codigo_evento, 10))
         .filter(c => !isNaN(c));
 
-      // Se o código sugerido já estiver em uso, incrementa automaticamente até achar um livre
       while (codigosExistentes.includes(codigoSugerido)) {
         codigoSugerido++;
       }
@@ -223,12 +317,10 @@
       if (id) {
         const { error } = await _supabase.from('tipos_eventos').update(payload).eq('id', id);
         if (error) alert('Erro ao atualizar: ' + error.message);
-        else alert('Evento atualizado com sucesso!');
       } else {
         payload.status = 'Ativo';
         const { error } = await _supabase.from('tipos_eventos').insert([payload]);
         if (error) alert('Erro ao cadastrar: ' + error.message);
-        else alert('Evento cadastrado com sucesso!');
       }
 
       limparFormulario();
@@ -282,7 +374,7 @@
 <!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
   <script>
     let tempoInatividade;
-    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+    const TEMPO_LIMITE = 15 * 60 * 1000; 
 
     function resetarTemporizador() {
       clearTimeout(tempoInatividade);
@@ -290,15 +382,11 @@
     }
 
     function fazerLogoutPorInatividade() {
-      // Remove a credencial salva
       localStorage.removeItem('usuario_drogarema');
-      
-      // Alerta o usuário e redireciona para o login
       alert('Sessão expirada por inatividade. Faça login novamente.');
       window.location.href = 'login.html';
     }
 
-    // Monitora eventos de movimento do mouse, cliques e digitação
     window.onload = resetarTemporizador;
     window.onmousemove = resetarTemporizador;
     window.onkeypress = resetarTemporizador;
