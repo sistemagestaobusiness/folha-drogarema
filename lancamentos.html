@@ -644,16 +644,31 @@
 
     function renderizarListas(lancamentos) {
       const itensEnriquecidos = lancamentos.map(item => {
-        const eventoBase = listaGlobalEventos.find(ev => 
-          String(ev.codigo_evento) === String(item.rubrica).split(' - ')[0] ||
-          removerAcentosEColocarMaiuscula(ev.descricao_do_evento) === removerAcentosEColocarMaiuscula(item.rubrica)
-        );
-        const natureza = eventoBase && eventoBase.natureza ? eventoBase.natureza : 'CONTABIL';
-        return { ...item, natureza: natureza.toUpperCase() };
+        // EXTRAÇÃO INTELIGENTE: Pega apenas os números iniciais da rubrica (ignora espaços/traços)
+        const matchCodigo = String(item.rubrica).match(/^(\d+)/);
+        const codigoExtraido = matchCodigo ? matchCodigo[1] : '';
+
+        // Tenta encontrar o evento original cadastrado no banco de tipos_eventos
+        const eventoBase = listaGlobalEventos.find(ev => String(ev.codigo_evento) === codigoExtraido);
+        
+        let nat = 'CONTABIL'; 
+        
+        // VÍNCULO CORRIGIDO: O campo exato da tela de eventos é "natureza_do_evento"
+        if (eventoBase && eventoBase.natureza_do_evento) {
+          nat = removerAcentosEColocarMaiuscula(eventoBase.natureza_do_evento);
+        } 
+        // FALLBACK: Se o evento não for encontrado no banco ou não tiver natureza, checa se tem " PF"
+        else if (String(item.rubrica).toUpperCase().includes(' PF')) {
+          nat = 'NAO CONTABIL';
+        }
+
+        const isNaoContabil = nat.includes('NAO');
+        
+        return { ...item, isNaoContabil };
       });
 
-      const contabilItens = itensEnriquecidos.filter(l => l.natureza.includes('CONTABIL') && !l.natureza.includes('NAO'));
-      const naoContabilItens = itensEnriquecidos.filter(l => l.natureza.includes('NAO_CONTABIL') || l.natureza.includes('NÃO CONTABIL') || l.natureza.includes('NAO CONTABIL'));
+      const contabilItens = itensEnriquecidos.filter(l => !l.isNaoContabil);
+      const naoContabilItens = itensEnriquecidos.filter(l => l.isNaoContabil);
 
       const thCont = document.getElementById('thAcaoContabil');
       const thNaoCont = document.getElementById('thAcaoNaoContabil');
