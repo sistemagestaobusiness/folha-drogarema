@@ -217,62 +217,87 @@
 
       </div>
 
-      <!-- Coluna Direita: Listagem Limpa e Objetiva -->
-      <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-6 shadow-sm">
+      <!-- Coluna Direita: Listagem Limpa e Objetiva com Separação Contábil / Não Contábil -->
+      <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 space-y-5 shadow-sm">
         
+        <!-- Cabeçalho do Painel Direito -->
         <div class="flex justify-between items-center border-b border-slate-200 pb-3">
           <div>
-            <h2 id="tituloPainelDireito" class="font-bold text-slate-900 text-sm">ITENS DA COMPETÊNCIA ATIVA</h2>
+            <h2 id="tituloPainelDireito" class="font-bold text-slate-900 text-xs uppercase">ITENS DA COMPETÊNCIA ATIVA</h2>
             <p id="subtituloContexto" class="text-[11px] text-emerald-700 font-mono mt-0.5">Selecione uma empresa e funcionário</p>
           </div>
-          <span id="resumoContador" class="text-xs text-slate-500 font-mono">LANÇAMENTOS: 0 | TOTAL LÍQUIDO: R$ 0,00</span>
-        </div>
-
-        <!-- Seção Proventos -->
-        <div class="space-y-2">
-          <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded text-xs font-bold">
-            ▲ PROVENTOS / CRÉDITOS (+)
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="border-b border-slate-200 text-slate-500">
-                  <th class="p-2.5">EVENTO / RUBRICA</th>
-                  <th class="p-2.5 text-right">VALOR</th>
-                  <th id="thAcaoProv" class="p-2.5 text-center w-24">AÇÕES</th>
-                </tr>
-              </thead>
-              <tbody id="tabelaProventos" class="divide-y divide-slate-100">
-                <tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="text-right text-xs font-bold text-emerald-700 pt-1 font-mono">
-            SUBTOTAL PROVENTOS (CRÉDITOS): <span id="subtotalProventos">R$ 0,00</span>
+          <div id="resumoContador" class="text-[11px] text-slate-600 font-mono text-right leading-tight">
+            <!-- Resumo estruturado compacto -->
+            P.Cont: R$ 0,00 | D.Cont: R$ 0,00 | <span class="font-bold">Líq.Cont: R$ 0,00</span><br>
+            P.NãoCont: R$ 0,00 | D.NãoCont: R$ 0,00 | <span class="font-bold">Líq.NãoCont: R$ 0,00</span><br>
+            <span class="text-emerald-700 font-bold">TOTAL LÍQ: R$ 0,00</span>
           </div>
         </div>
 
-        <!-- Seção Descontos -->
-        <div class="space-y-2 pt-4">
-          <div class="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-1.5 rounded text-xs font-bold">
-            ▼ DESCONTOS / DÉBITOS (-)
+        <!-- BLOCO 1: CONTÁBIL -->
+        <div class="space-y-3">
+          <div class="bg-slate-800 text-white px-3 py-1.5 rounded text-[11px] font-bold tracking-wide uppercase flex justify-between items-center">
+            <span>🔹 EVENTOS CONTÁBEIS</span>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
+            <table class="w-full text-left text-[11px] border-collapse">
               <thead>
-                <tr class="border-b border-slate-200 text-slate-500">
-                  <th class="p-2.5">EVENTO / RUBRICA</th>
-                  <th class="p-2.5 text-right">VALOR</th>
-                  <th id="thAcaoDesc" class="p-2.5 text-center w-24">AÇÕES</th>
+                <tr class="border-b border-slate-200 text-slate-400 font-semibold">
+                  <th class="py-2 px-2">EVENTO / RUBRICA</th>
+                  <th class="py-2 px-2 text-right text-emerald-700 w-24">CRÉDITO (+)</th>
+                  <th class="py-2 px-2 text-right text-rose-700 w-24">DÉBITO (-)</th>
+                  <th id="thAcaoContabil" class="py-2 px-2 text-center w-16">AÇÕES</th>
                 </tr>
               </thead>
-              <tbody id="tabelaDescontos" class="divide-y divide-slate-100">
-                <tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
+              <tbody id="tabelaContabil" class="divide-y divide-slate-100">
+                <tr><td colspan="4" class="p-3 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
               </tbody>
             </table>
           </div>
-          <div class="text-right text-xs font-bold text-rose-700 pt-1 font-mono">
-            SUBTOTAL DESCONTOS (DÉBITOS): <span id="subtotalDescontos">R$ 0,00</span>
+          <!-- Subtotais Contábil -->
+          <div class="bg-slate-50 border border-slate-200 rounded p-2 text-[11px] flex justify-between items-center font-mono font-bold text-slate-700">
+            <div>
+              <span class="text-emerald-700 mr-3">CRÉDITO: <span id="subCreditoContabil">R$ 0,00</span></span>
+              <span class="text-rose-700">DÉBITO: <span id="subDebitoContabil">R$ 0,00</span></span>
+            </div>
+            <div class="text-slate-900 bg-slate-200/70 px-2 py-1 rounded">
+              LÍQUIDO CONTÁBIL: <span id="subLiquidoContabil" class="text-emerald-800">R$ 0,00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linha Divisória -->
+        <hr class="border-t border-dashed border-slate-300 my-4">
+
+        <!-- BLOCO 2: NÃO CONTÁBIL -->
+        <div class="space-y-3">
+          <div class="bg-amber-600 text-white px-3 py-1.5 rounded text-[11px] font-bold tracking-wide uppercase flex justify-between items-center">
+            <span>🔸 EVENTOS NÃO CONTÁBEIS (EXIBIDOS NO HOLERITE)</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-[11px] border-collapse">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-400 font-semibold">
+                  <th class="py-2 px-2">EVENTO / RUBRICA</th>
+                  <th class="py-2 px-2 text-right text-emerald-700 w-24">CRÉDITO (+)</th>
+                  <th class="py-2 px-2 text-right text-rose-700 w-24">DÉBITO (-)</th>
+                  <th id="thAcaoNaoContabil" class="py-2 px-2 text-center w-16">AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaNaoContabil" class="divide-y divide-slate-100">
+                <tr><td colspan="4" class="p-3 text-center text-slate-400">Selecione o funcionário ao lado para visualizar.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Subtotais Não Contábil -->
+          <div class="bg-slate-50 border border-slate-200 rounded p-2 text-[11px] flex justify-between items-center font-mono font-bold text-slate-700">
+            <div>
+              <span class="text-emerald-700 mr-3">CRÉDITO: <span id="subCreditoNaoContabil">R$ 0,00</span></span>
+              <span class="text-rose-700">DÉBITO: <span id="subDebitoNaoContabil">R$ 0,00</span></span>
+            </div>
+            <div class="text-slate-900 bg-slate-200/70 px-2 py-1 rounded">
+              LÍQUIDO NÃO CONTÁBIL: <span id="subLiquidoNaoContabil" class="text-amber-800">R$ 0,00</span>
+            </div>
           </div>
         </div>
 
@@ -291,7 +316,7 @@
     let listaGlobalEventos = [];
     let abaAtiva = 'novo';
     let competenciaEstaFechada = false;
-    let periodoForcadoDesbloqueado = false; // Controle de liberação por senha de gestor
+    let periodoForcadoDesbloqueado = false; 
     
     let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
     
@@ -341,10 +366,8 @@
       container.classList.toggle('hidden');
     }
 
-    // Função para desbloquear período fechado mediante senha de gestor
     function tentarDesbloquearPeriodoComSenha() {
       const senhaInformada = prompt("Digite a Senha Mestra de Gestor para desbloquear a edição deste período fechado:");
-      // Senha padrão configurada (você pode alterar para a que preferir)
       const senhaCorreta = "DRG@2026";
 
       if (senhaInformada === senhaCorreta) {
@@ -608,102 +631,157 @@
 
     function limparTabelasDireita() {
       document.getElementById('subtituloContexto').innerText = 'Selecione uma empresa e funcionário';
-      document.getElementById('tabelaProventos').innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
-      document.getElementById('tabelaDescontos').innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
-      document.getElementById('subtotalProventos').innerText = 'R$ 0,00';
-      document.getElementById('subtotalDescontos').innerText = 'R$ 0,00';
-      document.getElementById('resumoContador').innerText = `LANÇAMENTOS: 0 | TOTAL LÍQUIDO: R$ 0,00`;
+      document.getElementById('tabelaContabil').innerHTML = `<tr><td colspan="4" class="p-3 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
+      document.getElementById('tabelaNaoContabil').innerHTML = `<tr><td colspan="4" class="p-3 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
+      
+      document.getElementById('subCreditoContabil').innerText = 'R$ 0,00';
+      document.getElementById('subDebitoContabil').innerText = 'R$ 0,00';
+      document.getElementById('subLiquidoContabil').innerText = 'R$ 0,00';
+      
+      document.getElementById('subCreditoNaoContabil').innerText = 'R$ 0,00';
+      document.getElementById('subDebitoNaoContabil').innerText = 'R$ 0,00';
+      document.getElementById('subLiquidoNaoContabil').innerText = 'R$ 0,00';
+
+      document.getElementById('resumoContador').innerHTML = `
+        P.Cont: R$ 0,00 | D.Cont: R$ 0,00 | <span class="font-bold">Líq.Cont: R$ 0,00</span><br>
+        P.NãoCont: R$ 0,00 | D.NãoCont: R$ 0,00 | <span class="font-bold">Líq.NãoCont: R$ 0,00</span><br>
+        <span class="text-emerald-700 font-bold">TOTAL LÍQ: R$ 0,00</span>
+      `;
     }
 
     function renderizarListas(lancamentos) {
-      const proventos = lancamentos.filter(l => l.tipo === 'PROVENTO');
-      const descontos = lancamentos.filter(l => l.tipo === 'DESCONTO');
-      const totalLancamentos = lancamentos.length;
+      // Cruzando com tipos_eventos para determinar se é CONTABIL ou NAO CONTABIL
+      // Caso o campo natureza/tipo não venha preenchido direto, verificamos na lista global de eventos
+      const itensEnriquecidos = lancamentos.map(item => {
+        const eventoBase = listaGlobalEventos.find(ev => 
+          String(ev.codigo_evento) === String(item.rubrica).split(' - ')[0] ||
+          removerAcentosEColocarMaiuscula(ev.descricao_do_evento) === removerAcentosEColocarMaiuscula(item.rubrica)
+        );
+        const natureza = eventoBase && eventoBase.natureza ? eventoBase.natureza : 'CONTABIL';
+        return { ...item, natureza: natureza.toUpperCase() };
+      });
 
-      const thProv = document.getElementById('thAcaoProv');
-      const thDesc = document.getElementById('thAcaoDesc');
+      const contabilItens = itensEnriquecidos.filter(l => l.natureza.includes('CONTABIL') && !l.natureza.includes('NAO'));
+      const naoContabilItens = itensEnriquecidos.filter(l => l.natureza.includes('NAO_CONTABIL') || l.natureza.includes('NÃO CONTABIL') || l.natureza.includes('NAO CONTABIL'));
+
+      const thCont = document.getElementById('thAcaoContabil');
+      const thNaoCont = document.getElementById('thAcaoNaoContabil');
       if (competenciaEstaFechada) {
-        if (thProv) thProv.style.display = 'none';
-        if (thDesc) thDesc.style.display = 'none';
+        if (thCont) thCont.style.display = 'none';
+        if (thNaoCont) thNaoCont.style.display = 'none';
       } else {
-        if (thProv) thProv.style.display = '';
-        if (thDesc) thDesc.style.display = '';
+        if (thCont) thCont.style.display = '';
+        if (thNaoCont) thNaoCont.style.display = '';
       }
 
-      const tbodyProv = document.getElementById('tabelaProventos');
-      if (proventos.length === 0) {
-        tbodyProv.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 2 : 3}" class="p-3 text-center text-slate-400">Nenhum provento encontrado.</td></tr>`;
-        document.getElementById('subtotalProventos').innerText = 'R$ 0,00';
+      // Renderizar Tabela Contábil
+      const tbodyCont = document.getElementById('tabelaContabil');
+      if (contabilItens.length === 0) {
+        tbodyCont.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 3 : 4}" class="p-3 text-center text-slate-400">Nenhum evento contábil encontrado.</td></tr>`;
+        document.getElementById('subCreditoContabil').innerText = 'R$ 0,00';
+        document.getElementById('subDebitoContabil').innerText = 'R$ 0,00';
+        document.getElementById('subLiquidoContabil').innerText = 'R$ 0,00';
       } else {
-        tbodyProv.innerHTML = proventos.map(p => {
-          const temAbatimento = p.abatimento_sigiloso && parseFloat(p.abatimento_sigiloso) > 0;
-          const abatimentoValStr = temAbatimento ? parseFloat(p.abatimento_sigiloso).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00';
-          const motivoStr = p.motivo_ajuste ? p.motivo_ajuste : 'Não informado';
-          const parcelaStr = p.total_parcelas > 1 ? `${p.parcela_atual}/${p.total_parcelas}` : '1/1';
+        tbodyCont.innerHTML = contabilItens.map(item => {
+          const valorNum = parseFloat(item.valor || 0);
+          const isProvento = item.tipo === 'PROVENTO';
+          const valorCredito = isProvento ? valorNum : 0;
+          const valorDebito = !isProvento ? valorNum : 0;
+
+          const temAbatimento = item.abatimento_sigiloso && parseFloat(item.abatimento_sigiloso) > 0;
+          const abatimentoValStr = temAbatimento ? parseFloat(item.abatimento_sigiloso).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00';
+          const motivoStr = item.motivo_ajuste ? item.motivo_ajuste : 'Não informado';
+          const parcelaStr = item.total_parcelas > 1 ? `${item.parcela_atual}/${item.total_parcelas}` : '1/1';
           
           const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
-          const badgeFixo = p.fixo ? `<span class="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
+          const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
 
           const botoesAcao = competenciaEstaFechada ? '' : `
-            <td class="p-2.5 text-center flex justify-center gap-1">
-              <button type="button" onclick='prepararEdicao(${JSON.stringify(p)})' class="text-slate-400 hover:text-sky-600 font-bold px-1.5 py-1 cursor-pointer" title="Editar lançamento">✎</button>
-              <button type="button" onclick="excluirLancamento('${p.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1.5 py-1 cursor-pointer" title="Remover lançamento">✕</button>
+            <td class="py-2 px-2 text-center">
+              <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
+              <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
             </td>
           `;
 
           return `
             <tr class="hover:bg-slate-50">
-              <td class="p-2.5 text-slate-700 font-medium">
-                ${p.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
+              <td class="py-2 px-2 text-slate-700 font-medium">
+                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
               </td>
-              <td class="p-2.5 text-right text-emerald-700 font-mono font-bold">R$ ${parseFloat(p.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+              <td class="py-2 px-2 text-right text-emerald-700 font-mono font-bold">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
+              <td class="py-2 px-2 text-right text-rose-700 font-mono font-bold">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               ${botoesAcao}
             </tr>
           `;
         }).join('');
-        const totalP = proventos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
-        document.getElementById('subtotalProventos').innerText = 'R$ ' + totalP.toLocaleString('pt-BR', {minimumFractionDigits: 2});
       }
 
-      const tbodyDesc = document.getElementById('tabelaDescontos');
-      if (descontos.length === 0) {
-        tbodyDesc.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 2 : 3}" class="p-3 text-center text-slate-400">Nenhum desconto encontrado.</td></tr>`;
-        document.getElementById('subtotalDescontos').innerText = 'R$ 0,00';
+      // Renderizar Tabela Não Contábil
+      const tbodyNaoCont = document.getElementById('tabelaNaoContabil');
+      if (naoContabilItens.length === 0) {
+        tbodyNaoCont.innerHTML = `<tr><td colspan="${competenciaEstaFechada ? 3 : 4}" class="p-3 text-center text-slate-400">Nenhum evento não contábil encontrado.</td></tr>`;
+        document.getElementById('subCreditoNaoContabil').innerText = 'R$ 0,00';
+        document.getElementById('subDebitoNaoContabil').innerText = 'R$ 0,00';
+        document.getElementById('subLiquidoNaoContabil').innerText = 'R$ 0,00';
       } else {
-        tbodyDesc.innerHTML = descontos.map(d => {
-          const temAbatimento = d.abatimento_sigiloso && parseFloat(d.abatimento_sigiloso) > 0;
-          const abatimentoValStr = temAbatimento ? parseFloat(d.abatimento_sigiloso).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00';
-          const motivoStr = d.motivo_ajuste ? d.motivo_ajuste : 'Não informado';
-          const parcelaStr = d.total_parcelas > 1 ? `${d.parcela_atual}/${d.total_parcelas}` : '1/1';
+        tbodyNaoCont.innerHTML = naoContabilItens.map(item => {
+          const valorNum = parseFloat(item.valor || 0);
+          const isProvento = item.tipo === 'PROVENTO';
+          const valorCredito = isProvento ? valorNum : 0;
+          const valorDebito = !isProvento ? valorNum : 0;
+
+          const temAbatimento = item.abatimento_sigiloso && parseFloat(item.abatimento_sigiloso) > 0;
+          const abatimentoValStr = temAbatimento ? parseFloat(item.abatimento_sigiloso).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '0,00';
+          const motivoStr = item.motivo_ajuste ? item.motivo_ajuste : 'Não informado';
+          const parcelaStr = item.total_parcelas > 1 ? `${item.parcela_atual}/${item.total_parcelas}` : '1/1';
           
           const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
-          const badgeFixo = d.fixo ? `<span class="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
+          const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
 
           const botoesAcao = competenciaEstaFechada ? '' : `
-            <td class="p-2.5 text-center flex justify-center gap-1">
-              <button type="button" onclick='prepararEdicao(${JSON.stringify(d)})' class="text-slate-400 hover:text-sky-600 font-bold px-1.5 py-1 cursor-pointer" title="Editar lançamento">✎</button>
-              <button type="button" onclick="excluirLancamento('${d.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1.5 py-1 cursor-pointer" title="Remover lançamento">✕</button>
+            <td class="py-2 px-2 text-center">
+              <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
+              <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
             </td>
           `;
 
           return `
             <tr class="hover:bg-slate-50">
-              <td class="p-2.5 text-slate-700 font-medium">
-                ${d.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
+              <td class="py-2 px-2 text-slate-700 font-medium">
+                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
               </td>
-              <td class="p-2.5 text-right text-rose-700 font-mono font-bold">R$ ${parseFloat(d.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+              <td class="py-2 px-2 text-right text-emerald-700 font-mono font-bold">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
+              <td class="py-2 px-2 text-right text-rose-700 font-mono font-bold">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               ${botoesAcao}
             </tr>
           `;
         }).join('');
-        const totalD = descontos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
-        document.getElementById('subtotalDescontos').innerText = 'R$ ' + totalD.toLocaleString('pt-BR', {minimumFractionDigits: 2});
       }
 
-      const totalP = proventos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
-      const totalD = descontos.reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
-      const liquido = totalP - totalD;
-      document.getElementById('resumoContador').innerText = `LANÇAMENTOS: ${totalLancamentos} | TOTAL LÍQUIDO: R$ ${liquido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+      // Cálculo de Totais e Subtotais
+      const credCont = contabilItens.filter(l => l.tipo === 'PROVENTO').reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+      const debCont = contabilItens.filter(l => l.tipo === 'DESCONTO').reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+      const liqCont = credCont - debCont;
+
+      const credNaoCont = naoContabilItens.filter(l => l.tipo === 'PROVENTO').reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+      const debNaoCont = naoContabilItens.filter(l => l.tipo === 'DESCONTO').reduce((acc, curr) => acc + parseFloat(curr.valor || 0), 0);
+      const liqNaoCont = credNaoCont - debNaoCont;
+
+      const liquidoTotalGeral = liqCont + liqNaoCont;
+
+      document.getElementById('subCreditoContabil').innerText = 'R$ ' + credCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      document.getElementById('subDebitoContabil').innerText = 'R$ ' + debCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      document.getElementById('subLiquidoContabil').innerText = 'R$ ' + liqCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+      document.getElementById('subCreditoNaoContabil').innerText = 'R$ ' + credNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      document.getElementById('subDebitoNaoContabil').innerText = 'R$ ' + debNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      document.getElementById('subLiquidoNaoContabil').innerText = 'R$ ' + liqNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+      document.getElementById('resumoContador').innerHTML = `
+        P.Cont: R$ ${credCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | D.Cont: R$ ${debCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | <span class="font-bold">Líq.Cont: R$ ${liqCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span><br>
+        P.NãoCont: R$ ${credNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | D.NãoCont: R$ ${debNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})} | <span class="font-bold">Líq.NãoCont: R$ ${liqNaoCont.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span><br>
+        <span class="text-emerald-700 font-bold">TOTAL LÍQ: R$ ${liquidoTotalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+      `;
     }
 
     function prepararEdicao(item) {
@@ -789,7 +867,6 @@
       }
 
       if (idEdicao) {
-        // Atualizar registro existente
         const { error } = await _supabase.from('folha_itens').update({
           rubrica, 
           tipo, 
@@ -809,7 +886,6 @@
           carregarLancamentosNovo();
         }
       } else {
-        // Inserir novo registro
         const { error } = await _supabase.from('folha_itens').insert([{ 
           funcionario_id, 
           rubrica, 
@@ -948,10 +1024,10 @@
 
     inicializarTela();
   </script>
-<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <!-- Script de Bloqueio por Inatividade -->
   <script>
     let tempoInatividade;
-    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+    const TEMPO_LIMITE = 15 * 60 * 1000;
 
     function resetarTemporizador() {
       clearTimeout(tempoInatividade);
@@ -959,15 +1035,11 @@
     }
 
     function fazerLogoutPorInatividade() {
-      // Remove a credencial salva
       localStorage.removeItem('usuario_drogarema');
-      
-      // Alerta o usuário e redireciona para o login
       alert('Sessão expirada por inatividade. Faça login novamente.');
       window.location.href = 'login.html';
     }
 
-    // Monitora eventos de movimento do mouse, cliques e digitação
     window.onload = resetarTemporizador;
     window.onmousemove = resetarTemporizador;
     window.onkeypress = resetarTemporizador;
