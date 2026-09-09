@@ -528,7 +528,7 @@
       }
     }
 
-    function buscarEventosInteligente(termo) {
+ function buscarEventosInteligente(termo) {
       const termoLimpo = removerAcentosEColocarMaiuscula(termo).trim();
       const divSugestoes = document.getElementById('listaSugestoes');
 
@@ -550,16 +550,31 @@
         return;
       }
 
-      divSugestoes.innerHTML = resultados.map(ev => `
+      divSugestoes.innerHTML = resultados.map(ev => {
+        // Verifica a natureza (usando o campo correto da base ou o fallback do "PF")
+        let natureza = (ev.natureza_do_evento) ? ev.natureza_do_evento.toUpperCase() : 'CONTABIL';
+        if (ev.descricao_do_evento.toUpperCase().includes(' PF')) {
+          natureza = 'NAO CONTABIL';
+        }
+        
+        const isNaoContabil = natureza.includes('NAO');
+        
+        // Cria a etiqueta (badge) com cor diferente, focando o destaque no NÃO CONTÁBIL
+        const badgeNatureza = isNaoContabil 
+          ? `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">NÃO CONTÁBIL</span>`
+          : `<span class="bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">CONTÁBIL</span>`;
+
+        return `
         <div onclick="selecionarEvento('${ev.codigo_evento}', '${ev.descricao_do_evento}', '${ev.tipo_evento}')" 
           class="p-2.5 hover:bg-slate-50 cursor-pointer text-xs flex justify-between items-center transition">
-          <div>
+          <div class="flex items-center">
             <span class="font-mono font-bold text-emerald-700 mr-2">${ev.codigo_evento}</span>
             <span class="text-slate-800 font-medium">${ev.descricao_do_evento}</span>
+            ${badgeNatureza}
           </div>
-          <span class="text-[10px] text-slate-500 font-bold uppercase">${ev.tipo_evento}</span>
+          <span class="text-[10px] text-slate-400 font-bold uppercase">${ev.tipo_evento}</span>
         </div>
-      `).join('');
+      `}).join('');
 
       divSugestoes.classList.remove('hidden');
     }
