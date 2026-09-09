@@ -175,12 +175,14 @@
             </button>
           </div>
         </div>
-<!-- Atalho Discreto para Empréstimos -->
-          <div class="pt-2 text-center">
-            <a href="emprestimos.html" class="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition underline cursor-pointer flex items-center justify-center gap-1">
-              📋 Acessar Controle de Empréstimos
-            </a>
-          </div>
+          
+        <!-- Atalho Discreto para Empréstimos -->
+        <div class="pt-2 text-center">
+          <a href="emprestimos.html" class="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition underline cursor-pointer flex items-center justify-center gap-1">
+            📋 Acessar Controle de Empréstimos
+          </a>
+        </div>
+
         <!-- ABA 2: CONSULTAR HISTÓRICO -->
         <div id="abaConsulta" class="hidden space-y-4">
           <div class="space-y-4">
@@ -222,7 +224,7 @@
 
       </div>
 
-      <!-- Coluna Direita: Listagem Limpa e Objetiva com Separação Contábil / Não Contábil -->
+      <!-- Coluna Direita: Listagem Limpa e Objetiva -->
       <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
         
         <!-- Cabeçalho do Painel Direito -->
@@ -258,7 +260,7 @@
               </tbody>
             </table>
           </div>
-          <!-- Subtotais Contábil Alinhados -->
+          <!-- Subtotais Contábil -->
           <div class="bg-slate-100 border border-slate-200 rounded-b p-2 text-[11px] flex justify-end gap-2 font-mono font-bold items-center">
             <div class="text-slate-500 mr-2 uppercase text-[10px]">Totais:</div>
             <div class="w-24 text-right text-emerald-700" id="subCreditoContabil">R$ 0,00</div>
@@ -289,7 +291,7 @@
               </tbody>
             </table>
           </div>
-          <!-- Subtotais Não Contábil Alinhados -->
+          <!-- Subtotais Não Contábil -->
           <div class="bg-slate-100 border border-slate-200 rounded-b p-2 text-[11px] flex justify-end gap-2 font-mono font-bold items-center">
             <div class="text-slate-500 mr-2 uppercase text-[10px]">Totais:</div>
             <div class="w-24 text-right text-emerald-700" id="subCreditoNaoContabil">R$ 0,00</div>
@@ -533,7 +535,7 @@
       }
     }
 
- function buscarEventosInteligente(termo) {
+    function buscarEventosInteligente(termo) {
       const termoLimpo = removerAcentosEColocarMaiuscula(termo).trim();
       const divSugestoes = document.getElementById('listaSugestoes');
 
@@ -556,7 +558,6 @@
       }
 
       divSugestoes.innerHTML = resultados.map(ev => {
-        // Verifica a natureza (usando o campo correto da base ou o fallback do "PF")
         let natureza = (ev.natureza_do_evento) ? ev.natureza_do_evento.toUpperCase() : 'CONTABIL';
         if (ev.descricao_do_evento.toUpperCase().includes(' PF')) {
           natureza = 'NAO CONTABIL';
@@ -564,7 +565,6 @@
         
         const isNaoContabil = natureza.includes('NAO');
         
-        // Cria a etiqueta (badge) com cor diferente, focando o destaque no NÃO CONTÁBIL
         const badgeNatureza = isNaoContabil 
           ? `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">NÃO CONTÁBIL</span>`
           : `<span class="bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">CONTÁBIL</span>`;
@@ -598,6 +598,71 @@
       }
     });
 
+    // -------------------------------------------------------------------------
+    // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA DE EMPRÉSTIMOS NA FOLHA
+    // -------------------------------------------------------------------------
+    async function sincronizarEmprestimos(funcionarioId, competencia) {
+      // 1. Busca todos os empréstimos ativos deste funcionário
+      const { data: emprestimos } = await _supabase
+        .from('emprestimos')
+        .select('*')
+        .eq('funcionario_id', funcionarioId)
+        .eq('status', 'ATIVO');
+
+      if (!emprestimos || emprestimos.length === 0) return;
+
+      // 2. Pega os lançamentos 3007 já existentes neste mês para não duplicar
+      const { data: lancamentosExistentes } = await _supabase
+        .from('folha_itens')
+        .select('id, rubrica, valor')
+        .eq('funcionario_id', funcionarioId)
+        .eq('competencia', competencia)
+        .ilike('rubrica', '3007%'); 
+
+      // Converte competência da tela (ex: 08/2026) para meses absolutos
+      const partesComp = competencia.split('/');
+      const numCompAtual = parseInt(partesComp[1]) * 12 + parseInt(partesComp[0]);
+
+      // Busca dinamicamente a descrição atualizada do evento 3007 no banco
+      const evento3007 = listaGlobalEventos.find(ev => String(ev.codigo_evento) === '3007');
+      const desc3007 = evento3007 ? evento3007.descricao_do_evento : 'EMPRESTIMO EMPRESA 1 PF';
+
+      for (const emp of emprestimos) {
+        const partesInicio = emp.competencia_inicio.split('/');
+        const numCompInicio = parseInt(partesInicio[1]) * 12 + parseInt(partesInicio[0]);
+
+        const deltaMeses = numCompAtual - numCompInicio;
+        
+        // Se o mês atual está dentro do período de parcelamento do empréstimo
+        if (deltaMeses >= 0 && deltaMeses < emp.qtd_parcelas) {
+          const parcelaAtual = deltaMeses + 1;
+          const tagParcela = `(${String(parcelaAtual).padStart(2, '0')}/${String(emp.qtd_parcelas).padStart(2, '0')})`;
+          const rubricaExata = `3007 - ${desc3007} ${tagParcela}`;
+
+          // Confere se esse desconto específico (mesma parcela e mesmo valor) já foi inserido
+          const jaExiste = lancamentosExistentes?.some(l => l.rubrica.includes(tagParcela) && parseFloat(l.valor) === parseFloat(emp.valor_parcela));
+
+          if (!jaExiste) {
+            // Injeta o desconto automaticamente direto no banco de dados!
+            await _supabase.from('folha_itens').insert([{
+              funcionario_id: funcionarioId,
+              rubrica: rubricaExata,
+              tipo: 'DESCONTO',
+              valor: emp.valor_parcela,
+              valor_bruto: emp.valor_parcela,
+              abatimento_sigiloso: 0,
+              motivo_ajuste: `Automação Empréstimo #${emp.id}`,
+              parcela_atual: parcelaAtual,
+              total_parcelas: emp.qtd_parcelas,
+              fixo: false, // Falso para não poluir importações manuais de meses anteriores
+              competencia: competencia
+            }]);
+          }
+        }
+      }
+    }
+    // -------------------------------------------------------------------------
+
     async function carregarLancamentosNovo() {
       if (abaAtiva !== 'novo') return;
       const funcionarioId = document.getElementById('selectFuncionarioNovo').value;
@@ -609,6 +674,12 @@
       const funcNome = document.getElementById('selectFuncionarioNovo').selectedOptions[0]?.text || '';
       document.getElementById('subtituloContexto').innerText = `Competência Ativa: ${competenciaRegraLancamento} | Colaborador: ${funcNome}`;
 
+      // Verifica se há empréstimos e injeta na base caso necessário (somente se a folha estiver aberta)
+      if (!competenciaEstaFechada) {
+        await sincronizarEmprestimos(funcionarioId, competenciaRegraLancamento);
+      }
+
+      // Depois da sincronização, puxa a lista completa atualizada do banco
       const { data, error } = await _supabase
         .from('folha_itens')
         .select('*')
@@ -664,27 +735,23 @@
 
     function renderizarListas(lancamentos) {
       const itensEnriquecidos = lancamentos.map(item => {
-        // EXTRAÇÃO INTELIGENTE: Pega apenas os números iniciais da rubrica (ignora espaços/traços)
         const matchCodigo = String(item.rubrica).match(/^(\d+)/);
         const codigoExtraido = matchCodigo ? matchCodigo[1] : '';
 
-        // Tenta encontrar o evento original cadastrado no banco de tipos_eventos
         const eventoBase = listaGlobalEventos.find(ev => String(ev.codigo_evento) === codigoExtraido);
         
         let nat = 'CONTABIL'; 
         
-        // VÍNCULO CORRIGIDO: O campo exato da tela de eventos é "natureza_do_evento"
         if (eventoBase && eventoBase.natureza_do_evento) {
           nat = removerAcentosEColocarMaiuscula(eventoBase.natureza_do_evento);
         } 
-        // FALLBACK: Se o evento não for encontrado no banco ou não tiver natureza, checa se tem " PF"
         else if (String(item.rubrica).toUpperCase().includes(' PF')) {
           nat = 'NAO CONTABIL';
         }
 
         const isNaoContabil = nat.includes('NAO');
         
-        return { ...item, isNaoContabil };
+        return { ...item, isNaoContabil, codigoExtraido };
       });
 
       const contabilItens = itensEnriquecidos.filter(l => !l.isNaoContabil);
@@ -718,18 +785,32 @@
           
           const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
           const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
+          
+          const isEmprestimoAuto = (item.codigoExtraido === '3007');
+          const badgeAuto = isEmprestimoAuto ? `<span class="text-[9px] text-indigo-700 bg-indigo-100 border border-indigo-200 px-1 py-0.5 rounded ml-1 font-bold" title="Lançamento injetado pelo Controle de Empréstimos">🤖 AUTO</span>` : '';
 
-          const botoesAcao = competenciaEstaFechada ? '' : `
-            <td class="py-1 px-2 text-center">
-              <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
-              <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
-            </td>
-          `;
+          let botoesAcao = '';
+          if (competenciaEstaFechada) {
+            botoesAcao = '';
+          } else if (isEmprestimoAuto) {
+            botoesAcao = `
+              <td class="py-1 px-2 text-center select-none">
+                <span class="text-[9px] text-slate-400 font-bold uppercase" title="Alterações devem ser feitas direto na tela de Controle de Empréstimos">🔒 BLOQUEADO</span>
+              </td>
+            `;
+          } else {
+            botoesAcao = `
+              <td class="py-1 px-2 text-center">
+                <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
+                <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
+              </td>
+            `;
+          }
 
           return `
             <tr class="hover:bg-slate-50">
               <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
-                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
+                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto}
               </td>
               <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
@@ -757,18 +838,32 @@
           
           const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
           const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
+          
+          const isEmprestimoAuto = (item.codigoExtraido === '3007');
+          const badgeAuto = isEmprestimoAuto ? `<span class="text-[9px] text-indigo-700 bg-indigo-100 border border-indigo-200 px-1 py-0.5 rounded ml-1 font-bold" title="Lançamento injetado pelo Controle de Empréstimos">🤖 AUTO</span>` : '';
 
-          const botoesAcao = competenciaEstaFechada ? '' : `
-            <td class="py-1 px-2 text-center">
-              <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
-              <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
-            </td>
-          `;
+          let botoesAcao = '';
+          if (competenciaEstaFechada) {
+            botoesAcao = '';
+          } else if (isEmprestimoAuto) {
+            botoesAcao = `
+              <td class="py-1 px-2 text-center select-none">
+                <span class="text-[9px] text-slate-400 font-bold uppercase" title="Alterações devem ser feitas direto na tela de Controle de Empréstimos">🔒 BLOQUEADO</span>
+              </td>
+            `;
+          } else {
+            botoesAcao = `
+              <td class="py-1 px-2 text-center">
+                <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
+                <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
+              </td>
+            `;
+          }
 
           return `
             <tr class="hover:bg-slate-50">
               <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
-                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo}
+                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto}
               </td>
               <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
