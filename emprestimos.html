@@ -129,9 +129,9 @@
     </div>
   </div>
 
-  <!-- Modal Compacto -->
+  <!-- Modal Detalhes com Edição -->
   <div id="modalDetalhes" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl max-w-xl w-full p-5 space-y-3 border border-slate-200">
+    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-5 space-y-3 border border-slate-200">
       <div class="flex justify-between items-center border-b border-slate-100 pb-2">
         <div>
           <h3 class="font-bold text-slate-900 text-sm">CRONOGRAMA DE PARCELAS</h3>
@@ -140,14 +140,15 @@
         <button onclick="fecharModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xs px-2 py-1 rounded bg-slate-100 cursor-pointer">✕ Fechar</button>
       </div>
 
-      <div class="overflow-x-auto max-h-80 border border-slate-200 rounded">
+      <div class="overflow-x-auto max-h-96 border border-slate-200 rounded">
         <table class="w-full text-left text-[11px] border-collapse">
           <thead>
             <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 sticky top-0">
               <th class="py-1.5 px-2 text-center">PARCELA</th>
               <th class="py-1.5 px-2 text-center">COMPETÊNCIA</th>
               <th class="py-1.5 px-2 text-right">VALOR (R$)</th>
-              <th class="py-1.5 px-2 text-center">STATUS PREVISTO</th>
+              <th class="py-1.5 px-2 text-center">STATUS</th>
+              <th class="py-1.5 px-2 text-center">AÇÕES</th>
             </tr>
           </thead>
           <tbody id="tabelaCronograma" class="divide-y divide-slate-100 font-mono">
@@ -155,8 +156,9 @@
         </table>
       </div>
 
-      <div class="flex justify-end pt-1">
-        <button onclick="fecharModal()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs cursor-pointer">OK</button>
+      <div class="flex justify-between items-center pt-1 border-t border-slate-100">
+        <span class="text-[9px] text-slate-400">As edições feitas aqui refletirão na automação da folha.</span>
+        <button onclick="fecharModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold text-xs cursor-pointer">OK</button>
       </div>
     </div>
   </div>
@@ -169,6 +171,7 @@
     let listaFuncionarios = [];
     let listaEmprestimos = [];
     let abaAtual = 'ativos';
+    let emprestimoAtualNoModal = null; // Guarda o ID do modal aberto
 
     function formatarCompetencia(input) {
       let v = input.value.replace(/\D/g, '');
@@ -232,6 +235,11 @@
       if (!error) {
         listaEmprestimos = data || [];
         renderizarTabelas();
+        
+        // Se o modal estiver aberto, atualiza ele para refletir edições
+        if (emprestimoAtualNoModal && !document.getElementById('modalDetalhes').classList.contains('hidden')) {
+          abrirCronograma(emprestimoAtualNoModal);
+        }
       }
     }
 
@@ -260,10 +268,9 @@
               <td class="py-1 px-2 text-center font-mono bg-slate-100/50 rounded">${e.qtd_parcelas}x</td>
               <td class="py-1 px-2 text-right font-mono font-bold text-amber-700">R$ ${parseFloat(e.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
               <td class="py-1 px-2 text-center whitespace-nowrap">
-                <button onclick="editarEmprestimo('${e.id}')" class="px-1.5 py-0.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded font-bold text-[9px] transition cursor-pointer" title="Editar Contrato">✎ Edit</button>
-                <button onclick="abrirCronograma('${e.id}')" class="ml-1 px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded font-bold text-[9px] transition cursor-pointer" title="Ver parcelas">📊 Detalhes</button>
-                <button onclick="finalizarEmprestimo('${e.id}')" class="ml-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-1.5 py-0.5 rounded text-[9px] font-bold transition cursor-pointer" title="Marcar como quitado">✔ Fin.</button>
-                <button onclick="excluirEmprestimo('${e.id}')" class="ml-1 text-rose-400 hover:text-rose-600 font-bold px-1 transition cursor-pointer" title="Excluir">✕</button>
+                <button onclick="editarEmprestimo('${e.id}')" class="px-1.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded text-xs transition cursor-pointer shadow-xs" title="Editar Contrato Base">✏️</button>
+                <button onclick="abrirCronograma('${e.id}')" class="ml-1 px-1.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded text-xs transition cursor-pointer shadow-xs" title="Ver ou Editar Parcelas">📊</button>
+                <button onclick="finalizarEmprestimo('${e.id}')" class="ml-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-[9px] font-bold transition cursor-pointer" title="Encerrar/Quitar Empréstimo">✔ Fin.</button>
               </td>
             </tr>
           `;
@@ -330,6 +337,7 @@
     }
 
     function abrirCronograma(id) {
+      emprestimoAtualNoModal = id;
       const emp = listaEmprestimos.find(item => String(item.id) === String(id));
       if (!emp) return;
 
@@ -347,24 +355,47 @@
       const anoReal = dataHoje.getFullYear();
       const numCompAtual = anoReal * 12 + mesReal;
 
+      // Recupera o JSON de exceções (se não existir, é um objeto vazio)
+      const excecoes = emp.excecoes || {};
+
       let htmlLinhas = '';
       for (let i = 1; i <= emp.qtd_parcelas; i++) {
         const compStr = `${String(mesAtual).padStart(2, '0')}/${anoAtual}`;
         const numCompParcela = anoAtual * 12 + mesAtual;
 
+        // Checa se há alguma edição/exceção salva no JSON para essa parcela (i)
+        const exc = excecoes[i] || {};
+        const isCancelada = exc.status === 'cancelada';
+        const valorReal = exc.valor !== undefined ? parseFloat(exc.valor) : parseFloat(emp.valor_parcela);
+        
         let badgeStatus = '<span class="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">PREVISTA</span>';
-        if (numCompParcela < numCompAtual) {
+        if (isCancelada) {
+          badgeStatus = '<span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded text-[9px] font-bold">CANCELADA / PULADA</span>';
+        } else if (numCompParcela < numCompAtual) {
           badgeStatus = '<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold">PAGA</span>';
         } else if (numCompParcela === numCompAtual) {
           badgeStatus = '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">MÊS ATUAL</span>';
         }
 
+        const btnAcoes = isCancelada 
+          ? `<button onclick="restaurarParcela('${emp.id}', ${i})" class="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold underline cursor-pointer" title="Restaurar parcela normal">Restaurar</button>`
+          : `
+            <button onclick="editarParcela('${emp.id}', ${i}, ${valorReal})" class="text-sky-600 hover:text-sky-800 text-[10px] font-bold cursor-pointer" title="Alterar Valor">Editar</button>
+            <button onclick="cancelarParcela('${emp.id}', ${i})" class="text-rose-500 hover:text-rose-700 text-[10px] font-bold ml-2 cursor-pointer" title="Pular/Cancelar Cobrança">Pular ✕</button>
+          `;
+
+        const classeCancelada = isCancelada ? 'opacity-50 line-through text-slate-400' : 'text-slate-700';
+        const avisoEditado = exc.valor !== undefined && !isCancelada ? `<span class="ml-1 text-[9px] text-sky-600 font-bold" title="Valor alterado manualmente">*Editado</span>` : '';
+
         htmlLinhas += `
-          <tr class="hover:bg-slate-50">
-            <td class="py-1 px-2 text-center font-bold text-slate-700">${i}/${emp.qtd_parcelas}</td>
-            <td class="py-1 px-2 text-center font-bold text-slate-800">${compStr}</td>
-            <td class="py-1 px-2 text-right font-bold text-slate-700">R$ ${parseFloat(emp.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-            <td class="py-1 px-2 text-center">${badgeStatus}</td>
+          <tr class="hover:bg-slate-50 border-b border-slate-50">
+            <td class="py-1.5 px-2 text-center font-bold text-slate-700">${i}/${emp.qtd_parcelas}</td>
+            <td class="py-1.5 px-2 text-center font-bold text-slate-800">${compStr}</td>
+            <td class="py-1.5 px-2 text-right font-bold ${classeCancelada}">
+              R$ ${valorReal.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${avisoEditado}
+            </td>
+            <td class="py-1.5 px-2 text-center">${badgeStatus}</td>
+            <td class="py-1.5 px-2 text-center select-none">${emp.status === 'FINALIZADO' ? '-' : btnAcoes}</td>
           </tr>
         `;
 
@@ -377,8 +408,58 @@
     }
 
     function fecharModal() {
+      emprestimoAtualNoModal = null;
       document.getElementById('modalDetalhes').classList.add('hidden');
     }
+
+    // --- FUNÇÕES DE EXCEÇÃO (EDICAO DENTRO DO MODAL) ---
+    async function salvarExcecao(id, numParcela, dadosExcecao) {
+      const emp = listaEmprestimos.find(e => String(e.id) === String(id));
+      if (!emp) return;
+
+      // Cria ou copia o JSON atual
+      let novasExcecoes = emp.excecoes ? JSON.parse(JSON.stringify(emp.excecoes)) : {};
+      
+      // Atualiza os dados da parcela específica
+      if (dadosExcecao === null) {
+        delete novasExcecoes[numParcela]; // Restaura o original apagando a exceção
+      } else {
+        novasExcecoes[numParcela] = { ...novasExcecoes[numParcela], ...dadosExcecao };
+      }
+
+      // Salva no banco de dados
+      const { error } = await _supabase.from('emprestimos').update({ excecoes: novasExcecoes }).eq('id', id);
+      if (error) {
+        alert("Erro ao aplicar alteração: " + error.message);
+      } else {
+        await carregarEmprestimos(); // Recarrega a tabela base, o que já atualiza o modal aberto
+      }
+    }
+
+    function editarParcela(id, parcela, valorAtual) {
+      const novoValor = prompt(`Digite o novo valor para a parcela ${parcela}:`, valorAtual);
+      if (novoValor !== null && novoValor.trim() !== '') {
+        const valorNumerico = parseFloat(novoValor.replace(',', '.'));
+        if (!isNaN(valorNumerico)) {
+          salvarExcecao(id, parcela, { valor: valorNumerico });
+        } else {
+          alert("Valor inválido.");
+        }
+      }
+    }
+
+    function cancelarParcela(id, parcela) {
+      if (confirm(`Deseja pular/cancelar a cobrança desta parcela ${parcela}?`)) {
+        salvarExcecao(id, parcela, { status: 'cancelada' });
+      }
+    }
+
+    function restaurarParcela(id, parcela) {
+      if (confirm(`Deseja restaurar esta parcela para o valor original do contrato?`)) {
+        salvarExcecao(id, parcela, null);
+      }
+    }
+    // --------------------------------------------------
 
     async function salvarEmprestimo(e) {
       e.preventDefault();
@@ -417,15 +498,8 @@
     }
 
     async function finalizarEmprestimo(id) {
-      if (confirm('Marcar como totalmente quitado?')) {
+      if (confirm('Marcar como totalmente quitado? O sistema deixará de enviar as parcelas restantes para a folha.')) {
         const { error } = await _supabase.from('emprestimos').update({ status: 'FINALIZADO' }).eq('id', id);
-        if (!error) carregarEmprestimos();
-      }
-    }
-
-    async function excluirEmprestimo(id) {
-      if (confirm('Atenção: Deseja apagar este registro permanentemente?')) {
-        const { error } = await _supabase.from('emprestimos').delete().eq('id', id);
         if (!error) carregarEmprestimos();
       }
     }
