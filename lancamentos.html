@@ -601,7 +601,7 @@
     // -------------------------------------------------------------------------
     // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA COM LEITURA DE EXCEÇÕES
     // -------------------------------------------------------------------------
-    async function sincronizarEmprestimos(funcionarioId, competencia) {
+async function sincronizarEmprestimos(funcionarioId, competencia) {
       // 1. Busca todos os empréstimos ativos deste funcionário
       const { data: emprestimos } = await _supabase
         .from('emprestimos')
@@ -611,19 +611,17 @@
 
       if (!emprestimos || emprestimos.length === 0) return;
 
-      // 2. Pega os lançamentos 3007 já existentes neste mês para não duplicar
+      // 2. Pega os lançamentos 3007 já existentes neste mês
       const { data: lancamentosExistentes } = await _supabase
         .from('folha_itens')
-        .select('id, rubrica, valor')
+        .select('id, rubrica, valor, motivo_ajuste')
         .eq('funcionario_id', funcionarioId)
         .eq('competencia', competencia)
         .ilike('rubrica', '3007%'); 
 
-      // Converte competência da tela (ex: 08/2026) para meses absolutos
       const partesComp = competencia.split('/');
       const numCompAtual = parseInt(partesComp[1]) * 12 + parseInt(partesComp[0]);
 
-      // Busca dinamicamente a descrição atualizada do evento 3007 no banco
       const evento3007 = listaGlobalEventos.find(ev => String(ev.codigo_evento) === '3007');
       const desc3007 = evento3007 ? evento3007.descricao_do_evento : 'EMPRESTIMO EMPRESA 1 PF';
 
@@ -633,31 +631,27 @@
 
         const deltaMeses = numCompAtual - numCompInicio;
         
-        // Se o mês atual está dentro do período de parcelamento do empréstimo
         if (deltaMeses >= 0 && deltaMeses < emp.qtd_parcelas) {
           const parcelaAtual = deltaMeses + 1;
           
-          // LÊ O JSON DE EXCEÇÕES DO BANCO DE DADOS
           const excecoes = emp.excecoes || {};
           const excParcela = excecoes[parcelaAtual] || {};
 
-          // Regra 1: Se a parcela foi "Pulada/Cancelada" lá no modal, aborta e não lança nada!
           if (excParcela.status === 'cancelada') {
             continue; 
           }
 
-          // Regra 2: Pega o valor (se foi editado no modal usa o novo, senão usa o original do contrato)
           const valorReal = excParcela.valor !== undefined ? parseFloat(excParcela.valor) : parseFloat(emp.valor_parcela);
 
           const tagParcela = `(${String(parcelaAtual).padStart(2, '0')}/${String(emp.qtd_parcelas).padStart(2, '0')})`;
           const rubricaExata = `3007 - ${desc3007} ${tagParcela}`;
+          const motivoIdentificador = `Automação Empréstimo #${emp.id}`;
 
-          // Regra 3: Confere se o desconto da parcela X já foi inserido (checando APENAS a tag)
-          // Isso garante que, se você editar o valor na tela de folha, ele não insira de novo.
-          const jaExiste = lancamentosExistentes?.some(l => l.rubrica.includes(tagParcela));
+          // CORREÇÃO: Verifica se JÁ EXISTE um lançamento específico para ESTE CONTRATO (#emp.id) neste mês
+          const jaExisteEsteContrato = lancamentosExistentes?.some(l => l.motivo_ajuste === motivoIdentificador);
 
-          if (!jaExiste) {
-            // Injeta o desconto automaticamente direto no banco de dados com o valor corrigido!
+          if (!jaExisteEsteContrato) {
+            // Insere a linha do contrato de forma independente na folha
             await _supabase.from('folha_itens').insert([{
               funcionario_id: funcionarioId,
               rubrica: rubricaExata,
@@ -665,10 +659,10 @@
               valor: valorReal,
               valor_bruto: valorReal,
               abatimento_sigiloso: 0,
-              motivo_ajuste: `Automação Empréstimo #${emp.id}`,
+              motivo_ajuste: motivoIdentificador, // Associa o ID do empréstimo no motivo para rastreio
               parcela_atual: parcelaAtual,
               total_parcelas: emp.qtd_parcelas,
-              fixo: false, // Falso para não poluir importações manuais de meses anteriores
+              fixo: false,
               competencia: competencia
             }]);
           }
