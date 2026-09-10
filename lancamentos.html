@@ -599,7 +599,6 @@
     });
 
     // -------------------------------------------------------------------------
-// -------------------------------------------------------------------------
     // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA COM LEITURA DE EXCEÇÕES
     // -------------------------------------------------------------------------
     async function sincronizarEmprestimos(funcionarioId, competencia) {
@@ -808,12 +807,6 @@
           let botoesAcao = '';
           if (competenciaEstaFechada) {
             botoesAcao = '';
-          } else if (isEmprestimoAuto) {
-            botoesAcao = `
-              <td class="py-1 px-2 text-center select-none">
-                <span class="text-[9px] text-slate-400 font-bold uppercase" title="Alterações devem ser feitas direto na tela de Controle de Empréstimos">🔒 BLOQUEADO</span>
-              </td>
-            `;
           } else {
             botoesAcao = `
               <td class="py-1 px-2 text-center">
@@ -861,12 +854,6 @@
           let botoesAcao = '';
           if (competenciaEstaFechada) {
             botoesAcao = '';
-          } else if (isEmprestimoAuto) {
-            botoesAcao = `
-              <td class="py-1 px-2 text-center select-none">
-                <span class="text-[9px] text-slate-400 font-bold uppercase" title="Alterações devem ser feitas direto na tela de Controle de Empréstimos">🔒 BLOQUEADO</span>
-              </td>
-            `;
           } else {
             botoesAcao = `
               <td class="py-1 px-2 text-center">
