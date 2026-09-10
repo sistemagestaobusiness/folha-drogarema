@@ -599,7 +599,7 @@
     });
 
     // -------------------------------------------------------------------------
-    // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA MULTI-CONTRATOS
+    // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO DINÂMICA (CONTÁBIL 3004 OU NÃO CONTÁBIL 3007)
     // -------------------------------------------------------------------------
     async function sincronizarEmprestimos(funcionarioId, competencia) {
       // 1. Busca todos os empréstimos ativos deste funcionário
@@ -611,19 +611,16 @@
 
       if (!emprestimos || emprestimos.length === 0) return;
 
-      // 2. Pega os lançamentos 3007 já existentes neste mês
+      // 2. Pega todos os lançamentos de empréstimo (3004 e 3007) já existentes neste mês
       const { data: lancamentosExistentes } = await _supabase
         .from('folha_itens')
         .select('id, rubrica, valor, motivo_ajuste')
         .eq('funcionario_id', funcionarioId)
         .eq('competencia', competencia)
-        .ilike('rubrica', '3007%'); 
+        .or('rubrica.ilike.3004%,rubrica.ilike.3007%'); 
 
       const partesComp = competencia.split('/');
       const numCompAtual = parseInt(partesComp[1]) * 12 + parseInt(partesComp[0]);
-
-      const evento3007 = listaGlobalEventos.find(ev => String(ev.codigo_evento) === '3007');
-      const desc3007 = evento3007 ? evento3007.descricao_do_evento : 'EMPRESTIMO EMPRESA 1 PF';
 
       for (const emp of emprestimos) {
         const partesInicio = emp.competencia_inicio.split('/');
@@ -643,15 +640,20 @@
 
           const valorReal = excParcela.valor !== undefined ? parseFloat(excParcela.valor) : parseFloat(emp.valor_parcela);
 
+          // Pega dinamicamente o código do evento escolhido no contrato (padrão 3007 se não houver)
+          const codigoEvento = String(emp.codigo_evento || '3007');
+          const eventoDinamico = listaGlobalEventos.find(ev => String(ev.codigo_evento) === codigoEvento);
+          const descEvento = eventoDinamico ? eventoDinamico.descricao_do_evento : (codigoEvento === '3004' ? 'DESC. EMP. CRED. TRAB' : 'EMPRESTIMO EMPRESA 1 PF');
+
           const tagParcela = `(${String(parcelaAtual).padStart(2, '0')}/${String(emp.qtd_parcelas).padStart(2, '0')})`;
-          const rubricaExata = `3007 - ${desc3007} ${tagParcela}`;
+          const rubricaExata = `${codigoEvento} - ${descEvento} ${tagParcela}`;
           const motivoIdentificador = `Automação Empréstimo #${emp.id}`;
 
-          // CORREÇÃO: Valida individualmente se ESTE ID de empréstimo já foi gerado na folha deste mês
+          // Confere se já existe um lançamento específico para ESTE contrato (#emp.id) neste mês
           const jaExisteEsteContrato = lancamentosExistentes?.some(l => l.motivo_ajuste === motivoIdentificador);
 
           if (!jaExisteEsteContrato) {
-            // Insere o desconto de cada contrato de forma independente e paralela
+            // Insere o desconto na folha com o evento correto (irá automático para Contábil se for 3004 ou Não Contábil se for 3007)
             await _supabase.from('folha_itens').insert([{
               funcionario_id: funcionarioId,
               rubrica: rubricaExata,
@@ -794,7 +796,7 @@
           const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
           const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
           
-          const isEmprestimoAuto = (item.codigoExtraido === '3007');
+          const isEmprestimoAuto = (item.codigoExtraido === '3007' || item.codigoExtraido === '3004');
           const badgeAuto = isEmprestimoAuto ? `<span class="text-[9px] text-indigo-700 bg-indigo-100 border border-indigo-200 px-1 py-0.5 rounded ml-1 font-bold" title="Lançamento injetado pelo Controle de Empréstimos">🤖 AUTO</span>` : '';
 
           let botoesAcao = '';
@@ -841,7 +843,7 @@
           const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
           const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
           
-          const isEmprestimoAuto = (item.codigoExtraido === '3007');
+          const isEmprestimoAuto = (item.codigoExtraido === '3007' || item.codigoExtraido === '3004');
           const badgeAuto = isEmprestimoAuto ? `<span class="text-[9px] text-indigo-700 bg-indigo-100 border border-indigo-200 px-1 py-0.5 rounded ml-1 font-bold" title="Lançamento injetado pelo Controle de Empréstimos">🤖 AUTO</span>` : '';
 
           let botoesAcao = '';
