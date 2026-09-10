@@ -22,7 +22,7 @@
       <div>
         <a href="lancamentos.html" class="text-xs text-amber-700 hover:underline mb-1 inline-block font-bold">← VOLTAR AOS LANÇAMENTOS</a>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">CONTROLE DE EMPRÉSTIMOS</h1>
-        <p class="text-xs text-slate-500">Gestão de adiantamentos e parcelamentos (<span class="font-mono text-amber-700">Eventos Não Contábeis</span>)</p>
+        <p class="text-xs text-slate-500">Gestão de adiantamentos e parcelamentos (<span class="font-mono text-amber-700">Contábil e Não Contábil</span>)</p>
       </div>
       <div>
         <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">PAINEL PRINCIPAL</a>
@@ -41,6 +41,14 @@
             <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">1. Colaborador (Apenas Ativos) *</label>
             <select id="selectFuncionario" required class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-amber-600 font-mono">
               <option value="">Carregando...</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Tipo de Evento / Rubrica *</label>
+            <select id="selectEventoEmprestimo" required class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-amber-600 font-mono">
+              <option value="3004">3004 - DESC. EMP. CRED. TRAB (CONTÁBIL)</option>
+              <option value="3007">3007 - EMPRESTIMO EMPRESA 1 PF (NÃO CONTÁBIL)</option>
             </select>
           </div>
 
@@ -94,7 +102,7 @@
           <table class="w-full text-left text-[11px] border-collapse">
             <thead>
               <tr class="border-b border-slate-200 text-slate-500">
-                <th class="py-1 px-2">COLABORADOR</th>
+                <th class="py-1 px-2">COLABORADOR / TIPO</th>
                 <th class="py-1 px-2 text-center">DATA/INÍCIO</th>
                 <th class="py-1 px-2 text-right">VALOR TOTAL</th>
                 <th class="py-1 px-2 text-center">PARCELAS</th>
@@ -112,7 +120,7 @@
           <table class="w-full text-left text-[11px] border-collapse">
             <thead>
               <tr class="border-b border-slate-200 text-slate-500">
-                <th class="py-1 px-2">COLABORADOR</th>
+                <th class="py-1 px-2">COLABORADOR / TIPO</th>
                 <th class="py-1 px-2 text-center">DATA/INÍCIO</th>
                 <th class="py-1 px-2 text-right">VALOR TOTAL</th>
                 <th class="py-1 px-2 text-center">PARCELAS</th>
@@ -120,7 +128,7 @@
               </tr>
             </thead>
             <tbody id="tabelaHistorico" class="divide-y divide-slate-100">
-              <tr><td colspan="5" class="p-4 text-center text-slate-400">Carregando histórico...</td></tr>
+              <tr><td colspan="5" class="p-4 text-center text-slate-400">O histórico está vazio.</td></tr>
             </tbody>
           </table>
         </div>
@@ -171,7 +179,7 @@
     let listaFuncionarios = [];
     let listaEmprestimos = [];
     let abaAtual = 'ativos';
-    let emprestimoAtualNoModal = null; // Guarda o ID do modal aberto
+    let emprestimoAtualNoModal = null;
 
     function formatarCompetencia(input) {
       let v = input.value.replace(/\D/g, '');
@@ -236,7 +244,6 @@
         listaEmprestimos = data || [];
         renderizarTabelas();
         
-        // Se o modal estiver aberto, atualiza ele para refletir edições
         if (emprestimoAtualNoModal && !document.getElementById('modalDetalhes').classList.contains('hidden')) {
           abrirCronograma(emprestimoAtualNoModal);
         }
@@ -256,10 +263,17 @@
         tbodyAtivos.innerHTML = ativos.map(e => {
           const func = listaFuncionarios.find(f => String(f.id) === String(e.funcionario_id));
           const nomeFunc = func ? func.nome_registro : 'Colaborador não localizado';
+          const codEv = e.codigo_evento || '3007';
+          const badgeTipo = codEv === '3004' 
+            ? '<span class="bg-indigo-100 text-indigo-800 px-1 py-0.5 rounded text-[9px] font-bold">CONTÁBIL (3004)</span>' 
+            : '<span class="bg-amber-100 text-amber-800 px-1 py-0.5 rounded text-[9px] font-bold">NÃO CONTÁBIL (3007)</span>';
           
           return `
             <tr class="hover:bg-slate-50 border-b border-slate-50 last:border-0">
-              <td class="py-1 px-2 font-bold text-slate-800 leading-tight">${nomeFunc}</td>
+              <td class="py-1 px-2">
+                <div class="font-bold text-slate-800 leading-tight">${nomeFunc}</div>
+                <div class="mt-0.5">${badgeTipo}</div>
+              </td>
               <td class="py-1 px-2 text-center leading-tight">
                 <div class="text-[9px] text-slate-500">Data: ${formatarDataBR(e.data_contrato)}</div>
                 <div class="font-mono text-emerald-700 font-bold text-[10px]">Início: ${e.competencia_inicio}</div>
@@ -284,10 +298,17 @@
         tbodyHist.innerHTML = finalizados.map(e => {
           const func = listaFuncionarios.find(f => String(f.id) === String(e.funcionario_id));
           const nomeFunc = func ? func.nome_registro : 'Colaborador não localizado';
+          const codEv = e.codigo_evento || '3007';
+          const badgeTipo = codEv === '3004' 
+            ? '<span class="bg-indigo-100 text-indigo-800 px-1 py-0.5 rounded text-[9px] font-bold">CONTÁBIL (3004)</span>' 
+            : '<span class="bg-amber-100 text-amber-800 px-1 py-0.5 rounded text-[9px] font-bold">NÃO CONTÁBIL (3007)</span>';
           
           return `
             <tr class="hover:bg-slate-50 opacity-70 border-b border-slate-50 last:border-0">
-              <td class="py-1 px-2 font-bold text-slate-600">${nomeFunc}</td>
+              <td class="py-1 px-2">
+                <div class="font-bold text-slate-600">${nomeFunc}</div>
+                <div class="mt-0.5">${badgeTipo}</div>
+              </td>
               <td class="py-1 px-2 text-center">
                 <div class="text-[9px] text-slate-500">Data: ${formatarDataBR(e.data_contrato)}</div>
                 <div class="font-mono text-slate-600 text-[10px]">Início: ${e.competencia_inicio}</div>
@@ -310,6 +331,7 @@
 
       document.getElementById('editEmprestimoId').value = emp.id;
       document.getElementById('selectFuncionario').value = emp.funcionario_id;
+      document.getElementById('selectEventoEmprestimo').value = emp.codigo_evento || '3007';
       document.getElementById('inputData').value = emp.data_contrato;
       document.getElementById('inputCompetencia').value = emp.competencia_inicio;
       document.getElementById('inputValorTotal').value = emp.valor_total;
@@ -327,6 +349,7 @@
     function cancelarEdicao() {
       document.getElementById('editEmprestimoId').value = '';
       document.getElementById('formEmprestimo').reset();
+      document.getElementById('selectEventoEmprestimo').value = '3004';
       document.getElementById('inputData').valueAsDate = new Date();
       document.getElementById('inputQtdParcelas').value = 1;
       
@@ -355,7 +378,6 @@
       const anoReal = dataHoje.getFullYear();
       const numCompAtual = anoReal * 12 + mesReal;
 
-      // Recupera o JSON de exceções (se não existir, é um objeto vazio)
       const excecoes = emp.excecoes || {};
 
       let htmlLinhas = '';
@@ -363,7 +385,6 @@
         const compStr = `${String(mesAtual).padStart(2, '0')}/${anoAtual}`;
         const numCompParcela = anoAtual * 12 + mesAtual;
 
-        // Checa se há alguma edição/exceção salva no JSON para essa parcela (i)
         const exc = excecoes[i] || {};
         const isCancelada = exc.status === 'cancelada';
         const valorReal = exc.valor !== undefined ? parseFloat(exc.valor) : parseFloat(emp.valor_parcela);
@@ -412,27 +433,23 @@
       document.getElementById('modalDetalhes').classList.add('hidden');
     }
 
-    // --- FUNÇÕES DE EXCEÇÃO (EDICAO DENTRO DO MODAL) ---
     async function salvarExcecao(id, numParcela, dadosExcecao) {
       const emp = listaEmprestimos.find(e => String(e.id) === String(id));
       if (!emp) return;
 
-      // Cria ou copia o JSON atual
       let novasExcecoes = emp.excecoes ? JSON.parse(JSON.stringify(emp.excecoes)) : {};
       
-      // Atualiza os dados da parcela específica
       if (dadosExcecao === null) {
-        delete novasExcecoes[numParcela]; // Restaura o original apagando a exceção
+        delete novasExcecoes[numParcela];
       } else {
         novasExcecoes[numParcela] = { ...novasExcecoes[numParcela], ...dadosExcecao };
       }
 
-      // Salva no banco de dados
       const { error } = await _supabase.from('emprestimos').update({ excecoes: novasExcecoes }).eq('id', id);
       if (error) {
         alert("Erro ao aplicar alteração: " + error.message);
       } else {
-        await carregarEmprestimos(); // Recarrega a tabela base, o que já atualiza o modal aberto
+        await carregarEmprestimos();
       }
     }
 
@@ -459,13 +476,13 @@
         salvarExcecao(id, parcela, null);
       }
     }
-    // --------------------------------------------------
 
     async function salvarEmprestimo(e) {
       e.preventDefault();
       
       const idEdicao = document.getElementById('editEmprestimoId').value;
       const funcionario_id = document.getElementById('selectFuncionario').value;
+      const codigo_evento = document.getElementById('selectEventoEmprestimo').value;
       const data_contrato = document.getElementById('inputData').value;
       const valor_total = parseFloat(document.getElementById('inputValorTotal').value);
       const qtd_parcelas = parseInt(document.getElementById('inputQtdParcelas').value);
@@ -477,7 +494,7 @@
         return;
       }
 
-      const payload = { funcionario_id, data_contrato, valor_total, qtd_parcelas, valor_parcela, competencia_inicio };
+      const payload = { funcionario_id, codigo_evento, data_contrato, valor_total, qtd_parcelas, valor_parcela, competencia_inicio };
 
       if (idEdicao) {
         const { error } = await _supabase.from('emprestimos').update(payload).eq('id', idEdicao);
