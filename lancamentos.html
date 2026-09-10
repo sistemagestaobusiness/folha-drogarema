@@ -599,9 +599,9 @@
     });
 
     // -------------------------------------------------------------------------
-    // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA COM LEITURA DE EXCEÇÕES
+    // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO AUTOMÁTICA MULTI-CONTRATOS
     // -------------------------------------------------------------------------
-async function sincronizarEmprestimos(funcionarioId, competencia) {
+    async function sincronizarEmprestimos(funcionarioId, competencia) {
       // 1. Busca todos os empréstimos ativos deste funcionário
       const { data: emprestimos } = await _supabase
         .from('emprestimos')
@@ -647,11 +647,11 @@ async function sincronizarEmprestimos(funcionarioId, competencia) {
           const rubricaExata = `3007 - ${desc3007} ${tagParcela}`;
           const motivoIdentificador = `Automação Empréstimo #${emp.id}`;
 
-          // CORREÇÃO: Verifica se JÁ EXISTE um lançamento específico para ESTE CONTRATO (#emp.id) neste mês
+          // CORREÇÃO: Valida individualmente se ESTE ID de empréstimo já foi gerado na folha deste mês
           const jaExisteEsteContrato = lancamentosExistentes?.some(l => l.motivo_ajuste === motivoIdentificador);
 
           if (!jaExisteEsteContrato) {
-            // Insere a linha do contrato de forma independente na folha
+            // Insere o desconto de cada contrato de forma independente e paralela
             await _supabase.from('folha_itens').insert([{
               funcionario_id: funcionarioId,
               rubrica: rubricaExata,
@@ -659,7 +659,7 @@ async function sincronizarEmprestimos(funcionarioId, competencia) {
               valor: valorReal,
               valor_bruto: valorReal,
               abatimento_sigiloso: 0,
-              motivo_ajuste: motivoIdentificador, // Associa o ID do empréstimo no motivo para rastreio
+              motivo_ajuste: motivoIdentificador, 
               parcela_atual: parcelaAtual,
               total_parcelas: emp.qtd_parcelas,
               fixo: false,
@@ -669,7 +669,6 @@ async function sincronizarEmprestimos(funcionarioId, competencia) {
         }
       }
     }
-  
     // -------------------------------------------------------------------------
 
     async function carregarLancamentosNovo() {
