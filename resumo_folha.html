@@ -7,23 +7,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Esconde barra de rolagem mas mantém a funcionalidade para visual clean */
     .no-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
     .no-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .no-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     .no-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    /* Efeito de sombra interna para rolagem fixa */
     .shadow-fixa { box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.05); }
-    /* Elevação de prioridade para a interseção (Canto superior esquerdo) */
     .z-canto { z-index: 60 !important; }
-    /* Esconder setinhas do input number */
     input[type="number"]::-webkit-inner-spin-button, 
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
 
-  <!-- Proteção de Acesso -->
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
       alert('Acesso negado! Faça login primeiro.');
@@ -31,7 +26,6 @@
     }
   </script>
 
-  <!-- Cabeçalho Principal -->
   <div class="sticky top-0 z-[70] bg-white/95 backdrop-blur-sm py-4 px-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xs">
     <div>
       <h1 class="text-xl font-black text-slate-900 tracking-wide uppercase">Resumo Geral de Lançamentos</h1>
@@ -39,7 +33,6 @@
     </div>
     
     <div class="flex items-center gap-2 w-full md:w-auto flex-wrap">
-      <!-- Seletor de Agrupamento -->
       <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg p-1 mr-2">
         <span class="text-[10px] text-slate-500 font-bold uppercase px-2">Agrupar:</span>
         <select id="agruparPor" onchange="renderizarTabelaCorpo()" class="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer">
@@ -65,13 +58,11 @@
     </div>
   </div>
 
-  <!-- Container da Tabela Dinâmica -->
   <div class="p-4 sm:p-6">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
       <div class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
         <table class="w-full text-left text-xs border-collapse">
           <thead id="tabelaCabecalho" class="sticky top-0 z-50 bg-slate-50 shadow-sm">
-            <!-- Gerado via JS -->
           </thead>
           <tbody id="tabelaCorpo" class="divide-y divide-slate-100">
             <tr><td class="p-8 text-center text-slate-400 font-mono">Sincronizando base de dados e cruzando eventos...</td></tr>
@@ -81,7 +72,6 @@
     </div>
   </div>
 
-  <!-- Modal: Relatório Banco -->
   <div id="modalRelatorioBanco" class="hidden fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
       <div class="bg-indigo-800 p-4 flex justify-between items-center">
@@ -98,7 +88,6 @@
     </div>
   </div>
 
-  <!-- Modal: Relatório Dinheiro -->
   <div id="modalRelatorioDinheiro" class="hidden fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
       <div class="bg-amber-600 p-4 flex justify-between items-center">
@@ -115,7 +104,6 @@
     </div>
   </div>
 
-  <!-- Script de Inteligência da Tabela -->
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
@@ -128,6 +116,7 @@
     let glob_dadosFunc = [];
     let glob_grandTotals = { cc: {}, cd: {}, ncc: {}, ncd: {}, tot_cc: 0, tot_cd: 0, tot_ncc: 0, tot_ncd: 0 };
     
+    // Agora o objeto valoresDinheiro espelhará os dados reais do banco
     let valoresDinheiro = {};
 
     function converterCompetenciaParaMMYYYY(texto) {
@@ -178,12 +167,14 @@
       document.getElementById('labelCompetencia').innerText = competenciaRegra;
 
       try {
-        const [resFunc, resFolha, resEventos, resLojas, resEmpresas] = await Promise.all([
+        // Nova consulta: Busca pagamentos_dinheiro filtrados pela competência atual
+        const [resFunc, resFolha, resEventos, resLojas, resEmpresas, resPgtoDinheiro] = await Promise.all([
           _supabase.from('funcionarios').select('*'),
           _supabase.from('folha_itens').select('*').eq('competencia', competenciaRegra),
           _supabase.from('tipos_eventos').select('*'),
           _supabase.from('lojas').select('*'),
-          _supabase.from('empresas').select('*')
+          _supabase.from('empresas').select('*'),
+          _supabase.from('pagamentos_dinheiro').select('*').eq('competencia', competenciaRegra)
         ]);
 
         const funcionarios = resFunc.data || [];
@@ -191,6 +182,13 @@
         const eventos = resEventos.data || [];
         const lojas = resLojas.data || [];
         const empresas = resEmpresas.data || [];
+        const pagamentosDb = resPgtoDinheiro.data || [];
+
+        // Inicializa o objeto com os dados permanentes vindos do banco
+        valoresDinheiro = {};
+        pagamentosDb.forEach(pd => {
+          valoresDinheiro[pd.funcionario_id] = parseFloat(pd.valor || 0);
+        });
 
         const mapaEventos = {};
         eventos.forEach(e => {
@@ -319,7 +317,6 @@
       tr3 += `<th class="py-2 px-3 sticky z-canto bg-slate-200 border-r border-slate-300 shadow-fixa" style="${widthC2}">-</th>`;
       tr3 += `<th class="py-2 px-3 sticky z-canto bg-slate-200 border-r border-slate-400 shadow-fixa" style="${widthC3}">-</th>`;
 
-      // CRÉDITOS CONTÁBEIS
       if (glob_colunas.cc.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-emerald-700 bg-emerald-50/80 border-b border-emerald-100" colspan="${glob_colunas.cc.length}">Proventos Contábeis (+)</th>`;
         glob_colunas.cc.forEach(c => {
@@ -330,7 +327,6 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-emerald-800 bg-emerald-100/80 border-l border-emerald-200 align-bottom" rowspan="2">Subt. Créd.</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-emerald-900 bg-emerald-200 border-l border-emerald-300">${formatarMoeda(glob_grandTotals.tot_cc)}</th>`;
 
-      // DÉBITOS CONTÁBEIS
       if (glob_colunas.cd.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-rose-700 bg-rose-50/80 border-b border-rose-100 border-l border-slate-200" colspan="${glob_colunas.cd.length}">Descontos Contábeis (-)</th>`;
         glob_colunas.cd.forEach(c => {
@@ -342,12 +338,10 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-rose-800 bg-rose-100/80 border-l border-rose-200 align-bottom" rowspan="2">Subt. Déb.</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-rose-900 bg-rose-200 border-l border-rose-300">${formatarMoeda(glob_grandTotals.tot_cd)}</th>`;
 
-      // LÍQ CONTÁBIL
       const liqContTotal = glob_grandTotals.tot_cc - glob_grandTotals.tot_cd;
       tr1 += `<th class="py-2 px-3 text-right font-black text-slate-800 bg-slate-200/90 border-l border-r border-slate-300 align-bottom" rowspan="2">LÍQ. CONTÁBIL</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-slate-900 bg-slate-300/80 border-l border-r border-slate-400">${formatarMoeda(liqContTotal)}</th>`;
 
-      // CRÉDITOS NÃO CONTÁBEIS
       if (glob_colunas.ncc.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-indigo-700 bg-indigo-50/80 border-b border-indigo-100" colspan="${glob_colunas.ncc.length}">Proventos N. Cont. (+)</th>`;
         glob_colunas.ncc.forEach(c => {
@@ -358,7 +352,6 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-indigo-800 bg-indigo-100/80 border-l border-indigo-200 align-bottom" rowspan="2">Subt. Créd. NC</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-indigo-900 bg-indigo-200 border-l border-indigo-300">${formatarMoeda(glob_grandTotals.tot_ncc)}</th>`;
 
-      // DÉBITOS NÃO CONTÁBEIS
       if (glob_colunas.ncd.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-orange-700 bg-orange-50/80 border-b border-orange-100 border-l border-slate-200" colspan="${glob_colunas.ncd.length}">Descontos N. Cont. (-)</th>`;
         glob_colunas.ncd.forEach(c => {
@@ -369,16 +362,13 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-orange-800 bg-orange-100/80 border-l border-orange-200 align-bottom" rowspan="2">Subt. Déb. NC</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-orange-900 bg-orange-200 border-l border-orange-300">${formatarMoeda(glob_grandTotals.tot_ncd)}</th>`;
 
-      // LÍQ NÃO CONTÁBIL
       tr1 += `<th class="py-2 px-3 text-right font-black text-slate-800 bg-slate-200/90 border-l border-r border-slate-300 align-bottom" rowspan="2">LÍQ. NÃO CONT.</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-slate-900 bg-slate-300/80 border-l border-r border-slate-400">${formatarMoeda(glob_grandTotals.tot_ncc - glob_grandTotals.tot_ncd)}</th>`;
 
-      // LÍQUIDO GERAL
       tr1 += `<th class="py-2 px-4 text-right font-black text-emerald-900 bg-emerald-200 tracking-widest text-[11px] align-bottom shadow-sm" rowspan="2">LÍQUIDO GERAL</th>`;
       const liqGerTotal = liqContTotal + (glob_grandTotals.tot_ncc - glob_grandTotals.tot_ncd);
       tr3 += `<th class="py-2 px-4 text-right text-emerald-950 font-black bg-emerald-300 text-[12px] shadow-sm border-r-2 border-emerald-400">${formatarMoeda(liqGerTotal)}</th>`;
 
-      // --- MÓDULO FINANCEIRO (CABEÇALHO) ---
       tr1 += `<th class="py-2 px-2 text-center font-black text-sky-900 bg-sky-200/80 border-b border-sky-300 border-l-2 border-white" colspan="3">MÓDULO FINANCEIRO</th>`;
       
       tr2 += `<th class="py-1 px-3 text-right bg-sky-100 text-sky-800 font-bold border-l-2 border-white" title="Líquido Geral - Líquido Contábil">DIF. (POR FORA)</th>`;
@@ -450,18 +440,19 @@
         const liqGeral = liqCont + liqNaoCont;
         tr += `<td class="py-2 px-4 text-right whitespace-nowrap font-black text-emerald-900 bg-emerald-100/70 text-[11px] border-r-2 border-emerald-300">${formatarMoeda(liqGeral)}</td>`;
 
-        // MÓDULO FINANCEIRO (LINHAS)
         const difVal = liqGeral - liqCont;
         const inputDinheiroVal = valoresDinheiro[f.id] || 0;
         const liqBancoVal = liqGeral - inputDinheiroVal;
 
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-sky-800 bg-sky-50/60 border-l-2 border-white">${formatarMoeda(difVal)}</td>`;
         
+        // Alterado de oninput para onblur (salva no banco quando sair do campo)
         tr += `
           <td class="py-1 px-2 text-center whitespace-nowrap bg-amber-50/40 border-l border-slate-200">
             <input type="number" step="0.01" value="${inputDinheiroVal > 0 ? inputDinheiroVal : ''}" placeholder="0.00"
                    class="w-20 text-right font-mono font-bold text-xs p-1 border border-amber-300 bg-white rounded focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                   oninput="calcularFinanceiro('${f.id}', this.value, ${liqGeral})">
+                   onblur="salvarFinanceiroBanco('${f.id}', this.value, ${liqGeral})"
+                   onkeypress="if(event.key === 'Enter') this.blur();">
           </td>
         `;
         
@@ -513,7 +504,6 @@
       const lg = subtLiqCont + subtLiqNaoCont;
       html += `<td class="py-2 px-4 text-right text-emerald-950 font-black bg-emerald-200 text-[11px] shadow-sm border-r-2 border-emerald-400">${formatarMoeda(lg)}</td>`;
       
-      // MÓDULO FINANCEIRO (SUBTOTAIS)
       const safeGroupName = groupName.replace(/[^a-zA-Z0-9]/g, '_');
       html += `<td class="py-2 px-3 text-right text-sky-900 bg-sky-200/80 border-l-2 border-white">${formatarMoeda(lg - subtLiqCont)}</td>`;
       html += `<td class="py-2 px-3 text-center text-amber-900 bg-amber-200/80 border-l border-slate-200" id="subDinheiro-${safeGroupName}">-</td>`;
@@ -523,14 +513,50 @@
       return html;
     }
 
-    function calcularFinanceiro(fId, inputStr, liqGeral) {
+    // NOVA FUNÇÃO: Atualiza a interface e envia para o banco simultaneamente
+    async function salvarFinanceiroBanco(fId, inputStr, liqGeral) {
       let valorDigitado = parseFloat(inputStr) || 0;
+
+      // 1. Atualiza visualmente na hora (Memória)
       valoresDinheiro[fId] = valorDigitado;
-      
       let valorBanco = liqGeral - valorDigitado;
       document.getElementById(`banco-${fId}`).innerHTML = formatarMoeda(valorBanco);
-
       recalcularTotaisInterface();
+
+      // 2. Gravação Crítica (Banco de Dados)
+      try {
+        const { data: existente, error: errBusca } = await _supabase
+          .from('pagamentos_dinheiro')
+          .select('id')
+          .eq('funcionario_id', fId)
+          .eq('competencia', competenciaRegra);
+
+        if (errBusca) throw errBusca;
+
+        if (existente && existente.length > 0) {
+          // Atualiza se já existir
+          const { error: errUpd } = await _supabase
+            .from('pagamentos_dinheiro')
+            .update({ valor: valorDigitado })
+            .eq('id', existente[0].id);
+          if (errUpd) throw errUpd;
+        } else {
+          // Insere se for a primeira vez
+          if (valorDigitado > 0) {
+            const { error: errIns } = await _supabase
+              .from('pagamentos_dinheiro')
+              .insert([{
+                funcionario_id: fId,
+                competencia: competenciaRegra,
+                valor: valorDigitado
+              }]);
+            if (errIns) throw errIns;
+          }
+        }
+      } catch (err) {
+        alert("Atenção: Falha de conexão ao salvar os R$ " + formatarMoedaSimples(valorDigitado) + " no banco. Verifique sua internet.");
+        console.error(err);
+      }
     }
 
     function recalcularTotaisInterface() {
@@ -557,13 +583,11 @@
         subTotsBanco[grp] += bc;
       });
 
-      // Atualiza Total Geral
       const elTotDin = document.getElementById('totGeralDinheiro');
       const elTotBan = document.getElementById('totGeralBanco');
       if(elTotDin) elTotDin.innerHTML = formatarMoeda(grandDinheiro);
       if(elTotBan) elTotBan.innerHTML = formatarMoeda(grandBanco);
 
-      // Atualiza Subtotais
       for (const [grpName, val] of Object.entries(subTotsDinheiro)) {
         const safeName = grpName.replace(/[^a-zA-Z0-9]/g, '_');
         const el = document.getElementById(`subDinheiro-${safeName}`);
@@ -576,10 +600,6 @@
       }
     }
 
-    // -------------------------------------------------------------------------
-    // LÓGICA DE GERAÇÃO DOS RELATÓRIOS
-    // -------------------------------------------------------------------------
-    
     function abrirRelatorioBanco() {
       let txtBanco = "";
       let totalGeralBanco = 0;
@@ -599,13 +619,11 @@
 
         if (banco > 0) {
           if (empresaAtual !== f.empresa) {
-            // Fecha a empresa anterior imprimindo o subtotal
             if (empresaAtual !== "") {
                txtBanco += `----------------------------------------\n`;
                txtBanco += `SUBTOTAL ${empresaAtual}: R$ ${formatarMoedaSimples(subtotalEmpresa)}\n`;
                txtBanco += `========================================\n\n`;
             }
-            // Abre nova empresa
             empresaAtual = f.empresa;
             subtotalEmpresa = 0;
             txtBanco += `EMPRESA: ${empresaAtual}\n`;
@@ -617,7 +635,6 @@
           totalGeralBanco += banco;
         }
 
-        // Caso seja o último item do array, imprime o subtotal da última empresa
         if (idx === funcOrdenados.length - 1 && empresaAtual !== "") {
            txtBanco += `----------------------------------------\n`;
            txtBanco += `SUBTOTAL ${empresaAtual}: R$ ${formatarMoedaSimples(subtotalEmpresa)}\n`;
