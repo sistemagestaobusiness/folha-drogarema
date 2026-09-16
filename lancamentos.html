@@ -600,9 +600,11 @@
     });
 
     // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
     // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO DINÂMICA (CONTÁBIL 3004 OU NÃO CONTÁBIL 3007)
     // -------------------------------------------------------------------------
-   async function sincronizarSalarioBase(funcionarioId, competencia, salarioBase) {
+    
+    async function sincronizarSalarioBase(funcionarioId, competencia, salarioBase) {
       if (!salarioBase || salarioBase <= 0) return; // Ignora se não houver salário cadastrado
 
       // Confere se já existe um lançamento do tipo SALARIO (código 2000) neste mês
@@ -634,6 +636,8 @@
         }]);
       }
     }
+
+    async function sincronizarEmprestimos(funcionarioId, competencia) {
       // 1. Busca todos os empréstimos ativos deste funcionário
       const { data: emprestimos } = await _supabase
         .from('emprestimos')
@@ -685,7 +689,7 @@
           const jaExisteEsteContrato = lancamentosExistentes?.some(l => l.motivo_ajuste === motivoIdentificador);
 
           if (!jaExisteEsteContrato) {
-            // Insere o desconto na folha com o evento correto (irá automático para Contábil se for 3004 ou Não Contábil se for 3007)
+            // Insere o desconto na folha com o evento correto
             await _supabase.from('folha_itens').insert([{
               funcionario_id: funcionarioId,
               rubrica: rubricaExata,
@@ -704,6 +708,7 @@
       }
     }
     // -------------------------------------------------------------------------
+   
 
    async function carregarLancamentosNovo() {
       if (abaAtiva !== 'novo') return;
