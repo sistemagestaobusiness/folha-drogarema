@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitação de Freelance - Líder</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <!-- Proteção de Acesso Temporária -->
+  <script>
+    if (!localStorage.getItem('usuario_drogarema')) {
+      alert('Acesso negado! Faça login primeiro.');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Cabeçalho -->
+    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">SOLICITAÇÃO DE FREELANCE</h1>
+        <p class="text-xs text-slate-500">Módulo do Líder - Agendamento de Plantões e Coberturas</p>
+      </div>
+      <div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← PAINEL PRINCIPAL</a>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- COLUNA ESQUERDA: Formulário de Solicitação -->
+      <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm h-fit">
+        <h2 class="font-bold text-indigo-700 text-sm border-b border-slate-100 pb-2">NOVA SOLICITAÇÃO</h2>
+
+        <form id="formFreelance" onsubmit="salvarSolicitacao(event)" class="space-y-4">
+          
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Colaborador / Freelancer *</label>
+            <select id="selectFuncionario" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase">
+              <option value="">-- CARREGANDO... --</option>
+            </select>
+            <p class="text-[9px] text-slate-400 mt-1">* Se externo, solicite o cadastro prévio ao RH.</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Data do Serviço *</label>
+              <input type="date" id="inputData" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-sm focus:outline-none focus:border-indigo-600 font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Período *</label>
+              <select id="selectPeriodo" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase">
+                <option value="COMERCIAL">COMERCIAL</option>
+                <option value="NOTURNO">NOTURNO</option>
+                <option value="DOBRA">DOBRA (INTEGRAL)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Função *</label>
+              <select id="selectFuncao" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase">
+                <option value="FARMACEUTICO">FARMACÊUTICO</option>
+                <option value="BALCONISTA">BALCONISTA</option>
+                <option value="CAIXA">CAIXA</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Horas Trabalhadas *</label>
+              <input type="number" id="inputHoras" required min="1" max="24" placeholder="Ex: 8" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-sm focus:outline-none focus:border-indigo-600 font-mono text-center">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Forma de Pagamento (Acordo) *</label>
+            <select id="selectPagamento" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase">
+              <option value="SEMANAL">SEMANAL (Semana corrente)</option>
+              <option value="QUINZENAL">QUINZENAL (A cada 15 dias)</option>
+              <option value="FOLHA">FECHAMENTO DA FOLHA (Mensal)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações da Loja</label>
+            <textarea id="inputObs" rows="2" placeholder="Motivo da cobertura, detalhes do horário fracionado..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-indigo-600"></textarea>
+          </div>
+
+          <div class="pt-2">
+            <button type="submit" id="btnSalvar" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase tracking-wider">
+              ENVIAR PARA APROVAÇÃO (RH)
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- COLUNA DIREITA: Histórico de Solicitações da Loja -->
+      <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
+        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+          <h2 class="font-bold text-slate-900 text-sm">MINHAS SOLICITAÇÕES</h2>
+          <span class="text-xs text-slate-500 font-mono">Últimos 30 dias</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500 bg-slate-50">
+                <th class="p-3">DATA SERVIÇO</th>
+                <th class="p-3">COLABORADOR</th>
+                <th class="p-3">FUNÇÃO / PERÍODO</th>
+                <th class="p-3 text-center">HORAS</th>
+                <th class="p-3">STATUS (RH)</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaSolicitacoes" class="divide-y divide-slate-100">
+              <tr><td colspan="5" class="p-6 text-center text-slate-400">A tabela de banco de dados ainda será criada na próxima etapa.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function carregarFuncionarios() {
+      // Busca todos os funcionários ativos (internos e externos)
+      const { data, error } = await _supabase
+        .from('funcionarios')
+        .select('id, nome_registro, cargo')
+        .eq('status', 'ATIVO')
+        .order('nome_registro');
+
+      const select = document.getElementById('selectFuncionario');
+      
+      if (error) {
+        select.innerHTML = '<option value="">ERRO AO CARREGAR</option>';
+        return;
+      }
+
+      select.innerHTML = '<option value="">-- SELECIONE O COLABORADOR --</option>' + 
+        data.map(f => {
+          const isExterno = String(f.cargo).includes('FREELANCE') ? ' ⚡ [EXTERNO]' : '';
+          return `<option value="${f.id}">${f.nome_registro}${isExterno}</option>`;
+        }).join('');
+    }
+
+    async function salvarSolicitacao(e) {
+      e.preventDefault();
+      
+      // O código de INSERT falhará até criarmos a tabela `freelance_solicitacoes` via SQL.
+      // Está preparado aqui para funcionar assim que o banco estiver pronto.
+      alert("Aviso: O layout está finalizado! Na próxima etapa criaremos a tabela no banco de dados para salvar esta solicitação.");
+    }
+
+    // Inicialização
+    carregarFuncionarios();
+  </script>
+</body>
+</html>
