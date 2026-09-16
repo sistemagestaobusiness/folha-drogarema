@@ -480,8 +480,9 @@
       if (selConsulta) selConsulta.innerHTML = optionsHtml;
     }
 
-    async function carregarFuncionariosGeral() {
-      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj').order('nome_registro');
+   async function carregarFuncionariosGeral() {
+      // Adicionado o campo salario_base na consulta
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base').order('nome_registro');
       if (!error) {
         listaGlobalFuncionarios = data || [];
       }
@@ -601,7 +602,38 @@
     // -------------------------------------------------------------------------
     // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO DINÂMICA (CONTÁBIL 3004 OU NÃO CONTÁBIL 3007)
     // -------------------------------------------------------------------------
-    async function sincronizarEmprestimos(funcionarioId, competencia) {
+   async function sincronizarSalarioBase(funcionarioId, competencia, salarioBase) {
+      if (!salarioBase || salarioBase <= 0) return; // Ignora se não houver salário cadastrado
+
+      // Confere se já existe um lançamento do tipo SALARIO (código 2000) neste mês
+      const { data: lancamentosExistentes } = await _supabase
+        .from('folha_itens')
+        .select('id')
+        .eq('funcionario_id', funcionarioId)
+        .eq('competencia', competencia)
+        .ilike('rubrica', '2000%'); 
+
+      if (!lancamentosExistentes || lancamentosExistentes.length === 0) {
+        // Busca o nome exato do evento 2000
+        const eventoSalario = listaGlobalEventos.find(ev => String(ev.codigo_evento) === '2000');
+        const descEvento = eventoSalario ? eventoSalario.descricao_do_evento : 'SALARIO';
+        const rubricaExata = `2000 - ${descEvento}`;
+
+        await _supabase.from('folha_itens').insert([{
+          funcionario_id: funcionarioId,
+          rubrica: rubricaExata,
+          tipo: 'PROVENTO',
+          valor: salarioBase,
+          valor_bruto: salarioBase,
+          abatimento_sigiloso: 0,
+          motivo_ajuste: 'Salário Base Padrão (Cadastro)',
+          parcela_atual: 1,
+          total_parcelas: 1,
+          fixo: false, // Fica false para permitir que o usuário edite se necessário (ex: férias)
+          competencia: competencia
+        }]);
+      }
+    }
       // 1. Busca todos os empréstimos ativos deste funcionário
       const { data: emprestimos } = await _supabase
         .from('emprestimos')
@@ -673,7 +705,7 @@
     }
     // -------------------------------------------------------------------------
 
-    async function carregarLancamentosNovo() {
+   async function carregarLancamentosNovo() {
       if (abaAtiva !== 'novo') return;
       const funcionarioId = document.getElementById('selectFuncionarioNovo').value;
       if (!funcionarioId) {
@@ -684,9 +716,13 @@
       const funcNome = document.getElementById('selectFuncionarioNovo').selectedOptions[0]?.text || '';
       document.getElementById('subtituloContexto').innerText = `Competência Ativa: ${competenciaRegraLancamento} | Colaborador: ${funcNome}`;
 
-      // Verifica se há empréstimos e injeta na base caso necessário (somente se a folha estiver aberta)
+      // Puxa o salário base mapeado
+      const funcDados = listaGlobalFuncionarios.find(f => String(f.id) === String(funcionarioId));
+      const salarioBase = funcDados ? parseFloat(funcDados.salario_base || 0) : 0;
+
       if (!competenciaEstaFechada) {
         await sincronizarEmprestimos(funcionarioId, competenciaRegraLancamento);
+        await sincronizarSalarioBase(funcionarioId, competenciaRegraLancamento, salarioBase);
       }
 
       // Depois da sincronização, puxa a lista completa atualizada do banco
