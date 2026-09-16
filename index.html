@@ -16,7 +16,7 @@
     }
   </script>
 
-  <div class="max-w-7xl mx-auto space-y-5">
+  <div class="max-w-[1400px] mx-auto space-y-5">
     
     <!-- TOPO / HEADER EXECUTIVO -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm gap-4">
@@ -40,13 +40,57 @@
       </div>
     </div>
 
-    <!-- PAINEL DE COMANDO CENTRAL -->
+    <!-- PAINEL DE COMANDO CENTRAL (Layout em 3 Colunas) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
       
-      <!-- Coluna Principal (Esquerda: 8 Cols) -->
-      <div class="lg:col-span-8 space-y-5">
+      <!-- ==========================================
+           COLUNA 1: MENU LATERAL ESQUERDO (Navegação)
+           ========================================== -->
+      <div class="lg:col-span-2 space-y-5">
         
-        <!-- Banner de Período Ativo & Ação de Alto Impacto (Lançamentos e Resumo) -->
+        <!-- Relatórios & Documentos -->
+        <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
+          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Relatórios</h3>
+          <div class="flex flex-col space-y-1 text-xs font-medium pt-1">
+            <a href="resumo_diretoria.html" class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>📈</span> <span>Resumo Diretoria</span>
+            </a>
+            <a href="recibo_pagamento.html" class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+              <span>📄</span> <span>Gerar Recibos</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Cadastros do Sistema -->
+        <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
+          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Cadastros</h3>
+          <div class="flex flex-col space-y-1 text-[11px] font-medium pt-1">
+            <a href="funcionarios.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>👥</span> <span>Funcionários</span>
+            </a>
+            <a href="empresas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>🏢</span> <span>Empresas</span>
+            </a>
+            <a href="lojas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>🏪</span> <span>Lojas e Unidades</span>
+            </a>
+            <a href="rubricas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>📋</span> <span>Rubricas (De>Para)</span>
+            </a>
+            <a href="eventos.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>⚡</span> <span>Tipos de Eventos</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==========================================
+           COLUNA 2: PAINEL PRINCIPAL (Centro)
+           ========================================== -->
+      <div class="lg:col-span-7 space-y-5">
+        
+        <!-- Banner de Período Ativo & Ação de Alto Impacto -->
         <div class="bg-white border border-slate-200 p-5 rounded-xl shadow-sm flex flex-col justify-between">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <div>
@@ -56,12 +100,12 @@
                 <span id="badgeStatusCompetencia" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200">...</span>
               </div>
             </div>
-            <div id="infoFechamentoAudit" class="text-xs text-slate-500 font-mono bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">
+            <div id="infoFechamentoAudit" class="text-[10px] text-slate-500 font-mono bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">
               Auditoria: -
             </div>
           </div>
 
-          <!-- BOTÕES EM EVIDÊNCIA: LANÇAMENTOS E RESUMO -->
+          <!-- BOTÕES EM EVIDÊNCIA -->
           <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
             <button onclick="toggleModalLancamentos()" class="flex-1 flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3.5 rounded-xl transition shadow-sm text-xs cursor-pointer">
               <span class="text-lg">⚡</span>
@@ -75,26 +119,41 @@
               <span class="text-lg">📊</span>
               <div class="text-left">
                 <div class="tracking-wide">RESUMO DA COMPETÊNCIA</div>
-                <div class="text-[10px] sm:text-[11px] text-blue-100 font-normal">Visualizar relatório completo da folha</div>
+                <div class="text-[10px] sm:text-[11px] text-blue-100 font-normal">Visualizar relatório da folha</div>
               </div>
             </a>
           </div>
         </div>
 
+        <!-- NOVO: ALERTA DE FREELANCE PENDENTE -->
+        <div id="alertaFreelance" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm space-y-3">
+          <div class="flex justify-between items-center border-b border-amber-200/50 pb-2">
+            <div class="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
+              <span class="animate-pulse">🔔</span> Plantões Pendentes de Aprovação
+            </div>
+            <a href="rh_aprovacao_freelance.html" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition shadow-sm cursor-pointer">
+              ACESSAR CENTRAL DE APROVAÇÃO →
+            </a>
+          </div>
+          
+          <ul id="listaPendenciasFreelance" class="text-xs text-amber-900 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <!-- Injetado via JS -->
+          </ul>
+        </div>
+
         <!-- INDICADORES GERENCIAIS -->
         <div class="space-y-4">
           <div class="flex justify-between items-center">
-            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">INDICADORES FINANCEIROS DO PERÍODO</h3>
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">INDICADORES FINANCEIROS</h3>
             <span class="text-[10px] text-slate-400 font-mono">Tempo real</span>
           </div>
 
           <!-- Grid de Indicadores Principais -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
-            <!-- Card 1: Salário Líquido (Destaque Principal) -->
+            <!-- Card 1: Salário Líquido -->
             <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-sm">
               <div class="flex justify-between items-center">
-                <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">SALÁRIO LÍQUIDO A PAGAR</span>
+                <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">LÍQUIDO A PAGAR</span>
                 <span class="text-sm">💰</span>
               </div>
               <div id="valLiquidoConsolidado" class="text-2xl font-black text-emerald-600 font-mono">R$ 0,00</div>
@@ -130,16 +189,13 @@
                 <span class="text-sm">👔</span>
               </div>
               <div id="qtdFuncionariosAtivos" class="text-2xl font-black text-slate-900 font-mono">0</div>
-              <p class="text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-                Aptos para proventos e descontos.
-              </p>
+              <p class="text-[11px] text-slate-500 pt-2 border-t border-slate-100">Aptos para folha.</p>
             </div>
-
           </div>
 
           <!-- Radiografia de Comissões -->
           <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
-            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Detalhamento de Comissões (Global)</span>
+            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Detalhamento de Comissões</span>
             <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
               <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
                 <span class="text-[10px] text-slate-500 block">Perfumaria</span>
@@ -164,7 +220,7 @@
             </div>
           </div>
 
-          <!-- Consolidado por Empresa / Filial (Formato Planilha Excel Alinhado com Totalizador de Linha e Coluna) -->
+          <!-- Consolidado por Empresa -->
           <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
             <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Consolidado por Empresa / Filial</span>
             <div id="listaEmpresasResumo" class="overflow-x-auto text-xs">
@@ -181,67 +237,26 @@
           </div>
 
         </div>
-
       </div>
 
-      <!-- Coluna Lateral (Direita: 4 Cols) -->
-      <div class="lg:col-span-4 space-y-5">
+      <!-- ==========================================
+           COLUNA 3: BARRA LATERAL DIREITA (Períodos)
+           ========================================== -->
+      <div class="lg:col-span-3 space-y-5">
         
         <!-- Gestão de Períodos da Folha -->
-        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3">
+        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 sticky top-6">
           <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-            <h3 class="font-bold text-slate-700 text-xs uppercase tracking-wider">SELECIONAR COMPETÊNCIA</h3>
+            <h3 class="font-bold text-slate-700 text-[10px] uppercase tracking-wider">SELECIONAR COMPETÊNCIA</h3>
             <select id="anoReferencia" onchange="carregarPeriodos()" class="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-slate-800 text-xs font-mono">
               <option value="2026">2026</option>
               <option value="2027">2027</option>
             </select>
           </div>
-          <p class="text-[11px] text-slate-500">Clique no mês para analisar ou na engrenagem (⚙️) para gerenciar o status.</p>
+          <p class="text-[10px] text-slate-500">Clique no mês para analisar ou na engrenagem (⚙️) para gerenciar o status.</p>
 
-          <div id="listaPeriodos" class="grid grid-cols-3 gap-1.5 pt-1">
+          <div id="listaPeriodos" class="grid grid-cols-2 gap-1.5 pt-1">
             <!-- Preenchido via JS compacto -->
-          </div>
-        </div>
-
-        <!-- Relatórios & Documentos -->
-        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2">
-          <h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100 pb-2">Relatórios & Documentos</h3>
-          <div class="flex flex-col space-y-1 text-xs font-medium pt-1">
-            <a href="resumo_diretoria.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>📈 Resumo Executivo (Diretoria)</span>
-              <span class="text-slate-400">→</span>
-            </a>
-            <a href="recibo_pagamento.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>📄 Emissão de Recibos</span>
-              <span class="text-slate-400">→</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- Configurações & Cadastros -->
-        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2">
-          <h3 class="font-bold text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100 pb-2">Cadastros do Sistema</h3>
-          <div class="flex flex-col space-y-1 text-xs font-medium pt-1">
-            <a href="funcionarios.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>👥 Funcionários</span>
-              <span class="text-slate-400">→</span>
-            </a>
-            <a href="empresas.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>🏢 Empresas</span>
-              <span class="text-slate-400">→</span>
-            </a>
-            <a href="lojas.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>🏪 Lojas e Unidades</span>
-              <span class="text-slate-400">→</span>
-            </a>
-            <a href="rubricas.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>📋 Rubricas e De>Para</span>
-              <span class="text-slate-400">→</span>
-            </a>
-            <a href="eventos.html" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>⚡ Tipos de Eventos</span>
-              <span class="text-slate-400">→</span>
-            </a>
           </div>
         </div>
 
@@ -250,7 +265,7 @@
     </div>
   </div>
 
-  <!-- MODAL DE GERENCIAMENTO DE STATUS DO MÊS (ABRIR / FECHAR) -->
+  <!-- MODAL DE GERENCIAMENTO DE STATUS DO MÊS -->
   <div id="modalGerenciarMes" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
     <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -272,7 +287,7 @@
         <button onclick="executarAcaoCompetencia('FECHADO')" class="w-full text-left p-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center justify-between cursor-pointer">
           <div>
             <div class="font-bold text-rose-900 text-xs">🔒 Fechar Competência</div>
-            <div class="text-[10px] text-rose-700">Bloquear novos lançamentos (Congelar folha)</div>
+            <div class="text-[10px] text-rose-700">Bloquear novos lançamentos</div>
           </div>
         </button>
       </div>
@@ -459,12 +474,56 @@
       }
 
       await calcularIndicadoresDashboard(competenciaMMYYYY);
+      
+      // Chamada da nova função de inteligência para Freelancers!
+      await carregarPendenciasFreelance();
     }
 
     function selecionarPeriodoAtivo(mesNome, ano) {
       const compStr = `${mesNome} / ${ano}`;
       localStorage.setItem('competencia_ativa', compStr);
       carregarPeriodos();
+    }
+
+    // NOVA FUNÇÃO: Busca e Agrupa Pendências de Freelance por Loja
+    async function carregarPendenciasFreelance() {
+      try {
+        const { data, error } = await _supabase
+          .from('freelance_solicitacoes')
+          .select('loja_solicitante')
+          .eq('status', 'PENDENTE');
+
+        const alertaDiv = document.getElementById('alertaFreelance');
+        const listaUl = document.getElementById('listaPendenciasFreelance');
+
+        if (error || !data || data.length === 0) {
+          alertaDiv.classList.add('hidden');
+          return;
+        }
+
+        // Agrupa e conta por loja
+        const contagem = {};
+        data.forEach(req => {
+          const loja = req.loja_solicitante || 'LOJA MATRIZ'; // Ou qualquer nome padrão
+          contagem[loja] = (contagem[loja] || 0) + 1;
+        });
+
+        // Monta o HTML separando por blocos
+        listaUl.innerHTML = Object.keys(contagem).map(loja => `
+          <li class="flex justify-between items-center bg-amber-100/40 p-2.5 rounded-lg border border-amber-200/50">
+            <span class="font-bold text-amber-900 truncate max-w-[200px]">${loja}</span>
+            <span class="bg-amber-500 text-white px-2.5 py-1 rounded text-[10px] font-bold shadow-xs border border-amber-600/20">
+              ${contagem[loja]} aguardando
+            </span>
+          </li>
+        `).join('');
+
+        // Exibe a div do alerta
+        alertaDiv.classList.remove('hidden');
+
+      } catch (err) {
+        console.error('Erro ao verificar alertas de freelance:', err);
+      }
     }
 
     async function calcularIndicadoresDashboard(competenciaMMYYYY) {
@@ -488,12 +547,7 @@
           mapaEventos[String(e.descricao_do_evento || '').toUpperCase()] = e.natureza_do_evento || 'CONTABIL';
         });
 
-        let totalGeralFolha = 0;
-        let totalContabil = 0;
-        let totalNaoContabil = 0;
-        let totalDescontos = 0;
-        let totalProventos = 0;
-
+        let totalGeralFolha = 0, totalContabil = 0, totalNaoContabil = 0, totalDescontos = 0, totalProventos = 0;
         let cPerf = 0, cSim = 0, cVit = 0, cFix = 0, cSid = 0;
 
         let resumoEmpresas = {};
@@ -580,16 +634,12 @@
         document.getElementById('comFix').innerText = 'R$ ' + cFix.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('comSid').innerText = 'R$ ' + cSid.toLocaleString('pt-BR', {minimumFractionDigits: 2});
 
-        // Consolidado por Empresa / Filial com Coluna de Total por Linha e Totais Gerais no Rodapé
         const containerEmp = document.getElementById('listaEmpresasResumo');
         const listaEmpArr = Object.values(resumoEmpresas);
         if (listaEmpArr.length === 0) {
           containerEmp.innerHTML = `<div class="text-slate-400 text-center py-2 text-xs">Nenhuma empresa encontrada.</div>`;
         } else {
-          let totalAtivosEmp = 0;
-          let totalContabilEmp = 0;
-          let totalNaoContabilEmp = 0;
-          let totalGeralEmp = 0;
+          let totalAtivosEmp = 0, totalContabilEmp = 0, totalNaoContabilEmp = 0, totalGeralEmp = 0;
 
           listaEmpArr.forEach(e => {
             totalAtivosEmp += e.ativosCount;
@@ -672,10 +722,11 @@
       window.location.href = 'login.html';
     }
   </script>
-<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+
+  <!-- Script de Bloqueio por Inatividade -->
   <script>
     let tempoInatividade;
-    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
+    const TEMPO_LIMITE = 15 * 60 * 1000; 
 
     function resetarTemporizador() {
       clearTimeout(tempoInatividade);
@@ -683,15 +734,11 @@
     }
 
     function fazerLogoutPorInatividade() {
-      // Remove a credencial salva
       localStorage.removeItem('usuario_drogarema');
-      
-      // Alerta o usuário e redireciona para o login
       alert('Sessão expirada por inatividade. Faça login novamente.');
       window.location.href = 'login.html';
     }
 
-    // Monitora eventos de movimento do mouse, cliques e digitação
     window.onload = resetarTemporizador;
     window.onmousemove = resetarTemporizador;
     window.onkeypress = resetarTemporizador;
