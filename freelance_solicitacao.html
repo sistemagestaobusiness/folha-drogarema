@@ -9,14 +9,6 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
 
-  <!-- Proteção de Acesso Temporária -->
-  <script>
-    if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
-    }
-  </script>
-
   <div class="max-w-7xl mx-auto space-y-6">
     
     <!-- Cabeçalho -->
@@ -32,7 +24,7 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- COLUNA ESQUERDA: Formulário de Solicitação -->
+      <!-- COLUNA ESQUERDA: Formulário -->
       <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm h-fit">
         <h2 class="font-bold text-indigo-700 text-sm border-b border-slate-100 pb-2">NOVA SOLICITAÇÃO</h2>
 
@@ -43,25 +35,31 @@
             <select id="selectFuncionario" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase">
               <option value="">-- CARREGANDO... --</option>
             </select>
-            <p class="text-[9px] text-slate-400 mt-1">* Se externo, solicite o cadastro prévio ao RH.</p>
+          </div>
+
+          <!-- Múltiplas Datas -->
+          <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+            <label class="block text-xs font-bold text-slate-600 uppercase">Datas do Serviço *</label>
+            <div class="flex gap-2">
+              <input type="date" id="inputDataTemp" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-sm focus:outline-none focus:border-indigo-600 font-mono">
+              <button type="button" onclick="adicionarData()" class="bg-indigo-600 text-white px-3 rounded font-bold hover:bg-indigo-700 transition">+</button>
+            </div>
+            <div id="listaDatas" class="flex flex-wrap gap-2 pt-2 empty:hidden"></div>
+            <p id="erroDatas" class="text-[10px] text-rose-500 hidden">Adicione pelo menos uma data.</p>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Data do Serviço *</label>
-              <input type="date" id="inputData" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-sm focus:outline-none focus:border-indigo-600 font-mono">
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Hora Início *</label>
+              <input type="time" id="inputHoraInicio" required onchange="calcularHoras()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-sm focus:outline-none focus:border-indigo-600 font-mono text-center">
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Período *</label>
-              <select id="selectPeriodo" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase">
-                <option value="COMERCIAL">COMERCIAL</option>
-                <option value="NOTURNO">NOTURNO</option>
-                <option value="DOBRA">DOBRA (INTEGRAL)</option>
-              </select>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Hora Fim *</label>
+              <input type="time" id="inputHoraFim" required onchange="calcularHoras()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-sm focus:outline-none focus:border-indigo-600 font-mono text-center">
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-2 gap-3 items-end">
             <div>
               <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Função *</label>
               <select id="selectFuncao" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase">
@@ -70,9 +68,11 @@
                 <option value="CAIXA">CAIXA</option>
               </select>
             </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Horas Trabalhadas *</label>
-              <input type="number" id="inputHoras" required min="1" max="24" placeholder="Ex: 8" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-sm focus:outline-none focus:border-indigo-600 font-mono text-center">
+            <div class="relative">
+              <label class="block text-[10px] font-bold text-slate-600 uppercase absolute -top-5 right-0 flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" id="checkDiaria" onchange="toggleDiaria()" class="accent-indigo-600 cursor-pointer"> Diária (8h)
+              </label>
+              <input type="number" id="inputHoras" required step="0.5" readonly placeholder="Auto" class="w-full bg-slate-200 border border-slate-300 rounded-lg p-2 text-slate-800 text-sm font-mono text-center cursor-not-allowed">
             </div>
           </div>
 
@@ -87,7 +87,7 @@
 
           <div>
             <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações da Loja</label>
-            <textarea id="inputObs" rows="2" placeholder="Motivo da cobertura, detalhes do horário fracionado..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-indigo-600"></textarea>
+            <textarea id="inputObs" rows="2" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-xs focus:outline-none focus:border-indigo-600"></textarea>
           </div>
 
           <div class="pt-2">
@@ -98,26 +98,24 @@
         </form>
       </div>
 
-      <!-- COLUNA DIREITA: Histórico de Solicitações da Loja -->
+      <!-- COLUNA DIREITA: Histórico -->
       <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
         <div class="flex justify-between items-center border-b border-slate-200 pb-3">
           <h2 class="font-bold text-slate-900 text-sm">MINHAS SOLICITAÇÕES</h2>
-          <span class="text-xs text-slate-500 font-mono">Últimos 30 dias</span>
         </div>
-
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
               <tr class="border-b border-slate-200 text-slate-500 bg-slate-50">
-                <th class="p-3">DATA SERVIÇO</th>
+                <th class="p-3">DATA</th>
                 <th class="p-3">COLABORADOR</th>
-                <th class="p-3">FUNÇÃO / PERÍODO</th>
+                <th class="p-3">HORÁRIO</th>
                 <th class="p-3 text-center">HORAS</th>
-                <th class="p-3">STATUS (RH)</th>
+                <th class="p-3">STATUS</th>
               </tr>
             </thead>
             <tbody id="tabelaSolicitacoes" class="divide-y divide-slate-100">
-              <tr><td colspan="5" class="p-6 text-center text-slate-400">A tabela de banco de dados ainda será criada na próxima etapa.</td></tr>
+              <!-- Renderizado via JS -->
             </tbody>
           </table>
         </div>
@@ -131,38 +129,158 @@
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    async function carregarFuncionarios() {
-      // Busca todos os funcionários ativos (internos e externos)
-      const { data, error } = await _supabase
-        .from('funcionarios')
-        .select('id, nome_registro, cargo')
-        .eq('status', 'ATIVO')
-        .order('nome_registro');
+    let datasSelecionadas = [];
 
+    async function inicializar() {
+      await carregarFuncionarios();
+      await carregarHistorico();
+    }
+
+    async function carregarFuncionarios() {
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cargo').eq('status', 'ATIVO').order('nome_registro');
       const select = document.getElementById('selectFuncionario');
+      if (!error && data) {
+        select.innerHTML = '<option value="">-- SELECIONE O COLABORADOR --</option>' + 
+          data.map(f => `<option value="${f.id}">${f.nome_registro} ${String(f.cargo).includes('FREELANCE') ? ' ⚡[EXTERNO]' : ''}</option>`).join('');
+      }
+    }
+
+    function formatarDataBR(dataIso) {
+      const partes = dataIso.split('-');
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+
+    function adicionarData() {
+      const input = document.getElementById('inputDataTemp');
+      const erro = document.getElementById('erroDatas');
+      if (!input.value) return;
       
-      if (error) {
-        select.innerHTML = '<option value="">ERRO AO CARREGAR</option>';
+      if (!datasSelecionadas.includes(input.value)) {
+        datasSelecionadas.push(input.value);
+        datasSelecionadas.sort();
+        renderizarDatas();
+        erro.classList.add('hidden');
+      }
+      input.value = '';
+    }
+
+    function removerData(dataIso) {
+      datasSelecionadas = datasSelecionadas.filter(d => d !== dataIso);
+      renderizarDatas();
+    }
+
+    function renderizarDatas() {
+      const div = document.getElementById('listaDatas');
+      div.innerHTML = datasSelecionadas.map(d => `
+        <span class="bg-indigo-100 text-indigo-800 text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+          ${formatarDataBR(d)} <button type="button" onclick="removerData('${d}')" class="text-indigo-500 hover:text-indigo-900">✕</button>
+        </span>
+      `).join('');
+    }
+
+    function toggleDiaria() {
+      const isDiaria = document.getElementById('checkDiaria').checked;
+      const inputHoras = document.getElementById('inputHoras');
+      if (isDiaria) {
+        inputHoras.value = '8';
+      } else {
+        calcularHoras();
+      }
+    }
+
+    function calcularHoras() {
+      if (document.getElementById('checkDiaria').checked) return;
+
+      const inicio = document.getElementById('inputHoraInicio').value;
+      const fim = document.getElementById('inputHoraFim').value;
+      const inputHoras = document.getElementById('inputHoras');
+
+      if (inicio && fim) {
+        let [hIni, mIni] = inicio.split(':').map(Number);
+        let [hFim, mFim] = fim.split(':').map(Number);
+        
+        let minutosTotal = (hFim * 60 + mFim) - (hIni * 60 + mIni);
+        if (minutosTotal < 0) minutosTotal += 24 * 60; // Caso passe da meia noite
+        
+        inputHoras.value = (minutosTotal / 60).toFixed(1);
+      } else {
+        inputHoras.value = '';
+      }
+    }
+
+    async function carregarHistorico() {
+      const { data, error } = await _supabase
+        .from('freelance_solicitacoes')
+        .select(`*, funcionarios(nome_registro)`)
+        .order('data_servico', { ascending: false })
+        .limit(30);
+
+      const tbody = document.getElementById('tabelaSolicitacoes');
+      if (error || !data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Nenhuma solicitação encontrada.</td></tr>`;
         return;
       }
 
-      select.innerHTML = '<option value="">-- SELECIONE O COLABORADOR --</option>' + 
-        data.map(f => {
-          const isExterno = String(f.cargo).includes('FREELANCE') ? ' ⚡ [EXTERNO]' : '';
-          return `<option value="${f.id}">${f.nome_registro}${isExterno}</option>`;
-        }).join('');
+      tbody.innerHTML = data.map(req => {
+        let statusBadge = req.status === 'APROVADA' ? 'bg-emerald-100 text-emerald-700' : 
+                          req.status === 'REJEITADA' ? 'bg-rose-100 text-rose-700' : 
+                          'bg-amber-100 text-amber-700';
+        return `
+          <tr class="hover:bg-slate-50 border-b border-slate-50 last:border-0">
+            <td class="p-3 font-mono font-bold text-slate-700">${formatarDataBR(req.data_servico)}</td>
+            <td class="p-3 text-slate-800 font-bold">${req.funcionarios?.nome_registro || 'N/A'}<br><span class="text-[10px] text-slate-400 font-normal">${req.cargo_exercido}</span></td>
+            <td class="p-3 font-mono text-slate-600 text-xs text-center">${req.hora_inicio.substring(0,5)} as ${req.hora_fim.substring(0,5)}</td>
+            <td class="p-3 font-mono text-indigo-700 font-bold text-center">${req.horas_trabalhadas}h</td>
+            <td class="p-3 text-center"><span class="${statusBadge} px-2 py-0.5 rounded text-[10px] font-bold">${req.status}</span></td>
+          </tr>
+        `;
+      }).join('');
     }
 
     async function salvarSolicitacao(e) {
       e.preventDefault();
       
-      // O código de INSERT falhará até criarmos a tabela `freelance_solicitacoes` via SQL.
-      // Está preparado aqui para funcionar assim que o banco estiver pronto.
-      alert("Aviso: O layout está finalizado! Na próxima etapa criaremos a tabela no banco de dados para salvar esta solicitação.");
+      if (datasSelecionadas.length === 0) {
+        document.getElementById('erroDatas').classList.remove('hidden');
+        return;
+      }
+
+      const btn = document.getElementById('btnSalvar');
+      btn.innerText = 'ENVIANDO...';
+      btn.disabled = true;
+
+      const baseData = {
+        funcionario_id: document.getElementById('selectFuncionario').value,
+        hora_inicio: document.getElementById('inputHoraInicio').value,
+        hora_fim: document.getElementById('inputHoraFim').value,
+        cargo_exercido: document.getElementById('selectFuncao').value,
+        horas_trabalhadas: parseFloat(document.getElementById('inputHoras').value),
+        forma_pagamento: document.getElementById('selectPagamento').value,
+        observacao_lider: document.getElementById('inputObs').value,
+        loja_solicitante: 'LOJA TESTE', // Futuramente virá da sessão do usuário
+        status: 'PENDENTE'
+      };
+
+      // Cria um array de inserções (uma linha para cada data)
+      const payload = datasSelecionadas.map(data_servico => ({ ...baseData, data_servico }));
+
+      const { error } = await _supabase.from('freelance_solicitacoes').insert(payload);
+
+      if (error) {
+        alert('Erro ao enviar solicitação: ' + error.message);
+      } else {
+        document.getElementById('formFreelance').reset();
+        datasSelecionadas = [];
+        renderizarDatas();
+        await carregarHistorico();
+        alert('Solicitação(ões) enviada(s) com sucesso para o RH!');
+      }
+
+      btn.innerText = 'ENVIAR PARA APROVAÇÃO (RH)';
+      btn.disabled = false;
     }
 
-    // Inicialização
-    carregarFuncionarios();
+    inicializar();
   </script>
 </body>
 </html>
