@@ -9,7 +9,6 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
 
-  <!-- Proteção de Acesso -->
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
       alert('Acesso negado! Faça login primeiro.');
@@ -19,7 +18,6 @@
 
   <div class="max-w-7xl mx-auto space-y-6">
     
-    <!-- Cabeçalho Fixo (Sticky Header) - Apenas com Painel Principal -->
     <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">GESTÃO DE COLABORADORES</h1>
@@ -30,10 +28,9 @@
       </div>
     </div>
 
-    <!-- Grid Principal -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- Coluna Esquerda: Formulário de Edição / Cadastro -->
+      <!-- Coluna Esquerda: Formulário -->
       <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm h-fit">
         <h2 id="tituloForm" class="font-bold text-emerald-700 text-sm border-b border-slate-100 pb-2">ADICIONAR COLABORADOR</h2>
 
@@ -50,13 +47,25 @@
             <input type="text" id="inputUsuarioAlpha7" placeholder="Ex: ALINE SILVA - 10" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
           </div>
 
+          <!-- NOVO: Salário e Admissão -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Salário Base (R$) *</label>
+              <input type="number" step="0.01" id="inputSalarioBase" required placeholder="0.00" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Admissão *</label>
+              <input type="date" id="inputDataContratacao" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono text-slate-600">
+            </div>
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Cargo *</label>
               <input type="text" id="inputCargo" required placeholder="Ex: CAIXA" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Matrícula (Automática)</label>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Matrícula</label>
               <input type="text" id="inputMatricula" readonly placeholder="Auto" class="w-full bg-slate-100 border border-slate-300 rounded-lg p-2.5 text-slate-600 text-sm focus:outline-none font-mono cursor-not-allowed">
             </div>
           </div>
@@ -86,7 +95,12 @@
             </select>
           </div>
 
-          <div class="flex gap-2 pt-2">
+          <div class="pt-2 border-t border-slate-100">
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações (Texto Livre)</label>
+            <textarea id="inputObservacoes" rows="2" placeholder="Detalhes adicionais..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600"></textarea>
+          </div>
+
+          <div class="flex gap-2 pt-1">
             <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer">
               ✓ ADICIONAR COLABORADOR
             </button>
@@ -94,40 +108,28 @@
               Cancelar
             </button>
           </div>
-
-          <!-- Caixa de Texto Livre -->
-          <div class="pt-3 border-t border-slate-100 mt-2">
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações / Detalhes (Texto Livre)</label>
-            <textarea id="inputObservacoes" rows="3" placeholder="Insira detalhes adicionais do funcionário..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600"></textarea>
-          </div>
         </form>
       </div>
 
-      <!-- Coluna Direita: Listagem de Colaboradores com Filtros Avançados -->
+      <!-- Coluna Direita: Listagem -->
       <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
         
         <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center border-b border-slate-200 pb-3 gap-3">
           <h2 class="font-bold text-slate-900 text-sm">COLABORADORES CADASTRADOS</h2>
           
-          <!-- Área de Filtros -->
           <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-end">
-            
-            <!-- Filtro Nome (Novo) -->
             <input type="text" id="filtroNome" oninput="renderizarTabela()" placeholder="NOME (MÍN. 3 LETRAS)" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium uppercase max-w-[180px]">
 
-            <!-- Filtro Status -->
             <select id="filtroStatus" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium">
               <option value="ATIVO">ATIVOS</option>
               <option value="INATIVO">INATIVOS</option>
               <option value="TODOS">TODOS OS STATUS</option>
             </select>
 
-            <!-- Filtro Empresa -->
             <select id="filtroEmpresa" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[180px]">
               <option value="">TODAS AS EMPRESAS</option>
             </select>
 
-            <!-- Filtro Loja -->
             <select id="filtroLoja" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[130px]">
               <option value="">TODAS AS LOJAS</option>
             </select>
@@ -141,8 +143,8 @@
             <thead>
               <tr class="border-b border-slate-200 text-slate-500">
                 <th class="p-3">MAT.</th>
-                <th class="p-3">NOME / USUÁRIO</th>
-                <th class="p-3">CARGO</th>
+                <th class="p-3 w-48">NOME / USUÁRIO</th>
+                <th class="p-3">CARGO / SALÁRIO</th>
                 <th class="p-3">EMPRESA / LOJA / CNPJ</th>
                 <th class="p-3">STATUS</th>
                 <th class="p-3 text-right">AÇÕES</th>
@@ -158,7 +160,6 @@
     </div>
   </div>
 
-  <!-- Scripts -->
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
@@ -179,7 +180,6 @@
       if (!error) {
         listaGlobalEmpresas = data || [];
         
-        // Select do Formulário
         const selectForm = document.getElementById('selectEmpresa');
         selectForm.innerHTML = '<option value="">-- SELECIONE A EMPRESA --</option>' + 
           listaGlobalEmpresas.map(e => `
@@ -188,7 +188,6 @@
             </option>
           `).join('');
 
-        // Select do Filtro Superior
         const filtroEmpresa = document.getElementById('filtroEmpresa');
         filtroEmpresa.innerHTML = '<option value="">TODAS AS EMPRESAS</option>' + 
           listaGlobalEmpresas.map(e => `
@@ -202,7 +201,6 @@
       if (!error) {
         listaGlobalLojas = data || [];
 
-        // Select do Filtro Superior de Lojas
         const filtroLoja = document.getElementById('filtroLoja');
         filtroLoja.innerHTML = '<option value="">TODAS AS LOJAS</option>' + 
           listaGlobalLojas.map(l => {
@@ -249,7 +247,6 @@
         selectLoja.value = lojaValorParaSelecionar;
       }
 
-      // Geração automática da matrícula para novos cadastros por empresa
       if (!funcId) {
         const cnpjLimpo = cnpj.replace(/\D/g, '');
         const funcDaEmpresa = listaGlobalFuncionarios.filter(f => {
@@ -279,6 +276,13 @@
       }
     }
 
+    function formatarDataBR(dataIso) {
+      if (!dataIso) return '-';
+      const partes = dataIso.split('-');
+      if (partes.length !== 3) return dataIso;
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+
     function renderizarTabela() {
       const nomeFiltro = document.getElementById('filtroNome').value.toUpperCase().trim();
       const statusFiltro = document.getElementById('filtroStatus').value;
@@ -287,17 +291,14 @@
 
       let dados = listaGlobalFuncionarios;
 
-      // Filtro por Nome (só atua se tiver 3 ou mais caracteres)
       if (nomeFiltro.length >= 3) {
         dados = dados.filter(f => String(f.nome_registro || '').toUpperCase().includes(nomeFiltro));
       }
 
-      // Filtro por Status
       if (statusFiltro !== 'TODOS') {
         dados = dados.filter(f => String(f.status || 'ATIVO').toUpperCase() === statusFiltro);
       }
 
-      // Filtro por Empresa (CNPJ exato)
       if (cnpjFiltro) {
         const cnpjFiltroLimpo = cnpjFiltro.replace(/\D/g, '');
         dados = dados.filter(f => {
@@ -308,7 +309,6 @@
         });
       }
 
-      // Filtro por Loja
       if (lojaFiltro) {
         dados = dados.filter(f => String(f.loja_trabalha || '').toUpperCase().includes(lojaFiltro.toUpperCase()));
       }
@@ -348,10 +348,8 @@
           if (empMatch) cnpjEmpresa = empMatch.cnpj || '';
         }
 
-        // Ícone indicador visual se o funcionário possuir observações
-        const iconeObs = f.observacoes && f.observacoes.trim() !== '' 
-          ? `<span title="Possui observações" class="ml-1 cursor-help">📝</span>` 
-          : '';
+        const iconeObs = f.observacoes && f.observacoes.trim() !== '' ? `<span title="Possui observações" class="ml-1 cursor-help">📝</span>` : '';
+        const salFormatado = parseFloat(f.salario_base || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2});
 
         return `
           <tr class="hover:bg-slate-50 transition">
@@ -359,12 +357,16 @@
             <td class="p-3">
               <div class="font-bold text-slate-900">${f.nome_registro} ${iconeObs}</div>
               <div class="text-[10px] text-slate-400 font-mono">${f.usuario_alpha7 || ''}</div>
+              <div class="text-[10px] text-emerald-700 mt-0.5">Admissão: ${formatarDataBR(f.data_contratacao)}</div>
             </td>
-            <td class="p-3 text-slate-700">${f.cargo || '-'}</td>
             <td class="p-3">
-              <div class="text-xs text-slate-700 font-mono">${f.empresa_registro || '-'}</div>
-              <div class="text-[11px] text-emerald-700 font-medium">Loja: ${nomeLoja}</div>
-              <div class="text-[11px] text-slate-400 font-mono">CNPJ: ${cnpjEmpresa || 'Não informado'}</div>
+              <div class="text-slate-700 font-medium">${f.cargo || '-'}</div>
+              <div class="text-[11px] text-slate-500 font-mono mt-0.5">R$ ${salFormatado}</div>
+            </td>
+            <td class="p-3">
+              <div class="text-[11px] text-slate-700 font-mono truncate max-w-[200px]" title="${f.empresa_registro}">${f.empresa_registro || '-'}</div>
+              <div class="text-[10px] text-emerald-700 font-medium">Loja: ${nomeLoja}</div>
+              <div class="text-[10px] text-slate-400 font-mono">CNPJ: ${cnpjEmpresa || 'Não informado'}</div>
             </td>
             <td class="p-3">
               <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${statusStr}</span>
@@ -384,11 +386,8 @@
 
       if (confirm(`Deseja realmente ${acaoTexto} este colaborador?`)) {
         const { error } = await _supabase.from('funcionarios').update({ status: novoStatus }).eq('id', id);
-        if (error) {
-          alert('Erro ao alterar status: ' + error.message);
-        } else {
-          carregarFuncionarios();
-        }
+        if (error) alert('Erro ao alterar status: ' + error.message);
+        else carregarFuncionarios();
       }
     }
 
@@ -403,22 +402,17 @@
       document.getElementById('inputCargo').value = f.cargo || '';
       document.getElementById('inputMatricula').value = f.matricula || '';
       document.getElementById('inputObservacoes').value = f.observacoes || '';
+      document.getElementById('inputSalarioBase').value = f.salario_base || '';
+      document.getElementById('inputDataContratacao').value = f.data_contratacao || '';
 
       let empresaMatch = null;
-
-      if (f.empresa_id) {
-        empresaMatch = listaGlobalEmpresas.find(e => String(e.id) === String(f.empresa_id));
-      }
+      if (f.empresa_id) empresaMatch = listaGlobalEmpresas.find(e => String(e.id) === String(f.empresa_id));
       if (!empresaMatch && f.cnpj) {
         const cnpjLimpo = String(f.cnpj).replace(/\D/g, '');
         empresaMatch = listaGlobalEmpresas.find(e => (e.cnpj || '').replace(/\D/g, '') === cnpjLimpo);
       }
-      if (!empresaMatch && f.empresa_registro) {
-        empresaMatch = listaGlobalEmpresas.find(e => e.cnpj && f.empresa_registro.includes(e.cnpj));
-      }
-      if (!empresaMatch && f.empresa_registro) {
-        empresaMatch = listaGlobalEmpresas.find(e => f.empresa_registro.includes(e.razao_social));
-      }
+      if (!empresaMatch && f.empresa_registro) empresaMatch = listaGlobalEmpresas.find(e => e.cnpj && f.empresa_registro.includes(e.cnpj));
+      if (!empresaMatch && f.empresa_registro) empresaMatch = listaGlobalEmpresas.find(e => f.empresa_registro.includes(e.razao_social));
 
       if (empresaMatch) {
         document.getElementById('selectEmpresa').value = empresaMatch.id;
@@ -428,9 +422,7 @@
           const lNome = String(l.nome_loja || l.loja || '').trim();
           return lNome.includes(String(lojaAlvo)) || lNome.endsWith(String(lojaAlvo));
         });
-        if (lojaObj) {
-          lojaAlvo = lojaObj.nome_loja || lojaObj.loja;
-        }
+        if (lojaObj) lojaAlvo = lojaObj.nome_loja || lojaObj.loja;
 
         aoSelecionarEmpresa(lojaAlvo);
       } else {
@@ -448,6 +440,8 @@
       document.getElementById('funcId').value = '';
       document.getElementById('inputMatricula').value = '';
       document.getElementById('inputObservacoes').value = '';
+      document.getElementById('inputSalarioBase').value = '';
+      document.getElementById('inputDataContratacao').value = '';
       document.getElementById('infoCnpj').innerText = '-';
       document.getElementById('infoFantasia').innerText = '-';
       document.getElementById('selectLoja').innerHTML = '<option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>';
@@ -463,10 +457,11 @@
       const cargo = document.getElementById('inputCargo').value.toUpperCase();
       const matricula = document.getElementById('inputMatricula').value;
       const observacoes = document.getElementById('inputObservacoes').value;
+      const salario_base = parseFloat(document.getElementById('inputSalarioBase').value) || 0;
+      const data_contratacao = document.getElementById('inputDataContratacao').value || null;
       
       const selectEmpresa = document.getElementById('selectEmpresa');
       const empresa_registro = selectEmpresa.selectedOptions[0]?.text || '';
-      
       const loja_trabalha = document.getElementById('selectLoja').value || null;
       const cnpj = selectEmpresa.selectedOptions[0]?.getAttribute('data-cnpj') || null;
 
@@ -478,7 +473,9 @@
         empresa_registro,
         loja_trabalha,
         cnpj,
-        observacoes
+        observacoes,
+        salario_base,
+        data_contratacao
       };
 
       if (id) {
@@ -494,28 +491,6 @@
     }
 
     inicializar();
-  </script>
-  <!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
-  <script>
-    let tempoInatividade;
-    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
-
-    function resetarTemporizador() {
-      clearTimeout(tempoInatividade);
-      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
-    }
-
-    function fazerLogoutPorInatividade() {
-      localStorage.removeItem('usuario_drogarema');
-      alert('Sessão expirada por inatividade. Faça login novamente.');
-      window.location.href = 'login.html';
-    }
-
-    window.onload = resetarTemporizador;
-    window.onmousemove = resetarTemporizador;
-    window.onkeypress = resetarTemporizador;
-    window.onclick = resetarTemporizador;
-    window.onscroll = resetarTemporizador;
   </script>
 </body>
 </html>
