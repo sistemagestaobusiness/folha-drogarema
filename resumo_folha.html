@@ -16,6 +16,9 @@
     .shadow-fixa { box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.05); }
     /* Elevação de prioridade para a interseção (Canto superior esquerdo) */
     .z-canto { z-index: 60 !important; }
+    /* Esconder setinhas do input number */
+    input[type="number"]::-webkit-inner-spin-button, 
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
@@ -35,7 +38,7 @@
       <p class="text-xs text-slate-500 font-medium">Competência Ativa: <span id="labelCompetencia" class="text-emerald-600 font-bold font-mono">...</span></p>
     </div>
     
-    <div class="flex items-center gap-3 w-full md:w-auto">
+    <div class="flex items-center gap-3 w-full md:w-auto flex-wrap">
       <!-- Seletor de Agrupamento -->
       <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg p-1">
         <span class="text-[10px] text-slate-500 font-bold uppercase px-2">Agrupar:</span>
@@ -44,6 +47,10 @@
           <option value="empresa">POR EMPRESA</option>
         </select>
       </div>
+
+      <button onclick="abrirRelatoriosFinanceiros()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold text-xs transition shadow-sm cursor-pointer whitespace-nowrap">
+        📄 EXTRATOS FINANCEIROS
+      </button>
 
       <button onclick="window.print()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition shadow-sm cursor-pointer whitespace-nowrap">
         🖨️ IMPRIMIR
@@ -60,12 +67,40 @@
       <div class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
         <table class="w-full text-left text-xs border-collapse">
           <thead id="tabelaCabecalho" class="sticky top-0 z-50 bg-slate-50 shadow-sm">
-            <!-- Gerado via JS (Categorias, Nomes dos Eventos e TOTAL GERAL) -->
+            <!-- Gerado via JS -->
           </thead>
           <tbody id="tabelaCorpo" class="divide-y divide-slate-100">
             <tr><td class="p-8 text-center text-slate-400 font-mono">Sincronizando base de dados e cruzando eventos...</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Relatórios Financeiros -->
+  <div id="modalRelatorios" class="hidden fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="bg-slate-800 p-4 flex justify-between items-center">
+        <h2 class="text-white font-bold text-lg">📄 EXTRATOS PARA O FINANCEIRO</h2>
+        <button onclick="fecharRelatorios()" class="text-slate-400 hover:text-white font-bold text-xl cursor-pointer">✕</button>
+      </div>
+      
+      <div class="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50">
+        <!-- Relatório 1: LÍQUIDO BANCO -->
+        <div class="space-y-2">
+          <h3 class="font-bold text-emerald-800 text-sm border-b border-emerald-200 pb-2">💳 PAGAMENTOS VIA BANCO</h3>
+          <p class="text-[10px] text-slate-500 mb-2">Empresa | Colaborador | Valor Banco</p>
+          <textarea id="txtRelatorioBanco" readonly class="w-full h-96 p-3 bg-white border border-slate-300 rounded-lg text-[11px] font-mono text-slate-700 focus:outline-none focus:border-emerald-500 shadow-inner" style="resize: none;"></textarea>
+          <button onclick="copiarTexto('txtRelatorioBanco')" class="w-full py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-xs rounded border border-emerald-300 transition cursor-pointer">Copiar Pagamentos Bancários</button>
+        </div>
+
+        <!-- Relatório 2: DINHEIRO FÍSICO -->
+        <div class="space-y-2">
+          <h3 class="font-bold text-amber-800 text-sm border-b border-amber-200 pb-2">💵 SEPARAÇÃO DE DINHEIRO</h3>
+          <p class="text-[10px] text-slate-500 mb-2">Colaborador | Valor Físico</p>
+          <textarea id="txtRelatorioDinheiro" readonly class="w-full h-96 p-3 bg-white border border-slate-300 rounded-lg text-[11px] font-mono text-slate-700 focus:outline-none focus:border-amber-500 shadow-inner" style="resize: none;"></textarea>
+          <button onclick="copiarTexto('txtRelatorioDinheiro')" class="w-full py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold text-xs rounded border border-amber-300 transition cursor-pointer">Copiar Lista de Dinheiro</button>
+        </div>
       </div>
     </div>
   </div>
@@ -79,10 +114,13 @@
     let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
     let competenciaRegra = '';
     
-    // Variáveis Globais para não recarregar do banco ao trocar o agrupamento
+    // Variáveis Globais
     let glob_colunas = { cc: [], cd: [], ncc: [], ncd: [] };
     let glob_dadosFunc = [];
     let glob_grandTotals = { cc: {}, cd: {}, ncc: {}, ncd: {}, tot_cc: 0, tot_cd: 0, tot_ncc: 0, tot_ncd: 0 };
+    
+    // Armazena os pagamentos em dinheiro digitados em tempo real { id_funcionario : valor }
+    let valoresDinheiro = {};
 
     function converterCompetenciaParaMMYYYY(texto) {
       const mesesMap = {
@@ -105,12 +143,14 @@
       return parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // Inicializa estrutura zerada de totais
+    function formatarMoedaSimples(valor) {
+      return parseFloat(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
     function initTotals() {
       return { cc: {}, cd: {}, ncc: {}, ncd: {}, tot_cc: 0, tot_cd: 0, tot_ncc: 0, tot_ncd: 0 };
     }
 
-    // Acumula valores na variável de totais
     function accumulate(totObj, f) {
       glob_colunas.cc.forEach(c => totObj.cc[c] = (totObj.cc[c] || 0) + (f.cc[c] || 0));
       totObj.tot_cc += f.tot_cc;
@@ -160,7 +200,6 @@
             const f = funcionarios.find(x => String(x.id) === String(fId));
             if (!f) return;
 
-            // Define LOJA
             let nomeLoja = f.loja_trabalha || '-';
             const numLojaStr = String(f.loja_trabalha).trim();
             const lojaEncontrada = lojas.find(l => {
@@ -169,7 +208,6 @@
             });
             if (lojaEncontrada) nomeLoja = lojaEncontrada.nome_loja || lojaEncontrada.loja;
 
-            // Define EMPRESA
             let empresaMatch = null;
             if (f.empresa_id) {
               empresaMatch = empresas.find(e => String(e.id) === String(f.empresa_id));
@@ -191,6 +229,7 @@
             }
 
             dadosFuncMap[fId] = {
+              id: f.id,
               nome: f.nome_registro,
               loja: nomeLoja.toUpperCase(),
               empresa: nomeEmpresa.toUpperCase(),
@@ -241,7 +280,7 @@
 
         glob_dadosFunc = Object.values(dadosFuncMap);
 
-        // Calcula o TOTAL GERAL
+        // Calcula o TOTAL GERAL inicial
         glob_grandTotals = initTotals();
         glob_dadosFunc.forEach(f => accumulate(glob_grandTotals, f));
 
@@ -255,14 +294,10 @@
     }
 
     function renderizarCabecalho() {
-      // Linha 1: Super Categorias
       let tr1 = `<tr class="text-[9px] uppercase tracking-wider text-slate-500">`;
-      // Linha 2: Nomes dos Eventos
       let tr2 = `<tr class="text-[9px] uppercase tracking-wider text-slate-500 border-b border-slate-300">`;
-      // Linha 3: TOTAL GERAL (A CEREJA DO BOLO)
       let tr3 = `<tr class="text-[10px] bg-slate-100 font-bold text-slate-800 border-b-2 border-slate-300 shadow-sm">`;
 
-      // Colunas Congeladas (Larguras exatas) -> Totalizando 420px de congelamento (180 + 120 + 120)
       const styC1 = `sticky z-canto bg-slate-50 border-r border-slate-200 shadow-fixa align-bottom`; 
       const widthC1 = `left: 0; min-width: 180px; max-width: 180px;`;
       const styC2 = `sticky z-canto bg-slate-50 border-r border-slate-200 shadow-fixa align-bottom`; 
@@ -274,12 +309,11 @@
       tr1 += `<th class="${styC2} py-2 px-3" style="${widthC2}" rowspan="2">Empresa</th>`;
       tr1 += `<th class="${styC3} py-2 px-3" style="${widthC3}" rowspan="2">Loja</th>`;
 
-      // Células do TOTAL GERAL nas colunas fixas
       tr3 += `<th class="py-2 px-3 sticky z-canto bg-slate-200 border-r border-slate-300 shadow-fixa" style="${widthC1}">TOTAL GERAL</th>`;
       tr3 += `<th class="py-2 px-3 sticky z-canto bg-slate-200 border-r border-slate-300 shadow-fixa" style="${widthC2}">-</th>`;
       tr3 += `<th class="py-2 px-3 sticky z-canto bg-slate-200 border-r border-slate-400 shadow-fixa" style="${widthC3}">-</th>`;
 
-      // --- CRÉDITOS CONTÁBEIS ---
+      // CRÉDITOS CONTÁBEIS
       if (glob_colunas.cc.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-emerald-700 bg-emerald-50/80 border-b border-emerald-100" colspan="${glob_colunas.cc.length}">Proventos Contábeis (+)</th>`;
         glob_colunas.cc.forEach(c => {
@@ -290,7 +324,7 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-emerald-800 bg-emerald-100/80 border-l border-emerald-200 align-bottom" rowspan="2">Subt. Créd.</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-emerald-900 bg-emerald-200 border-l border-emerald-300">${formatarMoeda(glob_grandTotals.tot_cc)}</th>`;
 
-      // --- DÉBITOS CONTÁBEIS ---
+      // DÉBITOS CONTÁBEIS
       if (glob_colunas.cd.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-rose-700 bg-rose-50/80 border-b border-rose-100 border-l border-slate-200" colspan="${glob_colunas.cd.length}">Descontos Contábeis (-)</th>`;
         glob_colunas.cd.forEach(c => {
@@ -302,11 +336,12 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-rose-800 bg-rose-100/80 border-l border-rose-200 align-bottom" rowspan="2">Subt. Déb.</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-rose-900 bg-rose-200 border-l border-rose-300">${formatarMoeda(glob_grandTotals.tot_cd)}</th>`;
 
-      // TOTAL LÍQ CONTÁBIL
+      // LÍQ CONTÁBIL
+      const liqContTotal = glob_grandTotals.tot_cc - glob_grandTotals.tot_cd;
       tr1 += `<th class="py-2 px-3 text-right font-black text-slate-800 bg-slate-200/90 border-l border-r border-slate-300 align-bottom" rowspan="2">LÍQ. CONTÁBIL</th>`;
-      tr3 += `<th class="py-2 px-3 text-right text-slate-900 bg-slate-300/80 border-l border-r border-slate-400">${formatarMoeda(glob_grandTotals.tot_cc - glob_grandTotals.tot_cd)}</th>`;
+      tr3 += `<th class="py-2 px-3 text-right text-slate-900 bg-slate-300/80 border-l border-r border-slate-400">${formatarMoeda(liqContTotal)}</th>`;
 
-      // --- CRÉDITOS NÃO CONTÁBEIS ---
+      // CRÉDITOS NÃO CONTÁBEIS
       if (glob_colunas.ncc.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-indigo-700 bg-indigo-50/80 border-b border-indigo-100" colspan="${glob_colunas.ncc.length}">Proventos N. Cont. (+)</th>`;
         glob_colunas.ncc.forEach(c => {
@@ -317,7 +352,7 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-indigo-800 bg-indigo-100/80 border-l border-indigo-200 align-bottom" rowspan="2">Subt. Créd. NC</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-indigo-900 bg-indigo-200 border-l border-indigo-300">${formatarMoeda(glob_grandTotals.tot_ncc)}</th>`;
 
-      // --- DÉBITOS NÃO CONTÁBEIS ---
+      // DÉBITOS NÃO CONTÁBEIS
       if (glob_colunas.ncd.length > 0) {
         tr1 += `<th class="py-2 px-2 text-center font-bold text-orange-700 bg-orange-50/80 border-b border-orange-100 border-l border-slate-200" colspan="${glob_colunas.ncd.length}">Descontos N. Cont. (-)</th>`;
         glob_colunas.ncd.forEach(c => {
@@ -328,23 +363,33 @@
       tr1 += `<th class="py-2 px-3 text-right font-black text-orange-800 bg-orange-100/80 border-l border-orange-200 align-bottom" rowspan="2">Subt. Déb. NC</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-orange-900 bg-orange-200 border-l border-orange-300">${formatarMoeda(glob_grandTotals.tot_ncd)}</th>`;
 
-      // TOTAL LÍQ NÃO CONTÁBIL
+      // LÍQ NÃO CONTÁBIL
       tr1 += `<th class="py-2 px-3 text-right font-black text-slate-800 bg-slate-200/90 border-l border-r border-slate-300 align-bottom" rowspan="2">LÍQ. NÃO CONT.</th>`;
       tr3 += `<th class="py-2 px-3 text-right text-slate-900 bg-slate-300/80 border-l border-r border-slate-400">${formatarMoeda(glob_grandTotals.tot_ncc - glob_grandTotals.tot_ncd)}</th>`;
 
       // LÍQUIDO GERAL
       tr1 += `<th class="py-2 px-4 text-right font-black text-emerald-900 bg-emerald-200 tracking-widest text-[11px] align-bottom shadow-sm" rowspan="2">LÍQUIDO GERAL</th>`;
-      const liqGerTotal = (glob_grandTotals.tot_cc - glob_grandTotals.tot_cd) + (glob_grandTotals.tot_ncc - glob_grandTotals.tot_ncd);
-      tr3 += `<th class="py-2 px-4 text-right text-emerald-950 font-black bg-emerald-300 text-[12px] shadow-sm">${formatarMoeda(liqGerTotal)}</th>`;
+      const liqGerTotal = liqContTotal + (glob_grandTotals.tot_ncc - glob_grandTotals.tot_ncd);
+      tr3 += `<th class="py-2 px-4 text-right text-emerald-950 font-black bg-emerald-300 text-[12px] shadow-sm border-r-2 border-emerald-400">${formatarMoeda(liqGerTotal)}</th>`;
+
+      // --- NOVO: MÓDULO DE PAGAMENTO (FINANCEIRO) ---
+      tr1 += `<th class="py-2 px-2 text-center font-black text-sky-900 bg-sky-200/80 border-b border-sky-300 border-l-2 border-white" colspan="3">MÓDULO FINANCEIRO</th>`;
+      
+      tr2 += `<th class="py-1 px-3 text-right bg-sky-100 text-sky-800 font-bold border-l-2 border-white" title="Líquido Geral - Líquido Contábil">DIF. (POR FORA)</th>`;
+      tr2 += `<th class="py-1 px-3 text-center bg-amber-100 text-amber-800 font-bold border-l border-slate-200">PGTO EM DINHEIRO</th>`;
+      tr2 += `<th class="py-1 px-3 text-right bg-indigo-100 text-indigo-800 font-bold border-l border-slate-200">LÍQUIDO BANCO</th>`;
+
+      tr3 += `<th class="py-2 px-3 text-right text-sky-900 bg-sky-200 border-l-2 border-white">${formatarMoeda(liqGerTotal - liqContTotal)}</th>`;
+      tr3 += `<th class="py-2 px-3 text-center text-amber-900 bg-amber-200 border-l border-slate-200" id="totGeralDinheiro">R$ 0,00</th>`;
+      tr3 += `<th class="py-2 px-3 text-right text-indigo-900 bg-indigo-200 border-l border-slate-200" id="totGeralBanco">${formatarMoeda(liqGerTotal)}</th>`;
 
       tr1 += `</tr>`; tr2 += `</tr>`; tr3 += `</tr>`;
       document.getElementById('tabelaCabecalho').innerHTML = tr1 + tr2 + tr3;
     }
 
     function renderizarTabelaCorpo() {
-      const groupBy = document.getElementById('agruparPor').value; // 'loja' ou 'empresa'
+      const groupBy = document.getElementById('agruparPor').value; 
       
-      // Ordenação: 1º Pelo Grupo, 2º Pelo Nome
       glob_dadosFunc.sort((a, b) => {
         const ga = groupBy === 'loja' ? a.loja : a.empresa;
         const gb = groupBy === 'loja' ? b.loja : b.empresa;
@@ -367,13 +412,12 @@
       glob_dadosFunc.forEach((f, idx) => {
         const groupVal = groupBy === 'loja' ? f.loja : f.empresa;
 
-        // Imprime Subtotal do Grupo Anterior se o grupo mudou
         if (currentGroup !== null && currentGroup !== groupVal) {
           tbodyHtml += gerarHTMLSubtotal(currentGroup, groupTotals, wC1, wC2, wC3);
-          groupTotals = initTotals(); // reseta contadores
+          groupTotals = initTotals(); 
         }
         currentGroup = groupVal;
-        accumulate(groupTotals, f); // Acumula no grupo atual
+        accumulate(groupTotals, f); 
 
         let tr = `<tr class="hover:bg-slate-50 text-[10px] text-slate-700 font-mono transition">`;
         
@@ -381,38 +425,56 @@
         tr += `<td class="py-2 px-3 whitespace-nowrap font-sans text-slate-500 truncate ${styLeft2}" style="${wC2}" title="${f.empresa}">${f.empresa}</td>`;
         tr += `<td class="py-2 px-3 whitespace-nowrap font-sans text-slate-500 truncate ${styLeft3}" style="${wC3}" title="${f.loja}">${f.loja}</td>`;
 
-        // CC
+        // Contábeis
         glob_colunas.cc.forEach(c => tr += `<td class="py-2 px-3 text-right whitespace-nowrap bg-emerald-50/20">${formatarMoeda(f.cc[c])}</td>`);
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-emerald-700 bg-emerald-50/80 border-l border-emerald-100">${formatarMoeda(f.tot_cc)}</td>`;
-        // CD
         glob_colunas.cd.forEach(c => tr += `<td class="py-2 px-3 text-right whitespace-nowrap text-rose-600 bg-rose-50/20 border-l border-slate-100">${formatarMoeda(f.cd[c])}</td>`);
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-rose-700 bg-rose-50/80 border-l border-rose-100">${formatarMoeda(f.tot_cd)}</td>`;
-        // Liq Cont
+        
         const liqCont = f.tot_cc - f.tot_cd;
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-slate-800 bg-slate-100 border-l-2 border-r border-slate-200">${formatarMoeda(liqCont)}</td>`;
-        // NCC
+        
+        // Não Contábeis
         glob_colunas.ncc.forEach(c => tr += `<td class="py-2 px-3 text-right whitespace-nowrap bg-indigo-50/20">${formatarMoeda(f.ncc[c])}</td>`);
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-indigo-700 bg-indigo-50/80 border-l border-indigo-100">${formatarMoeda(f.tot_ncc)}</td>`;
-        // NCD
         glob_colunas.ncd.forEach(c => tr += `<td class="py-2 px-3 text-right whitespace-nowrap text-orange-600 bg-orange-50/20 border-l border-slate-100">${formatarMoeda(f.ncd[c])}</td>`);
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-orange-700 bg-orange-50/80 border-l border-orange-100">${formatarMoeda(f.tot_ncd)}</td>`;
-        // Liq NC
+        
         const liqNaoCont = f.tot_ncc - f.tot_ncd;
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-slate-800 bg-slate-100 border-l-2 border-r border-slate-200">${formatarMoeda(liqNaoCont)}</td>`;
-        // Geral
+        
         const liqGeral = liqCont + liqNaoCont;
-        tr += `<td class="py-2 px-4 text-right whitespace-nowrap font-black text-emerald-900 bg-emerald-100/70 text-[11px] shadow-sm">${formatarMoeda(liqGeral)}</td>`;
+        tr += `<td class="py-2 px-4 text-right whitespace-nowrap font-black text-emerald-900 bg-emerald-100/70 text-[11px] border-r-2 border-emerald-300">${formatarMoeda(liqGeral)}</td>`;
+
+        // --- MÓDULO FINANCEIRO (LINHAS) ---
+        const difVal = liqGeral - liqCont;
+        const inputDinheiroVal = valoresDinheiro[f.id] || 0;
+        const liqBancoVal = liqGeral - inputDinheiroVal;
+
+        tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-sky-800 bg-sky-50/60 border-l-2 border-white">${formatarMoeda(difVal)}</td>`;
+        
+        // Input interativo para dinheiro
+        tr += `
+          <td class="py-1 px-2 text-center whitespace-nowrap bg-amber-50/40 border-l border-slate-200">
+            <input type="number" step="0.01" value="${inputDinheiroVal > 0 ? inputDinheiroVal : ''}" placeholder="0.00"
+                   class="w-20 text-right font-mono font-bold text-xs p-1 border border-amber-300 bg-white rounded focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                   oninput="calcularFinanceiro('${f.id}', this.value, ${liqGeral})">
+          </td>
+        `;
+        
+        // Retorno automático do banco
+        tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-black text-indigo-900 bg-indigo-50/80 border-l border-slate-200" id="banco-${f.id}">${formatarMoeda(liqBancoVal)}</td>`;
 
         tr += `</tr>`;
         tbodyHtml += tr;
 
-        // Imprime Subtotal do Último Grupo
         if (idx === glob_dadosFunc.length - 1) {
           tbodyHtml += gerarHTMLSubtotal(currentGroup, groupTotals, wC1, wC2, wC3);
         }
       });
 
       document.getElementById('tabelaCorpo').innerHTML = tbodyHtml;
+      recalcularTotaisInterface(); // Garante o recálculo inicial
     }
 
     function gerarHTMLSubtotal(groupName, t, wC1, wC2, wC3) {
@@ -434,7 +496,8 @@
       glob_colunas.cd.forEach(c => html += `<td class="py-2 px-3 text-right text-rose-800 bg-rose-50 border-l border-slate-200">${formatarMoeda(t.cd[c])}</td>`);
       html += `<td class="py-2 px-3 text-right text-rose-900 bg-rose-100/80 border-l border-rose-200">${formatarMoeda(t.tot_cd)}</td>`;
       
-      html += `<td class="py-2 px-3 text-right text-slate-900 bg-slate-200/90 border-l-2 border-r border-slate-400">${formatarMoeda(t.tot_cc - t.tot_cd)}</td>`;
+      const subtLiqCont = t.tot_cc - t.tot_cd;
+      html += `<td class="py-2 px-3 text-right text-slate-900 bg-slate-200/90 border-l-2 border-r border-slate-400">${formatarMoeda(subtLiqCont)}</td>`;
       
       glob_colunas.ncc.forEach(c => html += `<td class="py-2 px-3 text-right text-indigo-800 bg-indigo-50">${formatarMoeda(t.ncc[c])}</td>`);
       html += `<td class="py-2 px-3 text-right text-indigo-900 bg-indigo-100/80 border-l border-indigo-200">${formatarMoeda(t.tot_ncc)}</td>`;
@@ -442,42 +505,131 @@
       glob_colunas.ncd.forEach(c => html += `<td class="py-2 px-3 text-right text-orange-800 bg-orange-50 border-l border-slate-200">${formatarMoeda(t.ncd[c])}</td>`);
       html += `<td class="py-2 px-3 text-right text-orange-900 bg-orange-100/80 border-l border-orange-200">${formatarMoeda(t.tot_ncd)}</td>`;
       
-      html += `<td class="py-2 px-3 text-right text-slate-900 bg-slate-200/90 border-l-2 border-r border-slate-400">${formatarMoeda(t.tot_ncc - t.tot_ncd)}</td>`;
+      const subtLiqNaoCont = t.tot_ncc - t.tot_ncd;
+      html += `<td class="py-2 px-3 text-right text-slate-900 bg-slate-200/90 border-l-2 border-r border-slate-400">${formatarMoeda(subtLiqNaoCont)}</td>`;
       
-      const lg = (t.tot_cc - t.tot_cd) + (t.tot_ncc - t.tot_ncd);
-      html += `<td class="py-2 px-4 text-right text-emerald-950 font-black bg-emerald-200 text-[11px] shadow-sm">${formatarMoeda(lg)}</td>`;
+      const lg = subtLiqCont + subtLiqNaoCont;
+      html += `<td class="py-2 px-4 text-right text-emerald-950 font-black bg-emerald-200 text-[11px] shadow-sm border-r-2 border-emerald-400">${formatarMoeda(lg)}</td>`;
       
+      // --- MÓDULO FINANCEIRO (SUBTOTAIS) ---
+      const safeGroupName = groupName.replace(/[^a-zA-Z0-9]/g, '_');
+      html += `<td class="py-2 px-3 text-right text-sky-900 bg-sky-200/80 border-l-2 border-white">${formatarMoeda(lg - subtLiqCont)}</td>`;
+      html += `<td class="py-2 px-3 text-center text-amber-900 bg-amber-200/80 border-l border-slate-200" id="subDinheiro-${safeGroupName}">-</td>`;
+      html += `<td class="py-2 px-3 text-right text-indigo-900 bg-indigo-200/80 border-l border-slate-200" id="subBanco-${safeGroupName}">-</td>`;
+
       html += `</tr>`;
       return html;
     }
 
-    processarDadosBanco();
-  </script>
-<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
-  <script>
-    let tempoInatividade;
-    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
-
-    function resetarTemporizador() {
-      clearTimeout(tempoInatividade);
-      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
-    }
-
-    function fazerLogoutPorInatividade() {
-      // Remove a credencial salva
-      localStorage.removeItem('usuario_drogarema');
+    // -------------------------------------------------------------------------
+    // LÓGICA DO MÓDULO FINANCEIRO EM TEMPO REAL
+    // -------------------------------------------------------------------------
+    function calcularFinanceiro(fId, inputStr, liqGeral) {
+      let valorDigitado = parseFloat(inputStr) || 0;
+      valoresDinheiro[fId] = valorDigitado;
       
-      // Alerta o usuário e redireciona para o login
-      alert('Sessão expirada por inatividade. Faça login novamente.');
-      window.location.href = 'login.html';
+      let valorBanco = liqGeral - valorDigitado;
+      document.getElementById(`banco-${fId}`).innerHTML = formatarMoeda(valorBanco);
+
+      recalcularTotaisInterface();
     }
 
-    // Monitora eventos de movimento do mouse, cliques e digitação
-    window.onload = resetarTemporizador;
-    window.onmousemove = resetarTemporizador;
-    window.onkeypress = resetarTemporizador;
-    window.onclick = resetarTemporizador;
-    window.onscroll = resetarTemporizador;
+    function recalcularTotaisInterface() {
+      let grandDinheiro = 0;
+      let grandBanco = 0;
+      
+      let subTotsDinheiro = {};
+      let subTotsBanco = {};
+      const groupBy = document.getElementById('agruparPor').value;
+
+      glob_dadosFunc.forEach(f => {
+        let grp = groupBy === 'loja' ? f.loja : f.empresa;
+        if (!subTotsDinheiro[grp]) subTotsDinheiro[grp] = 0;
+        if (!subTotsBanco[grp]) subTotsBanco[grp] = 0;
+
+        let din = valoresDinheiro[f.id] || 0;
+        let liqGeral = (f.tot_cc - f.tot_cd) + (f.tot_ncc - f.tot_ncd);
+        let bc = liqGeral - din;
+
+        grandDinheiro += din;
+        grandBanco += bc;
+
+        subTotsDinheiro[grp] += din;
+        subTotsBanco[grp] += bc;
+      });
+
+      // Atualiza Total Geral
+      const elTotDin = document.getElementById('totGeralDinheiro');
+      const elTotBan = document.getElementById('totGeralBanco');
+      if(elTotDin) elTotDin.innerHTML = formatarMoeda(grandDinheiro);
+      if(elTotBan) elTotBan.innerHTML = formatarMoeda(grandBanco);
+
+      // Atualiza Subtotais
+      for (const [grpName, val] of Object.entries(subTotsDinheiro)) {
+        const safeName = grpName.replace(/[^a-zA-Z0-9]/g, '_');
+        const el = document.getElementById(`subDinheiro-${safeName}`);
+        if(el) el.innerHTML = formatarMoeda(val);
+      }
+      for (const [grpName, val] of Object.entries(subTotsBanco)) {
+        const safeName = grpName.replace(/[^a-zA-Z0-9]/g, '_');
+        const el = document.getElementById(`subBanco-${safeName}`);
+        if(el) el.innerHTML = formatarMoeda(val);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // GERADOR DE RELATÓRIOS (COPIAR E COLAR)
+    // -------------------------------------------------------------------------
+    function abrirRelatoriosFinanceiros() {
+      let txtBanco = "";
+      let txtDinheiro = "";
+
+      // Ordenar por empresa e nome para o relatório ficar bonito
+      const funcOrdenados = [...glob_dadosFunc].sort((a, b) => {
+        if (a.empresa < b.empresa) return -1;
+        if (a.empresa > b.empresa) return 1;
+        return a.nome.localeCompare(b.nome);
+      });
+
+      funcOrdenados.forEach(f => {
+        let liqGeral = (f.tot_cc - f.tot_cd) + (f.tot_ncc - f.tot_ncd);
+        let din = valoresDinheiro[f.id] || 0;
+        let banco = liqGeral - din;
+
+        if (banco > 0) {
+          txtBanco += `${f.empresa} | ${f.nome} | R$ ${formatarMoedaSimples(banco)}\n`;
+        }
+
+        if (din > 0) {
+          txtDinheiro += `${f.nome} | R$ ${formatarMoedaSimples(din)}\n`;
+        }
+      });
+
+      if(txtBanco === "") txtBanco = "Nenhum pagamento bancário a ser realizado.";
+      if(txtDinheiro === "") txtDinheiro = "Nenhum pagamento em dinheiro físico programado.";
+
+      document.getElementById('txtRelatorioBanco').value = txtBanco;
+      document.getElementById('txtRelatorioDinheiro').value = txtDinheiro;
+      
+      document.getElementById('modalRelatorios').classList.remove('hidden');
+    }
+
+    function fecharRelatorios() {
+      document.getElementById('modalRelatorios').classList.add('hidden');
+    }
+
+    function copiarTexto(elementId) {
+      const textarea = document.getElementById(elementId);
+      textarea.select();
+      textarea.setSelectionRange(0, 99999); // Para mobile
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        alert("Texto copiado para a área de transferência!");
+      }).catch(err => {
+        alert("Erro ao copiar. Tente selecionar o texto e usar Ctrl+C.");
+      });
+    }
+
+    processarDadosBanco();
   </script>
 </body>
 </html>
