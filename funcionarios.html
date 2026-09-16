@@ -94,6 +94,12 @@
               Cancelar
             </button>
           </div>
+
+          <!-- Caixa de Texto Livre -->
+          <div class="pt-3 border-t border-slate-100 mt-2">
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações / Detalhes (Texto Livre)</label>
+            <textarea id="inputObservacoes" rows="3" placeholder="Insira detalhes adicionais do funcionário..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600"></textarea>
+          </div>
         </form>
       </div>
 
@@ -104,7 +110,11 @@
           <h2 class="font-bold text-slate-900 text-sm">COLABORADORES CADASTRADOS</h2>
           
           <!-- Área de Filtros -->
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-end">
+            
+            <!-- Filtro Nome (Novo) -->
+            <input type="text" id="filtroNome" oninput="renderizarTabela()" placeholder="NOME (MÍN. 3 LETRAS)" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium uppercase max-w-[180px]">
+
             <!-- Filtro Status -->
             <select id="filtroStatus" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium">
               <option value="ATIVO">ATIVOS</option>
@@ -112,17 +122,17 @@
               <option value="TODOS">TODOS OS STATUS</option>
             </select>
 
-            <!-- Filtro Empresa (Baseado no CNPJ exato) -->
-            <select id="filtroEmpresa" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[220px]">
+            <!-- Filtro Empresa -->
+            <select id="filtroEmpresa" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[180px]">
               <option value="">TODAS AS EMPRESAS</option>
             </select>
 
             <!-- Filtro Loja -->
-            <select id="filtroLoja" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[140px]">
+            <select id="filtroLoja" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[130px]">
               <option value="">TODAS AS LOJAS</option>
             </select>
 
-            <span id="contadorRegistros" class="text-xs text-slate-500 font-mono ml-1">0 reg.</span>
+            <span id="contadorRegistros" class="text-xs text-slate-500 font-mono ml-1 whitespace-nowrap">0 reg.</span>
           </div>
         </div>
 
@@ -249,7 +259,7 @@
           return false;
         });
 
-        let maxMatricula = 1000; // Valor base padrão inicial
+        let maxMatricula = 1000;
         funcDaEmpresa.forEach(f => {
           const matNum = parseInt(f.matricula, 10);
           if (!isNaN(matNum) && matNum > maxMatricula) {
@@ -270,11 +280,17 @@
     }
 
     function renderizarTabela() {
+      const nomeFiltro = document.getElementById('filtroNome').value.toUpperCase().trim();
       const statusFiltro = document.getElementById('filtroStatus').value;
       const cnpjFiltro = document.getElementById('filtroEmpresa').value;
       const lojaFiltro = document.getElementById('filtroLoja').value;
 
       let dados = listaGlobalFuncionarios;
+
+      // Filtro por Nome (só atua se tiver 3 ou mais caracteres)
+      if (nomeFiltro.length >= 3) {
+        dados = dados.filter(f => String(f.nome_registro || '').toUpperCase().includes(nomeFiltro));
+      }
 
       // Filtro por Status
       if (statusFiltro !== 'TODOS') {
@@ -332,11 +348,16 @@
           if (empMatch) cnpjEmpresa = empMatch.cnpj || '';
         }
 
+        // Ícone indicador visual se o funcionário possuir observações
+        const iconeObs = f.observacoes && f.observacoes.trim() !== '' 
+          ? `<span title="Possui observações" class="ml-1 cursor-help">📝</span>` 
+          : '';
+
         return `
           <tr class="hover:bg-slate-50 transition">
             <td class="p-3 font-mono text-slate-600">${f.matricula || '-'}</td>
             <td class="p-3">
-              <div class="font-bold text-slate-900">${f.nome_registro}</div>
+              <div class="font-bold text-slate-900">${f.nome_registro} ${iconeObs}</div>
               <div class="text-[10px] text-slate-400 font-mono">${f.usuario_alpha7 || ''}</div>
             </td>
             <td class="p-3 text-slate-700">${f.cargo || '-'}</td>
@@ -381,6 +402,7 @@
       document.getElementById('inputUsuarioAlpha7').value = f.usuario_alpha7 || '';
       document.getElementById('inputCargo').value = f.cargo || '';
       document.getElementById('inputMatricula').value = f.matricula || '';
+      document.getElementById('inputObservacoes').value = f.observacoes || '';
 
       let empresaMatch = null;
 
@@ -425,6 +447,7 @@
       document.getElementById('formFuncionario').reset();
       document.getElementById('funcId').value = '';
       document.getElementById('inputMatricula').value = '';
+      document.getElementById('inputObservacoes').value = '';
       document.getElementById('infoCnpj').innerText = '-';
       document.getElementById('infoFantasia').innerText = '-';
       document.getElementById('selectLoja').innerHTML = '<option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>';
@@ -439,6 +462,7 @@
       const usuario_alpha7 = document.getElementById('inputUsuarioAlpha7').value.toUpperCase();
       const cargo = document.getElementById('inputCargo').value.toUpperCase();
       const matricula = document.getElementById('inputMatricula').value;
+      const observacoes = document.getElementById('inputObservacoes').value;
       
       const selectEmpresa = document.getElementById('selectEmpresa');
       const empresa_registro = selectEmpresa.selectedOptions[0]?.text || '';
@@ -453,7 +477,8 @@
         matricula,
         empresa_registro,
         loja_trabalha,
-        cnpj
+        cnpj,
+        observacoes
       };
 
       if (id) {
@@ -470,7 +495,7 @@
 
     inicializar();
   </script>
-<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
+  <!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
   <script>
     let tempoInatividade;
     const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
@@ -481,15 +506,11 @@
     }
 
     function fazerLogoutPorInatividade() {
-      // Remove a credencial salva
       localStorage.removeItem('usuario_drogarema');
-      
-      // Alerta o usuário e redireciona para o login
       alert('Sessão expirada por inatividade. Faça login novamente.');
       window.location.href = 'login.html';
     }
 
-    // Monitora eventos de movimento do mouse, cliques e digitação
     window.onload = resetarTemporizador;
     window.onmousemove = resetarTemporizador;
     window.onkeypress = resetarTemporizador;
