@@ -446,12 +446,13 @@
 
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-sky-800 bg-sky-50/60 border-l-2 border-white">${formatarMoeda(difVal)}</td>`;
         
-        // Alterado de oninput para onblur (salva no banco quando sair do campo)
+        // Novo Input com Memória de Estado (data-original) e bloqueio de falsos positivos
         tr += `
           <td class="py-1 px-2 text-center whitespace-nowrap bg-amber-50/40 border-l border-slate-200">
             <input type="number" step="0.01" value="${inputDinheiroVal > 0 ? inputDinheiroVal : ''}" placeholder="0.00"
+                   data-original="${inputDinheiroVal}"
                    class="w-20 text-right font-mono font-bold text-xs p-1 border border-amber-300 bg-white rounded focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                   onblur="salvarFinanceiroBanco('${f.id}', this.value, ${liqGeral})"
+                   onblur="salvarFinanceiroBanco('${f.id}', this, ${liqGeral})"
                    onkeypress="if(event.key === 'Enter') this.blur();">
           </td>
         `;
@@ -513,14 +514,19 @@
       return html;
     }
 
-    // NOVA FUNÇÃO: Atualiza a interface e envia para o banco simultaneamente
-    async function salvarFinanceiroBanco(fId, inputStr, liqGeral) {
-      let valorDigitado = parseFloat(inputStr) || 0;
+    // NOVA FUNÇÃO: Atualiza a interface, verifica alterações reais e envia para o banco
+    async function salvarFinanceiroBanco(fId, inputElement, liqGeral) {
+      let valorDigitado = parseFloat(inputElement.value) || 0;
+      let valorOriginal = parseFloat(inputElement.getAttribute('data-original')) || 0;
+
+      // TRAVA LÓGICA: Se o usuário só clicou e saiu sem alterar o valor, cancela a operação!
+      if (valorDigitado === valorOriginal) return;
 
       // 1. Atualiza visualmente na hora (Memória)
       valoresDinheiro[fId] = valorDigitado;
       let valorBanco = liqGeral - valorDigitado;
       document.getElementById(`banco-${fId}`).innerHTML = formatarMoeda(valorBanco);
+      inputElement.setAttribute('data-original', valorDigitado); // Atualiza o novo original na tela
       recalcularTotaisInterface();
 
       // 2. Gravação Crítica (Banco de Dados)
@@ -554,7 +560,8 @@
           }
         }
       } catch (err) {
-        alert("Atenção: Falha de conexão ao salvar os R$ " + formatarMoedaSimples(valorDigitado) + " no banco. Verifique sua internet.");
+        // Agora mostra o erro REAL do banco de dados para facilitar a auditoria
+        alert("Erro no Banco de Dados: " + (err.message || "Desconhecido."));
         console.error(err);
       }
     }
