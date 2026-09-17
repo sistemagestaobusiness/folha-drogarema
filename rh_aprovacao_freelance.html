@@ -75,13 +75,13 @@
     </div>
   </div>
 
-  <!-- MODAL DE APROVAÇÃO FINANCEIRA -->
+ <!-- MODAL DE APROVAÇÃO FINANCEIRA -->
   <div id="modalAprovacao" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
     <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div>
           <h3 class="font-bold text-emerald-700 text-sm">APROVAÇÃO E LANÇAMENTO</h3>
-          <p class="text-[11px] text-slate-500">Defina os valores que irão para a Folha.</p>
+          <p class="text-[11px] text-slate-500">Defina os valores e o destino do pagamento.</p>
         </div>
         <button onclick="fecharModalAprovacao()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
@@ -97,31 +97,34 @@
           <div>
             <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Acordo de Pag.</label>
             <select id="selectEdicaoPagamento" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-[11px] focus:outline-none focus:border-emerald-500 font-bold">
-              <option value="SEMANAL">SEMANAL</option>
-              <option value="QUINZENAL">QUINZENAL</option>
-              <option value="FOLHA">FECHAMENTO DA FOLHA</option>
+              <option value="SEMANAL">SEMANAL (Tesouraria)</option>
+              <option value="QUINZENAL">QUINZENAL (Tesouraria)</option>
+              <option value="FOLHA">MENSAL (Folha de Pagamento)</option>
             </select>
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+        <div class="grid grid-cols-3 gap-2 bg-emerald-50 p-3 rounded-lg border border-emerald-100">
           <div>
-            <label class="block text-[10px] font-bold text-emerald-800 uppercase mb-1">Competência (Mês/Ano) *</label>
-            <input type="text" id="inputCompetenciaFolha" placeholder="MM/AAAA" maxlength="7" oninput="formatarComp(this)" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono text-center">
+            <label class="block text-[9px] font-bold text-emerald-800 uppercase mb-1">Folha (Mês/Ano)</label>
+            <input type="text" id="inputCompetenciaFolha" placeholder="09/2026" maxlength="7" oninput="formatarComp(this)" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono text-center">
           </div>
           <div>
-            <label class="block text-[10px] font-bold text-emerald-800 uppercase mb-1">Valor a Pagar (R$) *</label>
+            <label class="block text-[9px] font-bold text-emerald-800 uppercase mb-1" title="Para pagamentos fora da folha">Data Avulsa *</label>
+            <input type="date" id="inputDataPagamento" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-[10px] focus:outline-none focus:border-emerald-600 font-mono text-center">
+          </div>
+          <div>
+            <label class="block text-[9px] font-bold text-emerald-800 uppercase mb-1">Valor (R$) *</label>
             <input type="number" step="0.01" id="inputValorPago" placeholder="0.00" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono text-right font-bold text-emerald-700">
           </div>
         </div>
 
         <button onclick="confirmarAprovacaoFinanceira(event)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase tracking-wide">
-          LANÇAR NA FOLHA E APROVAR ✅
+          REGISTRAR E APROVAR ✅
         </button>
       </div>
     </div>
   </div>
-
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
@@ -246,85 +249,107 @@
       document.getElementById('modalAprovacao').classList.add('hidden');
     }
 
-   async function confirmarAprovacaoFinanceira(event) {
+  async function confirmarAprovacaoFinanceira(event) {
       const id = document.getElementById('aprovacaoId').value;
       const funcId = document.getElementById('aprovacaoFuncId').value;
       const horas = parseFloat(document.getElementById('inputEdicaoHoras').value);
       const pagamento = document.getElementById('selectEdicaoPagamento').value;
       const competencia = document.getElementById('inputCompetenciaFolha').value;
+      const dataPagamento = document.getElementById('inputDataPagamento').value;
       const valor = parseFloat(document.getElementById('inputValorPago').value);
 
       if (!horas || horas <= 0) { alert('Informe uma carga horária válida.'); return; }
-      if (competencia.length !== 7) { alert('Informe a competência no formato MM/AAAA.'); return; }
       if (!valor || valor <= 0) { alert('Informe o valor a pagar (R$).'); return; }
+      
+      // Validações dinâmicas baseadas no destino do dinheiro
+      if (pagamento === 'FOLHA' && competencia.length !== 7) { 
+        alert('Para pagamento via Folha, a competência (MM/AAAA) é obrigatória.'); return; 
+      }
+      if (pagamento !== 'FOLHA' && !dataPagamento) {
+        alert('Para pagamentos via Tesouraria (Semanal/Quinzenal), a Data Avulsa é obrigatória.'); return;
+      }
 
       const btn = event.target;
       btn.disabled = true;
-      btn.innerText = 'Lançando no Banco...';
+      btn.innerText = 'Processando Segurança...';
 
-      // 1. TENTATIVA FINANCEIRA PRIMEIRO (Inversão Lógica)
-      const { error: errFinanceiro } = await _supabase.from('folha_itens').insert([{
-        funcionario_id: funcId,
-        rubrica: '2014 - FREELANCE PF', 
-        tipo: 'PROVENTO',
-        valor: valor,
-        valor_bruto: valor,
-        abatimento_sigiloso: 0,
-        motivo_ajuste: `Aprovado via Freelance (#${id})`,
-        parcela_atual: 1,
-        total_parcelas: 1,
-        fixo: false,
-        competencia: competencia
-      }]);
+      let erroCritico = null;
 
-      // SE O BANCO RECUSAR O LANÇAMENTO (EX: MÊS FECHADO), ABORTA A OPERAÇÃO INTEIRA
-      if (errFinanceiro) {
-        alert('OPERAÇÃO ABORTADA: O financeiro recusou o lançamento.\n\nMotivo do Banco: ' + errFinanceiro.message + '\n\nSolução: Verifique se a competência digitada está aberta.');
-        btn.disabled = false;
-        btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
-        return; // O código morre aqui, a solicitação continua PENDENTE.
+      // 1. INJEÇÃO FINANCEIRA APENAS SE FOR 'FOLHA'
+      if (pagamento === 'FOLHA') {
+        
+        // Verifica se a pessoa já tem freelance lançado nesse mês
+        const { data: itemExistente, error: errBusca } = await _supabase
+          .from('folha_itens')
+          .select('id, valor, valor_bruto, referencia')
+          .eq('funcionario_id', funcId)
+          .eq('competencia', competencia)
+          .eq('rubrica', '2014 - FREELANCE PF')
+          .single();
+
+        if (itemExistente) {
+          // AGLOMERAÇÃO: Já existe. Soma o dinheiro e soma +1 na quantidade (Referência)
+          let qtdAtual = parseInt(itemExistente.referencia) || 0;
+          const novoValor = parseFloat(itemExistente.valor) + valor;
+          const novoValorBruto = parseFloat(itemExistente.valor_bruto) + valor;
+          
+          const { error: errUpdate } = await _supabase.from('folha_itens').update({
+            valor: novoValor,
+            valor_bruto: novoValorBruto,
+            referencia: String(qtdAtual + 1)
+          }).eq('id', itemExistente.id);
+
+          if (errUpdate) erroCritico = errUpdate.message;
+
+        } else {
+          // PRIMEIRO LANÇAMENTO: Cria a linha do zero e diz que é o 1º freelance (Referencia = 1)
+          const { error: errInsert } = await _supabase.from('folha_itens').insert([{
+            funcionario_id: funcId,
+            rubrica: '2014 - FREELANCE PF', 
+            tipo: 'PROVENTO',
+            valor: valor,
+            valor_bruto: valor,
+            abatimento_sigiloso: 0,
+            motivo_ajuste: `Freelance Automático`,
+            parcela_atual: 1,
+            total_parcelas: 1,
+            fixo: false,
+            competencia: competencia,
+            referencia: '1' 
+          }]);
+          
+          if (errInsert) erroCritico = errInsert.message;
+        }
       }
 
-      // 2. SE O DINHEIRO ENTROU, ATUALIZA O STATUS OPERACIONAL
-      const { error: errOperacional } = await _supabase.from('freelance_solicitacoes').update({ 
+      // TRAVA DE SEGURANÇA (Se a folha recusar por mês fechado, a operação morre aqui e não aprova a solicitação)
+      if (erroCritico) {
+        alert('OPERAÇÃO ABORTADA: O financeiro rejeitou o lançamento.\n\nMotivo: ' + erroCritico);
+        btn.disabled = false;
+        btn.innerText = 'REGISTRAR E APROVAR ✅';
+        return; 
+      }
+
+      // 2. TUDO CERTO COM O DINHEIRO. ATUALIZA A SOLICITAÇÃO (STATUS E DATA)
+      const payloadOperacional = {
         horas_trabalhadas: horas,
         forma_pagamento: pagamento,
         valor_pago: valor,
         status: 'APROVADA'
-      }).eq('id', id);
+      };
+      
+      if (dataPagamento) {
+        payloadOperacional.data_pagamento = dataPagamento;
+      }
 
-      // Avaliando o risco de falha na etapa 2: O dinheiro entrou, mas o status não mudou. 
+      const { error: errOperacional } = await _supabase.from('freelance_solicitacoes').update(payloadOperacional).eq('id', id);
+
       if (errOperacional) {
-        alert('ATENÇÃO GRAVE: O lançamento financeiro foi realizado com sucesso, mas houve uma falha ao mudar o status da solicitação. Faça um print e avise o suporte.');
+        alert('ATENÇÃO GRAVE: Financeiro lançado, mas falha ao mudar o status.');
       }
 
       btn.disabled = false;
-      btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
-      fecharModalAprovacao();
-      carregarPendencias();
-    }
-
-      // 2. INJEÇÃO AUTOMÁTICA NA FOLHA DE PAGAMENTO
-      const { error: err2 } = await _supabase.from('folha_itens').insert([{
-        funcionario_id: funcId,
-        rubrica: '2014 - FREELANCE PF', // Rubrica fixa padrão
-        tipo: 'PROVENTO',
-        valor: valor,
-        valor_bruto: valor,
-        abatimento_sigiloso: 0,
-        motivo_ajuste: `Aprovado via Freelance (#${id})`,
-        parcela_atual: 1,
-        total_parcelas: 1,
-        fixo: false,
-        competencia: competencia
-      }]);
-
-      if (err2) {
-        alert('Aprovado, mas houve erro ao injetar na folha: ' + err2.message);
-      }
-
-      btn.disabled = false;
-      btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
+      btn.innerText = 'REGISTRAR E APROVAR ✅';
       fecharModalAprovacao();
       carregarPendencias();
     }
