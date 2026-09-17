@@ -246,7 +246,7 @@
       document.getElementById('modalAprovacao').classList.add('hidden');
     }
 
-    async function confirmarAprovacaoFinanceira(event) {
+   async function confirmarAprovacaoFinanceira(event) {
       const id = document.getElementById('aprovacaoId').value;
       const funcId = document.getElementById('aprovacaoFuncId').value;
       const horas = parseFloat(document.getElementById('inputEdicaoHoras').value);
@@ -260,22 +260,49 @@
 
       const btn = event.target;
       btn.disabled = true;
-      btn.innerText = 'Lançando...';
+      btn.innerText = 'Lançando no Banco...';
 
-      // 1. Atualiza o status na tabela de freelance
-      const { error: err1 } = await _supabase.from('freelance_solicitacoes').update({ 
+      // 1. TENTATIVA FINANCEIRA PRIMEIRO (Inversão Lógica)
+      const { error: errFinanceiro } = await _supabase.from('folha_itens').insert([{
+        funcionario_id: funcId,
+        rubrica: '2014 - FREELANCE PF', 
+        tipo: 'PROVENTO',
+        valor: valor,
+        valor_bruto: valor,
+        abatimento_sigiloso: 0,
+        motivo_ajuste: `Aprovado via Freelance (#${id})`,
+        parcela_atual: 1,
+        total_parcelas: 1,
+        fixo: false,
+        competencia: competencia
+      }]);
+
+      // SE O BANCO RECUSAR O LANÇAMENTO (EX: MÊS FECHADO), ABORTA A OPERAÇÃO INTEIRA
+      if (errFinanceiro) {
+        alert('OPERAÇÃO ABORTADA: O financeiro recusou o lançamento.\n\nMotivo do Banco: ' + errFinanceiro.message + '\n\nSolução: Verifique se a competência digitada está aberta.');
+        btn.disabled = false;
+        btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
+        return; // O código morre aqui, a solicitação continua PENDENTE.
+      }
+
+      // 2. SE O DINHEIRO ENTROU, ATUALIZA O STATUS OPERACIONAL
+      const { error: errOperacional } = await _supabase.from('freelance_solicitacoes').update({ 
         horas_trabalhadas: horas,
         forma_pagamento: pagamento,
         valor_pago: valor,
         status: 'APROVADA'
       }).eq('id', id);
 
-      if (err1) {
-        alert('Erro ao aprovar solicitação: ' + err1.message);
-        btn.disabled = false;
-        btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
-        return;
+      // Avaliando o risco de falha na etapa 2: O dinheiro entrou, mas o status não mudou. 
+      if (errOperacional) {
+        alert('ATENÇÃO GRAVE: O lançamento financeiro foi realizado com sucesso, mas houve uma falha ao mudar o status da solicitação. Faça um print e avise o suporte.');
       }
+
+      btn.disabled = false;
+      btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
+      fecharModalAprovacao();
+      carregarPendencias();
+    }
 
       // 2. INJEÇÃO AUTOMÁTICA NA FOLHA DE PAGAMENTO
       const { error: err2 } = await _supabase.from('folha_itens').insert([{
