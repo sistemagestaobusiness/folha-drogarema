@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aprovação de Freelance (RH) - Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+
+  <div class="max-w-[1200px] mx-auto space-y-6">
+    
+    <!-- CABEÇALHO -->
+    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+          <h1 class="text-xl font-bold text-slate-900 tracking-wide">CENTRAL DE APROVAÇÃO (RH)</h1>
+        </div>
+        <p class="text-xs text-slate-500 mt-0.5">Gestão de Plantões e Coberturas Extras (Freelance)</p>
+      </div>
+      <div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← VOLTAR AO DASHBOARD</a>
+      </div>
+    </div>
+
+    <!-- LISTA DE PENDÊNCIAS -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+        <h2 class="font-bold text-slate-700 text-sm">SOLICITAÇÕES PENDENTES</h2>
+        <span id="contadorPendencias" class="text-[10px] bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold">0 aguardando</span>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-white border-b border-slate-200 text-slate-500 uppercase text-[10px]">
+              <th class="p-3">Unidade / Loja</th>
+              <th class="p-3">Colaborador / Função</th>
+              <th class="p-3">Data Serviço</th>
+              <th class="p-3 text-center">Horas</th>
+              <th class="p-3 text-center">Ações de Auditoria</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaPendencias" class="divide-y divide-slate-100">
+            <!-- Renderizado via JS -->
+            <tr><td colspan="5" class="p-8 text-center text-slate-400">Carregando solicitações...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL DE RECUSA -->
+  <div id="modalRecusa" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-bold text-rose-700 text-sm">REJEITAR SOLICITAÇÃO</h3>
+          <p class="text-[11px] text-slate-500">Informe o motivo para o líder.</p>
+        </div>
+        <button onclick="fecharModalRecusa()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+      </div>
+      <div class="space-y-3">
+        <input type="hidden" id="recusaId">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Motivo da Recusa *</label>
+          <textarea id="inputMotivoRecusa" rows="3" placeholder="Ex: Carga horária excede o limite, não autorizado pela diretoria..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-rose-500"></textarea>
+        </div>
+        <button onclick="confirmarRecusa()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase">
+          Confirmar Rejeição
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO -->
+  <div id="modalEdicao" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-bold text-indigo-700 text-sm">EDITAR DADOS</h3>
+          <p class="text-[11px] text-slate-500">Ajuste os valores antes de aprovar.</p>
+        </div>
+        <button onclick="fecharModalEdicao()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+      </div>
+      <div class="space-y-3">
+        <input type="hidden" id="edicaoId">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Horas Trabalhadas (Correção)</label>
+          <input type="number" id="inputEdicaoHoras" step="0.5" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-mono">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Acordo de Pagamento</label>
+          <select id="selectEdicaoPagamento" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-bold">
+            <option value="SEMANAL">SEMANAL</option>
+            <option value="QUINZENAL">QUINZENAL</option>
+            <option value="FOLHA">FECHAMENTO DA FOLHA</option>
+          </select>
+        </div>
+        <button onclick="salvarEdicaoEAprovar()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase">
+          Salvar e Aprovar ✅
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function carregarPendencias() {
+      const tbody = document.getElementById('tabelaPendencias');
+      
+      const { data, error } = await _supabase
+        .from('freelance_solicitacoes')
+        .select(`*, funcionarios(nome_registro)`)
+        .eq('status', 'PENDENTE')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500">Erro ao carregar dados.</td></tr>`;
+        return;
+      }
+
+      document.getElementById('contadorPendencias').innerText = `${data.length} aguardando`;
+
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 flex flex-col items-center gap-2"><span class="text-3xl">🎉</span>Nenhuma solicitação pendente! Tudo em dia.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.map(req => {
+        // Formata a data (YYYY-MM-DD para DD/MM/YYYY)
+        const partesData = req.data_servico.split('-');
+        const dataFormatada = `${partesData[2]}/${partesData[1]}/${partesData[0]}`;
+        
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-50 last:border-0">
+            <td class="p-3">
+              <span class="font-bold text-slate-800 text-xs">${req.loja_solicitante || 'Não Informada'}</span>
+              <div class="text-[10px] text-slate-400 mt-0.5">Pagamento: <span class="font-bold text-slate-500">${req.forma_pagamento}</span></div>
+            </td>
+            <td class="p-3">
+              <span class="font-bold text-slate-800 text-xs">${req.funcionarios?.nome_registro || 'N/A'}</span>
+              <div class="text-[10px] text-slate-400 mt-0.5 uppercase">${req.cargo_exercido}</div>
+            </td>
+            <td class="p-3">
+              <span class="font-mono font-bold text-slate-700">${dataFormatada}</span>
+              <div class="text-[10px] text-slate-400 font-mono mt-0.5">${req.hora_inicio ? req.hora_inicio.substring(0,5) : '--'} às ${req.hora_fim ? req.hora_fim.substring(0,5) : '--'}</div>
+            </td>
+            <td class="p-3 text-center">
+              <span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-bold font-mono text-xs border border-indigo-100">${req.horas_trabalhadas}h</span>
+            </td>
+            <td class="p-3 text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <button onclick="aprovarDireto(${req.id})" class="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded transition cursor-pointer" title="Aprovar Diretamente">
+                  ✅
+                </button>
+                <button onclick="abrirEdicao(${req.id}, ${req.horas_trabalhadas}, '${req.forma_pagamento}')" class="p-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded transition cursor-pointer" title="Editar Valores antes de Aprovar">
+                  ✏️
+                </button>
+                <button onclick="abrirRecusa(${req.id})" class="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded transition cursor-pointer" title="Rejeitar Solicitação">
+                  ❌
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // APROVAÇÃO DIRETA
+    async function aprovarDireto(id) {
+      if(confirm('Tem certeza que deseja aprovar esta solicitação?')) {
+        await _supabase.from('freelance_solicitacoes').update({ status: 'APROVADA' }).eq('id', id);
+        carregarPendencias();
+      }
+    }
+
+    // FLUXO DE RECUSA
+    function abrirRecusa(id) {
+      document.getElementById('recusaId').value = id;
+      document.getElementById('inputMotivoRecusa').value = '';
+      document.getElementById('modalRecusa').classList.remove('hidden');
+    }
+
+    function fecharModalRecusa() {
+      document.getElementById('modalRecusa').classList.add('hidden');
+    }
+
+    async function confirmarRecusa() {
+      const id = document.getElementById('recusaId').value;
+      const motivo = document.getElementById('inputMotivoRecusa').value;
+
+      if (!motivo.trim()) {
+        alert('É obrigatório informar o motivo da recusa.');
+        return;
+      }
+
+      await _supabase.from('freelance_solicitacoes').update({ 
+        status: 'REJEITADA', 
+        observacao_rh: motivo // Assumindo que criaremos ou usaremos um campo de observação de retorno
+      }).eq('id', id);
+      
+      fecharModalRecusa();
+      carregarPendencias();
+    }
+
+    // FLUXO DE EDIÇÃO
+    function abrirEdicao(id, horas, pagamento) {
+      document.getElementById('edicaoId').value = id;
+      document.getElementById('inputEdicaoHoras').value = horas;
+      document.getElementById('selectEdicaoPagamento').value = pagamento;
+      document.getElementById('modalEdicao').classList.remove('hidden');
+    }
+
+    function fecharModalEdicao() {
+      document.getElementById('modalEdicao').classList.add('hidden');
+    }
+
+    async function salvarEdicaoEAprovar() {
+      const id = document.getElementById('edicaoId').value;
+      const horas = parseFloat(document.getElementById('inputEdicaoHoras').value);
+      const pagamento = document.getElementById('selectEdicaoPagamento').value;
+
+      if (!horas || horas <= 0) {
+        alert('Informe uma carga horária válida.');
+        return;
+      }
+
+      await _supabase.from('freelance_solicitacoes').update({ 
+        horas_trabalhadas: horas,
+        forma_pagamento: pagamento,
+        status: 'APROVADA'
+      }).eq('id', id);
+      
+      fecharModalEdicao();
+      carregarPendencias();
+    }
+
+    // Inicializa
+    carregarPendencias();
+  </script>
+</body>
+</html>
