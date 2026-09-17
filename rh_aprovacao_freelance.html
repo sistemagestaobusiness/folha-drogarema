@@ -40,11 +40,10 @@
               <th class="p-3">Colaborador / Função</th>
               <th class="p-3">Data Serviço</th>
               <th class="p-3 text-center">Horas</th>
-              <th class="p-3 text-center">Ações de Auditoria</th>
+              <th class="p-3 text-center">Ações (Financeiro)</th>
             </tr>
           </thead>
           <tbody id="tabelaPendencias" class="divide-y divide-slate-100">
-            <!-- Renderizado via JS -->
             <tr><td colspan="5" class="p-8 text-center text-slate-400">Carregando solicitações...</td></tr>
           </tbody>
         </table>
@@ -67,7 +66,7 @@
         <input type="hidden" id="recusaId">
         <div>
           <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Motivo da Recusa *</label>
-          <textarea id="inputMotivoRecusa" rows="3" placeholder="Ex: Carga horária excede o limite, não autorizado pela diretoria..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-rose-500"></textarea>
+          <textarea id="inputMotivoRecusa" rows="3" placeholder="Ex: Carga horária excede o limite, não autorizado..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-rose-500"></textarea>
         </div>
         <button onclick="confirmarRecusa(event)" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase">
           Confirmar Rejeição
@@ -76,32 +75,48 @@
     </div>
   </div>
 
-  <!-- MODAL DE EDIÇÃO -->
-  <div id="modalEdicao" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
-    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+  <!-- MODAL DE APROVAÇÃO FINANCEIRA -->
+  <div id="modalAprovacao" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div>
-          <h3 class="font-bold text-indigo-700 text-sm">EDITAR DADOS</h3>
-          <p class="text-[11px] text-slate-500">Ajuste os valores antes de aprovar.</p>
+          <h3 class="font-bold text-emerald-700 text-sm">APROVAÇÃO E LANÇAMENTO</h3>
+          <p class="text-[11px] text-slate-500">Defina os valores que irão para a Folha.</p>
         </div>
-        <button onclick="fecharModalEdicao()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+        <button onclick="fecharModalAprovacao()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
       <div class="space-y-3">
-        <input type="hidden" id="edicaoId">
-        <div>
-          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Horas Trabalhadas (Correção)</label>
-          <input type="number" id="inputEdicaoHoras" step="0.5" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-mono">
+        <input type="hidden" id="aprovacaoId">
+        <input type="hidden" id="aprovacaoFuncId">
+        
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Horas Validadas</label>
+            <input type="number" id="inputEdicaoHoras" step="0.5" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Acordo de Pag.</label>
+            <select id="selectEdicaoPagamento" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-[11px] focus:outline-none focus:border-emerald-500 font-bold">
+              <option value="SEMANAL">SEMANAL</option>
+              <option value="QUINZENAL">QUINZENAL</option>
+              <option value="FOLHA">FECHAMENTO DA FOLHA</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Acordo de Pagamento</label>
-          <select id="selectEdicaoPagamento" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-bold">
-            <option value="SEMANAL">SEMANAL</option>
-            <option value="QUINZENAL">QUINZENAL</option>
-            <option value="FOLHA">FECHAMENTO DA FOLHA</option>
-          </select>
+
+        <div class="grid grid-cols-2 gap-3 bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+          <div>
+            <label class="block text-[10px] font-bold text-emerald-800 uppercase mb-1">Competência (Mês/Ano) *</label>
+            <input type="text" id="inputCompetenciaFolha" placeholder="MM/AAAA" maxlength="7" oninput="formatarComp(this)" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono text-center">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-emerald-800 uppercase mb-1">Valor a Pagar (R$) *</label>
+            <input type="number" step="0.01" id="inputValorPago" placeholder="0.00" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono text-right font-bold text-emerald-700">
+          </div>
         </div>
-        <button onclick="salvarEdicaoEAprovar(event)" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase">
-          Salvar e Aprovar ✅
+
+        <button onclick="confirmarAprovacaoFinanceira(event)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase tracking-wide">
+          LANÇAR NA FOLHA E APROVAR ✅
         </button>
       </div>
     </div>
@@ -111,6 +126,12 @@
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    function formatarComp(input) {
+      let v = input.value.replace(/\D/g, '');
+      if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2, 6);
+      input.value = v;
+    }
 
     async function carregarPendencias() {
       const tbody = document.getElementById('tabelaPendencias');
@@ -134,9 +155,9 @@
       }
 
       tbody.innerHTML = data.map(req => {
-        // Formata a data (YYYY-MM-DD para DD/MM/YYYY)
         const partesData = req.data_servico.split('-');
         const dataFormatada = `${partesData[2]}/${partesData[1]}/${partesData[0]}`;
+        const compSugerida = `${partesData[1]}/${partesData[0]}`; // Sugere o mês/ano do serviço
         
         return `
           <tr class="hover:bg-slate-50 transition border-b border-slate-50 last:border-0">
@@ -157,13 +178,10 @@
             </td>
             <td class="p-3 text-center">
               <div class="flex items-center justify-center gap-1.5">
-                <button onclick="aprovarDireto('${req.id}')" class="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded transition cursor-pointer" title="Aprovar Diretamente">
-                  ✅
+                <button onclick="abrirAprovacao('${req.id}', '${req.funcionario_id}', ${req.horas_trabalhadas || 0}, '${req.forma_pagamento || ''}', '${compSugerida}')" class="px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold text-[10px] transition cursor-pointer flex items-center gap-1 shadow-xs" title="Definir Valor e Aprovar">
+                  💰 APROVAR
                 </button>
-                <button onclick="abrirEdicao('${req.id}', ${req.horas_trabalhadas || 0}, '${req.forma_pagamento || ''}')" class="p-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded transition cursor-pointer" title="Editar Valores antes de Aprovar">
-                  ✏️
-                </button>
-                <button onclick="abrirRecusa('${req.id}')" class="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded transition cursor-pointer" title="Rejeitar Solicitação">
+                <button onclick="abrirRecusa('${req.id}')" class="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded transition cursor-pointer shadow-xs" title="Rejeitar Solicitação">
                   ❌
                 </button>
               </div>
@@ -171,18 +189,6 @@
           </tr>
         `;
       }).join('');
-    }
-
-    // APROVAÇÃO DIRETA
-    async function aprovarDireto(id) {
-      if(confirm('Tem certeza que deseja aprovar esta solicitação?')) {
-        const { error } = await _supabase.from('freelance_solicitacoes').update({ status: 'APROVADA' }).eq('id', id);
-        if (error) {
-          alert('Erro ao aprovar: ' + error.message);
-        } else {
-          carregarPendencias();
-        }
-      }
     }
 
     // FLUXO DE RECUSA
@@ -217,55 +223,83 @@
       btn.disabled = false;
       btn.innerText = 'Confirmar Rejeição';
 
-      if (error) {
-        alert('Erro ao rejeitar: ' + error.message);
-      } else {
+      if (error) alert('Erro ao rejeitar: ' + error.message);
+      else {
         fecharModalRecusa();
         carregarPendencias();
       }
     }
 
-    // FLUXO DE EDIÇÃO
-    function abrirEdicao(id, horas, pagamento) {
-      document.getElementById('edicaoId').value = id;
+    // FLUXO DE APROVAÇÃO FINANCEIRA
+    function abrirAprovacao(id, funcId, horas, pagamento, compSugerida) {
+      document.getElementById('aprovacaoId').value = id;
+      document.getElementById('aprovacaoFuncId').value = funcId;
       document.getElementById('inputEdicaoHoras').value = horas;
       document.getElementById('selectEdicaoPagamento').value = pagamento;
-      document.getElementById('modalEdicao').classList.remove('hidden');
+      document.getElementById('inputCompetenciaFolha').value = compSugerida;
+      document.getElementById('inputValorPago').value = ''; // Limpo para obrigar preenchimento
+      
+      document.getElementById('modalAprovacao').classList.remove('hidden');
     }
 
-    function fecharModalEdicao() {
-      document.getElementById('modalEdicao').classList.add('hidden');
+    function fecharModalAprovacao() {
+      document.getElementById('modalAprovacao').classList.add('hidden');
     }
 
-    async function salvarEdicaoEAprovar(event) {
-      const id = document.getElementById('edicaoId').value;
+    async function confirmarAprovacaoFinanceira(event) {
+      const id = document.getElementById('aprovacaoId').value;
+      const funcId = document.getElementById('aprovacaoFuncId').value;
       const horas = parseFloat(document.getElementById('inputEdicaoHoras').value);
       const pagamento = document.getElementById('selectEdicaoPagamento').value;
+      const competencia = document.getElementById('inputCompetenciaFolha').value;
+      const valor = parseFloat(document.getElementById('inputValorPago').value);
 
-      if (!horas || horas <= 0) {
-        alert('Informe uma carga horária válida.');
-        return;
-      }
+      if (!horas || horas <= 0) { alert('Informe uma carga horária válida.'); return; }
+      if (competencia.length !== 7) { alert('Informe a competência no formato MM/AAAA.'); return; }
+      if (!valor || valor <= 0) { alert('Informe o valor a pagar (R$).'); return; }
 
       const btn = event.target;
       btn.disabled = true;
-      btn.innerText = 'Processando...';
+      btn.innerText = 'Lançando...';
 
-      const { error } = await _supabase.from('freelance_solicitacoes').update({ 
+      // 1. Atualiza o status na tabela de freelance
+      const { error: err1 } = await _supabase.from('freelance_solicitacoes').update({ 
         horas_trabalhadas: horas,
         forma_pagamento: pagamento,
+        valor_pago: valor,
         status: 'APROVADA'
       }).eq('id', id);
-      
-      btn.disabled = false;
-      btn.innerText = 'Salvar e Aprovar ✅';
 
-      if (error) {
-        alert('Erro ao salvar e aprovar: ' + error.message);
-      } else {
-        fecharModalEdicao();
-        carregarPendencias();
+      if (err1) {
+        alert('Erro ao aprovar solicitação: ' + err1.message);
+        btn.disabled = false;
+        btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
+        return;
       }
+
+      // 2. INJEÇÃO AUTOMÁTICA NA FOLHA DE PAGAMENTO
+      const { error: err2 } = await _supabase.from('folha_itens').insert([{
+        funcionario_id: funcId,
+        rubrica: '2014 - FREELANCE PF', // Rubrica fixa padrão
+        tipo: 'PROVENTO',
+        valor: valor,
+        valor_bruto: valor,
+        abatimento_sigiloso: 0,
+        motivo_ajuste: `Aprovado via Freelance (#${id})`,
+        parcela_atual: 1,
+        total_parcelas: 1,
+        fixo: false,
+        competencia: competencia
+      }]);
+
+      if (err2) {
+        alert('Aprovado, mas houve erro ao injetar na folha: ' + err2.message);
+      }
+
+      btn.disabled = false;
+      btn.innerText = 'LANÇAR NA FOLHA E APROVAR ✅';
+      fecharModalAprovacao();
+      carregarPendencias();
     }
 
     // Inicializa
