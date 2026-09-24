@@ -61,6 +61,22 @@
           </div>
         </div>
 
+        <!-- Freelance (fluxo em teste) -->
+        <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
+          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Freelance <span class="text-amber-600">(teste)</span></h3>
+          <div class="flex flex-col space-y-1 text-[11px] font-medium pt-1">
+            <a href="freelance_solicitacao.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>📝</span> <span>Solicitar (Líder)</span>
+            </a>
+            <a href="supervisor_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>🧭</span> <span>Aprovação Supervisor</span>
+            </a>
+            <a href="rh_aprovacao_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>✅</span> <span>Aprovação RH</span>
+            </a>
+          </div>
+        </div>
+
         <!-- Cadastros do Sistema -->
         <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
           <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Cadastros e Segurança</h3>
@@ -341,6 +357,18 @@
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Perfis de loja/supervisão não usam o painel master: vão para a tela deles
+    (async () => {
+      try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await _supabase.from('usuarios_sistema').select('perfil').eq('email', (user.email || '').toLowerCase()).maybeSingle();
+        const perfil = data ? data.perfil : null;
+        if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
+        else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');
+      } catch (err) { console.error(err); }
+    })();
 
     const mesesNomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
     const mesesNomesCompletos = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
