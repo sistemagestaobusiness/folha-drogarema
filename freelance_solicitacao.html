@@ -7,12 +7,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
 
   <div class="max-w-7xl mx-auto space-y-6">
 
     <!-- Cabeçalho -->
-    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">SOLICITAÇÕES DA LOJA</h1>
         <p class="text-xs text-slate-500">Freelance e Hora Extra · Líder da loja → Supervisor → RH</p>
@@ -123,7 +123,7 @@
               <select id="selectFuncao" class="w-full bg-white border border-slate-300 rounded p-2 text-[10px] font-bold uppercase">
                 <option value="FARMACEUTICO">Farmacêutico</option>
                 <option value="BALCONISTA">Balconista</option>
-                <option value="CAIXA">Caixa</option>
+                <option value="CAIXA/ATENDENTE">Caixa/Atendente</option>
               </select>
             </div>
             <div class="col-span-3 text-center">
@@ -169,6 +169,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-3 gap-2">
           <h2 id="tituloHistorico" class="font-bold text-slate-900 text-sm">MINHAS SOLICITAÇÕES</h2>
           <div class="flex items-center gap-1 text-[11px] flex-wrap">
+            <input type="text" id="filtroNome" oninput="clearTimeout(window._tNome); window._tNome = setTimeout(carregarHistorico, 250)" placeholder="🔍 Nome do colaborador..." autocomplete="off" class="bg-slate-50 border border-slate-300 rounded p-1 text-xs w-44 uppercase">
             <select id="filtroTipo" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 text-xs font-bold">
               <option value="">Todos</option><option value="FREELANCE">Freelance</option><option value="HORA_EXTRA">Hora extra</option>
             </select>
@@ -484,10 +485,15 @@
       if (!veTudo) q = q.eq('solicitante_email', usuario.email);
       document.getElementById('tituloHistorico').innerText = veTudo ? 'SOLICITAÇÕES (TODAS AS LOJAS)' : 'MINHAS SOLICITAÇÕES';
 
-      const { data, error } = await q.order('data_servico', { ascending: false });
+      const { data: dadosBrutos, error } = await q.order('data_servico', { ascending: false });
       const box = document.getElementById('listaHistorico');
       if (error) { box.innerHTML = `<div class="text-rose-600">${esc(error.message)}</div>`; return; }
-      if (!data || data.length === 0) { box.innerHTML = '<div class="p-4 text-center text-slate-400">Nenhuma solicitação encontrada.</div>'; return; }
+      // Filtro inteligente por nome (quem trabalhou ou quem faltou), sem acento e em qualquer parte do nome
+      const normNome = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+      const termoNome = normNome(document.getElementById('filtroNome').value.trim());
+      const data = (dadosBrutos || []).filter(r => !termoNome || termoNome.split(/\s+/).every(p =>
+        normNome(nomeFunc(r.funcionario_id)).includes(p) || normNome(nomeFunc(r.funcionario_ausente_id)).includes(p)));
+      if (data.length === 0) { box.innerHTML = '<div class="p-4 text-center text-slate-400">Nenhuma solicitação encontrada.</div>'; return; }
 
       box.innerHTML = data.map(r => {
         const st = STATUS[r.status] || { txt: r.status, cls: 'bg-slate-100' };
@@ -506,6 +512,7 @@
               </div>
               <div class="text-right shrink-0">
                 <span class="${st.cls} px-2 py-0.5 rounded text-[10px] font-bold">${st.txt}</span>
+                ${r.status === 'APROVADA' && r.data_prevista_pagamento ? `<div class="text-[10px] text-sky-800 font-bold mt-1">💵 pagamento previsto ${formatarDataBR(r.data_prevista_pagamento)}</div>` : ''}
                 ${r.status === 'PENDENTE_SUPERVISOR' ? `<div><button onclick="cancelarSolicitacao('${r.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline mt-1 cursor-pointer">cancelar</button></div>` : ''}
               </div>
             </div>

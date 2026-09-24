@@ -7,10 +7,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
   <div class="max-w-[1400px] mx-auto space-y-5">
 
-    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">PAGAMENTOS FORA DA FOLHA</h1>
         <p class="text-xs text-slate-500">Origem: tela de lançamentos (eventos marcados) ou aprovação de freelance/hora extra · Financeiro paga · RH e Gestor acompanham</p>
@@ -54,7 +54,7 @@
       <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
         <table class="w-full text-left text-xs">
           <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase">
-            <tr><th class="p-3">Vencimento</th><th class="p-3">Tipo</th><th class="p-3">Funcionário</th><th class="p-3">Origem</th><th class="p-3 text-right">Valor</th><th class="p-3">Lançado por</th><th class="p-3">Situação</th><th class="p-3"></th></tr>
+            <tr><th class="p-3">Pagar em</th><th class="p-3">Tipo</th><th class="p-3">Funcionário</th><th class="p-3">Origem</th><th class="p-3 text-right">Valor</th><th class="p-3">Lançado por</th><th class="p-3">Situação</th><th class="p-3"></th></tr>
           </thead>
           <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
         </table>
@@ -160,7 +160,7 @@
       tb.innerHTML = lista.map(p => {
         let sit = '';
         if (p.status === 'PENDENTE') sit = `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold text-[10px]">⏳ AGUARDANDO FINANCEIRO</span>${p.vencimento < h ? ' <span class="text-rose-700 font-bold text-[10px]">VENCIDO</span>' : ''}`;
-        if (p.status === 'PAGO') sit = `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px]">✅ PAGO ${dbr(p.pago_em)}</span><div class="text-[10px] text-slate-500 mt-1">${esc(p.banco_pagador || '')} · ${esc(p.pago_por || '')}${p.pagamento_obs ? ' · ' + esc(p.pagamento_obs) : ''}</div>`;
+        if (p.status === 'PAGO') sit = `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px]">✅ PAGO ${dbr(p.pago_em)}</span><div class="text-[10px] text-slate-500 mt-1">${esc(p.banco_pagador || '')} · ${esc(p.pago_por || '')}${p.pagamento_obs ? ' · ' + esc(p.pagamento_obs) : ''}</div>${p.comprovante_path ? `<button onclick="abrirComprovante('${esc(p.comprovante_path)}')" class="mt-1 text-[10px] font-bold text-indigo-700 underline cursor-pointer">📎 ver comprovante</button>` : '<div class="text-[10px] text-slate-400 mt-1">sem comprovante</div>'}`;
         if (p.status === 'CANCELADO') sit = `<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold text-[10px]">CANCELADO</span><div class="text-[10px] text-slate-500 mt-1">${esc(p.resolucao_obs || '')}</div>`;
         if (p.problema_desc && p.status !== 'PROBLEMA') sit += `<div class="text-[10px] text-slate-400 mt-1">Houve problema: ${esc(p.problema_desc)}${p.resolucao_obs ? ' → ' + esc(p.resolucao_obs) : ''}</div>`;
         let acao = '';
@@ -218,6 +218,13 @@
       const { error } = await _supabase.rpc('fn_pagamento_desfazer', { p_id: atual.id, p_obs: document.getElementById('rsObs').value.trim() || null });
       if (error) return alert(error.message);
       fechar('modalResolver'); carregar();
+    }
+
+    // Comprovante: link temporário (bucket privado)
+    async function abrirComprovante(caminho) {
+      const { data, error } = await _supabase.storage.from('comprovantes').createSignedUrl(caminho, 120);
+      if (error) return alert('Não foi possível abrir o comprovante: ' + error.message);
+      window.open(data.signedUrl, '_blank');
     }
 
     inicializar();

@@ -7,11 +7,11 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
 
   <div class="max-w-[1250px] mx-auto space-y-5">
 
-    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <div class="flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -68,13 +68,24 @@
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
         <div class="text-[11px] font-bold text-slate-700 uppercase"><span id="apTipoTxt">1. Quem fez o freelance</span>: <span id="apFreela" class="text-indigo-700"></span></div>
         <div id="apSaldoFreela" class="text-[11px]"></div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas validadas</label>
-            <input type="number" id="apHoras" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
-          <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Forma de pagamento</label>
-            <select id="apForma" onchange="atualizarModal()" class="w-full border border-slate-300 rounded p-2 text-xs font-bold">
-              <option value="FOLHA">FOLHA (5º dia útil)</option><option value="SEMANAL">SEMANAL</option><option value="QUINZENAL">QUINZENAL</option>
-            </select></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas validadas</label>
+          <input type="number" id="apHoras" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <!-- PAGAMENTO EM DESTAQUE -->
+        <div id="boxPagamento" class="rounded-xl border-2 p-3 space-y-2">
+          <div class="text-[11px] font-black uppercase tracking-wide">💵 Como e quando será pago</div>
+          <input type="hidden" id="apForma" value="FOLHA">
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-forma="FOLHA" onclick="escolherForma('FOLHA')" class="btnForma py-2.5 rounded-lg text-[11px] font-black border-2 cursor-pointer">🗓 FOLHA<br><span class="font-normal text-[10px]">5º dia útil</span></button>
+            <button type="button" data-forma="SEMANAL" onclick="escolherForma('SEMANAL')" class="btnForma py-2.5 rounded-lg text-[11px] font-black border-2 cursor-pointer">⚡ SEMANAL<br><span class="font-normal text-[10px]">fora da folha</span></button>
+            <button type="button" data-forma="QUINZENAL" onclick="escolherForma('QUINZENAL')" class="btnForma py-2.5 rounded-lg text-[11px] font-black border-2 cursor-pointer">⚡ QUINZENAL<br><span class="font-normal text-[10px]">fora da folha</span></button>
+          </div>
+          <div id="apLiderPediu" class="text-[10px]"></div>
+          <div id="boxDataPrevista" class="hidden">
+            <label class="block text-[11px] font-black uppercase text-amber-900">📅 Data prevista de pagamento *</label>
+            <input type="date" id="apDataPrevista" class="w-full border-2 border-amber-400 bg-white rounded-lg p-2.5 text-base font-mono font-bold text-slate-900">
+            <div class="text-[10px] text-amber-900 mt-1">É a data que aparece para o Financeiro pagar. <span id="apSugestao"></span></div>
+          </div>
+          <div id="txtFolha" class="hidden text-[11px] font-bold text-slate-700">Pago junto com a folha no 5º dia útil (competência <span id="apCompFolha"></span>).</div>
         </div>
         <div class="flex gap-4 text-xs">
           <label class="cursor-pointer"><input type="radio" name="apModo" value="PAGAR" checked onchange="atualizarModal()"> Pagar (gera provento)</label>
@@ -235,6 +246,34 @@
       box.innerHTML = lista.map(card).join('');
     }
 
+    // Selo bem visível da forma de pagamento (e data prevista, quando houver)
+    const FORMAS = {
+      FOLHA: { txt: '🗓 FOLHA · 5º DIA ÚTIL', cls: 'bg-slate-700 text-white' },
+      SEMANAL: { txt: '⚡ SEMANAL · FORA DA FOLHA', cls: 'bg-amber-400 text-amber-950' },
+      QUINZENAL: { txt: '⚡ QUINZENAL · FORA DA FOLHA', cls: 'bg-violet-600 text-white' }
+    };
+    function seloPagamento(r) {
+      const f = FORMAS[r.forma_pagamento] || { txt: esc(r.forma_pagamento || '-'), cls: 'bg-slate-200 text-slate-700' };
+      const compensa = r.status === 'APROVADA' && r.modo_freelancer === 'COMPENSAR';
+      const data = r.data_prevista_pagamento ? ` <span class="ml-1 bg-white/90 text-slate-900 px-1.5 rounded font-mono">📅 ${dataBR(r.data_prevista_pagamento)}</span>` : '';
+      return compensa
+        ? `<span class="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md text-[11px] font-black">⏱ COMPENSADO NO BANCO DE HORAS</span>`
+        : `<span class="inline-block ${f.cls} px-2 py-1 rounded-md text-[11px] font-black tracking-wide">${r.status === 'APROVADA' ? '' : 'LÍDER PEDIU: '}${f.txt}${data}</span>`;
+    }
+
+    function escolherForma(forma) {
+      document.getElementById('apForma').value = forma;
+      atualizarModal();
+    }
+
+    // Sugestão (não preenche sozinho): semanal = próxima sexta; quinzenal = dia 15 ou último dia do mês
+    function sugestaoData(forma) {
+      const d = new Date(); d.setHours(12, 0, 0, 0);
+      if (forma === 'SEMANAL') { let n = (5 - d.getDay() + 7) % 7; if (n === 0) n = 7; d.setDate(d.getDate() + n); }
+      else if (forma === 'QUINZENAL') { if (d.getDate() < 15) d.setDate(15); else d.setMonth(d.getMonth() + 1, 0); }
+      return d.toISOString().slice(0, 10);
+    }
+
     function card(r) {
       const st = STATUS[r.status] || { txt: r.status, cls: 'bg-slate-100' };
       let acoes = '';
@@ -250,7 +289,7 @@
         </div>`;
       const sup = r.supervisor_em ? `<div class="text-[11px]">Supervisor: <b>${r.status === 'REJEITADA' && !r.rh_em ? 'recusou' : 'aprovou'}</b> — ${esc(r.supervisor_por || '')}${r.supervisor_forcado ? ' <b class="text-amber-700">(no lugar do supervisor)</b>' : ''} em ${new Date(r.supervisor_em).toLocaleString('pt-BR')}${r.supervisor_obs ? ' · "' + esc(r.supervisor_obs) + '"' : ''}</div>` : '';
       const rh = r.rh_em ? `<div class="text-[11px]">RH: ${esc(r.rh_por || '')} em ${new Date(r.rh_em).toLocaleString('pt-BR')}${r.observacao_rh ? ' · "' + esc(r.observacao_rh) + '"' : ''}</div>` : '';
-      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)} · ${esc(r.forma_pagamento)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
+      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
       return `
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           <div class="flex flex-col md:flex-row justify-between gap-3">
@@ -261,7 +300,8 @@
                 <span class="text-[10px] text-slate-400">por ${esc(r.solicitante_email || '—')}</span>
               </div>
               <div class="text-sm font-bold text-slate-900">${r.tipo_solicitacao === 'HORA_EXTRA' ? '<span class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">⏰ HORA EXTRA</span>' : '<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">🧑‍🤝‍🧑 FREELANCE</span>'}${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span> <span class="text-[10px] font-normal">${txtSaldo(r.funcionario_id)}</span></div>
-              <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtH(r.horas_trabalhadas)}</b> · pagamento ${esc(r.forma_pagamento)}</div>
+              <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtH(r.horas_trabalhadas)}</b></div>
+              <div>${seloPagamento(r)}</div>
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? ` faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b> <span class="text-[10px]">${txtSaldo(r.funcionario_ausente_id)}</span>` : ''}</div>
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">Líder: "${esc(r.observacao_lider)}"</div>` : ''}
@@ -288,6 +328,9 @@
       document.getElementById('apSaldoFreela').innerHTML = txtSaldo(r.funcionario_id);
       document.getElementById('apHoras').value = r.horas_trabalhadas;
       document.getElementById('apForma').value = r.forma_pagamento || 'FOLHA';
+      document.getElementById('apDataPrevista').value = '';
+      document.getElementById('apCompFolha').innerText = compAberta || '-';
+      document.getElementById('apLiderPediu').innerHTML = `Líder pediu: <b>${esc(r.forma_pagamento || '-')}</b> · confirme ou altere a forma acima.`;
       document.getElementById('apValor').value = '';
       document.querySelector('input[name="apModo"][value="PAGAR"]').checked = true;
       const deve = (saldos[r.funcionario_id] || 0) < 0;
@@ -312,6 +355,16 @@
       const modo = document.querySelector('input[name="apModo"]:checked').value;
       const forma = document.getElementById('apForma').value;
       document.getElementById('boxValor').classList.toggle('hidden', modo !== 'PAGAR');
+      const cores = { FOLHA: 'border-slate-700 bg-slate-700 text-white', SEMANAL: 'border-amber-500 bg-amber-400 text-amber-950', QUINZENAL: 'border-violet-600 bg-violet-600 text-white' };
+      document.querySelectorAll('.btnForma').forEach(b => b.className = `btnForma py-2.5 rounded-lg text-[11px] font-black border-2 cursor-pointer ${b.dataset.forma === forma ? cores[forma] + ' shadow' : 'border-slate-200 bg-white text-slate-400'}`);
+      const foraFolha = modo === 'PAGAR' && forma !== 'FOLHA';
+      document.getElementById('boxPagamento').className = `rounded-xl border-2 p-3 space-y-2 ${modo !== 'PAGAR' ? 'hidden' : foraFolha ? 'border-amber-400 bg-amber-50' : 'border-slate-300 bg-white'}`;
+      document.getElementById('boxDataPrevista').classList.toggle('hidden', !foraFolha);
+      document.getElementById('txtFolha').classList.toggle('hidden', !(modo === 'PAGAR' && forma === 'FOLHA'));
+      if (foraFolha) {
+        const sug = sugestaoData(forma);
+        document.getElementById('apSugestao').innerHTML = `Sugestão ${forma.toLowerCase()}: <a href="#" onclick="document.getElementById('apDataPrevista').value='${sug}';return false;" class="underline font-bold">usar ${dataBR(sug)}</a>`;
+      }
       document.getElementById('boxEventoPag').classList.toggle('hidden', !(modo === 'PAGAR' && forma === 'FOLHA'));
       document.getElementById('apInfoFreela').innerText = modo === 'COMPENSAR'
         ? 'As horas entram como crédito no banco de horas dele. Nenhum valor é pago.'
@@ -326,6 +379,12 @@
       const modo = document.querySelector('input[name="apModo"]:checked').value;
       const trat = atual.funcionario_ausente_id ? ((document.querySelector('input[name="apTrat"]:checked') || {}).value || null) : null;
       if (atual.funcionario_ausente_id && !trat) return alert('Defina o tratamento de quem faltou.');
+      const formaSel = document.getElementById('apForma').value;
+      const dataPrev = document.getElementById('apDataPrevista').value || null;
+      if (modo === 'PAGAR' && formaSel !== 'FOLHA' && !dataPrev) {
+        document.getElementById('apDataPrevista').focus();
+        return alert('Informe a DATA PREVISTA DE PAGAMENTO (' + formaSel.toLowerCase() + ').');
+      }
       const params = {
         p_id: atual.id, p_aprovar: true,
         p_obs: document.getElementById('apObs').value.trim() || null,
@@ -337,7 +396,8 @@
         p_evento_falta: trat === 'DESCONTO' ? parseInt(document.getElementById('apEventoFalta').value) : null,
         p_valor_falta: trat === 'DESCONTO' ? (parseFloat(document.getElementById('apValorFalta').value) || null) : null,
         p_horas_falta: trat === 'BANCO_HORAS' ? (parseFloat(document.getElementById('apHorasFalta').value) || null) : null,
-        p_evento_pag: (modo === 'PAGAR' && document.getElementById('apForma').value === 'FOLHA') ? (parseInt(document.getElementById('apEventoPag').value) || null) : null
+        p_evento_pag: (modo === 'PAGAR' && document.getElementById('apForma').value === 'FOLHA') ? (parseInt(document.getElementById('apEventoPag').value) || null) : null,
+        p_data_prevista: (modo === 'PAGAR' && formaSel !== 'FOLHA') ? dataPrev : null
       };
       const btn = document.getElementById('btnAprovar'); btn.disabled = true;
       const { error } = await _supabase.rpc('fn_freelance_decisao_rh', params);

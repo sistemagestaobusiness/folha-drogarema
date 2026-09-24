@@ -7,11 +7,11 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
 
   <div class="max-w-[1200px] mx-auto space-y-5">
 
-    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">APROVAÇÃO DO SUPERVISOR</h1>
         <p class="text-xs text-slate-500">Freelance · 1ª etapa de aprovação (todas as lojas)</p>
@@ -37,6 +37,21 @@
     <div class="flex gap-4 border-b border-slate-200">
       <button id="abaPend" onclick="trocarAba('pend')" class="pb-2 text-xs font-bold border-b-2 border-indigo-600 text-indigo-700 cursor-pointer">AGUARDANDO DECISÃO <span id="qtdPend" class="ml-1 bg-amber-100 text-amber-800 px-2 rounded-full">0</span></button>
       <button id="abaHist" onclick="trocarAba('hist')" class="pb-2 text-xs font-bold text-slate-400 cursor-pointer">DECIDIDAS (HISTÓRICO)</button>
+    </div>
+
+    <!-- Filtro inteligente (vale para as duas abas) -->
+    <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-3 items-end text-xs">
+      <div class="flex-1 min-w-[200px]"><label class="block text-[10px] font-bold text-slate-500 uppercase">Colaborador</label>
+        <input type="text" id="fNome" oninput="clearTimeout(window._tN); window._tN = setTimeout(renderizar, 200)" placeholder="🔍 Digite parte do nome (quem trabalha ou quem faltou)" autocomplete="off" class="w-full border border-slate-300 rounded p-1.5 uppercase"></div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Função</label>
+        <select id="fFuncao" onchange="renderizar()" class="border border-slate-300 rounded p-1.5 font-bold">
+          <option value="">Todas</option><option value="FARMACEUTICO">Farmacêutico</option><option value="BALCONISTA">Balconista</option><option value="CAIXA">Caixa/Atendente</option>
+        </select></div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Tipo</label>
+        <select id="fTipo" onchange="renderizar()" class="border border-slate-300 rounded p-1.5 font-bold">
+          <option value="">Todos</option><option value="FREELANCE">Freelance</option><option value="HORA_EXTRA">Hora extra</option>
+        </select></div>
+      <span id="fResumo" class="text-[10px] text-slate-400"></span>
     </div>
 
     <div id="filtrosHist" class="hidden bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-3 items-end text-xs">
@@ -134,11 +149,28 @@
       const { data, error } = await q;
       const box = document.getElementById('lista');
       if (error) { box.innerHTML = `<div class="text-rose-600 text-xs">${esc(error.message)}</div>`; return; }
-      if (!data || data.length === 0) {
-        box.innerHTML = `<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">${aba === 'pend' ? '🎉 Nenhuma solicitação aguardando.' : 'Nenhuma decisão no período.'}</div>`;
+      dadosCarregados = data || [];
+      renderizar();
+    }
+
+    // Filtro inteligente: nome sem acento (qualquer parte, várias palavras), função e tipo
+    let dadosCarregados = [];
+    const normTxt = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    function renderizar() {
+      const box = document.getElementById('lista');
+      const termo = normTxt(document.getElementById('fNome').value.trim());
+      const funcao = document.getElementById('fFuncao').value, tipo = document.getElementById('fTipo').value;
+      const lista = dadosCarregados.filter(r =>
+        (!termo || termo.split(/\s+/).every(p => normTxt(nome(r.funcionario_id)).includes(p) || (r.funcionario_ausente_id && normTxt(nome(r.funcionario_ausente_id)).includes(p))))
+        && (!funcao || normTxt(r.cargo_exercido).startsWith(funcao))
+        && (!tipo || (r.tipo_solicitacao || 'FREELANCE') === tipo));
+      const filtrando = termo || funcao || tipo;
+      document.getElementById('fResumo').innerText = filtrando ? `${lista.length} de ${dadosCarregados.length} solicitação(ões)` : '';
+      if (lista.length === 0) {
+        box.innerHTML = `<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">${filtrando ? 'Nenhuma solicitação com esse filtro.' : aba === 'pend' ? '🎉 Nenhuma solicitação aguardando.' : 'Nenhuma decisão no período.'}</div>`;
         return;
       }
-      box.innerHTML = data.map(r => card(r)).join('');
+      box.innerHTML = lista.map(r => card(r)).join('');
     }
 
     function card(r) {

@@ -7,7 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
 
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
@@ -61,9 +61,9 @@
           </div>
         </div>
 
-        <!-- Freelance (fluxo em teste) -->
+        <!-- Jornada e pagamentos extras (freelance, hora extra, aprovações, financeiro) -->
         <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
-          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Freelance <span class="text-amber-600">(teste)</span></h3>
+          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Jornada e Pagamentos Extras <span class="text-amber-600">(teste)</span></h3>
           <div class="flex flex-col space-y-1 text-[11px] font-medium pt-1">
             <a href="freelance_solicitacao.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
               <span>📝</span> <span>Solicitar (Líder)</span>
@@ -713,6 +713,32 @@
             totalGeralEmp += (e.contabil + e.naoContabil);
           });
 
+          // Ordem: LOJA 01, LOJA 02... (subtotal lojas) > demais empresas em ordem alfabética (subtotal) > total geral
+          const numLoja = n => { const m = String(n || '').match(/^\s*LOJA\s*0*(\d+)/i); return m ? parseInt(m[1], 10) : null; };
+          const grpLojas = listaEmpArr.filter(e => numLoja(e.nome) !== null).sort((a, b) => numLoja(a.nome) - numLoja(b.nome) || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+          const grpOutras = listaEmpArr.filter(e => numLoja(e.nome) === null).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+          const somar = arr => arr.reduce((t, e) => ({ ativos: t.ativos + e.ativosCount, contabil: t.contabil + e.contabil, naoContabil: t.naoContabil + e.naoContabil }), { ativos: 0, contabil: 0, naoContabil: 0 });
+          const moedaEmp = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+          const linhaEmp = e => `
+                    <tr class="hover:bg-slate-50 transition text-xs">
+                      <td class="py-2 px-2 font-bold text-slate-800 truncate max-w-[180px]">${e.nome}</td>
+                      <td class="py-2 px-2 text-center text-slate-600 font-mono">${e.ativosCount}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-700">${moedaEmp(e.contabil)}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-600">${moedaEmp(e.naoContabil)}</td>
+                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700">${moedaEmp(e.contabil + e.naoContabil)}</td>
+                    </tr>`;
+          const linhaSub = (rot, s) => `
+                    <tr class="bg-slate-100 text-xs font-bold">
+                      <td class="py-1.5 px-2 text-slate-700 uppercase text-[10px] tracking-wide">${rot}</td>
+                      <td class="py-1.5 px-2 text-center font-mono text-slate-700">${s.ativos}</td>
+                      <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.contabil)}</td>
+                      <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.naoContabil)}</td>
+                      <td class="py-1.5 px-2 text-right font-mono text-emerald-800">${moedaEmp(s.contabil + s.naoContabil)}</td>
+                    </tr>`;
+          const subLojas = somar(grpLojas), subOutras = somar(grpOutras);
+          const corpoEmp = (grpLojas.length ? grpLojas.map(linhaEmp).join('') + linhaSub('Subtotal lojas', subLojas) : '')
+                         + (grpOutras.length ? grpOutras.map(linhaEmp).join('') + linhaSub('Subtotal demais empresas', subOutras) : '');
+
           containerEmp.innerHTML = `
             <table class="w-full text-left border-collapse">
               <thead>
@@ -725,22 +751,11 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                ${listaEmpArr.map(e => {
-                  const totalLinha = e.contabil + e.naoContabil;
-                  return `
-                    <tr class="hover:bg-slate-50 transition text-xs">
-                      <td class="py-2 px-2 font-bold text-slate-800 truncate max-w-[180px]">${e.nome}</td>
-                      <td class="py-2 px-2 text-center text-slate-600 font-mono">${e.ativosCount}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-700">R$ ${e.contabil.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-600">R$ ${e.naoContabil.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700">R$ ${totalLinha.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                    </tr>
-                  `;
-                }).join('')}
+                ${corpoEmp}
               </tbody>
               <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-bold text-xs">
                 <tr>
-                  <td class="py-2.5 px-2 text-slate-900 uppercase">Total Geral</td>
+                  <td class="py-2.5 px-2 text-slate-900 uppercase">Total Geral (lojas + empresas)</td>
                   <td class="py-2.5 px-2 text-center font-mono text-slate-800">${totalAtivosEmp}</td>
                   <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                   <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalNaoContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>

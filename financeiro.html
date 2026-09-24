@@ -7,10 +7,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
   <div class="max-w-[1400px] mx-auto space-y-5">
 
-    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">FINANCEIRO · PAGAMENTOS A REALIZAR</h1>
         <p class="text-xs text-slate-500">Tudo o que é pago fora do 5º dia útil · somente pendentes</p>
@@ -48,20 +48,20 @@
           <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase">
             <tr>
               <th class="p-3 w-8"><input type="checkbox" id="chkTodos" onchange="marcarTodos(this.checked)"></th>
-              <th class="p-3">Vencimento</th><th class="p-3">Solicitado</th><th class="p-3">Tipo</th><th class="p-3">Funcionário</th>
+              <th class="p-3">Pagar em</th><th class="p-3">Tipo / origem</th><th class="p-3">Funcionário</th>
               <th class="p-3">Empresa (registro)</th><th class="p-3">Dados bancários</th><th class="p-3 text-right">Valor</th><th class="p-3"></th>
             </tr>
           </thead>
           <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
-      <p class="text-[10px] text-slate-400">Comprovantes: o envio em lote (vários arquivos de uma vez, vinculados automaticamente a cada funcionário) entra na próxima etapa.</p>
+      <p class="text-[10px] text-slate-400">Ordenado pela data prevista de pagamento. Os comprovantes são anexados na confirmação (um geral para o lote e/ou um por funcionário).</p>
     </div>
   </div>
 
   <!-- CONFIRMAR PAGAMENTO -->
   <div id="modalPagar" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl">
+    <div class="bg-white rounded-2xl w-full max-w-lg p-5 space-y-3 shadow-2xl max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-2">
         <h3 class="font-bold text-sm text-emerald-700">CONFIRMAR PAGAMENTO</h3>
         <button onclick="fechar('modalPagar')" class="text-slate-400 font-bold cursor-pointer">✕</button>
@@ -74,6 +74,12 @@
           <datalist id="listaBancos"><option>Itaú</option><option>Bradesco</option><option>Santander</option><option>Banco do Brasil</option><option>Caixa</option><option>Sicoob</option><option>Sicredi</option><option>Inter</option><option>Dinheiro (tesouraria)</option></datalist></div>
       </div>
       <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Observação</label><textarea id="pgObs" rows="2" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea></div>
+      <div class="border border-slate-200 rounded-lg p-2 space-y-2">
+        <div class="text-[10px] font-bold text-slate-500 uppercase">📎 Comprovantes (opcional · PDF ou imagem)</div>
+        <div><label class="block text-[10px] text-slate-500">Comprovante geral do lote (vale para todos os selecionados)</label>
+          <input type="file" id="pgArqGeral" accept=".pdf,image/*" class="w-full text-[11px]"></div>
+        <div id="pgArqItens" class="max-h-48 overflow-y-auto divide-y divide-slate-100 text-[11px]"></div>
+      </div>
       <button id="pgBtn" onclick="confirmarPagamento()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer">CONFIRMAR</button>
     </div>
   </div>
@@ -103,15 +109,15 @@
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const TIPOS = {
-      FREELANCE: { txt: 'Freelance', cls: 'bg-indigo-100 text-indigo-800' },
-      HORA_EXTRA: { txt: 'Hora extra', cls: 'bg-orange-100 text-orange-800' },
-      ADIANTAMENTO: { txt: 'Adiantamento', cls: 'bg-sky-100 text-sky-800' },
-      VALE_TRANSPORTE: { txt: 'Vale-transporte', cls: 'bg-teal-100 text-teal-800' },
-      FERIAS: { txt: 'Férias', cls: 'bg-emerald-100 text-emerald-800' },
-      DECIMO_TERCEIRO: { txt: '13º salário', cls: 'bg-purple-100 text-purple-800' },
-      RESCISAO: { txt: 'Rescisão', cls: 'bg-rose-100 text-rose-800' },
-      REEMBOLSO: { txt: 'Reembolso', cls: 'bg-lime-100 text-lime-800' },
-      OUTROS: { txt: 'Outros', cls: 'bg-slate-200 text-slate-700' }
+      FREELANCE: { txt: 'Freelance', icone: '🧑‍🤝‍🧑', cls: 'bg-indigo-100 text-indigo-800' },
+      HORA_EXTRA: { txt: 'Hora extra', icone: '⏰', cls: 'bg-orange-100 text-orange-800' },
+      ADIANTAMENTO: { txt: 'Adiantamento salarial', icone: '💰', cls: 'bg-sky-100 text-sky-800' },
+      VALE_TRANSPORTE: { txt: 'Vale-transporte', icone: '🚌', cls: 'bg-teal-100 text-teal-800' },
+      FERIAS: { txt: 'Férias', icone: '🏖', cls: 'bg-emerald-100 text-emerald-800' },
+      DECIMO_TERCEIRO: { txt: '13º salário', icone: '🎄', cls: 'bg-purple-100 text-purple-800' },
+      RESCISAO: { txt: 'Rescisão', icone: '📄', cls: 'bg-rose-100 text-rose-800' },
+      REEMBOLSO: { txt: 'Reembolso', icone: '↩', cls: 'bg-lime-100 text-lime-800' },
+      OUTROS: { txt: 'Outros', icone: '•', cls: 'bg-slate-200 text-slate-700' }
     };
     let perfil = null, itens = [], funcs = {}, empresas = [], filtroTipo = '', selecionados = new Set(), itemProblema = null;
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -194,16 +200,39 @@
       const lista = itens.filter(i => !filtroTipo || i.tipo === filtroTipo);
       const h = hoje(), lim = somaDias(h, 3);
       const tb = document.getElementById('tabela');
-      if (lista.length === 0) { tb.innerHTML = '<tr><td colspan="9" class="p-10 text-center text-slate-400">🎉 Nenhum pagamento pendente.</td></tr>'; atualizarSel(); return; }
+      if (lista.length === 0) { tb.innerHTML = '<tr><td colspan="8" class="p-10 text-center text-slate-400">🎉 Nenhum pagamento pendente.</td></tr>'; atualizarSel(); return; }
+      // Agrupa por data prevista de pagamento (sequência lógica do dia a dia do Financeiro)
+      const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+      let dataAtual = null;
       tb.innerHTML = lista.map(i => {
+        let cab = '';
+        if (i.vencimento !== dataAtual) {
+          dataAtual = i.vencimento;
+          const doDia = lista.filter(x => x.vencimento === dataAtual);
+          const idsDia = doDia.map(x => x.id);
+          const todosMarcados = idsDia.every(id => selecionados.has(id));
+          const situacao = dataAtual < h ? ['bg-rose-600 text-white', '⚠ VENCIDO'] : dataAtual === h ? ['bg-emerald-600 text-white', 'HOJE'] : dataAtual <= lim ? ['bg-amber-400 text-amber-950', 'PRÓXIMOS DIAS'] : ['bg-slate-700 text-white', ''];
+          cab = `<tr class="${situacao[0]}"><td class="px-3 py-1.5"><input type="checkbox" ${todosMarcados ? 'checked' : ''} onchange="marcarDia('${dataAtual}', this.checked)" title="Selecionar todos do dia"></td>
+            <td colspan="7" class="px-3 py-1.5 text-[11px] font-black uppercase tracking-wide flex-wrap">📅 ${dbr(dataAtual)} · ${DIAS[new Date(dataAtual + 'T12:00:00').getDay()]} ${situacao[1] ? '· ' + situacao[1] : ''}
+              <span class="float-right font-mono">${doDia.length} pagamento(s) · ${fmtR(doDia.reduce((a, x) => a + parseFloat(x.valor), 0))}</span></td></tr>`;
+        }
+        return cab + linhaItem(i, h, lim);
+      }).join('');
+      atualizarSel();
+    }
+
+    function marcarDia(data, on) { itens.filter(i => i.vencimento === data && (!filtroTipo || i.tipo === filtroTipo)).forEach(i => on ? selecionados.add(i.id) : selecionados.delete(i.id)); renderTabela(); }
+
+    function linhaItem(i, h, lim) {
+      {
         const f = funcs[i.funcionario_id] || {};
         const tp = TIPOS[i.tipo] || { txt: i.tipo, cls: 'bg-slate-100' };
         const corV = i.vencimento < h ? 'text-rose-700 font-black' : i.vencimento <= lim ? 'text-amber-700 font-bold' : 'text-slate-700';
         return `<tr class="hover:bg-slate-50 ${selecionados.has(i.id) ? 'bg-emerald-50' : ''}">
           <td class="p-3"><input type="checkbox" ${selecionados.has(i.id) ? 'checked' : ''} onchange="marcar('${i.id}', this.checked)"></td>
-          <td class="p-3 font-mono ${corV}">${dbr(i.vencimento)}${i.vencimento < h ? '<div class="text-[9px]">VENCIDO</div>' : ''}</td>
-          <td class="p-3 font-mono text-slate-500">${dbr(i.criado_em)}</td>
-          <td class="p-3"><span class="${tp.cls} px-2 py-0.5 rounded text-[10px] font-bold">${tp.txt}</span></td>
+          <td class="p-3 font-mono text-sm ${corV}">${dbr(i.vencimento)}${i.vencimento < h ? '<div class="text-[9px]">VENCIDO</div>' : ''}<div class="text-[9px] text-slate-400 font-normal">solicitado ${dbr(i.criado_em)}</div></td>
+          <td class="p-3"><span class="${tp.cls} px-2 py-1 rounded text-[11px] font-black uppercase whitespace-nowrap">${tp.icone || ''} ${tp.txt}</span>
+            <div class="text-[9px] text-slate-500 mt-1">${i.origem === 'LANCAMENTO' ? 'via lançamento do RH' : 'via solicitação aprovada'}</div></td>
           <td class="p-3"><div class="font-bold">${esc(f.nome_registro || '—')}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.matricula ? ' · mat. ' + esc(f.matricula) : ''}</div>
             <div class="text-[10px] text-slate-400">${i.origem === 'LANCAMENTO' ? '📋 Lançamento RH ' + esc(i.competencia || '') + ' · ' + esc(i.rubrica || '') + (i.descricao ? ' · ' + esc(i.descricao) : '') : '🧑‍🤝‍🧑 ' + esc(i.descricao || '')}</div>${i.resolucao_obs ? `<div class="text-[10px] text-sky-700">↩ RH: ${esc(i.resolucao_obs)}</div>` : ''}</td>
           <td class="p-3 text-[11px]">${esc(empresaDe(f))}</td>
@@ -211,8 +240,7 @@
           <td class="p-3 text-right font-mono font-bold">${fmtR(i.valor)}</td>
           <td class="p-3 text-right"><button onclick="abrirProblema('${i.id}')" class="text-[10px] px-2 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded font-bold cursor-pointer whitespace-nowrap">⚠ Problema</button></td>
         </tr>`;
-      }).join('');
-      atualizarSel();
+      }
     }
 
     function marcar(id, on) { on ? selecionados.add(id) : selecionados.delete(id); renderTabela(); }
@@ -229,17 +257,56 @@
       document.getElementById('pgResumo').innerText = `${sel.length} pagamento(s) · total ${fmtR(sel.reduce((a, i) => a + parseFloat(i.valor), 0))}. Todos recebem a mesma data e o mesmo banco.`;
       document.getElementById('pgData').value = hoje();
       document.getElementById('pgObs').value = '';
+      document.getElementById('pgArqGeral').value = '';
+      document.getElementById('pgArqItens').innerHTML = sel.map(i => `
+        <div class="flex items-center justify-between gap-2 py-1">
+          <span class="truncate"><b>${esc((funcs[i.funcionario_id] || {}).nome_registro || '—')}</b> · ${fmtR(i.valor)}</span>
+          <input type="file" data-id="${i.id}" accept=".pdf,image/*" class="pgArqItem text-[10px] w-44 shrink-0">
+        </div>`).join('');
       document.getElementById('modalPagar').classList.remove('hidden');
     }
+    // Envia um arquivo ao Storage (bucket privado "comprovantes") e devolve o caminho
+    async function enviarArquivo(arquivo, pasta) {
+      const nomeSeguro = arquivo.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
+      const caminho = `${pasta}/${Date.now()}_${nomeSeguro}`;
+      const { error } = await _supabase.storage.from('comprovantes').upload(caminho, arquivo, { upsert: false });
+      if (error) throw new Error(`${arquivo.name}: ${error.message}`);
+      return caminho;
+    }
+
     async function confirmarPagamento() {
-      const btn = document.getElementById('pgBtn'); btn.disabled = true;
+      const btn = document.getElementById('pgBtn');
+      const ids = [...selecionados];
+      if (!document.getElementById('pgData').value) return alert('Informe a data do pagamento.');
+      if (!document.getElementById('pgBanco').value.trim()) return alert('Informe o banco pagador.');
+      btn.disabled = true; btn.innerText = 'ENVIANDO...';
+      // 1) comprovantes primeiro (se falhar, nada é confirmado)
+      const anexos = {};
+      try {
+        const geral = document.getElementById('pgArqGeral').files[0];
+        if (geral) { const p = await enviarArquivo(geral, 'lote_' + document.getElementById('pgData').value); ids.forEach(id => anexos[id] = p); }
+        for (const inp of document.querySelectorAll('.pgArqItem')) {
+          if (inp.files[0]) anexos[inp.dataset.id] = await enviarArquivo(inp.files[0], inp.dataset.id);
+        }
+      } catch (e) {
+        btn.disabled = false; btn.innerText = 'CONFIRMAR';
+        return alert('Falha ao enviar comprovante. Nenhum pagamento foi confirmado.\n' + e.message);
+      }
+      // 2) confirma o pagamento
       const { data, error } = await _supabase.rpc('fn_pagamento_confirmar', {
-        p_ids: [...selecionados], p_data: document.getElementById('pgData').value || null,
+        p_ids: ids, p_data: document.getElementById('pgData').value || null,
         p_banco: document.getElementById('pgBanco').value.trim() || null, p_obs: document.getElementById('pgObs').value.trim() || null
       });
-      btn.disabled = false;
-      if (error) return alert(error.message);
-      alert(`${data} pagamento(s) confirmado(s).`);
+      if (error) { btn.disabled = false; btn.innerText = 'CONFIRMAR'; return alert(error.message); }
+      // 3) vincula os comprovantes
+      const falhas = [];
+      for (const [id, caminho] of Object.entries(anexos)) {
+        const { error: e2 } = await _supabase.rpc('fn_pagamento_anexar', { p_id: id, p_path: caminho });
+        if (e2) falhas.push(e2.message);
+      }
+      btn.disabled = false; btn.innerText = 'CONFIRMAR';
+      alert(`${data} pagamento(s) confirmado(s).` + (Object.keys(anexos).length ? ` ${Object.keys(anexos).length - falhas.length} comprovante(s) anexado(s).` : '')
+        + (falhas.length ? '\nFalha ao vincular: ' + falhas.join(' | ') : ''));
       selecionados.clear(); fechar('modalPagar'); carregar();
     }
 
