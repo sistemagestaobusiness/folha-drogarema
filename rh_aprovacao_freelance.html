@@ -9,353 +9,359 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
 
-  <div class="max-w-[1200px] mx-auto space-y-6">
-    
-    <!-- CABEÇALHO -->
-    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+  <div class="max-w-[1250px] mx-auto space-y-5">
+
+    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <div class="flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
           <h1 class="text-xl font-bold text-slate-900 tracking-wide">CENTRAL DE APROVAÇÃO (RH)</h1>
         </div>
-        <p class="text-xs text-slate-500 mt-0.5">Gestão de Plantões e Coberturas Extras (Freelance)</p>
+        <p class="text-xs text-slate-500">Freelance · aprovação final · competência aberta: <b id="lblComp" class="font-mono text-emerald-700">-</b></p>
       </div>
-      <div>
-        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← VOLTAR AO DASHBOARD</a>
-      </div>
-    </div>
-
-    <!-- LISTA DE PENDÊNCIAS -->
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-        <h2 class="font-bold text-slate-700 text-sm">SOLICITAÇÕES PENDENTES</h2>
-        <span id="contadorPendencias" class="text-[10px] bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold">0 aguardando</span>
-      </div>
-      
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="bg-white border-b border-slate-200 text-slate-500 uppercase text-[10px]">
-              <th class="p-3">Unidade / Loja</th>
-              <th class="p-3">Colaborador / Função</th>
-              <th class="p-3">Data Serviço</th>
-              <th class="p-3 text-center">Horas</th>
-              <th class="p-3 text-center">Ações (Financeiro)</th>
-            </tr>
-          </thead>
-          <tbody id="tabelaPendencias" class="divide-y divide-slate-100">
-            <tr><td colspan="5" class="p-8 text-center text-slate-400">Carregando solicitações...</td></tr>
-          </tbody>
-        </table>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span>
+          <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
+        </div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← DASHBOARD</a>
       </div>
     </div>
 
+    <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold">Seu perfil não tem acesso a esta tela.</div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div class="flex flex-wrap gap-4 border-b border-slate-200">
+        <button data-aba="rh" onclick="trocarAba('rh')" class="aba pb-2 text-xs font-bold cursor-pointer">AGUARDANDO RH <span id="qtdRh" class="ml-1 bg-sky-100 text-sky-800 px-2 rounded-full">0</span></button>
+        <button data-aba="sup" onclick="trocarAba('sup')" class="aba pb-2 text-xs font-bold cursor-pointer">AGUARDANDO SUPERVISOR <span id="qtdSup" class="ml-1 bg-amber-100 text-amber-800 px-2 rounded-full">0</span></button>
+        <button data-aba="hist" onclick="trocarAba('hist')" class="aba pb-2 text-xs font-bold cursor-pointer">HISTÓRICO</button>
+      </div>
+
+      <div id="filtrosHist" class="hidden bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-3 items-end text-xs">
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">De</label><input type="date" id="fDe" class="border border-slate-300 rounded p-1.5 font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Até</label><input type="date" id="fAte" class="border border-slate-300 rounded p-1.5 font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Status</label>
+          <select id="fStatus" class="border border-slate-300 rounded p-1.5">
+            <option value="">Todos</option><option value="APROVADA">Aprovadas</option><option value="REJEITADA">Recusadas</option><option value="CANCELADA">Canceladas</option>
+          </select></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Loja</label><select id="fLoja" class="border border-slate-300 rounded p-1.5"><option value="">Todas</option></select></div>
+        <div class="flex-1 min-w-[160px]"><label class="block text-[10px] font-bold text-slate-500 uppercase">Colaborador</label><input type="text" id="fNome" placeholder="nome..." class="w-full border border-slate-300 rounded p-1.5"></div>
+        <button onclick="carregar()" class="bg-slate-800 text-white font-bold px-4 py-2 rounded cursor-pointer">FILTRAR</button>
+        <span id="resumoHist" class="text-[11px] text-slate-500 w-full"></span>
+      </div>
+
+      <div id="lista" class="space-y-3"></div>
+    </div>
   </div>
 
-  <!-- MODAL DE RECUSA -->
-  <div id="modalRecusa" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
-    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+  <!-- MODAL APROVAÇÃO RH -->
+  <div id="modalAprovar" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div>
-          <h3 class="font-bold text-rose-700 text-sm">REJEITAR SOLICITAÇÃO</h3>
-          <p class="text-[11px] text-slate-500">Informe o motivo para o líder.</p>
+          <h3 class="font-bold text-emerald-700 text-sm">APROVAÇÃO FINAL (RH)</h3>
+          <p id="apResumo" class="text-[11px] text-slate-500"></p>
         </div>
-        <button onclick="fecharModalRecusa()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+        <button onclick="fechar('modalAprovar')" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
-      <div class="space-y-3">
-        <input type="hidden" id="recusaId">
-        <div>
-          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Motivo da Recusa *</label>
-          <textarea id="inputMotivoRecusa" rows="3" placeholder="Ex: Carga horária excede o limite, não autorizado..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-rose-500"></textarea>
+
+      <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+        <div class="text-[11px] font-bold text-slate-700 uppercase">1. Quem fez o freelance: <span id="apFreela" class="text-indigo-700"></span></div>
+        <div id="apSaldoFreela" class="text-[11px]"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas validadas</label>
+            <input type="number" id="apHoras" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+          <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Forma de pagamento</label>
+            <select id="apForma" onchange="atualizarModal()" class="w-full border border-slate-300 rounded p-2 text-xs font-bold">
+              <option value="FOLHA">FOLHA (5º dia útil)</option><option value="SEMANAL">SEMANAL</option><option value="QUINZENAL">QUINZENAL</option>
+            </select></div>
         </div>
-        <button onclick="confirmarRecusa(event)" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase">
-          Confirmar Rejeição
-        </button>
+        <div class="flex gap-4 text-xs">
+          <label class="cursor-pointer"><input type="radio" name="apModo" value="PAGAR" checked onchange="atualizarModal()"> Pagar (gera provento)</label>
+          <label id="lblCompensar" class="cursor-pointer"><input type="radio" name="apModo" value="COMPENSAR" onchange="atualizarModal()"> Compensar horas devidas (sem pagamento)</label>
+        </div>
+        <div id="boxValor"><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor a pagar (R$) *</label>
+          <input type="number" id="apValor" step="0.01" min="0" placeholder="0,00" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <p id="apInfoFreela" class="text-[10px] text-slate-500"></p>
       </div>
+
+      <div id="boxAusente" class="bg-rose-50 border border-rose-200 rounded-lg p-3 space-y-2">
+        <div class="text-[11px] font-bold text-rose-800 uppercase">2. Quem faltou: <span id="apAusente"></span></div>
+        <div id="apSaldoAusente" class="text-[11px]"></div>
+        <div class="flex flex-wrap gap-4 text-xs">
+          <label class="cursor-pointer"><input type="radio" name="apTrat" value="DESCONTO" onchange="atualizarModal()"> Desconto em folha</label>
+          <label class="cursor-pointer"><input type="radio" name="apTrat" value="BANCO_HORAS" onchange="atualizarModal()"> Banco de horas (acordo)</label>
+          <label class="cursor-pointer"><input type="radio" name="apTrat" value="NENHUM" onchange="atualizarModal()"> Nenhum</label>
+        </div>
+        <div id="boxDesconto" class="hidden grid grid-cols-2 gap-2">
+          <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Evento de desconto</label><select id="apEventoFalta" class="w-full border border-slate-300 rounded p-2 text-xs"></select></div>
+          <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor do desconto (R$) *</label><input type="number" id="apValorFalta" step="0.01" min="0" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        </div>
+        <div id="boxBanco" class="hidden"><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas devidas (débito)</label>
+          <input type="number" id="apHorasFalta" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+      </div>
+
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Observação do RH</label>
+        <textarea id="apObs" rows="2" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea></div>
+
+      <button id="btnAprovar" onclick="confirmarAprovacao()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer">REGISTRAR E APROVAR ✅</button>
     </div>
   </div>
 
- <!-- MODAL DE APROVAÇÃO FINANCEIRA -->
-  <div id="modalAprovacao" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
-    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+  <!-- MODAL TEXTO (recusa / decisão no lugar do supervisor) -->
+  <div id="modalTexto" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-        <div>
-          <h3 class="font-bold text-emerald-700 text-sm">APROVAÇÃO E LANÇAMENTO</h3>
-          <p class="text-[11px] text-slate-500">Defina os valores e o destino do pagamento.</p>
-        </div>
-        <button onclick="fecharModalAprovacao()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+        <h3 id="txTitulo" class="font-bold text-sm">-</h3>
+        <button onclick="fechar('modalTexto')" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
-      <div class="space-y-3">
-        <input type="hidden" id="aprovacaoId">
-        <input type="hidden" id="aprovacaoFuncId">
-        
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Horas Validadas</label>
-            <input type="number" id="inputEdicaoHoras" step="0.5" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-500 font-mono">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Acordo de Pag.</label>
-            <select id="selectEdicaoPagamento" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-[11px] focus:outline-none focus:border-emerald-500 font-bold">
-              <option value="SEMANAL">SEMANAL (Tesouraria)</option>
-              <option value="QUINZENAL">QUINZENAL (Tesouraria)</option>
-              <option value="FOLHA">MENSAL (Folha de Pagamento)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2 bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-          <div>
-            <label class="block text-[9px] font-bold text-emerald-800 uppercase mb-1">Folha (Mês/Ano)</label>
-            <input type="text" id="inputCompetenciaFolha" placeholder="09/2026" maxlength="7" oninput="formatarComp(this)" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono text-center">
-          </div>
-          <div>
-            <label class="block text-[9px] font-bold text-emerald-800 uppercase mb-1" title="Para pagamentos fora da folha">Data Avulsa *</label>
-            <input type="date" id="inputDataPagamento" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-[10px] focus:outline-none focus:border-emerald-600 font-mono text-center">
-          </div>
-          <div>
-            <label class="block text-[9px] font-bold text-emerald-800 uppercase mb-1">Valor (R$) *</label>
-            <input type="number" step="0.01" id="inputValorPago" placeholder="0.00" class="w-full bg-white border border-emerald-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-emerald-600 font-mono text-right font-bold text-emerald-700">
-          </div>
-        </div>
-
-        <button onclick="confirmarAprovacaoFinanceira(event)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase tracking-wide">
-          REGISTRAR E APROVAR ✅
-        </button>
-      </div>
+      <p id="txInfo" class="text-xs text-slate-600"></p>
+      <textarea id="txObs" rows="3" placeholder="Motivo / observação (obrigatório)" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs"></textarea>
+      <div id="txBotoes" class="flex gap-2"></div>
     </div>
   </div>
+
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    function formatarComp(input) {
-      let v = input.value.replace(/\D/g, '');
-      if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2, 6);
-      input.value = v;
+    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda' };
+    const STATUS = {
+      PENDENTE_SUPERVISOR: { txt: 'AGUARDANDO SUPERVISOR', cls: 'bg-amber-100 text-amber-800' },
+      PENDENTE_RH: { txt: 'AGUARDANDO RH', cls: 'bg-sky-100 text-sky-800' },
+      PENDENTE: { txt: 'PENDENTE (FLUXO ANTIGO)', cls: 'bg-amber-100 text-amber-800' },
+      APROVADA: { txt: 'APROVADA', cls: 'bg-emerald-100 text-emerald-800' },
+      REJEITADA: { txt: 'RECUSADA', cls: 'bg-rose-100 text-rose-800' },
+      CANCELADA: { txt: 'CANCELADA', cls: 'bg-slate-200 text-slate-600' }
+    };
+    const TRAT = { DESCONTO: 'Desconto em folha', BANCO_HORAS: 'Banco de horas', NENHUM: 'Nenhum' };
+
+    let aba = 'rh', funcs = {}, saldos = {}, eventosFalta = [], atual = null, compAberta = null;
+
+    function esc(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+    function dataBR(iso) { if (!iso) return '-'; const p = String(iso).slice(0,10).split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
+    function fmtH(h) { const n = parseFloat(h || 0); return (Number.isInteger(n) ? n : n.toFixed(1).replace('.', ',')) + 'h'; }
+    function fmtR(v) { return 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+    function nome(id) { return funcs[id] || '(colaborador não encontrado)'; }
+    function fechar(id) { document.getElementById(id).classList.add('hidden'); }
+    function txtSaldo(id) {
+      const s = saldos[id] || 0;
+      if (s < 0) return `<span class="text-rose-700 font-bold">Banco de horas: deve ${fmtH(Math.abs(s))}</span>`;
+      if (s > 0) return `<span class="text-emerald-700 font-bold">Banco de horas: crédito de ${fmtH(s)}</span>`;
+      return '<span class="text-slate-400">Banco de horas: sem saldo</span>';
     }
 
-    async function carregarPendencias() {
-      const tbody = document.getElementById('tabelaPendencias');
-      
-      const { data, error } = await _supabase
-        .from('freelance_solicitacoes')
-        .select(`*, funcionarios(nome_registro)`)
-        .eq('status', 'PENDENTE')
-        .order('created_at', { ascending: true });
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
+      const email = (user.email || '').toLowerCase();
+      const { data: p } = await _supabase.from('usuarios_sistema').select('perfil').eq('email', email).maybeSingle();
+      const perfil = p ? p.perfil : null;
+      document.getElementById('lblUsuario').innerText = email;
+      document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR'].includes(perfil)) { document.getElementById('avisoSemAcesso').classList.remove('hidden'); return; }
+      document.getElementById('conteudo').classList.remove('hidden');
 
-      if (error) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500">Erro ao carregar dados: ${error.message}</td></tr>`;
-        return;
-      }
-
-      document.getElementById('contadorPendencias').innerText = `${data.length} aguardando`;
-
-      if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 flex flex-col items-center gap-2"><span class="text-3xl">🎉</span>Nenhuma solicitação pendente! Tudo em dia.</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = data.map(req => {
-        const partesData = req.data_servico.split('-');
-        const dataFormatada = `${partesData[2]}/${partesData[1]}/${partesData[0]}`;
-        const compSugerida = `${partesData[1]}/${partesData[0]}`; // Sugere o mês/ano do serviço
-        
-        return `
-          <tr class="hover:bg-slate-50 transition border-b border-slate-50 last:border-0">
-            <td class="p-3">
-              <span class="font-bold text-slate-800 text-xs">${req.loja_solicitante || 'Não Informada'}</span>
-              <div class="text-[10px] text-slate-400 mt-0.5">Pagamento: <span class="font-bold text-slate-500">${req.forma_pagamento}</span></div>
-            </td>
-            <td class="p-3">
-              <span class="font-bold text-slate-800 text-xs">${req.funcionarios?.nome_registro || 'N/A'}</span>
-              <div class="text-[10px] text-slate-400 mt-0.5 uppercase">${req.cargo_exercido}</div>
-            </td>
-            <td class="p-3">
-              <span class="font-mono font-bold text-slate-700">${dataFormatada}</span>
-              <div class="text-[10px] text-slate-400 font-mono mt-0.5">${req.hora_inicio ? req.hora_inicio.substring(0,5) : '--'} às ${req.hora_fim ? req.hora_fim.substring(0,5) : '--'}</div>
-            </td>
-            <td class="p-3 text-center">
-              <span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-bold font-mono text-xs border border-indigo-100">${req.horas_trabalhadas}h</span>
-            </td>
-            <td class="p-3 text-center">
-              <div class="flex items-center justify-center gap-1.5">
-                <button onclick="abrirAprovacao('${req.id}', '${req.funcionario_id}', ${req.horas_trabalhadas || 0}, '${req.forma_pagamento || ''}', '${compSugerida}')" class="px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded font-bold text-[10px] transition cursor-pointer flex items-center gap-1 shadow-xs" title="Definir Valor e Aprovar">
-                  💰 APROVAR
-                </button>
-                <button onclick="abrirRecusa('${req.id}')" class="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded transition cursor-pointer shadow-xs" title="Rejeitar Solicitação">
-                  ❌
-                </button>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      const [rf, rc, re, rl] = await Promise.all([
+        _supabase.from('funcionarios').select('id, nome_registro'),
+        _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO'),
+        _supabase.from('tipos_eventos').select('codigo_evento, descricao_do_evento, natureza_do_evento, status').eq('tipo_evento', 'DESCONTO').order('codigo_evento'),
+        _supabase.from('lojas').select('id, nome_loja').order('nome_loja')
+      ]);
+      (rf.data || []).forEach(f => funcs[f.id] = f.nome_registro);
+      const c = (rc.data || [])[0];
+      compAberta = c ? `${String(c.mes).padStart(2, '0')}/${c.ano}` : null;
+      document.getElementById('lblComp').innerText = compAberta || 'NENHUMA (aprovação bloqueada)';
+      eventosFalta = (re.data || []).filter(e => String(e.descricao_do_evento).toUpperCase().includes('FALTA'));
+      document.getElementById('apEventoFalta').innerHTML = eventosFalta.map(e =>
+        `<option value="${e.codigo_evento}">${e.codigo_evento} - ${esc(e.descricao_do_evento)} (${e.natureza_do_evento === 'CONTABIL' ? 'contábil' : 'não contábil'})</option>`).join('');
+      document.getElementById('fLoja').innerHTML = '<option value="">Todas</option>' + (rl.data || []).map(l => `<option value="${esc(l.nome_loja)}">${esc(l.nome_loja)}</option>`).join('');
+      trocarAba('rh');
     }
 
-    // FLUXO DE RECUSA
-    function abrirRecusa(id) {
-      document.getElementById('recusaId').value = id;
-      document.getElementById('inputMotivoRecusa').value = '';
-      document.getElementById('modalRecusa').classList.remove('hidden');
+    async function carregarSaldos() {
+      const { data } = await _supabase.from('vw_banco_horas_saldo').select('funcionario_id, saldo_horas');
+      saldos = {}; (data || []).forEach(s => saldos[s.funcionario_id] = parseFloat(s.saldo_horas));
     }
 
-    function fecharModalRecusa() {
-      document.getElementById('modalRecusa').classList.add('hidden');
+    function trocarAba(a) {
+      aba = a;
+      document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-400'}`);
+      document.getElementById('filtrosHist').classList.toggle('hidden', a !== 'hist');
+      carregar();
     }
 
-    async function confirmarRecusa(event) {
-      const id = document.getElementById('recusaId').value;
-      const motivo = document.getElementById('inputMotivoRecusa').value;
+    async function carregar() {
+      await carregarSaldos();
+      const [cRh, cSup] = await Promise.all([
+        _supabase.from('freelance_solicitacoes').select('id', { count: 'exact', head: true }).in('status', ['PENDENTE_RH', 'PENDENTE']),
+        _supabase.from('freelance_solicitacoes').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE_SUPERVISOR')
+      ]);
+      document.getElementById('qtdRh').innerText = cRh.count || 0;
+      document.getElementById('qtdSup').innerText = cSup.count || 0;
 
-      if (!motivo.trim()) {
-        alert('É obrigatório informar o motivo da recusa.');
-        return;
-      }
-
-      const btn = event.target;
-      btn.disabled = true;
-      btn.innerText = 'Processando...';
-
-      const { error } = await _supabase.from('freelance_solicitacoes').update({ 
-        status: 'REJEITADA', 
-        observacao_rh: motivo 
-      }).eq('id', id);
-      
-      btn.disabled = false;
-      btn.innerText = 'Confirmar Rejeição';
-
-      if (error) alert('Erro ao rejeitar: ' + error.message);
+      let q = _supabase.from('freelance_solicitacoes').select('*');
+      if (aba === 'rh') q = q.in('status', ['PENDENTE_RH', 'PENDENTE']).order('data_servico');
+      else if (aba === 'sup') q = q.eq('status', 'PENDENTE_SUPERVISOR').order('data_servico');
       else {
-        fecharModalRecusa();
-        carregarPendencias();
+        q = q.in('status', ['APROVADA', 'REJEITADA', 'CANCELADA']);
+        const de = document.getElementById('fDe').value, ate = document.getElementById('fAte').value, st = document.getElementById('fStatus').value, lj = document.getElementById('fLoja').value;
+        if (de) q = q.gte('data_servico', de);
+        if (ate) q = q.lte('data_servico', ate);
+        if (st) q = q.eq('status', st);
+        if (lj) q = q.eq('loja_solicitante', lj);
+        q = q.order('data_servico', { ascending: false });
       }
+      const { data, error } = await q;
+      const box = document.getElementById('lista');
+      if (error) { box.innerHTML = `<div class="text-rose-600 text-xs">${esc(error.message)}</div>`; return; }
+      let lista = data || [];
+      if (aba === 'hist') {
+        const termo = document.getElementById('fNome').value.trim().toUpperCase();
+        if (termo) lista = lista.filter(r => nome(r.funcionario_id).toUpperCase().includes(termo) || nome(r.funcionario_ausente_id).toUpperCase().includes(termo));
+        const aprov = lista.filter(r => r.status === 'APROVADA');
+        document.getElementById('resumoHist').innerText = `${lista.length} solicitação(ões) · ${aprov.length} aprovada(s) · ${fmtH(aprov.reduce((a, r) => a + parseFloat(r.horas_trabalhadas || 0), 0))} · ${fmtR(aprov.reduce((a, r) => a + parseFloat(r.valor_pago || 0), 0))} pagos`;
+      }
+      if (lista.length === 0) { box.innerHTML = '<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">Nada por aqui.</div>'; return; }
+      box.innerHTML = lista.map(card).join('');
     }
 
-    // FLUXO DE APROVAÇÃO FINANCEIRA
-    function abrirAprovacao(id, funcId, horas, pagamento, compSugerida) {
-      document.getElementById('aprovacaoId').value = id;
-      document.getElementById('aprovacaoFuncId').value = funcId;
-      document.getElementById('inputEdicaoHoras').value = horas;
-      document.getElementById('selectEdicaoPagamento').value = pagamento;
-      document.getElementById('inputCompetenciaFolha').value = compSugerida;
-      document.getElementById('inputValorPago').value = ''; // Limpo para obrigar preenchimento
-      
-      document.getElementById('modalAprovacao').classList.remove('hidden');
+    function card(r) {
+      const st = STATUS[r.status] || { txt: r.status, cls: 'bg-slate-100' };
+      let acoes = '';
+      if (aba === 'rh') acoes = `
+        <div class="flex flex-col gap-2">
+          <button onclick="abrirAprovacao('${r.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer" ${compAberta ? '' : 'disabled title="Sem competência aberta"'}>💰 APROVAR</button>
+          <button onclick="abrirRecusa('${r.id}')" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-[11px] font-bold cursor-pointer">❌ RECUSAR</button>
+        </div>`;
+      if (aba === 'sup') acoes = `
+        <div class="flex flex-col gap-2 items-end">
+          <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded">⏳ Falta aprovação do supervisor</span>
+          <button onclick="abrirNoLugarSupervisor('${r.id}')" class="px-3 py-1.5 bg-white border border-amber-400 text-amber-800 hover:bg-amber-50 rounded-lg text-[11px] font-bold cursor-pointer">Decidir no lugar do supervisor</button>
+        </div>`;
+      const sup = r.supervisor_em ? `<div class="text-[11px]">Supervisor: <b>${r.status === 'REJEITADA' && !r.rh_em ? 'recusou' : 'aprovou'}</b> — ${esc(r.supervisor_por || '')}${r.supervisor_forcado ? ' <b class="text-amber-700">(no lugar do supervisor)</b>' : ''} em ${new Date(r.supervisor_em).toLocaleString('pt-BR')}${r.supervisor_obs ? ' · "' + esc(r.supervisor_obs) + '"' : ''}</div>` : '';
+      const rh = r.rh_em ? `<div class="text-[11px]">RH: ${esc(r.rh_por || '')} em ${new Date(r.rh_em).toLocaleString('pt-BR')}${r.observacao_rh ? ' · "' + esc(r.observacao_rh) + '"' : ''}</div>` : '';
+      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)} · ${esc(r.forma_pagamento)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
+      return `
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <div class="flex flex-col md:flex-row justify-between gap-3">
+            <div class="space-y-1 text-xs">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(r.loja_solicitante || 'SEM LOJA')}</span>
+                <span class="${st.cls} px-2 py-0.5 rounded text-[10px] font-bold">${st.txt}</span>
+                <span class="text-[10px] text-slate-400">por ${esc(r.solicitante_email || '—')}</span>
+              </div>
+              <div class="text-sm font-bold text-slate-900">${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span> <span class="text-[10px] font-normal">${txtSaldo(r.funcionario_id)}</span></div>
+              <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtH(r.horas_trabalhadas)}</b> · pagamento ${esc(r.forma_pagamento)}</div>
+              <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
+                ${r.funcionario_ausente_id ? ` faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b> <span class="text-[10px]">${txtSaldo(r.funcionario_ausente_id)}</span>` : ''}</div>
+              ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">Líder: "${esc(r.observacao_lider)}"</div>` : ''}
+              ${sup}${rh}${fin}
+            </div>
+            ${acoes}
+          </div>
+        </div>`;
     }
 
-    function fecharModalAprovacao() {
-      document.getElementById('modalAprovacao').classList.add('hidden');
+    // ---------- Aprovação final ----------
+    async function abrirAprovacao(id) {
+      const { data: r } = await _supabase.from('freelance_solicitacoes').select('*').eq('id', id).single();
+      if (!r) return;
+      atual = r;
+      document.getElementById('apResumo').innerText = `${r.loja_solicitante || ''} · ${dataBR(r.data_servico)} · ${NOMES_MOTIVO[r.motivo] || r.motivo || ''} · lança na competência ${compAberta}`;
+      document.getElementById('apFreela').innerText = nome(r.funcionario_id);
+      document.getElementById('apSaldoFreela').innerHTML = txtSaldo(r.funcionario_id);
+      document.getElementById('apHoras').value = r.horas_trabalhadas;
+      document.getElementById('apForma').value = r.forma_pagamento || 'FOLHA';
+      document.getElementById('apValor').value = '';
+      document.querySelector('input[name="apModo"][value="PAGAR"]').checked = true;
+      const deve = (saldos[r.funcionario_id] || 0) < 0;
+      document.getElementById('lblCompensar').classList.toggle('opacity-40', !deve);
+      document.querySelector('input[name="apModo"][value="COMPENSAR"]').disabled = !deve;
+
+      const temAusente = !!r.funcionario_ausente_id;
+      document.getElementById('boxAusente').classList.toggle('hidden', !temAusente);
+      if (temAusente) {
+        document.getElementById('apAusente').innerText = nome(r.funcionario_ausente_id);
+        document.getElementById('apSaldoAusente').innerHTML = txtSaldo(r.funcionario_ausente_id);
+        document.querySelectorAll('input[name="apTrat"]').forEach(x => x.checked = false);
+        document.getElementById('apValorFalta').value = '';
+        document.getElementById('apHorasFalta').value = r.horas_trabalhadas;
+      }
+      document.getElementById('apObs').value = '';
+      atualizarModal();
+      document.getElementById('modalAprovar').classList.remove('hidden');
     }
 
-  async function confirmarAprovacaoFinanceira(event) {
-      const id = document.getElementById('aprovacaoId').value;
-      const funcId = document.getElementById('aprovacaoFuncId').value;
-      const horas = parseFloat(document.getElementById('inputEdicaoHoras').value);
-      const pagamento = document.getElementById('selectEdicaoPagamento').value;
-      const competencia = document.getElementById('inputCompetenciaFolha').value;
-      const dataPagamento = document.getElementById('inputDataPagamento').value;
-      const valor = parseFloat(document.getElementById('inputValorPago').value);
+    function atualizarModal() {
+      const modo = document.querySelector('input[name="apModo"]:checked').value;
+      const forma = document.getElementById('apForma').value;
+      document.getElementById('boxValor').classList.toggle('hidden', modo !== 'PAGAR');
+      document.getElementById('apInfoFreela').innerText = modo === 'COMPENSAR'
+        ? 'As horas entram como crédito no banco de horas dele. Nenhum valor é pago.'
+        : forma === 'FOLHA' ? `Gera "2014 - FREELANCE PF" (não contábil) na competência ${compAberta}.`
+        : `Pagamento ${forma.toLowerCase()} fora da folha: fica registrado para o Financeiro (não entra no 5º dia útil).`;
+      const t = (document.querySelector('input[name="apTrat"]:checked') || {}).value;
+      document.getElementById('boxDesconto').classList.toggle('hidden', t !== 'DESCONTO');
+      document.getElementById('boxBanco').classList.toggle('hidden', t !== 'BANCO_HORAS');
+    }
 
-      if (!horas || horas <= 0) { alert('Informe uma carga horária válida.'); return; }
-      if (!valor || valor <= 0) { alert('Informe o valor a pagar (R$).'); return; }
-      
-      // Validações dinâmicas baseadas no destino do dinheiro
-      if (pagamento === 'FOLHA' && competencia.length !== 7) { 
-        alert('Para pagamento via Folha, a competência (MM/AAAA) é obrigatória.'); return; 
-      }
-      if (pagamento !== 'FOLHA' && !dataPagamento) {
-        alert('Para pagamentos via Tesouraria (Semanal/Quinzenal), a Data Avulsa é obrigatória.'); return;
-      }
-
-      const btn = event.target;
-      btn.disabled = true;
-      btn.innerText = 'Processando Segurança...';
-
-      let erroCritico = null;
-
-      // 1. INJEÇÃO FINANCEIRA APENAS SE FOR 'FOLHA'
-      if (pagamento === 'FOLHA') {
-        
-        // Verifica se a pessoa já tem freelance lançado nesse mês
-        const { data: itemExistente, error: errBusca } = await _supabase
-          .from('folha_itens')
-          .select('id, valor, valor_bruto, referencia')
-          .eq('funcionario_id', funcId)
-          .eq('competencia', competencia)
-          .eq('rubrica', '2014 - FREELANCE PF')
-          .single();
-
-        if (itemExistente) {
-          // AGLOMERAÇÃO: Já existe. Soma o dinheiro e soma +1 na quantidade (Referência)
-          let qtdAtual = parseInt(itemExistente.referencia) || 0;
-          const novoValor = parseFloat(itemExistente.valor) + valor;
-          const novoValorBruto = parseFloat(itemExistente.valor_bruto) + valor;
-          
-          const { error: errUpdate } = await _supabase.from('folha_itens').update({
-            valor: novoValor,
-            valor_bruto: novoValorBruto,
-            referencia: String(qtdAtual + 1)
-          }).eq('id', itemExistente.id);
-
-          if (errUpdate) erroCritico = errUpdate.message;
-
-        } else {
-          // PRIMEIRO LANÇAMENTO: Cria a linha do zero e diz que é o 1º freelance (Referencia = 1)
-          const { error: errInsert } = await _supabase.from('folha_itens').insert([{
-            funcionario_id: funcId,
-            rubrica: '2014 - FREELANCE PF', 
-            tipo: 'PROVENTO',
-            valor: valor,
-            valor_bruto: valor,
-            abatimento_sigiloso: 0,
-            motivo_ajuste: `Freelance Automático`,
-            parcela_atual: 1,
-            total_parcelas: 1,
-            fixo: false,
-            competencia: competencia,
-            referencia: '1' 
-          }]);
-          
-          if (errInsert) erroCritico = errInsert.message;
-        }
-      }
-
-      // TRAVA DE SEGURANÇA (Se a folha recusar por mês fechado, a operação morre aqui e não aprova a solicitação)
-      if (erroCritico) {
-        alert('OPERAÇÃO ABORTADA: O financeiro rejeitou o lançamento.\n\nMotivo: ' + erroCritico);
-        btn.disabled = false;
-        btn.innerText = 'REGISTRAR E APROVAR ✅';
-        return; 
-      }
-
-      // 2. TUDO CERTO COM O DINHEIRO. ATUALIZA A SOLICITAÇÃO (STATUS E DATA)
-      const payloadOperacional = {
-        horas_trabalhadas: horas,
-        forma_pagamento: pagamento,
-        valor_pago: valor,
-        status: 'APROVADA'
+    async function confirmarAprovacao() {
+      const modo = document.querySelector('input[name="apModo"]:checked').value;
+      const trat = atual.funcionario_ausente_id ? ((document.querySelector('input[name="apTrat"]:checked') || {}).value || null) : null;
+      if (atual.funcionario_ausente_id && !trat) return alert('Defina o tratamento de quem faltou.');
+      const params = {
+        p_id: atual.id, p_aprovar: true,
+        p_obs: document.getElementById('apObs').value.trim() || null,
+        p_horas: parseFloat(document.getElementById('apHoras').value) || null,
+        p_forma_pagamento: document.getElementById('apForma').value,
+        p_modo_freelancer: modo,
+        p_valor: modo === 'PAGAR' ? (parseFloat(document.getElementById('apValor').value) || null) : null,
+        p_tratamento_ausencia: trat,
+        p_evento_falta: trat === 'DESCONTO' ? parseInt(document.getElementById('apEventoFalta').value) : null,
+        p_valor_falta: trat === 'DESCONTO' ? (parseFloat(document.getElementById('apValorFalta').value) || null) : null,
+        p_horas_falta: trat === 'BANCO_HORAS' ? (parseFloat(document.getElementById('apHorasFalta').value) || null) : null
       };
-      
-      if (dataPagamento) {
-        payloadOperacional.data_pagamento = dataPagamento;
-      }
-
-      const { error: errOperacional } = await _supabase.from('freelance_solicitacoes').update(payloadOperacional).eq('id', id);
-
-      if (errOperacional) {
-        alert('ATENÇÃO GRAVE: Financeiro lançado, mas falha ao mudar o status.');
-      }
-
+      const btn = document.getElementById('btnAprovar'); btn.disabled = true;
+      const { error } = await _supabase.rpc('fn_freelance_decisao_rh', params);
       btn.disabled = false;
-      btn.innerText = 'REGISTRAR E APROVAR ✅';
-      fecharModalAprovacao();
-      carregarPendencias();
+      if (error) return alert('Não aprovado: ' + error.message);
+      fechar('modalAprovar');
+      carregar();
     }
 
-    // Inicializa
-    carregarPendencias();
+    // ---------- Recusa / decisão no lugar do supervisor ----------
+    function abrirTexto(titulo, info, botoes) {
+      document.getElementById('txTitulo').innerText = titulo;
+      document.getElementById('txInfo').innerText = info;
+      document.getElementById('txObs').value = '';
+      document.getElementById('txBotoes').innerHTML = botoes;
+      document.getElementById('modalTexto').classList.remove('hidden');
+    }
+    function abrirRecusa(id) {
+      abrirTexto('RECUSAR SOLICITAÇÃO', 'O motivo volta para o líder que solicitou.',
+        `<button onclick="executarRecusa('${id}')" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">CONFIRMAR RECUSA</button>`);
+    }
+    async function executarRecusa(id) {
+      const obs = document.getElementById('txObs').value.trim();
+      const { error } = await _supabase.rpc('fn_freelance_decisao_rh', { p_id: id, p_aprovar: false, p_obs: obs || null });
+      if (error) return alert(error.message);
+      fechar('modalTexto'); carregar();
+    }
+    function abrirNoLugarSupervisor(id) {
+      abrirTexto('DECIDIR NO LUGAR DO SUPERVISOR', 'Use só na ausência do supervisor. A decisão fica registrada com o seu usuário e marcada nos relatórios.',
+        `<button onclick="executarNoLugar('${id}', true)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">APROVAR (segue p/ RH)</button>
+         <button onclick="executarNoLugar('${id}', false)" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">RECUSAR</button>`);
+    }
+    async function executarNoLugar(id, aprovar) {
+      const obs = document.getElementById('txObs').value.trim();
+      const { error } = await _supabase.rpc('fn_freelance_decisao_supervisor', { p_id: id, p_aprovar: aprovar, p_obs: obs || null });
+      if (error) return alert(error.message);
+      fechar('modalTexto'); trocarAba(aprovar ? 'rh' : 'sup');
+    }
+
+    inicializar();
   </script>
 </body>
 </html>

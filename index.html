@@ -522,7 +522,7 @@
         const { data, error } = await _supabase
           .from('freelance_solicitacoes')
           .select('loja_solicitante')
-          .eq('status', 'PENDENTE');
+          .in('status', ['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH']);
 
         const alertaDiv = document.getElementById('alertaFreelance');
         const listaUl = document.getElementById('listaPendenciasFreelance');

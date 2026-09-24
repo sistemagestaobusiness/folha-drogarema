@@ -202,10 +202,7 @@
       document.getElementById('lblUsuario').innerText = usuario.email;
       document.getElementById('lblPerfil').innerText = usuario.perfil || 'SEM PERFIL';
 
-      const hoje = new Date(); const inicio = new Date(); inicio.setDate(hoje.getDate() - 30);
-      const fim = new Date(); fim.setDate(hoje.getDate() + 30);
-      document.getElementById('filtroDataInicio').value = dataLocalISO(inicio);
-      document.getElementById('filtroDataFim').value = dataLocalISO(fim);
+      // Filtro de datas vazio = todo o período
 
       await Promise.all([carregarLojas(), carregarFuncionarios()]);
       atualizarTabelaCarrinho();
@@ -381,7 +378,9 @@
     // ------------------------------------------------------------------
     async function carregarHistorico() {
       const ini = document.getElementById('filtroDataInicio').value, fim = document.getElementById('filtroDataFim').value;
-      let q = _supabase.from('freelance_solicitacoes').select('*').gte('data_servico', ini).lte('data_servico', fim);
+      let q = _supabase.from('freelance_solicitacoes').select('*');
+      if (ini) q = q.gte('data_servico', ini);
+      if (fim) q = q.lte('data_servico', fim);
       const veTudo = ['GESTOR', 'RH'].includes(usuario.perfil);
       if (!veTudo) q = q.eq('solicitante_email', usuario.email);
       document.getElementById('tituloHistorico').innerText = veTudo ? 'SOLICITAÇÕES (TODAS AS LOJAS)' : 'MINHAS SOLICITAÇÕES';
@@ -389,7 +388,7 @@
       const { data, error } = await q.order('data_servico', { ascending: false });
       const box = document.getElementById('listaHistorico');
       if (error) { box.innerHTML = `<div class="text-rose-600">${esc(error.message)}</div>`; return; }
-      if (!data || data.length === 0) { box.innerHTML = '<div class="p-4 text-center text-slate-400">Nenhuma solicitação no período.</div>'; return; }
+      if (!data || data.length === 0) { box.innerHTML = '<div class="p-4 text-center text-slate-400">Nenhuma solicitação encontrada.</div>'; return; }
 
       box.innerHTML = data.map(r => {
         const st = STATUS[r.status] || { txt: r.status, cls: 'bg-slate-100' };
