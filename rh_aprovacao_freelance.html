@@ -91,7 +91,7 @@
         <div class="flex flex-wrap gap-4 text-xs">
           <label class="cursor-pointer"><input type="radio" name="apTrat" value="DESCONTO" onchange="atualizarModal()"> Desconto em folha</label>
           <label class="cursor-pointer"><input type="radio" name="apTrat" value="BANCO_HORAS" onchange="atualizarModal()"> Banco de horas (acordo)</label>
-          <label class="cursor-pointer"><input type="radio" name="apTrat" value="NENHUM" onchange="atualizarModal()"> Nenhum</label>
+          <label class="cursor-pointer"><input type="radio" name="apTrat" value="ATESTADO" onchange="atualizarModal()"> Atestado (sem desconto)</label>
         </div>
         <div id="boxDesconto" class="hidden grid grid-cols-2 gap-2">
           <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Evento de desconto</label><select id="apEventoFalta" class="w-full border border-slate-300 rounded p-2 text-xs"></select></div>
@@ -135,7 +135,8 @@
       REJEITADA: { txt: 'RECUSADA', cls: 'bg-rose-100 text-rose-800' },
       CANCELADA: { txt: 'CANCELADA', cls: 'bg-slate-200 text-slate-600' }
     };
-    const TRAT = { DESCONTO: 'Desconto em folha', BANCO_HORAS: 'Banco de horas', NENHUM: 'Nenhum' };
+    const TRAT = { DESCONTO: 'Desconto em folha', BANCO_HORAS: 'Banco de horas', ATESTADO: 'Atestado', NENHUM: 'Nenhum' };
+    const PGTO = { PENDENTE: '⏳ aguardando Financeiro', PAGO: '✅ pago pelo Financeiro', FOLHA: 'na folha (5º dia útil)', COMPENSADO: 'compensado no banco de horas' };
 
     let aba = 'rh', funcs = {}, saldos = {}, eventosFalta = [], atual = null, compAberta = null;
 
@@ -246,7 +247,7 @@
         </div>`;
       const sup = r.supervisor_em ? `<div class="text-[11px]">Supervisor: <b>${r.status === 'REJEITADA' && !r.rh_em ? 'recusou' : 'aprovou'}</b> — ${esc(r.supervisor_por || '')}${r.supervisor_forcado ? ' <b class="text-amber-700">(no lugar do supervisor)</b>' : ''} em ${new Date(r.supervisor_em).toLocaleString('pt-BR')}${r.supervisor_obs ? ' · "' + esc(r.supervisor_obs) + '"' : ''}</div>` : '';
       const rh = r.rh_em ? `<div class="text-[11px]">RH: ${esc(r.rh_por || '')} em ${new Date(r.rh_em).toLocaleString('pt-BR')}${r.observacao_rh ? ' · "' + esc(r.observacao_rh) + '"' : ''}</div>` : '';
-      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)} · ${esc(r.forma_pagamento)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
+      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)} · ${esc(r.forma_pagamento)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
       return `
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           <div class="flex flex-col md:flex-row justify-between gap-3">

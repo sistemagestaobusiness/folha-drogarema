@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Banco de Horas - Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+  <div class="max-w-[1250px] mx-auto space-y-5">
+
+    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">BANCO DE HORAS</h1>
+        <p class="text-xs text-slate-500">Controle não contábil · débito por falta (acordo) · crédito por compensação</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span>
+          <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
+        </div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+      </div>
+    </div>
+
+    <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <!-- SALDOS -->
+      <div class="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-4 space-y-3 h-fit">
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-rose-50 border border-rose-200 rounded-lg p-3"><div class="text-[10px] font-bold text-rose-700 uppercase">Horas devidas</div><div id="kpiDeve" class="text-xl font-black text-rose-700 font-mono">0h</div><div id="kpiDeveQtd" class="text-[10px] text-rose-700"></div></div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3"><div class="text-[10px] font-bold text-emerald-700 uppercase">Horas em crédito</div><div id="kpiCred" class="text-xl font-black text-emerald-700 font-mono">0h</div><div id="kpiCredQtd" class="text-[10px] text-emerald-700"></div></div>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <input id="fNome" oninput="renderSaldos()" placeholder="🔍 Filtrar colaborador..." class="flex-1 border border-slate-300 rounded p-2">
+          <select id="fSit" onchange="renderSaldos()" class="border border-slate-300 rounded p-2">
+            <option value="">Com saldo</option><option value="DEVE">Devendo</option><option value="CRED">Com crédito</option><option value="TODOS">Todos c/ movimento</option>
+          </select>
+        </div>
+        <div id="listaSaldos" class="divide-y divide-slate-100 text-xs max-h-[60vh] overflow-y-auto"></div>
+      </div>
+
+      <!-- EXTRATO -->
+      <div class="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+          <div>
+            <h2 id="tituloExtrato" class="font-bold text-sm text-slate-900">EXTRATO</h2>
+            <p id="saldoExtrato" class="text-[11px] text-slate-500">Selecione um colaborador à esquerda.</p>
+          </div>
+          <button id="btnAjuste" onclick="abrirAjuste()" class="hidden px-3 py-1.5 bg-slate-800 text-white rounded-lg text-[11px] font-bold cursor-pointer">+ AJUSTE MANUAL</button>
+        </div>
+        <table class="w-full text-xs">
+          <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase"><tr><th class="p-2 text-left">Data</th><th class="p-2 text-left">Tipo</th><th class="p-2 text-left">Origem / observação</th><th class="p-2 text-right">Horas</th><th class="p-2 text-right">Saldo</th></tr></thead>
+          <tbody id="tabelaExtrato" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+        <h3 class="font-bold text-sm">AJUSTE MANUAL · <span id="mNome"></span></h3>
+        <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-slate-400 font-bold cursor-pointer">✕</button>
+      </div>
+      <div class="flex gap-4 text-xs">
+        <label class="cursor-pointer"><input type="radio" name="mTipo" value="-1" checked> Débito (deve horas)</label>
+        <label class="cursor-pointer"><input type="radio" name="mTipo" value="1"> Crédito (compensou)</label>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Data</label><input type="date" id="mData" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas *</label><input type="number" id="mHoras" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+      </div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Motivo *</label><textarea id="mObs" rows="2" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea></div>
+      <button onclick="salvarAjuste()" class="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer">REGISTRAR AJUSTE</button>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const TIPOS = { DEBITO_FALTA: 'Falta (acordo)', CREDITO_COMPENSACAO: 'Compensação em freelance', AJUSTE: 'Ajuste manual' };
+    let funcs = {}, saldos = [], selecionado = null;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const fh = h => { const n = parseFloat(h || 0); return (n > 0 ? '+' : '') + (Number.isInteger(n) ? n : n.toFixed(1).replace('.', ',')) + 'h'; };
+    const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
+      const { data: u, error } = await _supabase.rpc('fn_meu_usuario');
+      const perfil = u ? u.perfil : null;
+      document.getElementById('lblUsuario').innerText = (user.email || '').toLowerCase();
+      document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR'].includes(perfil)) {
+        const av = document.getElementById('avisoSemAcesso');
+        av.innerText = error ? 'Erro ao ler o perfil: ' + error.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
+        av.classList.remove('hidden'); return;
+      }
+      document.getElementById('conteudo').classList.remove('hidden');
+      const { data: f } = await _supabase.from('funcionarios').select('id, nome_registro, status').order('nome_registro');
+      (f || []).forEach(x => funcs[x.id] = x);
+      await carregarSaldos();
+    }
+
+    async function carregarSaldos() {
+      const { data } = await _supabase.from('vw_banco_horas_saldo').select('*');
+      saldos = (data || []).map(s => ({ ...s, saldo: parseFloat(s.saldo_horas) }));
+      const dev = saldos.filter(s => s.saldo < 0), cred = saldos.filter(s => s.saldo > 0);
+      document.getElementById('kpiDeve').innerText = fh(dev.reduce((a, s) => a + s.saldo, 0)).replace('+', '');
+      document.getElementById('kpiDeveQtd').innerText = `${dev.length} colaborador(es)`;
+      document.getElementById('kpiCred').innerText = fh(cred.reduce((a, s) => a + s.saldo, 0));
+      document.getElementById('kpiCredQtd').innerText = `${cred.length} colaborador(es)`;
+      renderSaldos();
+    }
+
+    function renderSaldos() {
+      const termo = document.getElementById('fNome').value.trim().toUpperCase();
+      const sit = document.getElementById('fSit').value;
+      let lista;
+      if (termo.length >= 3) {
+        // busca qualquer colaborador (mesmo sem movimento) para permitir ajuste
+        lista = Object.values(funcs).filter(f => f.nome_registro.toUpperCase().includes(termo)).map(f => {
+          const s = saldos.find(x => x.funcionario_id === f.id);
+          return { funcionario_id: f.id, saldo: s ? s.saldo : 0, movimentos: s ? s.movimentos : 0 };
+        });
+      } else {
+        lista = saldos.filter(s => sit === 'TODOS' ? true : sit === 'DEVE' ? s.saldo < 0 : sit === 'CRED' ? s.saldo > 0 : s.saldo !== 0);
+      }
+      lista.sort((a, b) => a.saldo - b.saldo);
+      const box = document.getElementById('listaSaldos');
+      if (lista.length === 0) { box.innerHTML = '<div class="p-6 text-center text-slate-400">Nenhum saldo. Digite 3 letras para buscar um colaborador.</div>'; return; }
+      box.innerHTML = lista.map(s => {
+        const f = funcs[s.funcionario_id] || {};
+        const cor = s.saldo < 0 ? 'text-rose-700' : s.saldo > 0 ? 'text-emerald-700' : 'text-slate-400';
+        return `<div onclick="abrirExtrato('${s.funcionario_id}')" class="flex justify-between items-center p-2 cursor-pointer hover:bg-slate-50 ${selecionado === s.funcionario_id ? 'bg-indigo-50' : ''}">
+          <span class="font-bold">${esc(f.nome_registro || '—')}${f.status && f.status !== 'ATIVO' ? ' <span class="text-[9px] text-slate-400">(inativo)</span>' : ''}</span>
+          <span class="font-mono font-bold ${cor}">${s.saldo === 0 ? '0h' : fh(s.saldo)}</span></div>`;
+      }).join('');
+    }
+
+    async function abrirExtrato(id) {
+      selecionado = id; renderSaldos();
+      document.getElementById('tituloExtrato').innerText = 'EXTRATO · ' + ((funcs[id] || {}).nome_registro || '');
+      document.getElementById('btnAjuste').classList.remove('hidden');
+      const { data } = await _supabase.from('banco_horas_movimentos').select('*').eq('funcionario_id', id).order('data_ref').order('criado_em');
+      const tb = document.getElementById('tabelaExtrato');
+      const movs = data || [];
+      let acum = 0;
+      const linhas = movs.map(m => { acum += parseFloat(m.horas); return { ...m, acum }; });
+      document.getElementById('saldoExtrato').innerHTML = `Saldo atual: <b class="${acum < 0 ? 'text-rose-700' : acum > 0 ? 'text-emerald-700' : ''}">${acum === 0 ? '0h' : fh(acum)}</b> · ${movs.length} movimento(s)`;
+      if (movs.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">Sem movimentos.</td></tr>'; return; }
+      tb.innerHTML = linhas.reverse().map(m => `
+        <tr>
+          <td class="p-2 font-mono">${dbr(m.data_ref)}</td>
+          <td class="p-2">${TIPOS[m.tipo] || m.tipo}</td>
+          <td class="p-2 text-slate-600">${esc(m.observacao || '')}<div class="text-[10px] text-slate-400">${esc(m.criado_por || '')} · ${new Date(m.criado_em).toLocaleString('pt-BR')}</div></td>
+          <td class="p-2 text-right font-mono font-bold ${parseFloat(m.horas) < 0 ? 'text-rose-700' : 'text-emerald-700'}">${fh(m.horas)}</td>
+          <td class="p-2 text-right font-mono">${m.acum === 0 ? '0h' : fh(m.acum)}</td>
+        </tr>`).join('');
+    }
+
+    function abrirAjuste() {
+      document.getElementById('mNome').innerText = (funcs[selecionado] || {}).nome_registro || '';
+      document.getElementById('mData').value = hoje();
+      document.getElementById('mHoras').value = '';
+      document.getElementById('mObs').value = '';
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    async function salvarAjuste() {
+      const sinal = parseInt(document.querySelector('input[name="mTipo"]:checked').value);
+      const horas = Math.abs(parseFloat(document.getElementById('mHoras').value) || 0) * sinal;
+      const { error } = await _supabase.rpc('fn_banco_horas_ajuste', {
+        p_funcionario: selecionado, p_data: document.getElementById('mData').value || null,
+        p_horas: horas, p_obs: document.getElementById('mObs').value.trim() || null
+      });
+      if (error) return alert(error.message);
+      document.getElementById('modal').classList.add('hidden');
+      await carregarSaldos();
+      abrirExtrato(selecionado);
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

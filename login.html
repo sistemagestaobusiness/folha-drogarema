@@ -111,6 +111,7 @@
         const perfil = data ? data.perfil : null;
         if (perfil === 'LIDER') return 'freelance_solicitacao.html';
         if (perfil === 'SUPERVISOR') return 'supervisor_freelance.html';
+        if (perfil === 'FINANCEIRO') return 'financeiro_freelance.html';
       } catch (err) { console.error(err); }
       return 'index.html';
     }

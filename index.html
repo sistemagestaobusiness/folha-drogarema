@@ -74,6 +74,12 @@
             <a href="rh_aprovacao_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
               <span>✅</span> <span>Aprovação RH</span>
             </a>
+            <a href="financeiro_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>💵</span> <span>Pagamentos (Financeiro)</span>
+            </a>
+            <a href="banco_horas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>⏱</span> <span>Banco de Horas</span>
+            </a>
           </div>
         </div>
 
@@ -367,6 +373,7 @@
         const perfil = data ? data.perfil : null;
         if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
         else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');
+        else if (perfil === 'FINANCEIRO') window.location.replace('financeiro_freelance.html');
       } catch (err) { console.error(err); }
     })();
 

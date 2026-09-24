@@ -306,6 +306,16 @@
           </div>
         </div>
 
+        <!-- BLOCO 3: FREELANCE PAGO FORA DA FOLHA (somente consulta) -->
+        <div id="blocoForaFolha" class="hidden space-y-0 shadow-sm rounded mt-6">
+          <div class="bg-sky-700 text-white px-3 py-1.5 rounded-t text-[11px] font-bold tracking-wide uppercase flex justify-between items-center">
+            <span>💵 FREELANCE PAGO FORA DA FOLHA (SEMANAL / QUINZENAL)</span>
+            <span class="font-normal normal-case text-sky-100">não soma no líquido acima</span>
+          </div>
+          <div id="listaForaFolha" class="border border-t-0 border-slate-200 rounded-b bg-white text-[11px] divide-y divide-slate-100"></div>
+        </div>
+        <div id="lblBancoHoras" class="hidden text-[11px] mt-3 px-3 py-2 rounded border"></div>
+
       </div>
     </div>
   </div>
@@ -780,6 +790,43 @@
         .eq('competencia', competenciaRegraLancamento);
 
       if (!error) renderizarListas(data || []);
+      carregarExtrasFreelance(funcionarioId, competenciaRegraLancamento);
+    }
+
+    // Freelance pago fora da folha + saldo do banco de horas (apenas visualização)
+    async function carregarExtrasFreelance(funcionarioId, competencia) {
+      const bloco = document.getElementById('blocoForaFolha');
+      const lista = document.getElementById('listaForaFolha');
+      const lblBh = document.getElementById('lblBancoHoras');
+      bloco.classList.add('hidden'); lblBh.classList.add('hidden');
+      if (!funcionarioId) return;
+      try {
+        const [rf, rb] = await Promise.all([
+          _supabase.from('freelance_solicitacoes')
+            .select('data_servico, horas_trabalhadas, forma_pagamento, valor_pago, pagamento_status, pago_em, loja_solicitante')
+            .eq('funcionario_id', funcionarioId).eq('status', 'APROVADA').eq('competencia_folha', competencia)
+            .in('forma_pagamento', ['SEMANAL', 'QUINZENAL']).order('data_servico'),
+          _supabase.from('vw_banco_horas_saldo').select('saldo_horas').eq('funcionario_id', funcionarioId)
+        ]);
+        const itens = rf.data || [];
+        if (itens.length > 0) {
+          const fmt = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+          const dbr = d => d ? d.slice(0, 10).split('-').reverse().join('/') : '-';
+          const total = itens.reduce((a, i) => a + parseFloat(i.valor_pago || 0), 0);
+          lista.innerHTML = itens.map(i => `
+            <div class="flex justify-between items-center px-3 py-1.5">
+              <span>${dbr(i.data_servico)} · ${parseFloat(i.horas_trabalhadas)}h · ${i.forma_pagamento} · ${i.loja_solicitante || ''}</span>
+              <span class="font-mono font-bold">${fmt(i.valor_pago)}
+                <span class="ml-2 px-1.5 py-0.5 rounded text-[9px] ${i.pagamento_status === 'PAGO' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${i.pagamento_status === 'PAGO' ? 'PAGO ' + dbr(i.pago_em) : 'AGUARDANDO FINANCEIRO'}</span></span>
+            </div>`).join('') + `<div class="flex justify-between px-3 py-1.5 bg-slate-50 font-bold"><span>${itens.length} freelance(s) fora da folha</span><span class="font-mono">${fmt(total)}</span></div>`;
+          bloco.classList.remove('hidden');
+        }
+        const saldo = rb.data && rb.data[0] ? parseFloat(rb.data[0].saldo_horas) : 0;
+        if (saldo !== 0) {
+          lblBh.innerText = saldo < 0 ? `⏱ Banco de horas: deve ${Math.abs(saldo)}h` : `⏱ Banco de horas: crédito de ${saldo}h`;
+          lblBh.className = `text-[11px] mt-3 px-3 py-2 rounded border ${saldo < 0 ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`;
+        }
+      } catch (err) { console.error('Extras freelance:', err); }
     }
 
     async function dispararConsultaHistorico() {
@@ -805,9 +852,12 @@
         .eq('competencia', periodo);
 
       if (!error) renderizarListas(data || []);
+      carregarExtrasFreelance(funcionarioId, periodo);
     }
 
     function limparTabelasDireita() {
+      document.getElementById('blocoForaFolha').classList.add('hidden');
+      document.getElementById('lblBancoHoras').classList.add('hidden');
       document.getElementById('subtituloContexto').innerText = 'Selecione uma empresa e funcionário';
       document.getElementById('tabelaContabil').innerHTML = `<tr><td colspan="4" class="p-2 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
       document.getElementById('tabelaNaoContabil').innerHTML = `<tr><td colspan="4" class="p-2 text-center text-slate-400">Selecione os filtros à esquerda para consultar.</td></tr>`;
