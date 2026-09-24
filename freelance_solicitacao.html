@@ -10,68 +10,94 @@
 <body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
 
   <div class="max-w-7xl mx-auto space-y-6">
-    
+
     <!-- Cabeçalho -->
-    <div class="sticky top-0 z-50 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">SOLICITAÇÃO DE FREELANCE</h1>
-        <p class="text-xs text-slate-500">Módulo do Líder - Agendamento de Plantões e Coberturas</p>
+        <p class="text-xs text-slate-500">Líder da loja → Supervisor → RH</p>
       </div>
-      <div>
-        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← PAINEL PRINCIPAL</a>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span>
+          <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
+        </div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
       </div>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-      
-      <!-- COLUNA ESQUERDA: Formulário e Carrinho -->
+
+      <!-- COLUNA ESQUERDA: FORMULÁRIO -->
       <div class="xl:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-5 shadow-sm h-fit">
-        
-        <!-- 1. DADOS GERAIS DO PEDIDO -->
+
+        <!-- 1. LOJA E MOTIVO -->
         <div class="space-y-3">
-          <h2 class="font-bold text-indigo-700 text-sm border-b border-slate-100 pb-2">1. DADOS DO COLABORADOR</h2>
-          
-          <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-600 uppercase">Nome / Freelancer *</label>
-            <input type="text" id="inputFiltroNome" placeholder="🔍 Digite 3 letras para filtrar..." onkeyup="filtrarFuncionarios()" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 mb-1">
-            <select id="selectFuncionario" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase cursor-pointer">
-              <option value="">-- CARREGANDO... --</option>
+          <h2 class="font-bold text-indigo-700 text-sm border-b border-slate-100 pb-2">1. LOJA E MOTIVO</h2>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Loja solicitante *</label>
+            <select id="selectLoja" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Motivo da solicitação *</label>
+            <select id="selectMotivo" onchange="aoMudarMotivo()" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase">
+              <option value="">-- SELECIONE O MOTIVO --</option>
+              <option value="FALTA_DIA">Falta (dia todo)</option>
+              <option value="FALTA_PARCIAL">Falta (parcial)</option>
+              <option value="ATESTADO">Atestado</option>
+              <option value="AUSENCIA">Ausência</option>
+              <option value="ESCALA">Escala</option>
+              <option value="COMPENSAR">Compensar horas</option>
+              <option value="ALTA_DEMANDA">Alta demanda</option>
             </select>
           </div>
+          <div id="boxAusente" class="hidden bg-rose-50 border border-rose-200 rounded-lg p-3">
+            <label class="block text-xs font-bold text-rose-800 uppercase mb-1">Funcionário que faltou / ausente *</label>
+            <input type="text" id="filtroAusente" placeholder="🔍 Filtrar (3 letras)..." oninput="renderizarSelect('selectAusente', this.value)" class="w-full bg-white border border-rose-200 rounded p-2 text-xs mb-1">
+            <select id="selectAusente" class="w-full bg-white border border-rose-300 rounded p-2 text-xs font-bold uppercase"></select>
+            <p class="text-[10px] text-rose-700 mt-1">O RH decide se será desconto de falta ou banco de horas.</p>
+          </div>
+        </div>
 
+        <!-- 2. QUEM FARÁ O FREELANCE -->
+        <div class="space-y-3">
+          <h2 class="font-bold text-indigo-700 text-sm border-b border-slate-100 pb-2">2. QUEM FARÁ O FREELANCE</h2>
           <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Forma de Pagamento (Acordo) *</label>
-            <select id="selectPagamento" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-bold uppercase cursor-pointer">
-              <option value="SEMANAL">SEMANAL (Semana corrente)</option>
-              <option value="QUINZENAL">QUINZENAL (A cada 15 dias)</option>
-              <option value="FOLHA">FECHAMENTO DA FOLHA (Mensal)</option>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Colaborador / Freelancer *</label>
+            <input type="text" id="filtroFreelancer" placeholder="🔍 Filtrar (3 letras)..." oninput="renderizarSelect('selectFuncionario', this.value)" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs mb-1">
+            <select id="selectFuncionario" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Forma de pagamento (acordo) *</label>
+            <select id="selectPagamento" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase">
+              <option value="SEMANAL">SEMANAL (semana corrente)</option>
+              <option value="QUINZENAL">QUINZENAL (a cada 15 dias)</option>
+              <option value="FOLHA">FECHAMENTO DA FOLHA (mensal)</option>
             </select>
           </div>
         </div>
 
-        <!-- 2. INSERIR DATAS -->
+        <!-- 3. DATAS -->
         <div class="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-          <h2 class="font-bold text-slate-700 text-sm border-b border-slate-200 pb-2">2. INCLUIR DATA</h2>
-          
+          <h2 class="font-bold text-slate-700 text-sm border-b border-slate-200 pb-2">3. INCLUIR DATA</h2>
           <div class="grid grid-cols-3 gap-2">
-            <div class="col-span-3 sm:col-span-1">
+            <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data *</label>
-              <input type="date" id="inputData" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-mono">
+              <input type="date" id="inputData" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono">
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Início</label>
-              <input type="time" id="inputHoraInicio" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-mono text-center">
+              <input type="time" id="inputHoraInicio" step="1800" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fim</label>
-              <input type="time" id="inputHoraFim" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600 font-mono text-center">
+              <input type="time" id="inputHoraFim" step="1800" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
             </div>
           </div>
-
           <div class="grid grid-cols-12 gap-2 items-end">
             <div class="col-span-5">
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Função *</label>
-              <select id="selectFuncao" class="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 text-[10px] focus:outline-none focus:border-indigo-600 font-bold uppercase">
+              <select id="selectFuncao" class="w-full bg-white border border-slate-300 rounded p-2 text-[10px] font-bold uppercase">
                 <option value="FARMACEUTICO">Farmacêutico</option>
                 <option value="BALCONISTA">Balconista</option>
                 <option value="CAIXA">Caixa</option>
@@ -81,87 +107,55 @@
               <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1 cursor-pointer">
                 <input type="checkbox" id="checkDiaria" onchange="toggleDiaria()" class="accent-indigo-600"> Diária
               </label>
-              <input type="number" id="inputHoras" step="0.5" readonly placeholder="h" class="w-full bg-slate-200 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-mono text-center cursor-not-allowed h-[34px]">
+              <input type="text" id="inputHoras" readonly placeholder="h" class="w-full bg-slate-200 border border-slate-300 rounded p-1.5 text-xs font-mono text-center h-[34px]">
             </div>
             <div class="col-span-4">
-              <button type="button" onclick="adicionarAoCarrinho()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold h-[34px] rounded transition text-[10px] uppercase shadow-sm cursor-pointer">
-                + ADD
-              </button>
+              <button type="button" onclick="adicionarAoCarrinho()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold h-[34px] rounded text-[10px] uppercase cursor-pointer">+ ADD</button>
             </div>
           </div>
+          <p id="lblCalculo" class="text-[10px] text-slate-500 font-mono"></p>
         </div>
 
-        <!-- 3. LISTA DE ESPERA (Carrinho) -->
-        <div class="space-y-3">
+        <!-- 4. LISTA A ENVIAR -->
+        <div class="space-y-2">
           <div class="flex justify-between items-end border-b border-slate-100 pb-2">
-            <h2 class="font-bold text-indigo-700 text-sm">3. DATAS A ENVIAR</h2>
+            <h2 class="font-bold text-indigo-700 text-sm">4. DATAS A ENVIAR</h2>
             <span id="contadorCarrinho" class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold">0 itens</span>
           </div>
-          
           <div class="border border-slate-200 rounded-lg overflow-hidden">
-            <table class="w-full text-left text-[10px] border-collapse bg-white">
+            <table class="w-full text-left text-[10px] bg-white">
               <thead class="bg-slate-50 text-slate-500">
-                <tr>
-                  <th class="p-2">DATA</th>
-                  <th class="p-2 text-center">HORÁRIO</th>
-                  <th class="p-2 text-center">HORAS</th>
-                  <th class="p-2 text-center">X</th>
-                </tr>
+                <tr><th class="p-2">DATA</th><th class="p-2 text-center">HORÁRIO</th><th class="p-2 text-center">HORAS</th><th class="p-2 text-center">X</th></tr>
               </thead>
-              <tbody id="tabelaCarrinho" class="divide-y divide-slate-100">
-                <tr><td colspan="4" class="p-4 text-center text-slate-400">Nenhuma data adicionada.</td></tr>
-              </tbody>
+              <tbody id="tabelaCarrinho" class="divide-y divide-slate-100"></tbody>
             </table>
           </div>
-          <p id="erroEnvio" class="text-[10px] text-rose-500 hidden text-center">Adicione pelo menos uma data à lista antes de enviar.</p>
         </div>
 
-        <!-- 4. FINALIZAR -->
-        <div class="space-y-3 pt-2">
+        <div class="space-y-3">
           <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações da Loja (Geral)</label>
-            <textarea id="inputObs" rows="2" placeholder="Ex: Cobertura de atestado médico..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 text-xs focus:outline-none focus:border-indigo-600"></textarea>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações da loja</label>
+            <textarea id="inputObs" rows="2" placeholder="Detalhe a situação para o supervisor e o RH..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs"></textarea>
           </div>
-
-          <button type="button" id="btnSalvar" onclick="enviarParaRH()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition text-xs shadow-sm cursor-pointer uppercase tracking-wider">
-            ENVIAR PARA APROVAÇÃO (RH)
+          <button type="button" id="btnSalvar" onclick="enviarSolicitacao()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer">
+            ENVIAR PARA APROVAÇÃO (SUPERVISOR + RH)
           </button>
         </div>
-
       </div>
 
-      <!-- COLUNA DIREITA: Histórico Oficial com Filtro de Período -->
+      <!-- COLUNA DIREITA: MINHAS SOLICITAÇÕES -->
       <div class="xl:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-3 gap-2">
-          <h2 class="font-bold text-slate-900 text-sm">HISTÓRICO DE ENVIOS (RH)</h2>
-          
-          <!-- Filtro de Período por Calendário -->
+          <h2 id="tituloHistorico" class="font-bold text-slate-900 text-sm">MINHAS SOLICITAÇÕES</h2>
           <div class="flex items-center gap-1 text-[11px]">
             <span class="text-slate-500 font-bold">De:</span>
-            <input type="date" id="filtroDataInicio" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 font-mono text-slate-700 text-xs">
+            <input type="date" id="filtroDataInicio" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 font-mono text-xs">
             <span class="text-slate-500 font-bold">Até:</span>
-            <input type="date" id="filtroDataFim" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 font-mono text-slate-700 text-xs">
+            <input type="date" id="filtroDataFim" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 font-mono text-xs">
           </div>
         </div>
-        
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="border-b border-slate-200 text-slate-500 bg-slate-50">
-                <th class="p-3">DATA</th>
-                <th class="p-3">COLABORADOR</th>
-                <th class="p-3 text-center">HORÁRIO</th>
-                <th class="p-3 text-center">HORAS</th>
-                <th class="p-3 text-center">STATUS</th>
-              </tr>
-            </thead>
-            <tbody id="tabelaSolicitacoes" class="divide-y divide-slate-100">
-              <!-- Renderizado via JS -->
-            </tbody>
-          </table>
-        </div>
+        <div id="listaHistorico" class="space-y-2 text-xs"></div>
       </div>
-
     </div>
   </div>
 
@@ -170,239 +164,254 @@
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    const INTERVALO_MIN_HORAS = 6;    // acima de 6h de jornada, desconta intervalo
+    const INTERVALO_HORAS = 1;        // 1h de descanso
+    const MOTIVOS_COM_AUSENTE = ['FALTA_DIA', 'FALTA_PARCIAL', 'ATESTADO', 'AUSENCIA'];
+    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda' };
+    const STATUS = {
+      PENDENTE_SUPERVISOR: { txt: 'AGUARDANDO SUPERVISOR', cls: 'bg-amber-100 text-amber-800' },
+      PENDENTE_RH:         { txt: 'AGUARDANDO RH',         cls: 'bg-sky-100 text-sky-800' },
+      PENDENTE:            { txt: 'PENDENTE (FLUXO ANTIGO)', cls: 'bg-amber-100 text-amber-800' },
+      APROVADA:            { txt: 'APROVADA',              cls: 'bg-emerald-100 text-emerald-800' },
+      REJEITADA:           { txt: 'RECUSADA',              cls: 'bg-rose-100 text-rose-800' },
+      CANCELADA:           { txt: 'CANCELADA',             cls: 'bg-slate-200 text-slate-600' }
+    };
+
+    let usuario = { email: '', perfil: null, loja_id: null };
     let todosFuncionarios = [];
-    let carrinhoPlantoes = [];
+    let listaLojas = [];
+    let carrinho = [];
 
+    function esc(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+    function dataLocalISO(d) { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); }
+    function formatarDataBR(iso) { if (!iso) return '-'; const p = iso.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
+    function fmtHoras(h) { const n = parseFloat(h || 0); return (Number.isInteger(n) ? n : n.toFixed(1).replace('.', ',')) + 'h'; }
+    function nomeFunc(id) { const f = todosFuncionarios.find(x => x.id === id); return f ? f.nome_registro : '—'; }
+
+    // ------------------------------------------------------------------
+    // INICIALIZAÇÃO (login obrigatório)
+    // ------------------------------------------------------------------
     async function inicializar() {
-      // Define o padrão do filtro de data (últimos 30 dias até hoje)
-      const hoje = new Date();
-      const trintaDiasAtras = new Date();
-      trintaDiasAtras.setDate(hoje.getDate() - 30);
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
+      usuario.email = (user.email || '').toLowerCase();
 
-      document.getElementById('filtroDataFim').value = hoje.toISOString().split('T')[0];
-      document.getElementById('filtroDataInicio').value = trintaDiasAtras.toISOString().split('T')[0];
+      const { data: perfil } = await _supabase.from('usuarios_sistema').select('perfil, loja_id').eq('email', usuario.email).maybeSingle();
+      usuario.perfil = perfil ? perfil.perfil : null;
+      usuario.loja_id = perfil ? perfil.loja_id : null;
+      document.getElementById('lblUsuario').innerText = usuario.email;
+      document.getElementById('lblPerfil').innerText = usuario.perfil || 'SEM PERFIL';
 
-      await carregarFuncionarios();
+      const hoje = new Date(); const inicio = new Date(); inicio.setDate(hoje.getDate() - 30);
+      const fim = new Date(); fim.setDate(hoje.getDate() + 30);
+      document.getElementById('filtroDataInicio').value = dataLocalISO(inicio);
+      document.getElementById('filtroDataFim').value = dataLocalISO(fim);
+
+      await Promise.all([carregarLojas(), carregarFuncionarios()]);
+      atualizarTabelaCarrinho();
       await carregarHistorico();
     }
 
+    async function carregarLojas() {
+      const { data } = await _supabase.from('lojas').select('id, nome_loja, ativo').eq('ativo', true).order('nome_loja');
+      listaLojas = data || [];
+      const sel = document.getElementById('selectLoja');
+      sel.innerHTML = '<option value="">-- SELECIONE A LOJA --</option>' + listaLojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      // Líder com loja cadastrada: loja fixa
+      if (usuario.perfil === 'LIDER' && usuario.loja_id) {
+        sel.value = usuario.loja_id;
+        sel.disabled = true;
+        sel.classList.add('bg-slate-200');
+      }
+    }
+
     async function carregarFuncionarios() {
-      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cargo').eq('status', 'ATIVO').order('nome_registro');
-      if (!error && data) {
-        todosFuncionarios = data;
-        renderizarSelectFuncionarios('');
-      }
+      const { data } = await _supabase.from('funcionarios').select('id, nome_registro, cargo').eq('status', 'ATIVO').order('nome_registro');
+      todosFuncionarios = data || [];
+      renderizarSelect('selectFuncionario', '');
+      renderizarSelect('selectAusente', '');
     }
 
-    function filtrarFuncionarios() {
-      const termo = document.getElementById('inputFiltroNome').value.toLowerCase();
-      if (termo.length >= 3 || termo.length === 0) {
-        renderizarSelectFuncionarios(termo);
-      }
+    function renderizarSelect(idSelect, termo) {
+      const t = String(termo || '').toLowerCase();
+      if (t.length > 0 && t.length < 3) return;
+      const sel = document.getElementById(idSelect);
+      const atual = sel.value;
+      const filtrados = todosFuncionarios.filter(f => f.nome_registro.toLowerCase().includes(t));
+      sel.innerHTML = '<option value="">-- SELECIONE O COLABORADOR --</option>' +
+        filtrados.map(f => `<option value="${f.id}">${esc(f.nome_registro)}${String(f.cargo).includes('FREELANCE') ? ' ⚡[EXTERNO]' : ''}</option>`).join('');
+      if (filtrados.some(f => f.id === atual)) sel.value = atual;
     }
 
-    function renderizarSelectFuncionarios(termo) {
-      const select = document.getElementById('selectFuncionario');
-      const filtrados = todosFuncionarios.filter(f => f.nome_registro.toLowerCase().includes(termo));
-      select.innerHTML = '<option value="">-- SELECIONE O COLABORADOR --</option>' + 
-        filtrados.map(f => `<option value="${f.id}">${f.nome_registro} ${String(f.cargo).includes('FREELANCE') ? ' ⚡[EXTERNO]' : ''}</option>`).join('');
+    function aoMudarMotivo() {
+      const exige = MOTIVOS_COM_AUSENTE.includes(document.getElementById('selectMotivo').value);
+      document.getElementById('boxAusente').classList.toggle('hidden', !exige);
+      if (!exige) document.getElementById('selectAusente').value = '';
     }
 
-    function formatarDataBR(dataIso) {
-      if (!dataIso) return '-';
-      const partes = dataIso.split('-');
-      return `${partes[2]}/${partes[1]}/${partes[0]}`;
-    }
-
+    // ------------------------------------------------------------------
+    // HORAS: meia em meia hora, descontando intervalo
+    // ------------------------------------------------------------------
     function toggleDiaria() {
-      const isDiaria = document.getElementById('checkDiaria').checked;
-      const inputHoras = document.getElementById('inputHoras');
-      const inputInicio = document.getElementById('inputHoraInicio');
-      const inputFim = document.getElementById('inputHoraFim');
-
-      if (isDiaria) {
-        inputHoras.value = '8';
-        inputInicio.value = '';
-        inputFim.value = '';
-        inputInicio.disabled = true;
-        inputFim.disabled = true;
-        inputInicio.classList.add('bg-slate-200', 'cursor-not-allowed');
-        inputFim.classList.add('bg-slate-200', 'cursor-not-allowed');
-      } else {
-        inputHoras.value = '';
-        inputInicio.value = '';
-        inputFim.value = '';
-        inputInicio.disabled = false;
-        inputInicio.classList.remove('bg-slate-200', 'cursor-not-allowed');
-        inputFim.classList.remove('bg-slate-200', 'cursor-not-allowed');
-      }
+      const diaria = document.getElementById('checkDiaria').checked;
+      const ini = document.getElementById('inputHoraInicio'), fim = document.getElementById('inputHoraFim');
+      if (diaria) { ini.value = '08:00'; fim.value = '17:00'; }
+      ini.disabled = diaria; fim.disabled = diaria;
+      calcularHoras();
     }
 
     function calcularHoras() {
-      if (document.getElementById('checkDiaria').checked) return;
-      const inicio = document.getElementById('inputHoraInicio').value;
-      const fim = document.getElementById('inputHoraFim').value;
-      const inputHoras = document.getElementById('inputHoras');
-
-      if (inicio && fim) {
-        let [hIni, mIni] = inicio.split(':').map(Number);
-        let [hFim, mFim] = fim.split(':').map(Number);
-        let minutosTotal = (hFim * 60 + mFim) - (hIni * 60 + mIni);
-        if (minutosTotal < 0) minutosTotal += 24 * 60;
-        inputHoras.value = (minutosTotal / 60).toFixed(1);
-      } else {
-        inputHoras.value = '';
+      const ini = document.getElementById('inputHoraInicio').value, fim = document.getElementById('inputHoraFim').value;
+      const out = document.getElementById('inputHoras'), lbl = document.getElementById('lblCalculo');
+      if (!ini || !fim) { out.value = ''; lbl.innerText = ''; return null; }
+      const [hI, mI] = ini.split(':').map(Number), [hF, mF] = fim.split(':').map(Number);
+      if (mI % 30 !== 0 || mF % 30 !== 0) {
+        out.value = ''; lbl.innerText = '⚠️ Use horários de 30 em 30 minutos (ex.: 08:00, 08:30).'; return null;
       }
+      let min = (hF * 60 + mF) - (hI * 60 + mI);
+      if (min <= 0) min += 24 * 60;
+      const jornada = min / 60;
+      const intervalo = jornada > INTERVALO_MIN_HORAS ? INTERVALO_HORAS : 0;
+      const trabalhadas = jornada - intervalo;
+      out.value = fmtHoras(trabalhadas);
+      lbl.innerText = intervalo > 0 ? `${fmtHoras(jornada)} de jornada − ${fmtHoras(intervalo)} de intervalo = ${fmtHoras(trabalhadas)} trabalhadas` : `${fmtHoras(trabalhadas)} trabalhadas (sem intervalo)`;
+      return { horas: trabalhadas, intervalo, ini, fim };
     }
 
+    // ------------------------------------------------------------------
+    // CARRINHO
+    // ------------------------------------------------------------------
     function adicionarAoCarrinho() {
       const data = document.getElementById('inputData').value;
-      const isDiaria = document.getElementById('checkDiaria').checked;
-      const horaInicio = isDiaria ? '08:00' : document.getElementById('inputHoraInicio').value;
-      const horaFim = isDiaria ? '16:00' : document.getElementById('inputHoraFim').value;
-      const funcao = document.getElementById('selectFuncao').value;
-      const horas = document.getElementById('inputHoras').value;
-
-      if (!data || !horas || (!isDiaria && (!horaInicio || !horaFim))) {
-        alert('Preencha a Data, Horários (ou Diária) e verifique as horas.');
-        return;
-      }
-
-      carrinhoPlantoes.push({
-        id_temp: Date.now(),
-        data_servico: data,
-        hora_inicio: isDiaria ? '08:00 (Diária)' : horaInicio,
-        hora_fim: isDiaria ? '16:00 (Diária)' : horaFim,
-        cargo_exercido: funcao,
-        horas_trabalhadas: parseFloat(horas)
-      });
-
-      carrinhoPlantoes.sort((a, b) => new Date(a.data_servico) - new Date(b.data_servico));
-
-      atualizarTabelaCarrinho();
-      document.getElementById('erroEnvio').classList.add('hidden');
-      
+      const calc = calcularHoras();
+      if (!data || !calc) { alert('Preencha a data e os horários (de 30 em 30 minutos).'); return; }
+      if (carrinho.some(c => c.data_servico === data)) { alert('Esta data já está na lista. A mesma pessoa não pode ter duas solicitações no mesmo dia.'); return; }
+      carrinho.push({ id_temp: Date.now(), data_servico: data, hora_inicio: calc.ini, hora_fim: calc.fim, horas: calc.horas, intervalo: calc.intervalo, funcao: document.getElementById('selectFuncao').value });
+      carrinho.sort((a, b) => a.data_servico.localeCompare(b.data_servico));
       document.getElementById('inputData').value = '';
-      if (!isDiaria) {
-        document.getElementById('inputHoraInicio').value = '';
-        document.getElementById('inputHoraFim').value = '';
-      }
-      document.getElementById('inputHoras').value = '';
-    }
-
-    function removerDoCarrinho(idTemp) {
-      carrinhoPlantoes = carrinhoPlantoes.filter(item => item.id_temp !== idTemp);
       atualizarTabelaCarrinho();
     }
+
+    function removerDoCarrinho(idTemp) { carrinho = carrinho.filter(c => c.id_temp !== idTemp); atualizarTabelaCarrinho(); }
 
     function atualizarTabelaCarrinho() {
-      const tbody = document.getElementById('tabelaCarrinho');
-      document.getElementById('contadorCarrinho').innerText = `${carrinhoPlantoes.length} itens`;
-
-      if (carrinhoPlantoes.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Nenhuma data adicionada.</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = carrinhoPlantoes.map(item => `
-        <tr class="border-b border-slate-50">
-          <td class="p-2 font-mono font-bold text-slate-700">${formatarDataBR(item.data_servico)}</td>
-          <td class="p-2 font-mono text-slate-600 text-center">${item.hora_inicio} as ${item.hora_fim}</td>
-          <td class="p-2 font-mono text-indigo-700 font-bold text-center">${item.horas_trabalhadas}h<br><span class="text-[8px] text-slate-400 font-sans">${item.cargo_exercido}</span></td>
-          <td class="p-2 text-center">
-            <button onclick="removerDoCarrinho(${item.id_temp})" class="text-rose-500 hover:text-rose-700 font-bold cursor-pointer">X</button>
-          </td>
-        </tr>
-      `).join('');
+      document.getElementById('contadorCarrinho').innerText = `${carrinho.length} itens`;
+      const tb = document.getElementById('tabelaCarrinho');
+      if (carrinho.length === 0) { tb.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">Nenhuma data adicionada.</td></tr>'; return; }
+      tb.innerHTML = carrinho.map(c => `
+        <tr>
+          <td class="p-2 font-mono font-bold">${formatarDataBR(c.data_servico)}</td>
+          <td class="p-2 font-mono text-center">${c.hora_inicio} às ${c.hora_fim}</td>
+          <td class="p-2 font-mono text-indigo-700 font-bold text-center">${fmtHoras(c.horas)}<br><span class="text-[8px] text-slate-400">${c.funcao}</span></td>
+          <td class="p-2 text-center"><button onclick="removerDoCarrinho(${c.id_temp})" class="text-rose-500 font-bold cursor-pointer">X</button></td>
+        </tr>`).join('');
     }
 
-    async function enviarParaRH() {
-      const funcionarioId = document.getElementById('selectFuncionario').value;
-      const formaPagamento = document.getElementById('selectPagamento').value;
-      const observacao = document.getElementById('inputObs').value;
+    // ------------------------------------------------------------------
+    // ENVIO
+    // ------------------------------------------------------------------
+    async function enviarSolicitacao() {
+      const lojaId = document.getElementById('selectLoja').value;
+      const motivo = document.getElementById('selectMotivo').value;
+      const ausenteId = document.getElementById('selectAusente').value || null;
+      const funcId = document.getElementById('selectFuncionario').value;
 
-      if (!funcionarioId) {
-        alert('Selecione o Colaborador primeiro.');
-        return;
-      }
-      
-      if (carrinhoPlantoes.length === 0) {
-        document.getElementById('erroEnvio').classList.remove('hidden');
-        return;
+      if (!lojaId) return alert('Selecione a loja solicitante.');
+      if (!motivo) return alert('Selecione o motivo da solicitação.');
+      if (MOTIVOS_COM_AUSENTE.includes(motivo) && !ausenteId) return alert('Para este motivo é obrigatório informar quem faltou.');
+      if (!funcId) return alert('Selecione quem fará o freelance.');
+      if (ausenteId && ausenteId === funcId) return alert('O freelancer não pode ser a mesma pessoa que faltou.');
+      if (carrinho.length === 0) return alert('Adicione pelo menos uma data.');
+
+      // Duplicidade no banco: mesma pessoa com solicitação ativa na mesma data
+      const datas = carrinho.map(c => c.data_servico);
+      const { data: existentes } = await _supabase.from('freelance_solicitacoes')
+        .select('data_servico, status').eq('funcionario_id', funcId).in('data_servico', datas)
+        .not('status', 'in', '("REJEITADA","CANCELADA")');
+      if (existentes && existentes.length > 0) {
+        return alert('Já existe solicitação ativa para este colaborador em: ' + existentes.map(e => formatarDataBR(e.data_servico)).join(', '));
       }
 
       const btn = document.getElementById('btnSalvar');
-      btn.innerText = 'ENVIANDO...';
-      btn.disabled = true;
+      btn.disabled = true; btn.innerText = 'ENVIANDO...';
 
-      const payload = carrinhoPlantoes.map(item => ({
-        funcionario_id: funcionarioId,
-        data_servico: item.data_servico,
-        hora_inicio: item.hora_inicio.includes('Diária') ? '08:00' : item.hora_inicio,
-        hora_fim: item.hora_fim.includes('Diária') ? '16:00' : item.hora_fim,
-        cargo_exercido: item.cargo_exercido,
-        horas_trabalhadas: item.horas_trabalhadas,
-        forma_pagamento: formaPagamento,
-        observacao_lider: observacao,
-        loja_solicitante: 'LOJA TESTE',
-        status: 'PENDENTE'
+      const lote = crypto.randomUUID();
+      const loja = listaLojas.find(l => l.id === lojaId);
+      const payload = carrinho.map(c => ({
+        lote_id: lote,
+        funcionario_id: funcId,
+        data_servico: c.data_servico,
+        hora_inicio: c.hora_inicio,
+        hora_fim: c.hora_fim,
+        horas_trabalhadas: c.horas,
+        intervalo_horas: c.intervalo,
+        cargo_exercido: c.funcao,
+        forma_pagamento: document.getElementById('selectPagamento').value,
+        observacao_lider: document.getElementById('inputObs').value.trim() || null,
+        loja_id: lojaId,
+        loja_solicitante: loja ? loja.nome_loja : null,
+        solicitante_email: usuario.email,
+        motivo: motivo,
+        funcionario_ausente_id: ausenteId,
+        status: 'PENDENTE_SUPERVISOR'
       }));
 
       const { error } = await _supabase.from('freelance_solicitacoes').insert(payload);
+      btn.disabled = false; btn.innerText = 'ENVIAR PARA APROVAÇÃO (SUPERVISOR + RH)';
 
       if (error) {
-        alert('Erro ao enviar solicitação: ' + error.message);
-      } else {
-        carrinhoPlantoes = [];
-        atualizarTabelaCarrinho();
-        document.getElementById('inputObs').value = '';
-        document.getElementById('inputFiltroNome').value = '';
-        renderizarSelectFuncionarios('');
-        
-        await carregarHistorico();
-        alert('Solicitações enviadas com sucesso para aprovação!');
+        const msg = error.message.includes('uq_freelance_pessoa_data') ? 'Já existe solicitação ativa para este colaborador em uma das datas.' : error.message;
+        return alert('Erro ao enviar: ' + msg);
       }
-
-      btn.innerText = 'ENVIAR PARA APROVAÇÃO (RH)';
-      btn.disabled = false;
+      carrinho = [];
+      atualizarTabelaCarrinho();
+      document.getElementById('inputObs').value = '';
+      alert('Solicitação enviada! Ela aparece agora para o Supervisor e para o RH.');
+      carregarHistorico();
     }
 
+    async function cancelarSolicitacao(id) {
+      if (!confirm('Cancelar esta solicitação?')) return;
+      const { error } = await _supabase.rpc('fn_freelance_cancelar', { p_id: id });
+      if (error) alert(error.message); else carregarHistorico();
+    }
+
+    // ------------------------------------------------------------------
+    // HISTÓRICO: o líder vê só o que ele solicitou
+    // ------------------------------------------------------------------
     async function carregarHistorico() {
-      const dataInicio = document.getElementById('filtroDataInicio').value;
-      const dataFim = document.getElementById('filtroDataFim').value;
+      const ini = document.getElementById('filtroDataInicio').value, fim = document.getElementById('filtroDataFim').value;
+      let q = _supabase.from('freelance_solicitacoes').select('*').gte('data_servico', ini).lte('data_servico', fim);
+      const veTudo = ['GESTOR', 'RH'].includes(usuario.perfil);
+      if (!veTudo) q = q.eq('solicitante_email', usuario.email);
+      document.getElementById('tituloHistorico').innerText = veTudo ? 'SOLICITAÇÕES (TODAS AS LOJAS)' : 'MINHAS SOLICITAÇÕES';
 
-      let query = _supabase
-        .from('freelance_solicitacoes')
-        .select(`*, funcionarios(nome_registro)`);
+      const { data, error } = await q.order('data_servico', { ascending: false });
+      const box = document.getElementById('listaHistorico');
+      if (error) { box.innerHTML = `<div class="text-rose-600">${esc(error.message)}</div>`; return; }
+      if (!data || data.length === 0) { box.innerHTML = '<div class="p-4 text-center text-slate-400">Nenhuma solicitação no período.</div>'; return; }
 
-      if (dataInicio && dataFim) {
-        query = query.gte('data_servico', dataInicio).lte('data_servico', dataFim);
-      }
-
-      // ORDENAÇÃO INTELIGENTE: PENDENTES PRIMEIRO, depois por data decrescente
-      const { data, error } = await query
-        .order('status', { ascending: true }) // 'PENDENTE' vem antes de 'APROVADA'/'REJEITADA' alfabeticamente
-        .order('data_servico', { ascending: false });
-
-      const tbody = document.getElementById('tabelaSolicitacoes');
-      if (error || !data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Nenhuma solicitação encontrada no período.</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = data.map(req => {
-        let statusBadge = req.status === 'APROVADA' ? 'bg-emerald-100 text-emerald-700' : 
-                          req.status === 'REJEITADA' ? 'bg-rose-100 text-rose-700' : 
-                          'bg-amber-100 text-amber-700 animate-pulse';
+      box.innerHTML = data.map(r => {
+        const st = STATUS[r.status] || { txt: r.status, cls: 'bg-slate-100' };
+        const retorno = [
+          r.supervisor_obs ? `<div><b>Supervisor${r.supervisor_forcado ? ' (decidido pelo RH)' : ''}:</b> ${esc(r.supervisor_obs)}</div>` : '',
+          r.observacao_rh ? `<div><b>RH:</b> ${esc(r.observacao_rh)}</div>` : ''
+        ].join('');
         return `
-          <tr class="hover:bg-slate-50 border-b border-slate-50 last:border-0">
-            <td class="p-3 font-mono font-bold text-slate-700">${formatarDataBR(req.data_servico)}</td>
-            <td class="p-3 text-slate-800 font-bold">${req.funcionarios?.nome_registro || 'N/A'}<br><span class="text-[10px] text-slate-400 font-normal uppercase">${req.cargo_exercido}</span></td>
-            <td class="p-3 font-mono text-slate-600 text-xs text-center">${req.hora_inicio ? req.hora_inicio.substring(0,5) : '--'} as ${req.hora_fim ? req.hora_fim.substring(0,5) : '--'}</td>
-            <td class="p-3 font-mono text-indigo-700 font-bold text-center">${req.horas_trabalhadas}h</td>
-            <td class="p-3 text-center"><span class="${statusBadge} px-2 py-0.5 rounded text-[10px] font-bold">${req.status}</span></td>
-          </tr>
-        `;
+          <div class="border border-slate-200 rounded-lg p-3 hover:bg-slate-50">
+            <div class="flex justify-between items-start gap-2">
+              <div>
+                <div class="font-bold text-slate-800">${esc(nomeFunc(r.funcionario_id))} <span class="text-[10px] text-slate-400 font-normal">${esc(r.cargo_exercido)}</span></div>
+                <div class="font-mono text-[11px] text-slate-600">${formatarDataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtHoras(r.horas_trabalhadas)}</b> · ${esc(r.forma_pagamento)}</div>
+                <div class="text-[11px] text-slate-500">${esc(r.loja_solicitante || '')} · ${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'sem motivo')}${r.funcionario_ausente_id ? ' · faltou: <b>' + esc(nomeFunc(r.funcionario_ausente_id)) + '</b>' : ''}</div>
+              </div>
+              <div class="text-right shrink-0">
+                <span class="${st.cls} px-2 py-0.5 rounded text-[10px] font-bold">${st.txt}</span>
+                ${r.status === 'PENDENTE_SUPERVISOR' ? `<div><button onclick="cancelarSolicitacao('${r.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline mt-1 cursor-pointer">cancelar</button></div>` : ''}
+              </div>
+            </div>
+            ${retorno ? `<div class="mt-2 text-[11px] bg-slate-50 border-l-2 border-slate-300 pl-2 py-1 text-slate-700">${retorno}</div>` : ''}
+          </div>`;
       }).join('');
     }
 
