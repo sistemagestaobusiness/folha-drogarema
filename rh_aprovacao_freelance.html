@@ -156,11 +156,15 @@
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
       const email = (user.email || '').toLowerCase();
-      const { data: p } = await _supabase.from('usuarios_sistema').select('perfil').eq('email', email).maybeSingle();
+      const { data: p, error: errPerfil } = await _supabase.rpc('fn_meu_usuario');
       const perfil = p ? p.perfil : null;
       document.getElementById('lblUsuario').innerText = email;
       document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['RH', 'GESTOR'].includes(perfil)) { document.getElementById('avisoSemAcesso').classList.remove('hidden'); return; }
+      if (!['RH', 'GESTOR'].includes(perfil)) {
+        const av = document.getElementById('avisoSemAcesso');
+        av.innerText = errPerfil ? 'Erro ao ler o perfil: ' + errPerfil.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
+        av.classList.remove('hidden'); return;
+      }
       document.getElementById('conteudo').classList.remove('hidden');
 
       const [rf, rc, re, rl] = await Promise.all([

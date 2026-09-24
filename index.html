@@ -363,7 +363,7 @@
       try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) return;
-        const { data } = await _supabase.from('usuarios_sistema').select('perfil').eq('email', (user.email || '').toLowerCase()).maybeSingle();
+        const { data } = await _supabase.rpc('fn_meu_usuario');
         const perfil = data ? data.perfil : null;
         if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
         else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');

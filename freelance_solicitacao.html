@@ -196,7 +196,8 @@
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
       usuario.email = (user.email || '').toLowerCase();
 
-      const { data: perfil } = await _supabase.from('usuarios_sistema').select('perfil, loja_id').eq('email', usuario.email).maybeSingle();
+      const { data: perfil, error: errPerfil } = await _supabase.rpc('fn_meu_usuario');
+      if (errPerfil) console.error('Erro ao ler perfil:', errPerfil);
       usuario.perfil = perfil ? perfil.perfil : null;
       usuario.loja_id = perfil ? perfil.loja_id : null;
       document.getElementById('lblUsuario').innerText = usuario.email;
