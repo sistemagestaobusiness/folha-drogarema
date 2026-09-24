@@ -53,7 +53,7 @@
           <div id="alertaCompetenciaFechada" class="hidden bg-rose-50 border border-rose-300 text-rose-800 p-3 rounded-lg text-xs font-bold flex flex-col items-center gap-2">
             <span>⚠️ O PERÍODO ATIVO ESTÁ FECHADO. LANÇAMENTOS BLOQUEADOS.</span>
             <button type="button" onclick="tentarDesbloquearPeriodoComSenha()" class="bg-rose-700 hover:bg-rose-800 text-white font-bold px-3 py-1.5 rounded transition text-[11px] cursor-pointer">
-              🔒 Desbloquear com Senha de Gestor
+              🔒 Como corrigir um mês fechado (Gestor)
             </button>
           </div>
 
@@ -310,6 +310,22 @@
     </div>
   </div>
 
+  <!-- Modal: detalhes e histórico do lançamento -->
+  <div id="modalDetalhesItem" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[60] p-4" onclick="if(event.target===this) fecharDetalhesItem()">
+    <div class="bg-white border border-slate-200 rounded-xl w-full max-w-lg p-5 space-y-3 shadow-2xl max-h-[85vh] flex flex-col">
+      <div class="flex justify-between items-start border-b border-slate-100 pb-2">
+        <div>
+          <h3 class="font-bold text-slate-900 text-xs uppercase">Detalhes do lançamento</h3>
+          <p id="detalheTitulo" class="text-[11px] text-emerald-700 font-mono mt-0.5"></p>
+        </div>
+        <button type="button" onclick="fecharDetalhesItem()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
+      </div>
+      <div id="detalheAjustes"></div>
+      <div class="text-[10px] font-bold text-slate-500 uppercase pt-1">Histórico (auditoria)</div>
+      <div id="detalheHistorico" class="overflow-y-auto border border-slate-200 rounded-lg flex-1"></div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
@@ -342,7 +358,19 @@
     }
 
     let competenciaRegraLancamento = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
-    document.getElementById('labelCompetenciaAtiva').innerText = `${competenciaRegraLancamento} (ABERTA)`;
+    document.getElementById('labelCompetenciaAtiva').innerText = `${competenciaRegraLancamento} (...)`;
+
+    function atualizarEtiquetaCompetencia(status) {
+      const el = document.getElementById('labelCompetenciaAtiva');
+      const mapa = {
+        'ABERTO':   { txt: 'ABERTA',   cls: 'text-emerald-700' },
+        'FECHADO':  { txt: 'FECHADA',  cls: 'text-rose-700' },
+        'PENDENTE': { txt: 'PENDENTE', cls: 'text-amber-600' }
+      };
+      const m = mapa[status] || { txt: status || 'SEM STATUS', cls: 'text-slate-500' };
+      el.innerText = `${competenciaRegraLancamento} (${m.txt})`;
+      el.className = `${m.cls} font-bold text-xs font-mono uppercase`;
+    }
 
     function removerAcentosEColocarMaiuscula(texto) {
       if (!texto) return '';
@@ -371,27 +399,34 @@
       container.classList.toggle('hidden');
     }
 
-    function tentarDesbloquearPeriodoComSenha() {
-      const senhaInformada = prompt("Digite a Senha Mestra de Gestor para desbloquear a edição deste período fechado:");
-      const senhaCorreta = "DRG@2026";
-
-      if (senhaInformada === senhaCorreta) {
-        periodoForcadoDesbloqueado = true;
-        competenciaEstaFechada = false;
-        document.getElementById('alertaCompetenciaFechada').classList.add('hidden');
-        const btnSalvar = document.getElementById('btnSalvar');
-        btnSalvar.disabled = false;
-        btnSalvar.classList.remove('opacity-50', 'cursor-not-allowed');
-        carregarLancamentosNovo();
-        alert("🔒 Período desbloqueado temporariamente com sucesso para manutenções autorizadas!");
-      } else if (senhaInformada !== null) {
-        alert("❌ Senha incorreta! Acesso negado.");
+    // Perfil do usuário logado (tabela usuarios_sistema). Substitui a antiga senha fixa no código.
+    let perfilUsuarioLogado = null;
+    async function carregarPerfilUsuario() {
+      try {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (!user || !user.email) return;
+        const { data } = await _supabase.from('usuarios_sistema')
+          .select('perfil').eq('email', user.email.toLowerCase()).maybeSingle();
+        perfilUsuarioLogado = data ? String(data.perfil || '').toUpperCase() : null;
+      } catch (err) {
+        console.error('Erro ao carregar perfil:', err);
       }
+    }
+
+    function tentarDesbloquearPeriodoComSenha() {
+      if (perfilUsuarioLogado !== 'GESTOR') {
+        alert('Somente o perfil GESTOR pode tratar alterações em competência fechada.');
+        return;
+      }
+      alert('Competência fechada: o banco de dados bloqueia qualquer inclusão, edição ou exclusão neste mês.\n\n' +
+            'Para fazer uma correção, reabra o mês no Dashboard (engrenagem ⚙️ do mês), ajuste e feche novamente.\n' +
+            'Obs.: só um mês pode ficar ABERTO por vez.');
     }
 
     async function inicializarTela() {
       try {
         periodoForcadoDesbloqueado = false;
+        await carregarPerfilUsuario();
         await verificarStatusCompetenciaNoBanco(competenciaRegraLancamento);
         await carregarEmpresas();
         await carregarFuncionariosGeral();
@@ -414,6 +449,10 @@
       let status = 'ABERTO';
       if (data && data.length > 0) {
         status = data[0].status;
+      }
+
+      if ((competenciaStr || competenciaRegraLancamento) === competenciaRegraLancamento) {
+        atualizarEtiquetaCompetencia(status);
       }
 
       if (periodoForcadoDesbloqueado) {
@@ -789,6 +828,8 @@
     }
 
     function renderizarListas(lancamentos) {
+      mapaItensRenderizados = {};
+      lancamentos.forEach(it => { mapaItensRenderizados[it.id] = it; });
       const itensEnriquecidos = lancamentos.map(item => {
         const matchCodigo = String(item.rubrica).match(/^(\d+)/);
         const codigoExtraido = matchCodigo ? matchCodigo[1] : '';
@@ -838,7 +879,8 @@
           const motivoStr = item.motivo_ajuste ? item.motivo_ajuste : 'Não informado';
           const parcelaStr = item.total_parcelas > 1 ? `${item.parcela_atual}/${item.total_parcelas}` : '1/1';
           
-          const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
+          const iconeAbatimento = (temAbatimento ? `<span onclick="abrirDetalhesItem('${item.id}')" class="text-slate-400 hover:text-slate-600 cursor-pointer ml-1 font-mono text-xs select-none" title="Ver ajustes">⚙</span>` : '')
+            + `<span onclick="abrirDetalhesItem('${item.id}')" class="text-slate-300 hover:text-slate-600 cursor-pointer ml-1 text-[10px] select-none" title="Histórico do lançamento">🕘</span>`;
           const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
           
           const isEmprestimoAuto = (item.codigoExtraido === '3007' || item.codigoExtraido === '3004');
@@ -850,7 +892,7 @@
           } else {
             botoesAcao = `
               <td class="py-1 px-2 text-center">
-                <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
+                <button type="button" onclick="prepararEdicaoPorId('${item.id}')" class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
                 <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
               </td>
             `;
@@ -885,7 +927,8 @@
           const motivoStr = item.motivo_ajuste ? item.motivo_ajuste : 'Não informado';
           const parcelaStr = item.total_parcelas > 1 ? `${item.parcela_atual}/${item.total_parcelas}` : '1/1';
           
-          const iconeAbatimento = temAbatimento ? `<span onclick="alert('Detalhes do ajuste:\\nValor Descontado: R$ ${abatimentoValStr}\\nMotivo: ${motivoStr}\\nParcela: ${parcelaStr}')" class="text-slate-300 hover:text-slate-500 cursor-pointer ml-1 font-mono text-xs select-none">⚙</span>` : '';
+          const iconeAbatimento = (temAbatimento ? `<span onclick="abrirDetalhesItem('${item.id}')" class="text-slate-400 hover:text-slate-600 cursor-pointer ml-1 font-mono text-xs select-none" title="Ver ajustes">⚙</span>` : '')
+            + `<span onclick="abrirDetalhesItem('${item.id}')" class="text-slate-300 hover:text-slate-600 cursor-pointer ml-1 text-[10px] select-none" title="Histórico do lançamento">🕘</span>`;
           const badgeFixo = item.fixo ? `<span class="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded ml-1 font-mono">fixo</span>` : '';
           
           const isEmprestimoAuto = (item.codigoExtraido === '3007' || item.codigoExtraido === '3004');
@@ -897,7 +940,7 @@
           } else {
             botoesAcao = `
               <td class="py-1 px-2 text-center">
-                <button type="button" onclick='prepararEdicao(${JSON.stringify(item)})' class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
+                <button type="button" onclick="prepararEdicaoPorId('${item.id}')" class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
                 <button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>
               </td>
             `;
@@ -943,27 +986,61 @@
       `;
     }
 
+    // ---------------------------------------------------------------------
+    // AJUSTES (botão "+"): até 2 ajustes por lançamento, gravados em
+    // folha_itens.ajustes (jsonb). As colunas antigas continuam preenchidas
+    // (abatimento_sigiloso = soma dos ajustes; motivo/parcela = 1º ajuste).
+    // ---------------------------------------------------------------------
+    let mapaItensRenderizados = {};
+
+    function lerAjustesDoItem(item) {
+      if (Array.isArray(item.ajustes) && item.ajustes.length > 0) return item.ajustes;
+      if (item.abatimento_sigiloso && parseFloat(item.abatimento_sigiloso) > 0) {
+        return [{ valor: parseFloat(item.abatimento_sigiloso), motivo: item.motivo_ajuste || '',
+                  parcela_atual: item.parcela_atual || 1, total_parcelas: item.total_parcelas || 1 }];
+      }
+      return [];
+    }
+
+    function preencherPainelAjuste(n, aj) {
+      const suf = n === 1 ? '' : '2';
+      document.getElementById('valorAbatimento' + suf).value = aj ? aj.valor : '0.00';
+      document.getElementById('inputMotivo' + suf).value = aj ? (aj.motivo || '') : '';
+      document.getElementById('inputParcelaAtual' + suf).value = aj ? (aj.parcela_atual || 1) : '1';
+      document.getElementById('inputTotalParcelas' + suf).value = aj ? (aj.total_parcelas || 1) : '1';
+      document.getElementById(n === 1 ? 'containerAbatimento' : 'containerAbatimento2').classList.toggle('hidden', !aj);
+    }
+
+    function lerPainelAjuste(n) {
+      const suf = n === 1 ? '' : '2';
+      const valor = parseFloat(document.getElementById('valorAbatimento' + suf).value) || 0;
+      if (valor <= 0) return null;
+      return {
+        valor: valor,
+        motivo: removerAcentosEColocarMaiuscula(document.getElementById('inputMotivo' + suf).value).trim(),
+        parcela_atual: parseInt(document.getElementById('inputParcelaAtual' + suf).value) || 1,
+        total_parcelas: parseInt(document.getElementById('inputTotalParcelas' + suf).value) || 1
+      };
+    }
+
+    function prepararEdicaoPorId(id) {
+      const item = mapaItensRenderizados[id];
+      if (item) prepararEdicao(item);
+    }
+
     function prepararEdicao(item) {
       document.getElementById('editLancamentoId').value = item.id;
       document.getElementById('inputRubrica').value = item.rubrica || '';
       document.getElementById('tipoLancamento').value = item.tipo || 'PROVENTO';
-      
-      const valorBrutoOriginal = item.valor_bruto !== undefined && item.valor_bruto !== null ? item.valor_bruto : item.valor;
+
+      // Itens importados (Alpha7/Farmácia) têm valor_bruto = 0: usa o valor gravado para não abrir zerado
+      const bruto = parseFloat(item.valor_bruto);
+      const valorBrutoOriginal = (!isNaN(bruto) && bruto > 0) ? bruto : parseFloat(item.valor || 0);
       document.getElementById('valorLancamento').value = valorBrutoOriginal;
 
-      if (item.abatimento_sigiloso && parseFloat(item.abatimento_sigiloso) > 0) {
-        document.getElementById('valorAbatimento').value = item.abatimento_sigiloso;
-        document.getElementById('inputMotivo').value = item.motivo_ajuste || '';
-        document.getElementById('inputParcelaAtual').value = item.parcela_atual || 1;
-        document.getElementById('inputTotalParcelas').value = item.total_parcelas || 1;
-        document.getElementById('containerAbatimento').classList.remove('hidden');
-      } else {
-        document.getElementById('valorAbatimento').value = '0.00';
-        document.getElementById('inputMotivo').value = '';
-        document.getElementById('inputParcelaAtual').value = '1';
-        document.getElementById('inputTotalParcelas').value = '1';
-        document.getElementById('containerAbatimento').classList.add('hidden');
-      }
+      const ajustes = lerAjustesDoItem(item);
+      preencherPainelAjuste(1, ajustes[0] || null);
+      preencherPainelAjuste(2, ajustes[1] || null);
 
       document.getElementById('checkFixo').checked = !!item.fixo;
 
@@ -979,12 +1056,9 @@
       document.getElementById('editLancamentoId').value = '';
       document.getElementById('inputRubrica').value = '';
       document.getElementById('valorLancamento').value = '';
-      document.getElementById('valorAbatimento').value = '0.00';
-      document.getElementById('inputMotivo').value = '';
-      document.getElementById('inputParcelaAtual').value = '1';
-      document.getElementById('inputTotalParcelas').value = '1';
+      preencherPainelAjuste(1, null);
+      preencherPainelAjuste(2, null);
       document.getElementById('checkFixo').checked = false;
-      document.getElementById('containerAbatimento').classList.add('hidden');
 
       const btnSalvar = document.getElementById('btnSalvar');
       btnSalvar.innerText = '✓ CONFIRMAR LANÇAMENTO';
@@ -1003,76 +1077,71 @@
       const funcionario_id = document.getElementById('selectFuncionarioNovo').value;
       let rubrica = removerAcentosEColocarMaiuscula(document.getElementById('inputRubrica').value);
       const tipo = document.getElementById('tipoLancamento').value;
-      
       const valorBruto = parseFloat(document.getElementById('valorLancamento').value) || 0;
-      const abatimentoSigiloso = parseFloat(document.getElementById('valorAbatimento').value) || 0;
-      const motivo_ajuste = removerAcentosEColocarMaiuscula(document.getElementById('inputMotivo').value);
-      const parcela_atual = parseInt(document.getElementById('inputParcelaAtual').value) || 1;
-      const total_parcelas = parseInt(document.getElementById('inputTotalParcelas').value) || 1;
       const fixo = document.getElementById('checkFixo').checked;
-      
-      const valorFinal = Math.max(0, valorBruto - abatimentoSigiloso);
 
       if (!funcionario_id) {
         alert("Selecione um funcionário válido!");
         return;
       }
 
-      if (abatimentoSigiloso > 0 && total_parcelas > 1) {
-        const tagParcela = ` (${String(parcela_atual).padStart(2, '0')}/${String(total_parcelas).padStart(2, '0')})`;
-        if (!rubrica.includes('/')) {
+      // Ajustes do botão "+" (1º e 2º)
+      const ajustes = [lerPainelAjuste(1), lerPainelAjuste(2)].filter(Boolean);
+      const agora = new Date().toISOString();
+      const itemOriginal = idEdicao ? (mapaItensRenderizados[idEdicao] || {}) : {};
+      const ajustesAnteriores = lerAjustesDoItem(itemOriginal);
+      ajustes.forEach((aj, idx) => {
+        const ant = ajustesAnteriores[idx];
+        const igual = ant && parseFloat(ant.valor) === aj.valor && (ant.motivo || '') === aj.motivo;
+        aj.registrado_em = igual && ant.registrado_em ? ant.registrado_em : agora;
+      });
+
+      const abatimentoTotal = ajustes.reduce((acc, a) => acc + a.valor, 0);
+      const valorFinal = Math.max(0, valorBruto - abatimentoTotal);
+      const aj1 = ajustes[0] || null;
+
+      let motivo_ajuste = ajustes.map(a => a.motivo).filter(Boolean).join(' | ');
+      // Preserva a identificação das parcelas automáticas de empréstimo (evita duplicidade)
+      if (String(itemOriginal.motivo_ajuste || '').startsWith('Automação Empréstimo #')) {
+        motivo_ajuste = itemOriginal.motivo_ajuste;
+      }
+
+      const parcela_atual = aj1 ? aj1.parcela_atual : (itemOriginal.parcela_atual || 1);
+      const total_parcelas = aj1 ? aj1.total_parcelas : (itemOriginal.total_parcelas || 1);
+
+      if (aj1 && aj1.total_parcelas > 1) {
+        const tagParcela = ` (${String(aj1.parcela_atual).padStart(2, '0')}/${String(aj1.total_parcelas).padStart(2, '0')})`;
+        if (!/\(\d{2}\/\d{2}\)/.test(rubrica)) {
           rubrica += tagParcela;
         }
       }
 
+      const payload = {
+        rubrica,
+        tipo,
+        valor: valorFinal,
+        valor_bruto: valorBruto,
+        abatimento_sigiloso: abatimentoTotal,
+        motivo_ajuste,
+        parcela_atual,
+        total_parcelas,
+        fixo,
+        ajustes: ajustes.length > 0 ? ajustes : null
+      };
+
+      let error;
       if (idEdicao) {
-        const { error } = await _supabase.from('folha_itens').update({
-          rubrica, 
-          tipo, 
-          valor: valorFinal,
-          valor_bruto: valorBruto,
-          abatimento_sigiloso: abatimentoSigiloso,
-          motivo_ajuste: motivo_ajuste,
-          parcela_atual: parcela_atual,
-          total_parcelas: total_parcelas,
-          fixo: fixo
-        }).eq('id', idEdicao);
-
-        if (error) {
-          alert('Erro ao atualizar lançamento: ' + error.message);
-        } else {
-          cancelarEdicao();
-          carregarLancamentosNovo();
-        }
+        ({ error } = await _supabase.from('folha_itens').update(payload).eq('id', idEdicao));
       } else {
-        const { error } = await _supabase.from('folha_itens').insert([{ 
-          funcionario_id, 
-          rubrica, 
-          tipo, 
-          valor: valorFinal,
-          valor_bruto: valorBruto,
-          abatimento_sigiloso: abatimentoSigiloso,
-          motivo_ajuste: motivo_ajuste,
-          parcela_atual: parcela_atual,
-          total_parcelas: total_parcelas,
-          fixo: fixo,
-          competencia: competenciaRegraLancamento 
-        }]);
-
-        if (error) {
-          alert('Erro ao salvar lançamento: ' + error.message);
-        } else {
-          document.getElementById('inputRubrica').value = '';
-          document.getElementById('valorLancamento').value = '';
-          document.getElementById('valorAbatimento').value = '0.00';
-          document.getElementById('inputMotivo').value = '';
-          document.getElementById('inputParcelaAtual').value = '1';
-          document.getElementById('inputTotalParcelas').value = '1';
-          document.getElementById('checkFixo').checked = false;
-          document.getElementById('containerAbatimento').classList.add('hidden');
-          carregarLancamentosNovo();
-        }
+        ({ error } = await _supabase.from('folha_itens').insert([{ ...payload, funcionario_id, competencia: competenciaRegraLancamento }]));
       }
+
+      if (error) {
+        alert((idEdicao ? 'Erro ao atualizar lançamento: ' : 'Erro ao salvar lançamento: ') + error.message);
+        return;
+      }
+      cancelarEdicao();
+      carregarLancamentosNovo();
     }
 
     async function importarItensFixosMesAnterior() {
@@ -1151,6 +1220,9 @@
             valor_bruto: item.valor_bruto || item.valor,
             abatimento_sigiloso: item.abatimento_sigiloso || 0,
             motivo_ajuste: item.motivo_ajuste || '',
+            ajustes: Array.isArray(item.ajustes)
+              ? item.ajustes.map(a => ({ ...a, parcela_atual: (a.total_parcelas > 1 ? Math.min((a.parcela_atual || 1) + 1, a.total_parcelas) : 1), registrado_em: new Date().toISOString() }))
+              : null,
             parcela_atual: novaParcela,
             total_parcelas: totalP,
             fixo: true,
@@ -1179,6 +1251,93 @@
           else dispararConsultaHistorico();
         }
       }
+    }
+
+    // ---------------------------------------------------------------------
+    // DETALHES / HISTÓRICO DO LANÇAMENTO (lê audit_logs, somente leitura)
+    // ---------------------------------------------------------------------
+    function escaparHtml(t) {
+      return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+    function fmtMoeda(v) {
+      return 'R$ ' + (parseFloat(v || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function resumoAjustes(reg) {
+      if (!reg) return '-';
+      const lista = lerAjustesDoItem(reg);
+      if (lista.length === 0) return 'sem ajuste';
+      return lista.map((a, i) => `${i + 1}º: ${fmtMoeda(a.valor)} ${a.motivo ? '- ' + a.motivo : ''}${a.total_parcelas > 1 ? ` (${a.parcela_atual}/${a.total_parcelas})` : ''}`).join(' | ');
+    }
+
+    async function abrirDetalhesItem(id) {
+      const item = mapaItensRenderizados[id];
+      if (!item) return;
+      const modal = document.getElementById('modalDetalhesItem');
+      document.getElementById('detalheTitulo').innerText = item.rubrica || '';
+
+      const ajustes = lerAjustesDoItem(item);
+      const brutoNum = parseFloat(item.valor_bruto);
+      document.getElementById('detalheAjustes').innerHTML = `
+        <div class="grid grid-cols-3 gap-2 text-[11px] font-mono mb-2">
+          <div class="bg-slate-50 border border-slate-200 rounded p-2"><div class="text-[9px] text-slate-400 uppercase">Valor bruto</div>${fmtMoeda(!isNaN(brutoNum) && brutoNum > 0 ? brutoNum : item.valor)}</div>
+          <div class="bg-slate-50 border border-slate-200 rounded p-2"><div class="text-[9px] text-slate-400 uppercase">Ajustes</div>${fmtMoeda(item.abatimento_sigiloso)}</div>
+          <div class="bg-slate-50 border border-slate-200 rounded p-2"><div class="text-[9px] text-slate-400 uppercase">Valor final</div><b>${fmtMoeda(item.valor)}</b></div>
+        </div>
+        ${ajustes.length === 0 ? '<div class="text-[11px] text-slate-400">Nenhum ajuste neste lançamento.</div>' :
+          ajustes.map((a, i) => `
+            <div class="text-[11px] border-l-2 border-amber-400 pl-2 py-1 mb-1">
+              <b>${i + 1}º ajuste:</b> ${fmtMoeda(a.valor)} — ${escaparHtml(a.motivo || 'sem motivo')}
+              ${a.total_parcelas > 1 ? ` — parcela ${a.parcela_atual}/${a.total_parcelas}` : ''}
+              ${a.registrado_em ? `<span class="text-slate-400"> — ${new Date(a.registrado_em).toLocaleString('pt-BR')}</span>` : ''}
+            </div>`).join('')}
+      `;
+
+      const hist = document.getElementById('detalheHistorico');
+      hist.innerHTML = '<div class="text-[11px] text-slate-400 p-2">Carregando histórico...</div>';
+      modal.classList.remove('hidden');
+
+      const { data, error } = await _supabase.from('audit_logs')
+        .select('operation, changed_by, changed_at, old_data, new_data')
+        .eq('record_id', String(id))
+        .order('changed_at', { ascending: true });
+
+      if (error) {
+        hist.innerHTML = `<div class="text-[11px] text-rose-600 p-2">Erro ao carregar histórico: ${escaparHtml(error.message)}</div>`;
+        return;
+      }
+      if (!data || data.length === 0) {
+        hist.innerHTML = '<div class="text-[11px] text-slate-400 p-2">Sem registros de auditoria para este lançamento.</div>';
+        return;
+      }
+      const campos = [
+        ['valor', 'Valor', fmtMoeda], ['valor_bruto', 'Bruto', fmtMoeda], ['abatimento_sigiloso', 'Total ajustes', fmtMoeda],
+        ['rubrica', 'Rubrica', escaparHtml], ['tipo', 'Tipo', escaparHtml], ['fixo', 'Fixo', v => v ? 'SIM' : 'NÃO']
+      ];
+      hist.innerHTML = data.map(log => {
+        const dt = new Date(log.changed_at).toLocaleString('pt-BR');
+        let det = '';
+        if (log.operation === 'INSERT') {
+          det = `Criado com ${fmtMoeda(log.new_data?.valor)} — ajustes: ${escaparHtml(resumoAjustes(log.new_data))}`;
+        } else if (log.operation === 'DELETE') {
+          det = `Excluído (valor era ${fmtMoeda(log.old_data?.valor)})`;
+        } else {
+          const mud = campos.filter(([k]) => String(log.old_data?.[k]) !== String(log.new_data?.[k]))
+            .map(([k, rot, f]) => `${rot}: ${f(log.old_data?.[k])} → <b>${f(log.new_data?.[k])}</b>`);
+          const ajA = resumoAjustes(log.old_data), ajN = resumoAjustes(log.new_data);
+          if (ajA !== ajN) mud.push(`Ajustes: ${escaparHtml(ajA)} → <b>${escaparHtml(ajN)}</b>`);
+          det = mud.length ? mud.join('<br>') : 'Atualizado sem mudança de valores';
+        }
+        const cor = log.operation === 'INSERT' ? 'text-emerald-700' : log.operation === 'DELETE' ? 'text-rose-700' : 'text-amber-700';
+        return `<div class="border-b border-slate-100 py-1.5 px-2 text-[11px]">
+                  <div class="flex justify-between"><span class="font-bold ${cor}">${log.operation}</span><span class="text-slate-400 font-mono">${dt}</span></div>
+                  <div class="text-slate-500">${escaparHtml(log.changed_by || '')}</div>
+                  <div class="text-slate-700 mt-0.5">${det}</div>
+                </div>`;
+      }).join('');
+    }
+
+    function fecharDetalhesItem() {
+      document.getElementById('modalDetalhesItem').classList.add('hidden');
     }
 
     inicializarTela();
