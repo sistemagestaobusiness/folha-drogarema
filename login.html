@@ -104,6 +104,17 @@
 
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    // Direciona cada perfil para a sua tela inicial
+    async function destinoPorPerfil(email) {
+      try {
+        const { data } = await _supabase.from('usuarios_sistema').select('perfil').eq('email', String(email).toLowerCase()).maybeSingle();
+        const perfil = data ? data.perfil : null;
+        if (perfil === 'LIDER') return 'freelance_solicitacao.html';
+        if (perfil === 'SUPERVISOR') return 'supervisor_freelance.html';
+      } catch (err) { console.error(err); }
+      return 'index.html';
+    }
+
     const formLogin = document.getElementById('loginForm');
     const formRecuperar = document.getElementById('recuperarForm');
     const formPrimeiro = document.getElementById('primeiroAcessoForm');
@@ -178,7 +189,8 @@
           msg.className = 'mt-4 text-center text-xs text-emerald-400 font-semibold';
           msg.innerText = 'Sucesso! Redirecionando...';
           localStorage.setItem('usuario_drogarema', JSON.stringify(data.user));
-          setTimeout(() => { window.location.href = 'index.html'; }, 800);
+          const destino = await destinoPorPerfil(email);
+          setTimeout(() => { window.location.href = destino; }, 800);
         }
       } catch (err) {
         msg.className = 'mt-4 text-center text-xs text-rose-500 font-semibold';
@@ -266,7 +278,8 @@
           msg.innerText = 'Senha alterada com sucesso! Entrando no sistema...';
           
           localStorage.setItem('usuario_drogarema', JSON.stringify(authData.user));
-          setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+          const destino = await destinoPorPerfil(email);
+          setTimeout(() => { window.location.href = destino; }, 1000);
         }
       } catch (err) {
         msg.className = 'mt-4 text-center text-xs text-rose-500 font-semibold';
