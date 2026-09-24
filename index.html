@@ -74,8 +74,11 @@
             <a href="rh_aprovacao_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
               <span>✅</span> <span>Aprovação RH</span>
             </a>
-            <a href="financeiro_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>💵</span> <span>Pagamentos (Financeiro)</span>
+            <a href="pagamentos_extras.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>💵</span> <span>Pagamentos fora da folha</span>
+            </a>
+            <a href="financeiro.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
+              <span>🏦</span> <span>Tela do Financeiro</span>
             </a>
             <a href="banco_horas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
               <span>⏱</span> <span>Banco de Horas</span>
@@ -149,6 +152,15 @@
             </a>
           </div>
         </div>
+
+        <!-- ALERTA URGENTE: FINANCEIRO NÃO CONSEGUIU PAGAR -->
+        <a id="alertaPagamento" href="pagamentos_extras.html" class="hidden block bg-rose-50 border-2 border-rose-400 p-4 rounded-xl shadow-sm">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2 text-rose-800 font-black text-sm uppercase"><span class="animate-pulse">🚨</span> <span id="alertaPagamentoTxt">Problemas em pagamentos</span></div>
+            <span class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold">RESOLVER →</span>
+          </div>
+          <div id="alertaPagamentoLista" class="text-xs text-rose-900 mt-2 space-y-1"></div>
+        </a>
 
         <!-- NOVO: ALERTA DE FREELANCE PENDENTE -->
         <div id="alertaFreelance" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm space-y-3">
@@ -373,7 +385,7 @@
         const perfil = data ? data.perfil : null;
         if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
         else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');
-        else if (perfil === 'FINANCEIRO') window.location.replace('financeiro_freelance.html');
+        else if (perfil === 'FINANCEIRO') window.location.replace('financeiro.html');
       } catch (err) { console.error(err); }
     })();
 
@@ -515,6 +527,21 @@
       
       // Chamada da nova função de inteligência para Freelancers!
       await carregarPendenciasFreelance();
+      await carregarAlertaPagamentos();
+    }
+
+    async function carregarAlertaPagamentos() {
+      try {
+        const { data } = await _supabase.from('pagamentos_extras').select('valor, descricao, problema_desc, funcionario_id').eq('status', 'PROBLEMA');
+        const box = document.getElementById('alertaPagamento');
+        if (!data || data.length === 0) { box.classList.add('hidden'); return; }
+        const { data: f } = await _supabase.from('funcionarios').select('id, nome_registro').in('id', data.map(d => d.funcionario_id));
+        const nomes = {}; (f || []).forEach(x => nomes[x.id] = x.nome_registro);
+        document.getElementById('alertaPagamentoTxt').innerText = `${data.length} pagamento(s) com problema informado pelo Financeiro`;
+        document.getElementById('alertaPagamentoLista').innerHTML = data.slice(0, 5).map(d =>
+          `<div>• <b>${nomes[d.funcionario_id] || ''}</b> — R$ ${parseFloat(d.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — ${String(d.problema_desc || '').replace(/</g, '&lt;')}</div>`).join('');
+        box.classList.remove('hidden');
+      } catch (err) { console.error('Alerta pagamentos:', err); }
     }
 
     function selecionarPeriodoAtivo(mesNome, ano) {

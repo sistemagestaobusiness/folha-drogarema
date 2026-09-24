@@ -22,7 +22,7 @@
           <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
         </div>
         <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
-        <button onclick="sairSistema()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
+        <button id="btnSair" onclick="sairSistema()" class="hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
       </div>
     </div>
 
@@ -94,7 +94,7 @@
       perfil = p ? p.perfil : null;
       document.getElementById('lblUsuario').innerText = email;
       document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (['GESTOR', 'RH'].includes(perfil)) document.getElementById('btnPainel').classList.remove('hidden');
+      document.getElementById(['GESTOR', 'RH'].includes(perfil) ? 'btnPainel' : 'btnSair').classList.remove('hidden');
 
       if (!['SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) {
         const av = document.getElementById('avisoSemAcesso');
@@ -161,7 +161,7 @@
                 <span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(r.loja_solicitante || 'SEM LOJA')}</span>
                 <span class="text-[10px] text-slate-400">por ${esc(r.solicitante_email || '—')}</span>
               </div>
-              <div class="text-sm font-bold text-slate-900">${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span></div>
+              <div class="text-sm font-bold text-slate-900">${r.tipo_solicitacao === 'HORA_EXTRA' ? '<span class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">⏰ HORA EXTRA</span>' : '<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">🧑‍🤝‍🧑 FREELANCE</span>'}${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span></div>
               <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtHoras(r.horas_trabalhadas)}</b> · pagamento ${esc(r.forma_pagamento)}</div>
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? `<span class="ml-1 text-[11px]">faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b></span>` : ''}</div>

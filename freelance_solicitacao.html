@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Solicitação de Freelance - Líder</title>
+  <title>Solicitações da Loja - Freelance e Hora Extra</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -14,8 +14,8 @@
     <!-- Cabeçalho -->
     <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-        <h1 class="text-xl font-bold text-slate-900 tracking-wide">SOLICITAÇÃO DE FREELANCE</h1>
-        <p class="text-xs text-slate-500">Líder da loja → Supervisor → RH</p>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">SOLICITAÇÕES DA LOJA</h1>
+        <p class="text-xs text-slate-500">Freelance e Hora Extra · Líder da loja → Supervisor → RH</p>
       </div>
       <div class="flex items-center gap-3">
         <div class="text-right">
@@ -23,18 +23,34 @@
           <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
         </div>
         <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
-        <button onclick="sairSistema()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
+        <button id="btnSair" onclick="sairSistema()" class="hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
       </div>
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
       <!-- COLUNA ESQUERDA: FORMULÁRIO -->
-      <div class="xl:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-5 shadow-sm h-fit">
+      <div id="painelForm" class="xl:col-span-5 bg-white border-2 border-indigo-200 rounded-xl p-6 space-y-5 shadow-sm h-fit">
+
+        <!-- 0. O QUE ESTÁ SENDO SOLICITADO -->
+        <div class="space-y-2">
+          <h2 class="font-bold text-slate-700 text-sm">O QUE VOCÊ PRECISA SOLICITAR?</h2>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="optFreelance" onclick="escolherTipo('FREELANCE')" class="text-left p-3 rounded-xl border-2 cursor-pointer">
+              <div class="text-sm font-black">🧑‍🤝‍🧑 FREELANCE</div>
+              <div class="text-[10px] leading-tight mt-1">Uma pessoa <b>de fora do turno</b> vem cobrir a loja</div>
+            </button>
+            <button type="button" id="optHoraExtra" onclick="escolherTipo('HORA_EXTRA')" class="text-left p-3 rounded-xl border-2 cursor-pointer">
+              <div class="text-sm font-black">⏰ HORA EXTRA</div>
+              <div class="text-[10px] leading-tight mt-1">Um funcionário <b>estende a própria jornada</b></div>
+            </button>
+          </div>
+          <div id="faixaTipo" class="text-center text-xs font-black uppercase tracking-wider rounded-lg py-2"></div>
+        </div>
 
         <!-- 1. LOJA E MOTIVO -->
         <div class="space-y-3">
-          <h2 class="font-bold text-indigo-700 text-sm border-b border-slate-100 pb-2">1. LOJA E MOTIVO</h2>
+          <h2 class="tituloSecao font-bold text-sm border-b border-slate-100 pb-2">1. LOJA E MOTIVO</h2>
           <div>
             <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Loja solicitante *</label>
             <select id="selectLoja" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase"></select>
@@ -54,19 +70,25 @@
           </div>
           <div id="boxAusente" class="hidden bg-rose-50 border border-rose-200 rounded-lg p-3">
             <label class="block text-xs font-bold text-rose-800 uppercase mb-1">Funcionário que faltou / ausente *</label>
-            <input type="text" id="filtroAusente" placeholder="🔍 Filtrar (3 letras)..." oninput="renderizarSelect('selectAusente', this.value)" class="w-full bg-white border border-rose-200 rounded p-2 text-xs mb-1">
-            <select id="selectAusente" class="w-full bg-white border border-rose-300 rounded p-2 text-xs font-bold uppercase"></select>
-            <p class="text-[10px] text-rose-700 mt-1">O RH decide se será desconto de falta ou banco de horas.</p>
+            <div class="combo relative" data-alvo="selectAusente">
+              <input type="text" id="buscaAusente" autocomplete="off" placeholder="Digite o nome..." class="w-full bg-white border border-rose-300 rounded p-2 text-xs font-bold uppercase">
+              <div class="lista hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-56 overflow-y-auto z-50"></div>
+            </div>
+            <input type="hidden" id="selectAusente">
+            <p class="text-[10px] text-rose-700 mt-1">O RH decide se será desconto de falta, banco de horas ou atestado.</p>
           </div>
         </div>
 
-        <!-- 2. QUEM FARÁ O FREELANCE -->
+        <!-- 2. QUEM FARÁ -->
         <div class="space-y-3">
-          <h2 class="font-bold text-indigo-700 text-sm border-b border-slate-100 pb-2">2. QUEM FARÁ O FREELANCE</h2>
+          <h2 id="tituloQuem" class="tituloSecao font-bold text-sm border-b border-slate-100 pb-2">2. QUEM FARÁ O FREELANCE</h2>
           <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Colaborador / Freelancer *</label>
-            <input type="text" id="filtroFreelancer" placeholder="🔍 Filtrar (3 letras)..." oninput="renderizarSelect('selectFuncionario', this.value)" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs mb-1">
-            <select id="selectFuncionario" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase"></select>
+            <label id="lblQuem" class="block text-xs font-bold text-slate-600 uppercase mb-1">Colaborador / Freelancer *</label>
+            <div class="combo relative" data-alvo="selectFuncionario">
+              <input type="text" id="buscaFuncionario" autocomplete="off" placeholder="Digite o nome..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase">
+              <div class="lista hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-56 overflow-y-auto z-50"></div>
+            </div>
+            <input type="hidden" id="selectFuncionario">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Forma de pagamento (acordo) *</label>
@@ -87,11 +109,11 @@
               <input type="date" id="inputData" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono">
             </div>
             <div>
-              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Início</label>
+              <label id="lblInicio" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Início</label>
               <input type="time" id="inputHoraInicio" step="1800" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
             </div>
             <div>
-              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fim</label>
+              <label id="lblFim" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fim</label>
               <input type="time" id="inputHoraFim" step="1800" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
             </div>
           </div>
@@ -105,7 +127,7 @@
               </select>
             </div>
             <div class="col-span-3 text-center">
-              <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1 cursor-pointer">
+              <label id="boxDiaria" class="block text-[9px] font-bold text-slate-500 uppercase mb-1 cursor-pointer">
                 <input type="checkbox" id="checkDiaria" onchange="toggleDiaria()" class="accent-indigo-600"> Diária
               </label>
               <input type="text" id="inputHoras" readonly placeholder="h" class="w-full bg-slate-200 border border-slate-300 rounded p-1.5 text-xs font-mono text-center h-[34px]">
@@ -120,7 +142,7 @@
         <!-- 4. LISTA A ENVIAR -->
         <div class="space-y-2">
           <div class="flex justify-between items-end border-b border-slate-100 pb-2">
-            <h2 class="font-bold text-indigo-700 text-sm">4. DATAS A ENVIAR</h2>
+            <h2 class="tituloSecao font-bold text-sm">4. DATAS A ENVIAR</h2>
             <span id="contadorCarrinho" class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold">0 itens</span>
           </div>
           <div class="border border-slate-200 rounded-lg overflow-hidden">
@@ -138,9 +160,7 @@
             <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações da loja</label>
             <textarea id="inputObs" rows="2" placeholder="Detalhe a situação para o supervisor e o RH..." class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs"></textarea>
           </div>
-          <button type="button" id="btnSalvar" onclick="enviarSolicitacao()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer">
-            ENVIAR PARA APROVAÇÃO (SUPERVISOR + RH)
-          </button>
+          <button type="button" id="btnSalvar" onclick="enviarSolicitacao()" class="w-full text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer"></button>
         </div>
       </div>
 
@@ -148,8 +168,11 @@
       <div class="xl:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-3 gap-2">
           <h2 id="tituloHistorico" class="font-bold text-slate-900 text-sm">MINHAS SOLICITAÇÕES</h2>
-          <div class="flex items-center gap-1 text-[11px]">
-            <span class="text-slate-500 font-bold">De:</span>
+          <div class="flex items-center gap-1 text-[11px] flex-wrap">
+            <select id="filtroTipo" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 text-xs font-bold">
+              <option value="">Todos</option><option value="FREELANCE">Freelance</option><option value="HORA_EXTRA">Hora extra</option>
+            </select>
+            <span class="text-slate-500 font-bold ml-1">De:</span>
             <input type="date" id="filtroDataInicio" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 font-mono text-xs">
             <span class="text-slate-500 font-bold">Até:</span>
             <input type="date" id="filtroDataFim" onchange="carregarHistorico()" class="bg-slate-50 border border-slate-300 rounded p-1 font-mono text-xs">
@@ -177,17 +200,94 @@
       REJEITADA:           { txt: 'RECUSADA',              cls: 'bg-rose-100 text-rose-800' },
       CANCELADA:           { txt: 'CANCELADA',             cls: 'bg-slate-200 text-slate-600' }
     };
+    const TIPOS = {
+      FREELANCE:  { rotulo: 'FREELANCE',  icone: '🧑‍🤝‍🧑', cor: 'indigo', badge: 'bg-indigo-600 text-white' },
+      HORA_EXTRA: { rotulo: 'HORA EXTRA', icone: '⏰',    cor: 'orange', badge: 'bg-orange-500 text-white' }
+    };
 
     let usuario = { email: '', perfil: null, loja_id: null };
     let todosFuncionarios = [];
     let listaLojas = [];
     let carrinho = [];
+    let tipoAtual = 'FREELANCE';
 
     function esc(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-    function dataLocalISO(d) { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); }
     function formatarDataBR(iso) { if (!iso) return '-'; const p = iso.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
     function fmtHoras(h) { const n = parseFloat(h || 0); return (Number.isInteger(n) ? n : n.toFixed(1).replace('.', ',')) + 'h'; }
     function nomeFunc(id) { const f = todosFuncionarios.find(x => x.id === id); return f ? f.nome_registro : '—'; }
+    function semAcento(t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase(); }
+
+    // ------------------------------------------------------------------
+    // CAMPO DE BUSCA COM LISTA (digita e escolhe no mesmo campo)
+    // ------------------------------------------------------------------
+    function iniciarCombos() {
+      document.querySelectorAll('.combo').forEach(combo => {
+        const input = combo.querySelector('input');
+        const lista = combo.querySelector('.lista');
+        const hidden = document.getElementById(combo.dataset.alvo);
+        const desenhar = () => {
+          const termo = semAcento(input.value.trim());
+          const achados = todosFuncionarios.filter(f => !termo || semAcento(f.nome_registro).includes(termo)).slice(0, 60);
+          lista.innerHTML = achados.length === 0
+            ? '<div class="p-3 text-xs text-slate-400 text-center">Nenhum colaborador encontrado</div>'
+            : achados.map(f => `<div data-id="${f.id}" class="opcao p-2.5 text-xs hover:bg-indigo-50 cursor-pointer flex justify-between">
+                <span class="font-bold">${esc(f.nome_registro)}</span>
+                <span class="text-[10px] text-slate-400">${esc(f.cargo || '')}${String(f.cargo).includes('FREELANCE') ? ' ⚡EXTERNO' : ''}</span></div>`).join('');
+          lista.classList.remove('hidden');
+        };
+        input.addEventListener('focus', desenhar);
+        input.addEventListener('input', () => { hidden.value = ''; input.classList.remove('border-emerald-500'); desenhar(); });
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); const p = lista.querySelector('.opcao'); if (p) p.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); }
+          if (e.key === 'Escape') lista.classList.add('hidden');
+        });
+        lista.addEventListener('mousedown', e => {
+          const op = e.target.closest('.opcao'); if (!op) return;
+          e.preventDefault();
+          hidden.value = op.dataset.id;
+          input.value = nomeFunc(op.dataset.id);
+          input.classList.add('border-emerald-500');
+          lista.classList.add('hidden');
+        });
+        input.addEventListener('blur', () => setTimeout(() => {
+          lista.classList.add('hidden');
+          if (!hidden.value) input.value = '';
+        }, 150));
+      });
+    }
+    function limparCombo(idHidden) {
+      document.getElementById(idHidden).value = '';
+      const input = document.querySelector(`.combo[data-alvo="${idHidden}"] input`);
+      if (input) { input.value = ''; input.classList.remove('border-emerald-500'); }
+    }
+
+    // ------------------------------------------------------------------
+    // FREELANCE x HORA EXTRA
+    // ------------------------------------------------------------------
+    function escolherTipo(tipo) {
+      tipoAtual = tipo;
+      const fl = tipo === 'FREELANCE';
+      const onFl = 'border-indigo-600 bg-indigo-600 text-white shadow', onHe = 'border-orange-500 bg-orange-500 text-white shadow', off = 'border-slate-200 bg-white text-slate-500 hover:border-slate-300';
+      document.getElementById('optFreelance').className = `text-left p-3 rounded-xl border-2 cursor-pointer ${fl ? onFl : off}`;
+      document.getElementById('optHoraExtra').className = `text-left p-3 rounded-xl border-2 cursor-pointer ${!fl ? onHe : off}`;
+      const faixa = document.getElementById('faixaTipo');
+      faixa.innerText = fl ? 'Você está solicitando: FREELANCE' : 'Você está solicitando: HORA EXTRA';
+      faixa.className = `text-center text-xs font-black uppercase tracking-wider rounded-lg py-2 ${fl ? 'bg-indigo-50 text-indigo-800 border border-indigo-200' : 'bg-orange-50 text-orange-800 border border-orange-200'}`;
+      document.getElementById('painelForm').className = `xl:col-span-5 bg-white border-2 ${fl ? 'border-indigo-200' : 'border-orange-300'} rounded-xl p-6 space-y-5 shadow-sm h-fit`;
+      document.querySelectorAll('.tituloSecao').forEach(t => { t.classList.toggle('text-indigo-700', fl); t.classList.toggle('text-orange-700', !fl); });
+      document.getElementById('tituloQuem').innerText = fl ? '2. QUEM FARÁ O FREELANCE' : '2. QUEM FARÁ A HORA EXTRA';
+      document.getElementById('lblQuem').innerText = fl ? 'Colaborador / Freelancer *' : 'Funcionário que vai estender a jornada *';
+      document.getElementById('lblInicio').innerText = fl ? 'Início' : 'Início da HE';
+      document.getElementById('lblFim').innerText = fl ? 'Fim' : 'Fim da HE';
+      // Hora extra: conta só as horas a mais (sem diária e sem desconto de intervalo)
+      document.getElementById('boxDiaria').classList.toggle('invisible', !fl);
+      if (!fl && document.getElementById('checkDiaria').checked) { document.getElementById('checkDiaria').checked = false; toggleDiaria(); }
+      const btn = document.getElementById('btnSalvar');
+      btn.innerText = fl ? 'ENVIAR FREELANCE PARA APROVAÇÃO (SUPERVISOR + RH)' : 'ENVIAR HORA EXTRA PARA APROVAÇÃO (SUPERVISOR + RH)';
+      btn.className = `w-full text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer ${fl ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-orange-500 hover:bg-orange-600'}`;
+      if (carrinho.length) { carrinho = []; atualizarTabelaCarrinho(); }
+      calcularHoras();
+    }
 
     // ------------------------------------------------------------------
     // INICIALIZAÇÃO (login obrigatório)
@@ -203,11 +303,12 @@
       usuario.loja_id = perfil ? perfil.loja_id : null;
       document.getElementById('lblUsuario').innerText = usuario.email;
       document.getElementById('lblPerfil').innerText = usuario.perfil || 'SEM PERFIL';
-      if (['GESTOR', 'RH'].includes(usuario.perfil)) document.getElementById('btnPainel').classList.remove('hidden');
+      // Gestor/RH voltam ao painel (o SAIR fica no index); demais perfis só têm SAIR
+      document.getElementById(['GESTOR', 'RH'].includes(usuario.perfil) ? 'btnPainel' : 'btnSair').classList.remove('hidden');
 
-      // Filtro de datas vazio = todo o período
-
+      escolherTipo('FREELANCE');
       await Promise.all([carregarLojas(), carregarFuncionarios()]);
+      iniciarCombos();
       atualizarTabelaCarrinho();
       await carregarHistorico();
     }
@@ -217,7 +318,6 @@
       listaLojas = data || [];
       const sel = document.getElementById('selectLoja');
       sel.innerHTML = '<option value="">-- SELECIONE A LOJA --</option>' + listaLojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
-      // Líder com loja cadastrada: loja fixa
       if (usuario.perfil === 'LIDER' && usuario.loja_id) {
         sel.value = usuario.loja_id;
         sel.disabled = true;
@@ -228,29 +328,16 @@
     async function carregarFuncionarios() {
       const { data } = await _supabase.from('funcionarios').select('id, nome_registro, cargo').eq('status', 'ATIVO').order('nome_registro');
       todosFuncionarios = data || [];
-      renderizarSelect('selectFuncionario', '');
-      renderizarSelect('selectAusente', '');
-    }
-
-    function renderizarSelect(idSelect, termo) {
-      const t = String(termo || '').toLowerCase();
-      if (t.length > 0 && t.length < 3) return;
-      const sel = document.getElementById(idSelect);
-      const atual = sel.value;
-      const filtrados = todosFuncionarios.filter(f => f.nome_registro.toLowerCase().includes(t));
-      sel.innerHTML = '<option value="">-- SELECIONE O COLABORADOR --</option>' +
-        filtrados.map(f => `<option value="${f.id}">${esc(f.nome_registro)}${String(f.cargo).includes('FREELANCE') ? ' ⚡[EXTERNO]' : ''}</option>`).join('');
-      if (filtrados.some(f => f.id === atual)) sel.value = atual;
     }
 
     function aoMudarMotivo() {
       const exige = MOTIVOS_COM_AUSENTE.includes(document.getElementById('selectMotivo').value);
       document.getElementById('boxAusente').classList.toggle('hidden', !exige);
-      if (!exige) document.getElementById('selectAusente').value = '';
+      if (!exige) limparCombo('selectAusente');
     }
 
     // ------------------------------------------------------------------
-    // HORAS: meia em meia hora, descontando intervalo
+    // HORAS: meia em meia hora
     // ------------------------------------------------------------------
     function toggleDiaria() {
       const diaria = document.getElementById('checkDiaria').checked;
@@ -271,6 +358,11 @@
       let min = (hF * 60 + mF) - (hI * 60 + mI);
       if (min <= 0) min += 24 * 60;
       const jornada = min / 60;
+      if (tipoAtual === 'HORA_EXTRA') {
+        out.value = fmtHoras(jornada);
+        lbl.innerText = `${fmtHoras(jornada)} de hora extra (horário além da jornada normal)`;
+        return { horas: jornada, intervalo: 0, ini, fim };
+      }
       const intervalo = jornada > INTERVALO_MIN_HORAS ? INTERVALO_HORAS : 0;
       const trabalhadas = jornada - intervalo;
       out.value = fmtHoras(trabalhadas);
@@ -302,7 +394,7 @@
         <tr>
           <td class="p-2 font-mono font-bold">${formatarDataBR(c.data_servico)}</td>
           <td class="p-2 font-mono text-center">${c.hora_inicio} às ${c.hora_fim}</td>
-          <td class="p-2 font-mono text-indigo-700 font-bold text-center">${fmtHoras(c.horas)}<br><span class="text-[8px] text-slate-400">${c.funcao}</span></td>
+          <td class="p-2 font-mono font-bold text-center">${fmtHoras(c.horas)}<br><span class="text-[8px] text-slate-400">${c.funcao}</span></td>
           <td class="p-2 text-center"><button onclick="removerDoCarrinho(${c.id_temp})" class="text-rose-500 font-bold cursor-pointer">X</button></td>
         </tr>`).join('');
     }
@@ -319,26 +411,27 @@
       if (!lojaId) return alert('Selecione a loja solicitante.');
       if (!motivo) return alert('Selecione o motivo da solicitação.');
       if (MOTIVOS_COM_AUSENTE.includes(motivo) && !ausenteId) return alert('Para este motivo é obrigatório informar quem faltou.');
-      if (!funcId) return alert('Selecione quem fará o freelance.');
-      if (ausenteId && ausenteId === funcId) return alert('O freelancer não pode ser a mesma pessoa que faltou.');
+      if (!funcId) return alert(tipoAtual === 'FREELANCE' ? 'Selecione quem fará o freelance.' : 'Selecione o funcionário que fará a hora extra.');
+      if (ausenteId && ausenteId === funcId) return alert('Quem vai trabalhar não pode ser a mesma pessoa que faltou.');
       if (carrinho.length === 0) return alert('Adicione pelo menos uma data.');
 
-      // Duplicidade no banco: mesma pessoa com solicitação ativa na mesma data
       const datas = carrinho.map(c => c.data_servico);
       const { data: existentes } = await _supabase.from('freelance_solicitacoes')
         .select('data_servico, status').eq('funcionario_id', funcId).in('data_servico', datas)
         .not('status', 'in', '("REJEITADA","CANCELADA")');
       if (existentes && existentes.length > 0) {
-        return alert('Já existe solicitação ativa para este colaborador em: ' + existentes.map(e => formatarDataBR(e.data_servico)).join(', '));
+        return alert('Já existe solicitação ativa (freelance ou hora extra) para este colaborador em: ' + existentes.map(e => formatarDataBR(e.data_servico)).join(', '));
       }
 
       const btn = document.getElementById('btnSalvar');
+      const txtBtn = btn.innerText;
       btn.disabled = true; btn.innerText = 'ENVIANDO...';
 
       const lote = crypto.randomUUID();
       const loja = listaLojas.find(l => l.id === lojaId);
       const payload = carrinho.map(c => ({
         lote_id: lote,
+        tipo_solicitacao: tipoAtual,
         funcionario_id: funcId,
         data_servico: c.data_servico,
         hora_inicio: c.hora_inicio,
@@ -357,7 +450,7 @@
       }));
 
       const { error } = await _supabase.from('freelance_solicitacoes').insert(payload);
-      btn.disabled = false; btn.innerText = 'ENVIAR PARA APROVAÇÃO (SUPERVISOR + RH)';
+      btn.disabled = false; btn.innerText = txtBtn;
 
       if (error) {
         const msg = error.message.includes('uq_freelance_pessoa_data') ? 'Já existe solicitação ativa para este colaborador em uma das datas.' : error.message;
@@ -366,7 +459,8 @@
       carrinho = [];
       atualizarTabelaCarrinho();
       document.getElementById('inputObs').value = '';
-      alert('Solicitação enviada! Ela aparece agora para o Supervisor e para o RH.');
+      limparCombo('selectFuncionario');
+      alert(`Solicitação de ${TIPOS[tipoAtual].rotulo} enviada! Ela aparece agora para o Supervisor e para o RH.`);
       carregarHistorico();
     }
 
@@ -381,9 +475,11 @@
     // ------------------------------------------------------------------
     async function carregarHistorico() {
       const ini = document.getElementById('filtroDataInicio').value, fim = document.getElementById('filtroDataFim').value;
+      const tipo = document.getElementById('filtroTipo').value;
       let q = _supabase.from('freelance_solicitacoes').select('*');
       if (ini) q = q.gte('data_servico', ini);
       if (fim) q = q.lte('data_servico', fim);
+      if (tipo) q = q.eq('tipo_solicitacao', tipo);
       const veTudo = ['GESTOR', 'RH'].includes(usuario.perfil);
       if (!veTudo) q = q.eq('solicitante_email', usuario.email);
       document.getElementById('tituloHistorico').innerText = veTudo ? 'SOLICITAÇÕES (TODAS AS LOJAS)' : 'MINHAS SOLICITAÇÕES';
@@ -395,16 +491,17 @@
 
       box.innerHTML = data.map(r => {
         const st = STATUS[r.status] || { txt: r.status, cls: 'bg-slate-100' };
+        const tp = TIPOS[r.tipo_solicitacao] || TIPOS.FREELANCE;
         const retorno = [
           r.supervisor_obs ? `<div><b>Supervisor${r.supervisor_forcado ? ' (decidido pelo RH)' : ''}:</b> ${esc(r.supervisor_obs)}</div>` : '',
           r.observacao_rh ? `<div><b>RH:</b> ${esc(r.observacao_rh)}</div>` : ''
         ].join('');
         return `
-          <div class="border border-slate-200 rounded-lg p-3 hover:bg-slate-50">
+          <div class="border border-slate-200 border-l-4 ${tp.cor === 'orange' ? 'border-l-orange-500' : 'border-l-indigo-600'} rounded-lg p-3 hover:bg-slate-50">
             <div class="flex justify-between items-start gap-2">
               <div>
-                <div class="font-bold text-slate-800">${esc(nomeFunc(r.funcionario_id))} <span class="text-[10px] text-slate-400 font-normal">${esc(r.cargo_exercido)}</span></div>
-                <div class="font-mono text-[11px] text-slate-600">${formatarDataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtHoras(r.horas_trabalhadas)}</b> · ${esc(r.forma_pagamento)}</div>
+                <div class="font-bold text-slate-800"><span class="${tp.badge} px-1.5 py-0.5 rounded text-[9px] font-black mr-1">${tp.icone} ${tp.rotulo}</span>${esc(nomeFunc(r.funcionario_id))} <span class="text-[10px] text-slate-400 font-normal">${esc(r.cargo_exercido)}</span></div>
+                <div class="font-mono text-[11px] text-slate-600 mt-0.5">${formatarDataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b>${fmtHoras(r.horas_trabalhadas)}</b> · ${esc(r.forma_pagamento)}</div>
                 <div class="text-[11px] text-slate-500">${esc(r.loja_solicitante || '')} · ${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'sem motivo')}${r.funcionario_ausente_id ? ' · faltou: <b>' + esc(nomeFunc(r.funcionario_ausente_id)) + '</b>' : ''}</div>
               </div>
               <div class="text-right shrink-0">
@@ -416,7 +513,6 @@
           </div>`;
       }).join('');
     }
-
 
     async function sairSistema() {
       try { await _supabase.auth.signOut(); } catch (e) {}

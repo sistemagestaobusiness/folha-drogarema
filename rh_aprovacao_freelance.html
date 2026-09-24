@@ -66,7 +66,7 @@
       </div>
 
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-        <div class="text-[11px] font-bold text-slate-700 uppercase">1. Quem fez o freelance: <span id="apFreela" class="text-indigo-700"></span></div>
+        <div class="text-[11px] font-bold text-slate-700 uppercase"><span id="apTipoTxt">1. Quem fez o freelance</span>: <span id="apFreela" class="text-indigo-700"></span></div>
         <div id="apSaldoFreela" class="text-[11px]"></div>
         <div class="grid grid-cols-2 gap-2">
           <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas validadas</label>
@@ -82,6 +82,8 @@
         </div>
         <div id="boxValor"><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor a pagar (R$) *</label>
           <input type="number" id="apValor" step="0.01" min="0" placeholder="0,00" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <div id="boxEventoPag"><label class="block text-[10px] font-bold text-slate-500 uppercase">Evento na folha *</label>
+          <select id="apEventoPag" class="w-full border border-slate-300 rounded p-2 text-xs"></select></div>
         <p id="apInfoFreela" class="text-[10px] text-slate-500"></p>
       </div>
 
@@ -138,7 +140,7 @@
     const TRAT = { DESCONTO: 'Desconto em folha', BANCO_HORAS: 'Banco de horas', ATESTADO: 'Atestado', NENHUM: 'Nenhum' };
     const PGTO = { PENDENTE: '⏳ aguardando Financeiro', PAGO: '✅ pago pelo Financeiro', FOLHA: 'na folha (5º dia útil)', COMPENSADO: 'compensado no banco de horas' };
 
-    let aba = 'rh', funcs = {}, saldos = {}, eventosFalta = [], atual = null, compAberta = null;
+    let aba = 'rh', funcs = {}, saldos = {}, eventosFalta = [], eventosProv = [], atual = null, compAberta = null;
 
     function esc(t) { return String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
     function dataBR(iso) { if (!iso) return '-'; const p = String(iso).slice(0,10).split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
@@ -171,14 +173,15 @@
       const [rf, rc, re, rl] = await Promise.all([
         _supabase.from('funcionarios').select('id, nome_registro'),
         _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO'),
-        _supabase.from('tipos_eventos').select('codigo_evento, descricao_do_evento, natureza_do_evento, status').eq('tipo_evento', 'DESCONTO').order('codigo_evento'),
+        _supabase.from('tipos_eventos').select('*').order('codigo_evento'),
         _supabase.from('lojas').select('id, nome_loja').order('nome_loja')
       ]);
       (rf.data || []).forEach(f => funcs[f.id] = f.nome_registro);
       const c = (rc.data || [])[0];
       compAberta = c ? `${String(c.mes).padStart(2, '0')}/${c.ano}` : null;
       document.getElementById('lblComp').innerText = compAberta || 'NENHUMA (aprovação bloqueada)';
-      eventosFalta = (re.data || []).filter(e => String(e.descricao_do_evento).toUpperCase().includes('FALTA'));
+      eventosFalta = (re.data || []).filter(e => e.tipo_evento === 'DESCONTO' && String(e.descricao_do_evento).toUpperCase().includes('FALTA'));
+      eventosProv = (re.data || []).filter(e => e.tipo_evento === 'PROVENTO');
       document.getElementById('apEventoFalta').innerHTML = eventosFalta.map(e =>
         `<option value="${e.codigo_evento}">${e.codigo_evento} - ${esc(e.descricao_do_evento)} (${e.natureza_do_evento === 'CONTABIL' ? 'contábil' : 'não contábil'})</option>`).join('');
       document.getElementById('fLoja').innerHTML = '<option value="">Todas</option>' + (rl.data || []).map(l => `<option value="${esc(l.nome_loja)}">${esc(l.nome_loja)}</option>`).join('');
@@ -257,7 +260,7 @@
                 <span class="${st.cls} px-2 py-0.5 rounded text-[10px] font-bold">${st.txt}</span>
                 <span class="text-[10px] text-slate-400">por ${esc(r.solicitante_email || '—')}</span>
               </div>
-              <div class="text-sm font-bold text-slate-900">${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span> <span class="text-[10px] font-normal">${txtSaldo(r.funcionario_id)}</span></div>
+              <div class="text-sm font-bold text-slate-900">${r.tipo_solicitacao === 'HORA_EXTRA' ? '<span class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">⏰ HORA EXTRA</span>' : '<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">🧑‍🤝‍🧑 FREELANCE</span>'}${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span> <span class="text-[10px] font-normal">${txtSaldo(r.funcionario_id)}</span></div>
               <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtH(r.horas_trabalhadas)}</b> · pagamento ${esc(r.forma_pagamento)}</div>
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? ` faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b> <span class="text-[10px]">${txtSaldo(r.funcionario_ausente_id)}</span>` : ''}</div>
@@ -276,6 +279,12 @@
       atual = r;
       document.getElementById('apResumo').innerText = `${r.loja_solicitante || ''} · ${dataBR(r.data_servico)} · ${NOMES_MOTIVO[r.motivo] || r.motivo || ''} · lança na competência ${compAberta}`;
       document.getElementById('apFreela').innerText = nome(r.funcionario_id);
+      const he = r.tipo_solicitacao === 'HORA_EXTRA';
+      document.getElementById('apTipoTxt').innerText = he ? '1. ⏰ HORA EXTRA de' : '1. 🧑‍🤝‍🧑 FREELANCE feito por';
+      const chave = he ? 'HORA EXTRA' : 'FREELANCE';
+      const evs = eventosProv.filter(e => String(e.descricao_do_evento).toUpperCase().includes(chave) && !e.pagamento_extra_tipo);
+      document.getElementById('apEventoPag').innerHTML = (he ? '<option value="">-- escolha o evento de hora extra --</option>' : '') +
+        evs.map(e => `<option value="${e.codigo_evento}" ${!he && e.codigo_evento === 2014 ? 'selected' : ''}>${e.codigo_evento} - ${esc(e.descricao_do_evento)} (${e.natureza_do_evento === 'CONTABIL' ? 'contábil' : 'não contábil'})</option>`).join('');
       document.getElementById('apSaldoFreela').innerHTML = txtSaldo(r.funcionario_id);
       document.getElementById('apHoras').value = r.horas_trabalhadas;
       document.getElementById('apForma').value = r.forma_pagamento || 'FOLHA';
@@ -303,10 +312,11 @@
       const modo = document.querySelector('input[name="apModo"]:checked').value;
       const forma = document.getElementById('apForma').value;
       document.getElementById('boxValor').classList.toggle('hidden', modo !== 'PAGAR');
+      document.getElementById('boxEventoPag').classList.toggle('hidden', !(modo === 'PAGAR' && forma === 'FOLHA'));
       document.getElementById('apInfoFreela').innerText = modo === 'COMPENSAR'
         ? 'As horas entram como crédito no banco de horas dele. Nenhum valor é pago.'
-        : forma === 'FOLHA' ? `Gera "2014 - FREELANCE PF" (não contábil) na competência ${compAberta}.`
-        : `Pagamento ${forma.toLowerCase()} fora da folha: fica registrado para o Financeiro (não entra no 5º dia útil).`;
+        : forma === 'FOLHA' ? `Gera o evento escolhido na folha, competência ${compAberta}.`
+        : `Pagamento ${forma.toLowerCase()} fora da folha: vai para a fila do Financeiro (não entra no 5º dia útil).`;
       const t = (document.querySelector('input[name="apTrat"]:checked') || {}).value;
       document.getElementById('boxDesconto').classList.toggle('hidden', t !== 'DESCONTO');
       document.getElementById('boxBanco').classList.toggle('hidden', t !== 'BANCO_HORAS');
@@ -326,7 +336,8 @@
         p_tratamento_ausencia: trat,
         p_evento_falta: trat === 'DESCONTO' ? parseInt(document.getElementById('apEventoFalta').value) : null,
         p_valor_falta: trat === 'DESCONTO' ? (parseFloat(document.getElementById('apValorFalta').value) || null) : null,
-        p_horas_falta: trat === 'BANCO_HORAS' ? (parseFloat(document.getElementById('apHorasFalta').value) || null) : null
+        p_horas_falta: trat === 'BANCO_HORAS' ? (parseFloat(document.getElementById('apHorasFalta').value) || null) : null,
+        p_evento_pag: (modo === 'PAGAR' && document.getElementById('apForma').value === 'FOLHA') ? (parseInt(document.getElementById('apEventoPag').value) || null) : null
       };
       const btn = document.getElementById('btnAprovar'); btn.disabled = true;
       const { error } = await _supabase.rpc('fn_freelance_decisao_rh', params);

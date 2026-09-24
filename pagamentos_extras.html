@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pagamentos Fora da Folha - Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+  <div class="max-w-[1400px] mx-auto space-y-5">
+
+    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">PAGAMENTOS FORA DA FOLHA</h1>
+        <p class="text-xs text-slate-500">Origem: tela de lançamentos (eventos marcados) ou aprovação de freelance/hora extra · Financeiro paga · RH e Gestor acompanham</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span>
+          <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
+        </div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+      </div>
+    </div>
+
+    <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <!-- ALERTA DE PROBLEMAS -->
+      <div id="boxProblemas" class="hidden bg-rose-50 border-2 border-rose-400 rounded-xl p-4 space-y-2">
+        <div class="flex items-center gap-2 text-rose-800 font-black text-sm uppercase"><span class="animate-pulse">🚨</span> Urgente: o Financeiro não conseguiu pagar</div>
+        <div id="listaProblemas" class="space-y-2"></div>
+      </div>
+
+      <div class="flex flex-wrap justify-between items-end gap-3">
+        <div class="flex flex-wrap gap-4 border-b border-slate-200">
+          <button data-aba="PENDENTE" onclick="trocarAba('PENDENTE')" class="aba pb-2 text-xs font-bold cursor-pointer">AGUARDANDO FINANCEIRO <span id="qPend" class="ml-1 bg-amber-100 text-amber-800 px-2 rounded-full">0</span></button>
+          <button data-aba="PAGO" onclick="trocarAba('PAGO')" class="aba pb-2 text-xs font-bold cursor-pointer">PAGOS (HISTÓRICO)</button>
+          <button data-aba="CANCELADO" onclick="trocarAba('CANCELADO')" class="aba pb-2 text-xs font-bold cursor-pointer">CANCELADOS</button>
+        </div>
+        <a href="lancamentos.html" class="text-[11px] text-slate-500 hover:text-slate-800 underline">Para incluir um pagamento (13º, férias, adiantamento, VT, rescisão...) faça o lançamento do evento na tela de lançamentos →</a>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-3 items-end text-xs">
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Tipo</label><select id="fTipo" class="border border-slate-300 rounded p-1.5"></select></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Vencimento de</label><input type="date" id="fDe" class="border border-slate-300 rounded p-1.5 font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">até</label><input type="date" id="fAte" class="border border-slate-300 rounded p-1.5 font-mono"></div>
+        <div class="flex-1 min-w-[160px]"><label class="block text-[10px] font-bold text-slate-500 uppercase">Funcionário</label><input type="text" id="fNome" class="w-full border border-slate-300 rounded p-1.5"></div>
+        <button onclick="carregar()" class="bg-slate-800 text-white font-bold px-4 py-2 rounded cursor-pointer">FILTRAR</button>
+        <span id="resumo" class="text-[11px] text-slate-500 w-full"></span>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase">
+            <tr><th class="p-3">Vencimento</th><th class="p-3">Tipo</th><th class="p-3">Funcionário</th><th class="p-3">Origem</th><th class="p-3 text-right">Valor</th><th class="p-3">Lançado por</th><th class="p-3">Situação</th><th class="p-3"></th></tr>
+          </thead>
+          <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESOLVER / DESFAZER -->
+  <div id="modalResolver" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+        <h3 id="rsTitulo" class="font-bold text-sm">RESOLVER</h3>
+        <button onclick="fechar('modalResolver')" class="text-slate-400 font-bold cursor-pointer">✕</button>
+      </div>
+      <p id="rsInfo" class="text-xs text-slate-600"></p>
+      <div id="rsCampos" class="grid grid-cols-2 gap-2">
+        <div id="rsBoxValor"><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor (corrigir)</label><input type="number" step="0.01" id="rsValor" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Novo vencimento</label><input type="date" id="rsVenc" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+      </div>
+      <p id="rsDica" class="hidden text-[11px] bg-sky-50 border border-sky-200 text-sky-800 rounded p-2">Este pagamento veio da <b>tela de lançamentos</b>. Valor errado ou cancelamento: corrija ou exclua o lançamento lá (a fila se atualiza sozinha). Aqui só é possível reenviar ao Financeiro, com novo vencimento se precisar.</p>
+      <textarea id="rsObs" rows="2" placeholder="O que foi feito / motivo (obrigatório)" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea>
+      <div id="rsBotoes" class="flex gap-2"></div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const TIPOS = {
+      FREELANCE: 'Freelance', HORA_EXTRA: 'Hora extra', ADIANTAMENTO: 'Adiantamento salarial', VALE_TRANSPORTE: 'Vale-transporte',
+      FERIAS: 'Férias', DECIMO_TERCEIRO: '13º salário', RESCISAO: 'Rescisão', REEMBOLSO: 'Reembolso / ajuda de custo', OUTROS: 'Outros'
+    };
+    const origemHtml = p => p.origem === 'LANCAMENTO'
+      ? `<span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[9px] font-bold">📋 LANÇAMENTO ${esc(p.competencia || '')}</span><div class="text-[11px] text-slate-600 mt-0.5">${esc(p.rubrica || '')}${p.descricao ? ' · ' + esc(p.descricao) : ''}</div>`
+      : `<span class="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[9px] font-bold">🧑‍🤝‍🧑 SOLICITAÇÃO APROVADA</span><div class="text-[11px] text-slate-600 mt-0.5">${esc(p.descricao || '')}</div>`;
+    let perfil = null, aba = 'PENDENTE', funcs = {}, atual = null;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const fechar = id => document.getElementById(id).classList.add('hidden');
+    const nome = id => (funcs[id] || {}).nome_registro || '—';
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
+      const { data: u, error } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      document.getElementById('lblUsuario').innerText = (user.email || '').toLowerCase();
+      document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR'].includes(perfil)) {
+        const av = document.getElementById('avisoSemAcesso');
+        av.innerText = error ? 'Erro ao ler o perfil: ' + error.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
+        av.classList.remove('hidden'); return;
+      }
+      document.getElementById('conteudo').classList.remove('hidden');
+      document.getElementById('fTipo').innerHTML = '<option value="">Todos</option>' + Object.entries(TIPOS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+      const { data: f } = await _supabase.from('funcionarios').select('id, nome_registro, cargo, status').order('nome_registro');
+      (f || []).forEach(x => funcs[x.id] = x);
+      trocarAba('PENDENTE');
+    }
+
+    function trocarAba(a) {
+      aba = a;
+      document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-400'}`);
+      carregar();
+    }
+
+    async function carregar() {
+      const [rProb, rPend] = await Promise.all([
+        _supabase.from('pagamentos_extras').select('*').eq('status', 'PROBLEMA').order('problema_em'),
+        _supabase.from('pagamentos_extras').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE')
+      ]);
+      document.getElementById('qPend').innerText = rPend.count || 0;
+      const probs = rProb.data || [];
+      document.getElementById('boxProblemas').classList.toggle('hidden', probs.length === 0);
+      document.getElementById('listaProblemas').innerHTML = probs.map(p => `
+        <div class="bg-white border border-rose-200 rounded-lg p-3 flex flex-col md:flex-row justify-between gap-2 text-xs">
+          <div><b>${esc(nome(p.funcionario_id))}</b> · ${TIPOS[p.tipo] || p.tipo} · <b class="font-mono">${fmtR(p.valor)}</b> · vence ${dbr(p.vencimento)}
+            <div class="text-[10px] text-slate-500">${p.origem === 'LANCAMENTO' ? 'Lançamento ' + esc(p.competencia || '') + ' · ' + esc(p.rubrica || '') : esc(p.descricao || '')}</div>
+            <div class="text-rose-700 font-bold mt-1">⚠ ${esc(p.problema_desc)}</div>
+            <div class="text-[10px] text-slate-500">${esc(p.problema_por || '')} em ${p.problema_em ? new Date(p.problema_em).toLocaleString('pt-BR') : ''}</div></div>
+          <button onclick="abrirResolver('${p.id}')" class="self-start px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer whitespace-nowrap">RESOLVER</button>
+        </div>`).join('');
+
+      let q = _supabase.from('pagamentos_extras').select('*').eq('status', aba);
+      const tipo = document.getElementById('fTipo').value, de = document.getElementById('fDe').value, ate = document.getElementById('fAte').value;
+      if (tipo) q = q.eq('tipo', tipo);
+      if (de) q = q.gte('vencimento', de);
+      if (ate) q = q.lte('vencimento', ate);
+      const { data, error } = await q.order('vencimento', { ascending: aba === 'PENDENTE' });
+      const tb = document.getElementById('tabela');
+      if (error) { tb.innerHTML = `<tr><td colspan="8" class="p-4 text-rose-600">${esc(error.message)}</td></tr>`; return; }
+      let lista = data || [];
+      const termo = semAcento(document.getElementById('fNome').value.trim());
+      if (termo) lista = lista.filter(p => semAcento(nome(p.funcionario_id)).includes(termo));
+      document.getElementById('resumo').innerText = `${lista.length} registro(s) · ${fmtR(lista.reduce((a, p) => a + parseFloat(p.valor), 0))}`;
+      if (lista.length === 0) { tb.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400">Nada por aqui.</td></tr>'; return; }
+      const h = hoje();
+      tb.innerHTML = lista.map(p => {
+        let sit = '';
+        if (p.status === 'PENDENTE') sit = `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold text-[10px]">⏳ AGUARDANDO FINANCEIRO</span>${p.vencimento < h ? ' <span class="text-rose-700 font-bold text-[10px]">VENCIDO</span>' : ''}`;
+        if (p.status === 'PAGO') sit = `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px]">✅ PAGO ${dbr(p.pago_em)}</span><div class="text-[10px] text-slate-500 mt-1">${esc(p.banco_pagador || '')} · ${esc(p.pago_por || '')}${p.pagamento_obs ? ' · ' + esc(p.pagamento_obs) : ''}</div>`;
+        if (p.status === 'CANCELADO') sit = `<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold text-[10px]">CANCELADO</span><div class="text-[10px] text-slate-500 mt-1">${esc(p.resolucao_obs || '')}</div>`;
+        if (p.problema_desc && p.status !== 'PROBLEMA') sit += `<div class="text-[10px] text-slate-400 mt-1">Houve problema: ${esc(p.problema_desc)}${p.resolucao_obs ? ' → ' + esc(p.resolucao_obs) : ''}</div>`;
+        let acao = '';
+        if (p.status === 'PENDENTE') acao = `<button onclick="abrirResolver('${p.id}')" class="text-[10px] text-slate-500 hover:text-slate-800 underline cursor-pointer">${p.origem === 'LANCAMENTO' ? 'mudar vencimento' : 'corrigir / cancelar'}</button>`;
+        if (p.status === 'PAGO' && perfil === 'GESTOR') acao = `<button onclick="abrirDesfazer('${p.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline cursor-pointer">desfazer</button>`;
+        return `<tr class="hover:bg-slate-50">
+          <td class="p-3 font-mono ${p.status === 'PENDENTE' && p.vencimento < h ? 'text-rose-700 font-bold' : ''}">${dbr(p.vencimento)}</td>
+          <td class="p-3">${TIPOS[p.tipo] || p.tipo}</td>
+          <td class="p-3 font-bold">${esc(nome(p.funcionario_id))}</td>
+          <td class="p-3">${origemHtml(p)}</td>
+          <td class="p-3 text-right font-mono font-bold">${fmtR(p.valor)}</td>
+          <td class="p-3 text-[10px] text-slate-500">${esc(p.criado_por || '')}<br>${new Date(p.criado_em).toLocaleString('pt-BR')}</td>
+          <td class="p-3">${sit}</td>
+          <td class="p-3 text-right">${acao}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function abrirResolver(id) {
+      const { data: p } = await _supabase.from('pagamentos_extras').select('*').eq('id', id).single();
+      atual = p;
+      document.getElementById('rsTitulo').innerText = p.status === 'PROBLEMA' ? 'RESOLVER PROBLEMA' : 'CORRIGIR / CANCELAR';
+      document.getElementById('rsInfo').innerHTML = `<b>${esc(nome(p.funcionario_id))}</b> · ${TIPOS[p.tipo] || p.tipo} · ${fmtR(p.valor)}${p.problema_desc && p.status === 'PROBLEMA' ? `<div class="text-rose-700 mt-1">Financeiro: ${esc(p.problema_desc)}</div>` : ''}`;
+      const doLanc = p.origem === 'LANCAMENTO';
+      document.getElementById('rsCampos').classList.remove('hidden');
+      document.getElementById('rsBoxValor').classList.toggle('hidden', doLanc);
+      document.getElementById('rsDica').classList.toggle('hidden', !doLanc);
+      document.getElementById('rsValor').value = p.valor;
+      document.getElementById('rsVenc').value = p.vencimento;
+      document.getElementById('rsObs').value = '';
+      document.getElementById('rsBotoes').innerHTML = `
+        <button onclick="resolver('REENVIAR')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">${p.status === 'PROBLEMA' ? 'CORRIGIDO · REENVIAR AO FINANCEIRO' : 'SALVAR CORREÇÃO'}</button>
+        ${doLanc ? '' : `<button onclick="resolver('CANCELAR')" class="bg-rose-100 text-rose-700 font-bold px-3 py-2.5 rounded-lg text-xs cursor-pointer">CANCELAR PAGAMENTO</button>`}`;
+      document.getElementById('modalResolver').classList.remove('hidden');
+    }
+    async function resolver(acao) {
+      const { error } = await _supabase.rpc('fn_pagamento_resolver', {
+        p_id: atual.id, p_acao: acao, p_obs: document.getElementById('rsObs').value.trim() || null,
+        p_valor: atual.origem === 'LANCAMENTO' ? null : (parseFloat(document.getElementById('rsValor').value) || null), p_vencimento: document.getElementById('rsVenc').value || null
+      });
+      if (error) return alert(error.message);
+      fechar('modalResolver'); carregar();
+    }
+    function abrirDesfazer(id) {
+      atual = { id };
+      document.getElementById('rsTitulo').innerText = 'DESFAZER PAGAMENTO';
+      document.getElementById('rsInfo').innerText = 'O pagamento volta para o Financeiro como pendente (e o lançamento de origem volta a poder ser corrigido). O motivo fica registrado.';
+      document.getElementById('rsCampos').classList.add('hidden');
+      document.getElementById('rsDica').classList.add('hidden');
+      document.getElementById('rsObs').value = '';
+      document.getElementById('rsBotoes').innerHTML = `<button onclick="desfazer()" class="flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">DESFAZER</button>`;
+      document.getElementById('modalResolver').classList.remove('hidden');
+    }
+    async function desfazer() {
+      const { error } = await _supabase.rpc('fn_pagamento_desfazer', { p_id: atual.id, p_obs: document.getElementById('rsObs').value.trim() || null });
+      if (error) return alert(error.message);
+      fechar('modalResolver'); carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

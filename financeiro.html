@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Financeiro - Pagamentos a Realizar - Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-6 font-sans">
+  <div class="max-w-[1400px] mx-auto space-y-5">
+
+    <div class="sticky top-0 z-40 bg-slate-100/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">FINANCEIRO · PAGAMENTOS A REALIZAR</h1>
+        <p class="text-xs text-slate-500">Tudo o que é pago fora do 5º dia útil · somente pendentes</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span>
+          <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
+        </div>
+        <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+        <button id="btnSair" onclick="sairSistema()" class="hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
+      </div>
+    </div>
+
+    <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-4"><div class="text-[10px] font-bold text-slate-500 uppercase">Total a pagar</div><div id="kpiTotal" class="text-2xl font-black text-slate-900 font-mono">R$ 0,00</div><div id="kpiQtd" class="text-[11px] text-slate-500"></div></div>
+        <div class="bg-rose-50 border border-rose-200 rounded-xl p-4"><div class="text-[10px] font-bold text-rose-700 uppercase">Vencidos</div><div id="kpiVencido" class="text-2xl font-black text-rose-700 font-mono">R$ 0,00</div><div id="kpiVencidoQtd" class="text-[11px] text-rose-700"></div></div>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4"><div class="text-[10px] font-bold text-amber-700 uppercase">Vencem em até 3 dias</div><div id="kpiProximo" class="text-2xl font-black text-amber-700 font-mono">R$ 0,00</div><div id="kpiProximoQtd" class="text-[11px] text-amber-700"></div></div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4"><div class="text-[10px] font-bold text-slate-500 uppercase">Com problema (no RH)</div><div id="kpiProblema" class="text-2xl font-black text-slate-500 font-mono">0</div><div class="text-[11px] text-slate-500">aguardando o RH corrigir</div></div>
+      </div>
+
+      <div id="chipsTipo" class="flex flex-wrap gap-2"></div>
+
+      <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+        <div class="flex flex-wrap justify-between items-center gap-2 p-3 border-b border-slate-100 bg-slate-50">
+          <div class="text-xs"><b id="qtdSel">0</b> selecionado(s) · <b id="totalSel" class="font-mono">R$ 0,00</b></div>
+          <div class="flex gap-2">
+            <button onclick="abrirConfirmacao()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer">✅ CONFIRMAR PAGAMENTO DOS SELECIONADOS</button>
+          </div>
+        </div>
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase">
+            <tr>
+              <th class="p-3 w-8"><input type="checkbox" id="chkTodos" onchange="marcarTodos(this.checked)"></th>
+              <th class="p-3">Vencimento</th><th class="p-3">Solicitado</th><th class="p-3">Tipo</th><th class="p-3">Funcionário</th>
+              <th class="p-3">Empresa (registro)</th><th class="p-3">Dados bancários</th><th class="p-3 text-right">Valor</th><th class="p-3"></th>
+            </tr>
+          </thead>
+          <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-slate-400">Comprovantes: o envio em lote (vários arquivos de uma vez, vinculados automaticamente a cada funcionário) entra na próxima etapa.</p>
+    </div>
+  </div>
+
+  <!-- CONFIRMAR PAGAMENTO -->
+  <div id="modalPagar" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+        <h3 class="font-bold text-sm text-emerald-700">CONFIRMAR PAGAMENTO</h3>
+        <button onclick="fechar('modalPagar')" class="text-slate-400 font-bold cursor-pointer">✕</button>
+      </div>
+      <p id="pgResumo" class="text-xs text-slate-600"></p>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Data do pagamento *</label><input type="date" id="pgData" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Banco pagador *</label>
+          <input id="pgBanco" list="listaBancos" placeholder="Ex.: Itaú" class="w-full border border-slate-300 rounded p-2 text-xs">
+          <datalist id="listaBancos"><option>Itaú</option><option>Bradesco</option><option>Santander</option><option>Banco do Brasil</option><option>Caixa</option><option>Sicoob</option><option>Sicredi</option><option>Inter</option><option>Dinheiro (tesouraria)</option></datalist></div>
+      </div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Observação</label><textarea id="pgObs" rows="2" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea></div>
+      <button id="pgBtn" onclick="confirmarPagamento()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer">CONFIRMAR</button>
+    </div>
+  </div>
+
+  <!-- INFORMAR PROBLEMA -->
+  <div id="modalProblema" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+        <h3 class="font-bold text-sm text-rose-700">⚠️ INFORMAR PROBLEMA</h3>
+        <button onclick="fechar('modalProblema')" class="text-slate-400 font-bold cursor-pointer">✕</button>
+      </div>
+      <p id="prResumo" class="text-xs text-slate-600"></p>
+      <div class="flex flex-wrap gap-1 text-[10px]">
+        <button onclick="sugerir('Dados bancários / PIX ausentes no cadastro')" class="px-2 py-1 bg-slate-100 rounded cursor-pointer">Sem dados bancários</button>
+        <button onclick="sugerir('PIX / conta inválida - pagamento devolvido')" class="px-2 py-1 bg-slate-100 rounded cursor-pointer">PIX/conta inválida</button>
+        <button onclick="sugerir('Valor divergente - favor conferir')" class="px-2 py-1 bg-slate-100 rounded cursor-pointer">Valor divergente</button>
+        <button onclick="sugerir('Sem saldo / pagamento adiado')" class="px-2 py-1 bg-slate-100 rounded cursor-pointer">Pagamento adiado</button>
+      </div>
+      <textarea id="prDesc" rows="3" placeholder="Descreva o problema (vai como alerta urgente para RH e Gestor)" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea>
+      <button onclick="confirmarProblema()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer">ENVIAR ALERTA AO RH / GESTOR</button>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const TIPOS = {
+      FREELANCE: { txt: 'Freelance', cls: 'bg-indigo-100 text-indigo-800' },
+      HORA_EXTRA: { txt: 'Hora extra', cls: 'bg-orange-100 text-orange-800' },
+      ADIANTAMENTO: { txt: 'Adiantamento', cls: 'bg-sky-100 text-sky-800' },
+      VALE_TRANSPORTE: { txt: 'Vale-transporte', cls: 'bg-teal-100 text-teal-800' },
+      FERIAS: { txt: 'Férias', cls: 'bg-emerald-100 text-emerald-800' },
+      DECIMO_TERCEIRO: { txt: '13º salário', cls: 'bg-purple-100 text-purple-800' },
+      RESCISAO: { txt: 'Rescisão', cls: 'bg-rose-100 text-rose-800' },
+      REEMBOLSO: { txt: 'Reembolso', cls: 'bg-lime-100 text-lime-800' },
+      OUTROS: { txt: 'Outros', cls: 'bg-slate-200 text-slate-700' }
+    };
+    let perfil = null, itens = [], funcs = {}, empresas = [], filtroTipo = '', selecionados = new Set(), itemProblema = null;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    const somaDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const fechar = id => document.getElementById(id).classList.add('hidden');
+
+    async function sairSistema() {
+      try { await _supabase.auth.signOut(); } catch (e) {}
+      localStorage.removeItem('usuario_drogarema');
+      window.location.href = 'login.html';
+    }
+
+    function empresaDe(f) {
+      const c = String(f.cnpj || '').replace(/\D/g, '');
+      const e = c && empresas.find(x => String(x.cnpj || '').replace(/\D/g, '') === c);
+      return e ? (e.nome_fantasia || e.razao_social) : (f.empresa_registro || '—');
+    }
+    function dadosBancarios(f) {
+      const partes = [];
+      if (f.pix_chave) partes.push(`<b>PIX</b> ${esc(f.pix_tipo ? f.pix_tipo + ': ' : '')}${esc(f.pix_chave)}`);
+      if (f.banco || f.conta) partes.push(`${esc(f.banco || '')} ag ${esc(f.agencia || '-')} cc ${esc(f.conta || '-')}${f.tipo_conta ? ' (' + esc(f.tipo_conta) + ')' : ''}`);
+      return partes.length ? partes.join('<br>') : '<span class="text-amber-700 font-bold">⚠ sem dados no cadastro</span>';
+    }
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
+      const { data: u, error } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      document.getElementById('lblUsuario').innerText = (user.email || '').toLowerCase();
+      document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['FINANCEIRO', 'GESTOR'].includes(perfil)) {
+        const av = document.getElementById('avisoSemAcesso');
+        av.innerText = error ? 'Erro ao ler o perfil: ' + error.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela. RH e Gestor acompanham em "Pagamentos fora da folha".';
+        av.classList.remove('hidden');
+        document.getElementById(['RH'].includes(perfil) ? 'btnPainel' : 'btnSair').classList.remove('hidden');
+        return;
+      }
+      document.getElementById(perfil === 'GESTOR' ? 'btnPainel' : 'btnSair').classList.remove('hidden');
+      document.getElementById('conteudo').classList.remove('hidden');
+      const [rf, re] = await Promise.all([
+        _supabase.from('funcionarios').select('*'),
+        _supabase.from('empresas').select('cnpj, razao_social, nome_fantasia')
+      ]);
+      (rf.data || []).forEach(f => funcs[f.id] = f);
+      empresas = re.data || [];
+      carregar();
+    }
+
+    async function carregar() {
+      const [rp, rprob] = await Promise.all([
+        _supabase.from('pagamentos_extras').select('*').eq('status', 'PENDENTE').order('vencimento').order('criado_em'),
+        _supabase.from('pagamentos_extras').select('id', { count: 'exact', head: true }).eq('status', 'PROBLEMA')
+      ]);
+      itens = rp.data || [];
+      document.getElementById('kpiProblema').innerText = rprob.count || 0;
+      selecionados = new Set([...selecionados].filter(id => itens.some(i => i.id === id)));
+      const h = hoje(), lim = somaDias(h, 3);
+      const venc = itens.filter(i => i.vencimento < h), prox = itens.filter(i => i.vencimento >= h && i.vencimento <= lim);
+      const soma = l => l.reduce((a, i) => a + parseFloat(i.valor), 0);
+      document.getElementById('kpiTotal').innerText = fmtR(soma(itens));
+      document.getElementById('kpiQtd').innerText = `${itens.length} pagamento(s)`;
+      document.getElementById('kpiVencido').innerText = fmtR(soma(venc));
+      document.getElementById('kpiVencidoQtd').innerText = `${venc.length} pagamento(s)`;
+      document.getElementById('kpiProximo').innerText = fmtR(soma(prox));
+      document.getElementById('kpiProximoQtd').innerText = `${prox.length} pagamento(s)`;
+
+      const cont = {}; itens.forEach(i => cont[i.tipo] = (cont[i.tipo] || 0) + 1);
+      document.getElementById('chipsTipo').innerHTML = [['', 'Todos', itens.length], ...Object.keys(cont).map(t => [t, (TIPOS[t] || {}).txt || t, cont[t]])]
+        .map(([k, t, n]) => `<button onclick="filtrarTipo('${k}')" class="px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer border ${filtroTipo === k ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-300'}">${esc(t)} <span class="opacity-70">${n}</span></button>`).join('');
+      renderTabela();
+    }
+
+    function filtrarTipo(t) { filtroTipo = t; carregar(); }
+
+    function renderTabela() {
+      const lista = itens.filter(i => !filtroTipo || i.tipo === filtroTipo);
+      const h = hoje(), lim = somaDias(h, 3);
+      const tb = document.getElementById('tabela');
+      if (lista.length === 0) { tb.innerHTML = '<tr><td colspan="9" class="p-10 text-center text-slate-400">🎉 Nenhum pagamento pendente.</td></tr>'; atualizarSel(); return; }
+      tb.innerHTML = lista.map(i => {
+        const f = funcs[i.funcionario_id] || {};
+        const tp = TIPOS[i.tipo] || { txt: i.tipo, cls: 'bg-slate-100' };
+        const corV = i.vencimento < h ? 'text-rose-700 font-black' : i.vencimento <= lim ? 'text-amber-700 font-bold' : 'text-slate-700';
+        return `<tr class="hover:bg-slate-50 ${selecionados.has(i.id) ? 'bg-emerald-50' : ''}">
+          <td class="p-3"><input type="checkbox" ${selecionados.has(i.id) ? 'checked' : ''} onchange="marcar('${i.id}', this.checked)"></td>
+          <td class="p-3 font-mono ${corV}">${dbr(i.vencimento)}${i.vencimento < h ? '<div class="text-[9px]">VENCIDO</div>' : ''}</td>
+          <td class="p-3 font-mono text-slate-500">${dbr(i.criado_em)}</td>
+          <td class="p-3"><span class="${tp.cls} px-2 py-0.5 rounded text-[10px] font-bold">${tp.txt}</span></td>
+          <td class="p-3"><div class="font-bold">${esc(f.nome_registro || '—')}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.matricula ? ' · mat. ' + esc(f.matricula) : ''}</div>
+            <div class="text-[10px] text-slate-400">${i.origem === 'LANCAMENTO' ? '📋 Lançamento RH ' + esc(i.competencia || '') + ' · ' + esc(i.rubrica || '') + (i.descricao ? ' · ' + esc(i.descricao) : '') : '🧑‍🤝‍🧑 ' + esc(i.descricao || '')}</div>${i.resolucao_obs ? `<div class="text-[10px] text-sky-700">↩ RH: ${esc(i.resolucao_obs)}</div>` : ''}</td>
+          <td class="p-3 text-[11px]">${esc(empresaDe(f))}</td>
+          <td class="p-3 text-[11px]">${dadosBancarios(f)}</td>
+          <td class="p-3 text-right font-mono font-bold">${fmtR(i.valor)}</td>
+          <td class="p-3 text-right"><button onclick="abrirProblema('${i.id}')" class="text-[10px] px-2 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded font-bold cursor-pointer whitespace-nowrap">⚠ Problema</button></td>
+        </tr>`;
+      }).join('');
+      atualizarSel();
+    }
+
+    function marcar(id, on) { on ? selecionados.add(id) : selecionados.delete(id); renderTabela(); }
+    function marcarTodos(on) { itens.filter(i => !filtroTipo || i.tipo === filtroTipo).forEach(i => on ? selecionados.add(i.id) : selecionados.delete(i.id)); renderTabela(); }
+    function atualizarSel() {
+      const sel = itens.filter(i => selecionados.has(i.id));
+      document.getElementById('qtdSel').innerText = sel.length;
+      document.getElementById('totalSel').innerText = fmtR(sel.reduce((a, i) => a + parseFloat(i.valor), 0));
+    }
+
+    function abrirConfirmacao() {
+      const sel = itens.filter(i => selecionados.has(i.id));
+      if (sel.length === 0) return alert('Selecione pelo menos um pagamento.');
+      document.getElementById('pgResumo').innerText = `${sel.length} pagamento(s) · total ${fmtR(sel.reduce((a, i) => a + parseFloat(i.valor), 0))}. Todos recebem a mesma data e o mesmo banco.`;
+      document.getElementById('pgData').value = hoje();
+      document.getElementById('pgObs').value = '';
+      document.getElementById('modalPagar').classList.remove('hidden');
+    }
+    async function confirmarPagamento() {
+      const btn = document.getElementById('pgBtn'); btn.disabled = true;
+      const { data, error } = await _supabase.rpc('fn_pagamento_confirmar', {
+        p_ids: [...selecionados], p_data: document.getElementById('pgData').value || null,
+        p_banco: document.getElementById('pgBanco').value.trim() || null, p_obs: document.getElementById('pgObs').value.trim() || null
+      });
+      btn.disabled = false;
+      if (error) return alert(error.message);
+      alert(`${data} pagamento(s) confirmado(s).`);
+      selecionados.clear(); fechar('modalPagar'); carregar();
+    }
+
+    function abrirProblema(id) {
+      itemProblema = itens.find(i => i.id === id);
+      const f = funcs[itemProblema.funcionario_id] || {};
+      document.getElementById('prResumo').innerText = `${f.nome_registro || ''} · ${(TIPOS[itemProblema.tipo] || {}).txt || itemProblema.tipo} · ${fmtR(itemProblema.valor)} · vence ${dbr(itemProblema.vencimento)}`;
+      document.getElementById('prDesc').value = '';
+      document.getElementById('modalProblema').classList.remove('hidden');
+    }
+    function sugerir(t) { document.getElementById('prDesc').value = t; }
+    async function confirmarProblema() {
+      const { error } = await _supabase.rpc('fn_pagamento_problema', { p_id: itemProblema.id, p_desc: document.getElementById('prDesc').value.trim() || null });
+      if (error) return alert(error.message);
+      selecionados.delete(itemProblema.id); fechar('modalProblema'); carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
