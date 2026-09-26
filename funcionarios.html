@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cadastro de Funcionários - Sistema Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -134,10 +135,16 @@
             <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
               <div class="md:col-span-3"><label class="lbl">E-mail de acesso (login)</label><input type="email" id="email_acesso" oninput="mostrarAcesso()" class="inp lowercase"></div>
               <div class="md:col-span-2"><label class="lbl">Perfil</label>
-                <select id="perfilAcesso" class="inp font-bold"><option value="">Sem acesso</option><option value="LIDER">Líder de loja</option><option value="SUPERVISOR">Supervisor</option><option value="RH">RH</option><option value="FINANCEIRO">Financeiro</option><option value="GESTOR">Gestor</option></select></div>
+                <select id="perfilAcesso" class="inp font-bold"><option value="">Sem acesso</option></select></div>
               <div class="md:col-span-1 flex items-end"><button type="button" id="btnAcesso" onclick="salvarAcesso()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg cursor-pointer">Salvar acesso</button></div>
             </div>
             <p id="infoAcesso" class="text-[10px] text-slate-600"></p>
+            <!-- Telas extras só desta pessoa (GESTOR) -->
+            <div id="boxExtras" class="hidden border-t border-indigo-100 pt-2 space-y-1">
+              <div class="flex justify-between items-center"><span class="text-[10px] font-black uppercase text-indigo-900">➕ Telas extras só para esta pessoa (além do perfil)</span>
+                <button type="button" onclick="salvarExtras()" class="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded cursor-pointer">Salvar telas extras</button></div>
+              <div id="gradeExtras" class="grid grid-cols-2 md:grid-cols-3 gap-x-3 text-[11px]"></div>
+            </div>
             <p class="text-[10px] text-slate-400">O login (senha) continua sendo criado no Supabase: Authentication › Users › Add user, com o mesmo e-mail. Somente o GESTOR define o perfil.</p>
           </div>
         </div>
@@ -206,6 +213,7 @@
       data_contratacao: 'Admissão', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
       lider_loja: 'Líder da loja', email_acesso: 'E-mail de acesso', pix_tipo: 'Tipo PIX', pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', tipo_conta: 'Tipo de conta', cpf: 'CPF' };
 
+    let perfisLista = [], telasLista = [], perfilTelas = [], telasExtras = [], meuEmail = '';
     let perfil = null, funcs = [], empresas = [], lojas = [], cargos = [], usuarios = [], pendencias = [], atual = null;
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
@@ -238,14 +246,23 @@
     async function inicializar() {
       const { data: u } = await _supabase.rpc('fn_meu_usuario');
       perfil = u ? u.perfil : null;
+      meuEmail = u ? String(u.email || '').toLowerCase() : '';
       _supabase.rpc('fn_funcionarios_aplicar_rescisoes').then(() => {});
       const [re, rl, rc, ru] = await Promise.all([
         _supabase.from('empresas').select('*').order('nome_fantasia'),
         _supabase.from('lojas').select('*').order('nome_loja'),
         _supabase.from('cargos').select('*').eq('ativo', true).order('ordem'),
-        _supabase.from('usuarios_sistema').select('*')
-      ]);
+        _supabase.from('usuarios_sistema').select('*'),
+        _supabase.from('perfis').select('*').eq('ativo', true).order('nome'),
+        _supabase.from('telas').select('*').order('ordem'),
+        _supabase.from('perfil_telas').select('*'),
+        _supabase.from('usuario_telas_extra').select('*')
+      ]).then(r => { perfisLista = (r[4] && r[4].data) || []; telasLista = (r[5] && r[5].data) || []; perfilTelas = (r[6] && r[6].data) || []; telasExtras = (r[7] && r[7].data) || []; return r; });
       empresas = re.data || []; lojas = rl.data || []; cargos = rc.data || []; usuarios = ru.data || [];
+      // GESTOR vê todos os perfis; RH só os não privilegiados (GESTOR/RH só o GESTOR atribui)
+      $('perfilAcesso').innerHTML = '<option value="">Sem acesso</option>' + perfisLista
+        .filter(p => perfil === 'GESTOR' || !p.privilegiado)
+        .map(p => `<option value="${esc(p.codigo)}">${esc(p.nome)}${p.privilegiado ? ' 🔒' : ''}</option>`).join('');
       const opts = (lista, v, t, vazio) => `<option value="">${vazio}</option>` + lista.map(x => `<option value="${esc(x[v])}">${esc(t(x))}</option>`).join('');
       $('fEmpresa').innerHTML = opts(empresas, 'id', e => e.nome_fantasia || e.razao_social, 'Todas');
       $('fLoja').innerHTML = opts(lojas, 'id', l => l.nome_loja, 'Todas');
@@ -253,7 +270,7 @@
       $('empresa_id').innerHTML = opts(empresas.filter(e => String(e.status || 'Ativo').toLowerCase() === 'ativo'), 'id', e => `${e.nome_fantasia || ''} · ${e.razao_social || ''}`, '-- selecione --');
       $('loja_id').innerHTML = opts(lojas.filter(l => l.ativo !== false), 'id', l => l.nome_loja, '-- selecione --');
       $('cargo').innerHTML = opts(cargos, 'nome', c => c.nome, '-- selecione --');
-      if (perfil !== 'GESTOR') { $('btnAcesso').disabled = true; $('btnAcesso').classList.add('opacity-40', 'cursor-not-allowed'); $('perfilAcesso').disabled = true; }
+      if (!['GESTOR', 'RH'].includes(perfil)) { $('btnAcesso').disabled = true; $('btnAcesso').classList.add('opacity-40', 'cursor-not-allowed'); $('perfilAcesso').disabled = true; }
       await carregar();
     }
 
@@ -344,15 +361,34 @@
       if (!ehCaixa) $('adicional_caixa').value = '';
     }
     function aoMarcarLider() {
-      if ($('lider_loja').checked && perfil === 'GESTOR' && !$('perfilAcesso').value) $('perfilAcesso').value = 'LIDER';
+      if ($('lider_loja').checked && ['GESTOR', 'RH'].includes(perfil) && !$('perfilAcesso').value) $('perfilAcesso').value = 'LIDER';
     }
     function mostrarAcesso() {
       const email = String($('email_acesso').value || '').toLowerCase();
       const u = usuarios.find(x => x.email === email);
+      const pAtual = u && perfisLista.find(p => p.codigo === u.perfil);
+      // perfil privilegiado (GESTOR/RH) só o GESTOR vê/altera
+      const travado = !!(pAtual && pAtual.privilegiado && perfil !== 'GESTOR');
+      if (u && ![...$('perfilAcesso').options].some(o => o.value === u.perfil))
+        $('perfilAcesso').insertAdjacentHTML('beforeend', `<option value="${esc(u.perfil)}">${esc((pAtual || {}).nome || u.perfil)} 🔒</option>`);
       $('perfilAcesso').value = u ? u.perfil : ($('lider_loja').checked && email ? 'LIDER' : '');
+      const bloqueio = !['GESTOR', 'RH'].includes(perfil) || travado || email === meuEmail;
+      $('perfilAcesso').disabled = bloqueio; $('btnAcesso').disabled = bloqueio; $('email_acesso').readOnly = travado;
+      $('btnAcesso').classList.toggle('opacity-40', bloqueio);
       $('infoAcesso').innerHTML = !email ? 'Sem e-mail de acesso cadastrado.'
-        : u ? `Acesso atual: <b>${esc(u.perfil)}</b>${u.loja_id ? ' · ' + esc(nomeLoja(u.loja_id)) : ''}${u.ativo === false ? ' · <b class="text-rose-700">inativo</b>' : ''}`
+        : u ? `Acesso atual: <b>${esc((pAtual || {}).nome || u.perfil)}</b>${u.loja_id ? ' · ' + esc(nomeLoja(u.loja_id)) : ''}${u.ativo === false ? ' · <b class="text-rose-700">inativo</b>' : ''}`
+            + (travado ? ' · <b class="text-rose-700">🔒 perfil privilegiado: só o GESTOR altera</b>' : '') + (email === meuEmail ? ' · é o seu acesso (não pode ser alterado por você)' : '')
         : 'Este e-mail ainda não tem perfil no sistema.';
+      // telas extras (só GESTOR, para quem já tem perfil e não é GESTOR)
+      const mostraExtras = perfil === 'GESTOR' && u && u.perfil !== 'GESTOR' && email !== meuEmail;
+      $('boxExtras').classList.toggle('hidden', !mostraExtras);
+      if (mostraExtras) {
+        const doPerfil = new Set(perfilTelas.filter(x => x.perfil === u.perfil).map(x => x.tela));
+        const ext = new Set(telasExtras.filter(x => x.email === email).map(x => x.tela));
+        $('gradeExtras').innerHTML = telasLista.filter(t => t.arquivo !== 'perfis.html').map(t => doPerfil.has(t.arquivo)
+          ? `<div class="py-0.5 text-slate-400">✓ ${esc(t.nome)}</div>`
+          : `<label class="flex items-center gap-1 py-0.5 cursor-pointer"><input type="checkbox" class="chkExtra" value="${t.arquivo}" ${ext.has(t.arquivo) ? 'checked' : ''}> ${esc(t.nome)}</label>`).join('');
+      }
     }
 
     async function salvarFicha(e) {
@@ -384,11 +420,22 @@
       abrirFicha(data.id, id ? undefined : 'lotacao');
     }
 
+    async function salvarExtras() {
+      const email = $('email_acesso').value.trim().toLowerCase();
+      const sel = [...document.querySelectorAll('.chkExtra:checked')].map(c => c.value);
+      const { error } = await _supabase.rpc('fn_usuario_telas_extra', { p_email: email, p_telas: sel });
+      if (error) return alert(error.message);
+      const { data } = await _supabase.from('usuario_telas_extra').select('*'); telasExtras = data || [];
+      mostrarAcesso(); alert('Telas extras salvas.');
+    }
+
     async function salvarAcesso() {
-      if (perfil !== 'GESTOR') return alert('Somente o GESTOR define acesso.');
+      if (!['GESTOR', 'RH'].includes(perfil)) return alert('Somente GESTOR ou RH definem acesso.');
       const email = $('email_acesso').value.trim().toLowerCase(), p = $('perfilAcesso').value;
       if (!email) return alert('Informe o e-mail de acesso.');
       if (!$('fId').value) return alert('Salve o cadastro primeiro.');
+      const alvo = perfisLista.find(x => x.codigo === p);
+      if (alvo && alvo.privilegiado && !confirm(`Atenção: o perfil ${alvo.nome} dá acesso amplo ao sistema.\n\nConfirmar ${email} como ${alvo.nome}?`)) return;
       const { error } = p
         ? await _supabase.rpc('fn_usuario_acesso', { p_email: email, p_perfil: p, p_loja_id: $('loja_id').value || null, p_nome: $('nome_registro').value.trim(), p_ativo: true })
         : await _supabase.rpc('fn_usuario_acesso', { p_email: email, p_perfil: (usuarios.find(x => x.email === email) || {}).perfil || 'LIDER', p_loja_id: $('loja_id').value || null, p_nome: $('nome_registro').value.trim(), p_ativo: false });

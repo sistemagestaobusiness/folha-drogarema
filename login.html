@@ -100,6 +100,9 @@
     // Direciona cada perfil para a sua tela inicial
     async function destinoPorPerfil(email) {
       try {
+        // página inicial definida no perfil (Perfis e acessos)
+        const { data: acesso } = await _supabase.rpc('fn_minhas_telas');
+        if (acesso && acesso.pagina_inicial) return acesso.pagina_inicial;
         const { data } = await _supabase.rpc('fn_meu_usuario');
         const perfil = data ? data.perfil : null;
         if (perfil === 'LIDER') return 'freelance_solicitacao.html';

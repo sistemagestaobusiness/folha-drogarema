@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfis e Acessos - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+  <div class="max-w-7xl mx-auto space-y-5">
+
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">PERFIS E ACESSOS</h1>
+        <p class="text-xs text-slate-500">Quais telas cada perfil abre · quem tem cada perfil · telas extras por pessoa · exclusivo do GESTOR</p>
+      </div>
+      <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+    </div>
+
+    <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold">Somente o GESTOR gerencia perfis e acessos.</div>
+
+    <div id="conteudo" class="hidden space-y-5">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- LISTA DE PERFIS -->
+        <div class="lg:col-span-4 space-y-2">
+          <div class="flex justify-between items-center">
+            <h2 class="text-xs font-black uppercase text-slate-600">Perfis</h2>
+            <button onclick="editarPerfil(null)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">+ NOVO PERFIL</button>
+          </div>
+          <div id="listaPerfis" class="space-y-2"></div>
+          <div class="text-[10px] text-slate-500 bg-white border border-slate-200 rounded-lg p-3 leading-relaxed">
+            🔒 <b>GESTOR</b> e <b>RH</b> são perfis privilegiados e fixos: só o GESTOR atribui, altera ou remove esses perfis. O RH atribui apenas os demais perfis e não mexe em quem já é GESTOR ou RH.
+            Ninguém altera o próprio acesso, e o último GESTOR ativo não pode ser removido.
+          </div>
+        </div>
+
+        <!-- EDITOR DO PERFIL -->
+        <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+          <div class="flex justify-between items-start">
+            <div><h2 id="edTitulo" class="font-black text-slate-900">Selecione um perfil</h2><p id="edSub" class="text-[11px] text-slate-500"></p></div>
+            <span id="edBadge"></span>
+          </div>
+          <div id="edForm" class="hidden space-y-4 text-xs">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+              <div class="md:col-span-2"><label class="lbl">Nome do perfil *</label><input id="pNome" class="inp"></div>
+              <div class="md:col-span-1"><label class="lbl">Código</label><input id="pCodigo" placeholder="ex.: CONFERENTE" class="inp font-mono uppercase"></div>
+              <div class="md:col-span-3"><label class="lbl">Descrição</label><input id="pDescricao" class="inp"></div>
+            </div>
+            <div>
+              <div class="flex justify-between items-end mb-1">
+                <label class="lbl">Telas que o perfil pode abrir</label>
+                <span id="qtdMarcadas" class="text-[10px] text-slate-500"></span>
+              </div>
+              <div id="gradeTelas" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+              <div class="md:col-span-3"><label class="lbl">Página inicial (abre após o login) *</label><select id="pInicial" class="inp"></select></div>
+              <div class="md:col-span-1"><label class="inline-flex items-center gap-2 font-bold"><input type="checkbox" id="pAtivo" checked> ativo</label></div>
+              <div class="md:col-span-2"><button id="btnSalvarPerfil" onclick="salvarPerfil()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">✓ SALVAR PERFIL</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- USUÁRIOS -->
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div class="flex flex-wrap justify-between items-center gap-3 p-4 border-b border-slate-100">
+          <div><h2 class="text-xs font-black uppercase text-slate-600">Usuários do sistema</h2>
+            <p class="text-[10px] text-slate-400">O login (senha) é criado no Supabase: Authentication › Users › Add user. Aqui define-se o perfil e as telas extras.</p></div>
+          <input id="fUsuario" oninput="renderizarUsuarios()" placeholder="🔍 e-mail ou nome" class="border border-slate-300 rounded p-1.5 text-xs w-56">
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase"><tr><th class="p-3">E-mail / nome</th><th class="p-3">Perfil</th><th class="p-3">Loja (líder)</th><th class="p-3">Ativo</th><th class="p-3">Telas extras</th><th class="p-3"></th></tr></thead>
+            <tbody id="tabUsuarios" class="divide-y divide-slate-100"></tbody>
+            <tfoot class="bg-emerald-50/40 border-t border-slate-200">
+              <tr>
+                <td class="p-2"><input id="nEmail" placeholder="novo e-mail de acesso" class="inp lowercase"><input id="nNome" placeholder="nome" class="inp mt-1"></td>
+                <td class="p-2"><select id="nPerfil" class="inp"></select></td>
+                <td class="p-2"><select id="nLoja" class="inp"></select></td>
+                <td class="p-2 text-center">✓</td>
+                <td class="p-2 text-[10px] text-slate-400">depois de salvar</td>
+                <td class="p-2"><button onclick="adicionarUsuario()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg cursor-pointer">+ Adicionar</button></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TELAS EXTRAS DE UM USUÁRIO -->
+  <div id="modalExtras" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-2xl mx-auto my-6 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-start border-b border-slate-100 pb-2">
+        <div><h3 class="font-black text-sm">TELAS EXTRAS</h3><p id="exSub" class="text-[11px] text-slate-500"></p></div>
+        <button onclick="document.getElementById('modalExtras').classList.add('hidden')" class="text-slate-400 font-bold cursor-pointer">✕</button>
+      </div>
+      <p class="text-[11px] text-slate-600">Libera telas <b>só para esta pessoa</b>, além das telas do perfil dela. O perfil não muda.</p>
+      <div id="gradeExtras" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      <button onclick="salvarExtras()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">✓ SALVAR TELAS EXTRAS</button>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display:block; font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:2px; }
+    .inp { width:100%; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:7px; font-size:12px; color:#1e293b; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    let meuEmail = '', perfis = [], telas = [], perfilTelas = [], usuarios = [], extras = [], lojas = [], atual = null, usuarioExtras = null;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const $ = id => document.getElementById(id);
+    const telasDoPerfil = cod => cod === 'GESTOR' ? telas.map(t => t.arquivo) : perfilTelas.filter(x => x.perfil === cod).map(x => x.tela);
+    const nomeTela = a => (telas.find(t => t.arquivo === a) || {}).nome || a;
+    const grupos = () => [...new Set(telas.map(t => t.grupo))].sort();
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      meuEmail = (user.email || '').toLowerCase();
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      if (!u || u.perfil !== 'GESTOR') { $('avisoSemAcesso').classList.remove('hidden'); return; }
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+      editarPerfil(perfis[0] ? perfis[0].codigo : null);
+    }
+
+    async function carregar() {
+      const r = await Promise.all([
+        _supabase.from('perfis').select('*').order('privilegiado', { ascending: false }).order('nome'),
+        _supabase.from('telas').select('*').order('ordem'),
+        _supabase.from('perfil_telas').select('*'),
+        _supabase.from('usuarios_sistema').select('*').order('email'),
+        _supabase.from('usuario_telas_extra').select('*'),
+        _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja')
+      ]);
+      [perfis, telas, perfilTelas, usuarios, extras, lojas] = r.map(x => x.data || []);
+      renderizarPerfis(); renderizarUsuarios();
+      $('nPerfil').innerHTML = perfis.filter(p => p.ativo).map(p => `<option value="${p.codigo}">${esc(p.nome)}</option>`).join('');
+      $('nLoja').innerHTML = '<option value="">-</option>' + lojas.filter(l => l.ativo !== false).map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+    }
+
+    function renderizarPerfis() {
+      $('listaPerfis').innerHTML = perfis.map(p => {
+        const n = usuarios.filter(u => u.perfil === p.codigo && u.ativo).length;
+        return `<button onclick="editarPerfil('${p.codigo}')" class="w-full text-left bg-white border ${atual && atual.codigo === p.codigo ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-slate-200'} rounded-xl p-3 hover:bg-slate-50 cursor-pointer ${p.ativo ? '' : 'opacity-50'}">
+          <div class="flex justify-between items-center"><b class="text-sm">${esc(p.nome)}</b>
+            ${p.privilegiado ? '<span class="text-[9px] bg-rose-100 text-rose-800 px-1.5 rounded font-black">🔒 PRIVILEGIADO</span>' : ''}</div>
+          <div class="text-[10px] text-slate-500 font-mono">${p.codigo}${p.ativo ? '' : ' · inativo'}</div>
+          <div class="text-[10px] text-slate-500 mt-1">${telasDoPerfil(p.codigo).length} tela(s) · ${n} usuário(s) · início: ${esc(nomeTela(p.pagina_inicial))}</div>
+        </button>`;
+      }).join('');
+    }
+
+    function editarPerfil(cod) {
+      atual = cod ? perfis.find(p => p.codigo === cod) : { codigo: '', nome: '', descricao: '', pagina_inicial: '', ativo: true, novo: true };
+      renderizarPerfis();
+      $('edForm').classList.remove('hidden');
+      const fixo = atual.codigo === 'GESTOR' || atual.codigo === 'RH';
+      $('edTitulo').innerText = atual.novo ? 'Novo perfil' : atual.nome;
+      $('edSub').innerText = fixo ? (atual.codigo === 'GESTOR' ? 'Acesso a todas as telas, sempre.' : 'Acesso amplo à operação (todas as telas, exceto Perfis e acessos).') : (atual.descricao || '');
+      $('edBadge').innerHTML = fixo ? '<span class="text-[10px] bg-rose-100 text-rose-800 px-2 py-1 rounded font-black">🔒 FIXO · NÃO EDITÁVEL</span>' : '';
+      $('pNome').value = atual.nome || ''; $('pCodigo').value = atual.codigo || ''; $('pDescricao').value = atual.descricao || ''; $('pAtivo').checked = atual.ativo !== false;
+      $('pCodigo').disabled = !atual.novo;
+      const marcadas = new Set(telasDoPerfil(atual.codigo));
+      $('gradeTelas').innerHTML = grupos().map(g => `<div class="border border-slate-200 rounded-lg p-2">
+          <div class="text-[10px] font-black uppercase text-slate-500 mb-1">${esc(g.replace(/^\d+\.\s*/, ''))}</div>
+          ${telas.filter(t => t.grupo === g).map(t => `<label class="flex items-center gap-2 py-0.5 ${t.arquivo === 'perfis.html' ? 'opacity-50' : 'cursor-pointer'}">
+            <input type="checkbox" class="chkTela" value="${t.arquivo}" ${marcadas.has(t.arquivo) ? 'checked' : ''} ${fixo || t.arquivo === 'perfis.html' ? 'disabled' : ''} onchange="atualizarInicial()">
+            <span>${esc(t.nome)}${t.arquivo === 'perfis.html' ? ' <span class="text-[9px]">(só GESTOR)</span>' : ''}</span></label>`).join('')}
+        </div>`).join('');
+      ['pNome','pDescricao','pInicial','pAtivo','btnSalvarPerfil'].forEach(id => { $(id).disabled = fixo; $(id).classList.toggle('opacity-50', fixo); });
+      atualizarInicial(atual.pagina_inicial);
+    }
+
+    function atualizarInicial(valor) {
+      const sel = [...document.querySelectorAll('.chkTela:checked')].map(c => c.value);
+      const atualSel = valor || $('pInicial').value;
+      $('pInicial').innerHTML = sel.map(a => `<option value="${a}">${esc(nomeTela(a))}</option>`).join('');
+      if (sel.includes(atualSel)) $('pInicial').value = atualSel;
+      $('qtdMarcadas').innerText = `${sel.length} marcada(s)`;
+    }
+
+    async function salvarPerfil() {
+      const telasSel = [...document.querySelectorAll('.chkTela:checked')].map(c => c.value);
+      const { error } = await _supabase.rpc('fn_perfil_salvar', {
+        p_codigo: atual.novo ? $('pCodigo').value.trim() : atual.codigo, p_nome: $('pNome').value.trim(), p_descricao: $('pDescricao').value.trim(),
+        p_pagina_inicial: $('pInicial').value, p_telas: telasSel, p_ativo: $('pAtivo').checked });
+      if (error) return alert(error.message);
+      const cod = atual.novo ? $('pCodigo').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_') : atual.codigo;
+      await carregar(); editarPerfil(cod);
+      alert('Perfil salvo.');
+    }
+
+    // ---------- usuários ----------
+    function renderizarUsuarios() {
+      const termo = $('fUsuario').value.trim().toLowerCase();
+      const lista = usuarios.filter(u => !termo || u.email.includes(termo) || String(u.nome || '').toLowerCase().includes(termo));
+      $('tabUsuarios').innerHTML = lista.map(u => {
+        const eu = u.email === meuEmail;
+        const ext = extras.filter(x => x.email === u.email).map(x => x.tela);
+        return `<tr class="${u.ativo ? '' : 'opacity-50'}">
+          <td class="p-3"><div class="font-bold">${esc(u.email)}${eu ? ' <span class="text-[9px] bg-slate-200 px-1 rounded">você</span>' : ''}</div><div class="text-[10px] text-slate-500">${esc(u.nome || '')}</div></td>
+          <td class="p-3"><select id="uPerfil_${u.email}" class="inp" ${eu ? 'disabled' : ''}>${perfis.filter(p => p.ativo || p.codigo === u.perfil).map(p => `<option value="${p.codigo}" ${p.codigo === u.perfil ? 'selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></td>
+          <td class="p-3"><select id="uLoja_${u.email}" class="inp" ${eu ? 'disabled' : ''}><option value="">-</option>${lojas.map(l => `<option value="${l.id}" ${l.id === u.loja_id ? 'selected' : ''}>${esc(l.nome_loja)}</option>`).join('')}</select></td>
+          <td class="p-3"><input type="checkbox" id="uAtivo_${u.email}" ${u.ativo ? 'checked' : ''} ${eu ? 'disabled' : ''}></td>
+          <td class="p-3 text-[10px]">${ext.length ? ext.map(t => `<span class="inline-block bg-indigo-100 text-indigo-800 px-1.5 rounded mr-1 mb-1">${esc(nomeTela(t))}</span>`).join('') : '<span class="text-slate-300">-</span>'}
+            ${eu || u.perfil === 'GESTOR' ? '' : `<button onclick="abrirExtras('${u.email}')" class="block text-indigo-700 underline cursor-pointer">editar</button>`}</td>
+          <td class="p-3">${eu ? '' : `<button onclick="salvarUsuario('${u.email}')" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg cursor-pointer">Salvar</button>`}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function gravarAcesso(email, perfil, loja, nome, ativo) {
+      const alvo = perfis.find(p => p.codigo === perfil) || {};
+      const antes = usuarios.find(u => u.email === email);
+      if (alvo.privilegiado && (!antes || antes.perfil !== perfil) &&
+          !confirm(`Atenção: o perfil ${alvo.nome} dá acesso amplo ao sistema (inclusive dados de todos os funcionários e pagamentos).\n\nConfirmar ${email} como ${alvo.nome}?`)) return false;
+      const { error } = await _supabase.rpc('fn_usuario_acesso', { p_email: email, p_perfil: perfil, p_loja_id: loja || null, p_nome: nome || null, p_ativo: ativo });
+      if (error) { alert(error.message); return false; }
+      return true;
+    }
+    async function salvarUsuario(email) {
+      const u = usuarios.find(x => x.email === email);
+      if (await gravarAcesso(email, $('uPerfil_' + email).value, $('uLoja_' + email).value, u.nome, $('uAtivo_' + email).checked)) { await carregar(); alert('Acesso atualizado.'); }
+    }
+    async function adicionarUsuario() {
+      const email = $('nEmail').value.trim().toLowerCase();
+      if (!email) return alert('Informe o e-mail.');
+      if (await gravarAcesso(email, $('nPerfil').value, $('nLoja').value, $('nNome').value.trim(), true)) {
+        $('nEmail').value = ''; $('nNome').value = ''; await carregar();
+        alert('Usuário adicionado. Crie o login dele no Supabase (Authentication › Users › Add user) com o mesmo e-mail, se ainda não existir.');
+      }
+    }
+
+    function abrirExtras(email) {
+      usuarioExtras = usuarios.find(u => u.email === email);
+      const doPerfil = new Set(telasDoPerfil(usuarioExtras.perfil));
+      const ext = new Set(extras.filter(x => x.email === email).map(x => x.tela));
+      $('exSub').innerText = `${email} · perfil ${usuarioExtras.perfil}`;
+      $('gradeExtras').innerHTML = grupos().map(g => `<div class="border border-slate-200 rounded-lg p-2">
+          <div class="text-[10px] font-black uppercase text-slate-500 mb-1">${esc(g.replace(/^\d+\.\s*/, ''))}</div>
+          ${telas.filter(t => t.grupo === g && t.arquivo !== 'perfis.html').map(t => doPerfil.has(t.arquivo)
+            ? `<div class="py-0.5 text-slate-400">✓ ${esc(t.nome)} <span class="text-[9px]">(já no perfil)</span></div>`
+            : `<label class="flex items-center gap-2 py-0.5 cursor-pointer"><input type="checkbox" class="chkExtra" value="${t.arquivo}" ${ext.has(t.arquivo) ? 'checked' : ''}> ${esc(t.nome)}</label>`).join('')}
+        </div>`).join('');
+      $('modalExtras').classList.remove('hidden');
+    }
+    async function salvarExtras() {
+      const sel = [...document.querySelectorAll('.chkExtra:checked')].map(c => c.value);
+      const { error } = await _supabase.rpc('fn_usuario_telas_extra', { p_email: usuarioExtras.email, p_telas: sel });
+      if (error) return alert(error.message);
+      $('modalExtras').classList.add('hidden'); await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
