@@ -231,7 +231,9 @@
         let resumoMapeado = rubEncontrada ? rubEncontrada.resumo_mapeado : planoRem;
 
         const resumoUpper = resumoMapeado.toUpperCase();
-        let eventoEncontrado = tiposEventosSistema.find(e => {
+        // A7 é 100% NÃO CONTÁBIL: procura só nesses eventos (nome igual primeiro, depois parecido)
+        const eventosA7 = tiposEventosSistema.filter(e => String(e.natureza_do_evento || '').toUpperCase().includes('NAO') && e.tipo_evento === 'PROVENTO');
+        let eventoEncontrado = eventosA7.find(e => String(e.descricao_do_evento || '').trim().toUpperCase() === resumoUpper) || eventosA7.find(e => {
           const descEv = String(e.descricao_do_evento || '').trim().toUpperCase();
           return descEv.includes(resumoUpper) || resumoUpper.includes(descEv) || 
                  (resumoUpper.includes('SIDNEY') && descEv.includes('SIDNEY')) ||
@@ -248,7 +250,7 @@
           funcionario_id: funcEncontrado ? funcEncontrado.id : '',
           plano_remuneracao: planoRem,
           resumo_mapeado: resumoMapeado,
-          codigo_evento: eventoEncontrado ? eventoEncontrado.codigo_evento : '2021',
+          codigo_evento: eventoEncontrado ? eventoEncontrado.codigo_evento : '',
           descricao_evento: eventoEncontrado ? eventoEncontrado.descricao_do_evento : resumoMapeado,
           valor: valorRem,
           pendente_rubrica: !eventoEncontrado
@@ -290,7 +292,14 @@
           <td class="p-3 text-slate-300 font-mono text-[11px]">${item.plano_remuneracao}</td>
           <td class="p-3">
             <div class="font-bold text-cyan-400">${item.resumo_mapeado}</div>
-            <div class="text-[10px] text-emerald-400 font-mono">Cód Evento: ${item.codigo_evento} - ${item.descricao_evento}</div>
+            ${item.pendente_rubrica
+              ? `<select onchange="atualizarEvento('${item.id}', this.value)" class="mt-1 bg-slate-900 border border-amber-500 text-amber-300 rounded p-1 w-full text-[11px]">
+                   <option value="">⚠ ESCOLHA O EVENTO (não encontrado)</option>
+                   ${tiposEventosSistema.filter(e => String(e.natureza_do_evento || '').toUpperCase().includes('NAO') && e.tipo_evento === 'PROVENTO')
+                      .map(e => `<option value="${e.codigo_evento}">${e.codigo_evento} - ${e.descricao_do_evento}</option>`).join('')}
+                 </select>`
+              : `<div class="text-[10px] text-emerald-400 font-mono">Cód Evento: ${item.codigo_evento} - ${item.descricao_evento}</div>`}
+            ${item.duplicado ? `<div class="text-[10px] text-rose-400 font-bold mt-1">⚠ Já lançado nesta competência (mesmo colaborador, evento e valor)</div>` : ''}
           </td>
           <td class="p-3 text-right text-emerald-400 font-mono font-bold">R$ ${item.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
           <td class="p-3 text-center">
@@ -298,6 +307,16 @@
           </td>
         </tr>
       `).join('');
+    }
+
+    function atualizarEvento(id, codigo) {
+      const item = dadosProcessados.find(d => d.id === id);
+      const ev = tiposEventosSistema.find(e => String(e.codigo_evento) === String(codigo));
+      if (!item) return;
+      item.codigo_evento = ev ? ev.codigo_evento : '';
+      item.descricao_evento = ev ? ev.descricao_do_evento : '';
+      item.pendente_rubrica = !ev;
+      document.getElementById('statPendentesRub').innerText = dadosProcessados.filter(d => d.pendente_rubrica).length;
     }
 
     function atualizarVinculoFunc(id, funcId) {
@@ -323,12 +342,44 @@
         alert('Existem registros sem colaborador vinculado. Por favor, vincule todos antes de salvar.');
         return;
       }
+      const semEvento = dadosProcessados.filter(d => d.pendente_rubrica || !d.codigo_evento);
+      if (semEvento.length > 0) {
+        alert(`Existem ${semEvento.length} registro(s) sem evento. Escolha o evento de cada um (lista em amarelo) antes de salvar.`);
+        return;
+      }
 
-      const registrosParaSalvar = dadosProcessados.map(d => ({
+      // Só importa em mês ABERTO
+      const [mm, aaaa] = competenciaRegraLancamento.split('/');
+      const { data: comp } = await _supabase.from('competencias').select('status').eq('ano', parseInt(aaaa, 10)).eq('mes', parseInt(mm, 10));
+      if (!comp || !comp[0] || comp[0].status !== 'ABERTO') {
+        alert(`A competência ${competenciaRegraLancamento} não está ABERTA. Selecione o mês aberto no painel antes de importar.`);
+        return;
+      }
+
+      // Varredura de duplicidade: mesmo colaborador + mesmo evento + mesmo valor já lançado no mês
+      const ids = [...new Set(dadosProcessados.map(d => d.funcionario_id))];
+      const { data: existentes } = await _supabase.from('folha_itens').select('funcionario_id, rubrica, valor')
+        .eq('competencia', competenciaRegraLancamento).in('funcionario_id', ids);
+      const chave = (f, cod, v) => `${f}|${cod}|${parseFloat(v).toFixed(2)}`;
+      const jaExiste = new Set((existentes || []).map(e => chave(e.funcionario_id, (String(e.rubrica).match(/^\d+/) || [''])[0], e.valor)));
+      dadosProcessados.forEach(d => { d.duplicado = jaExiste.has(chave(d.funcionario_id, d.codigo_evento, d.valor)); });
+      const duplicados = dadosProcessados.filter(d => d.duplicado);
+      let lista = dadosProcessados;
+      if (duplicados.length > 0) {
+        renderizarConferencia();
+        if (!confirm(`⚠ ${duplicados.length} registro(s) JÁ ESTÃO LANÇADOS nesta competência (mesmo colaborador, evento e valor) e estão marcados em vermelho.\n\nOK = importar somente os ${dadosProcessados.length - duplicados.length} novos\nCancelar = voltar e revisar`)) return;
+        lista = dadosProcessados.filter(d => !d.duplicado);
+        if (lista.length === 0) { alert('Nada novo para importar.'); return; }
+      }
+      const totalImp = lista.reduce((a, d) => a + d.valor, 0);
+      if (!confirm(`Confirmar a importação de ${lista.length} lançamento(s) na competência ${competenciaRegraLancamento}?\nTotal: R$ ${totalImp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`)) return;
+
+      const registrosParaSalvar = lista.map(d => ({
         funcionario_id: d.funcionario_id,
         rubrica: `${d.codigo_evento} - ${d.descricao_evento}`,
         tipo: 'PROVENTO',
         valor: d.valor,
+        valor_bruto: d.valor,
         competencia: competenciaRegraLancamento
       }));
 

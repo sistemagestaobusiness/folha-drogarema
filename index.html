@@ -292,6 +292,8 @@
           <div id="listaPeriodos" class="grid grid-cols-2 gap-1.5 pt-1">
             <!-- Preenchido via JS compacto -->
           </div>
+          <button id="btnBackup" onclick="fazerBackup('manual')" class="hidden w-full mt-2 text-[11px] font-bold px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 cursor-pointer">💾 Fazer backup agora</button>
+          <p class="text-[9px] text-slate-400 leading-tight">O backup completo é feito automaticamente ao fechar o mês (cópia no Supabase + download no seu computador).</p>
         </div>
 
       </div>
@@ -310,20 +312,17 @@
         <button onclick="fecharModalMes()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
 
-      <div class="space-y-2">
-        <button onclick="executarAcaoCompetencia('ABERTO')" class="w-full text-left p-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition flex items-center justify-between cursor-pointer">
-          <div>
-            <div class="font-bold text-emerald-900 text-xs">🔓 Abrir / Iniciar Período</div>
-            <div class="text-[10px] text-emerald-700">Permitir lançamentos e importações</div>
-          </div>
-        </button>
-
-        <button onclick="executarAcaoCompetencia('FECHADO')" class="w-full text-left p-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center justify-between cursor-pointer">
-          <div>
-            <div class="font-bold text-rose-900 text-xs">🔒 Fechar Competência</div>
-            <div class="text-[10px] text-rose-700">Bloquear novos lançamentos</div>
-          </div>
-        </button>
+      <div id="mesSituacao" class="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2"></div>
+      <div id="mesAcoes" class="space-y-2"></div>
+      <!-- Confirmação do gestor (reabrir / liberação excepcional) -->
+      <div id="mesFormGestor" class="hidden space-y-2 border-t border-slate-100 pt-3">
+        <div id="mesFormTitulo" class="text-[11px] font-black uppercase text-amber-800"></div>
+        <textarea id="mesJustificativa" rows="2" placeholder="Justificativa (obrigatória, fica registrada)" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea>
+        <div id="mesBoxMinutos"><label class="block text-[10px] font-bold text-slate-500 uppercase">Prazo da liberação</label>
+          <select id="mesMinutos" class="w-full border border-slate-300 rounded p-2 text-xs"><option value="10">10 minutos</option><option value="15" selected>15 minutos</option><option value="30">30 minutos</option></select></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Sua senha de GESTOR</label>
+          <input type="password" id="mesSenha" autocomplete="current-password" class="w-full border border-slate-300 rounded p-2 text-xs"></div>
+        <button id="mesBtnConfirmar" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">CONFIRMAR</button>
       </div>
     </div>
   </div>
@@ -380,6 +379,8 @@
         if (!user) return;
         const { data } = await _supabase.rpc('fn_meu_usuario');
         const perfil = data ? data.perfil : null;
+        perfilIndex = perfil; emailIndex = (user.email || '').toLowerCase();
+        document.getElementById('btnBackup').classList.toggle('hidden', !['RH', 'GESTOR'].includes(perfil));
         if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
         else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');
         else if (perfil === 'FINANCEIRO') window.location.replace('financeiro.html');
@@ -390,6 +391,7 @@
     const mesesNomesCompletos = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
     let mesSelecionadoContexto = { mesNome: '', ano: '', mesNum: 0 };
+    let perfilIndex = null, emailIndex = '', competenciasAno = {};
 
     function toggleModalLancamentos() {
       const modal = document.getElementById('modalLancamentos');
@@ -400,33 +402,116 @@
       event.stopPropagation();
       mesSelecionadoContexto = { mesNome, ano, mesNum };
       document.getElementById('modalMesTitulo').innerText = `MÊS: ${mesNome.toUpperCase()} / ${ano}`;
+      const c = competenciasAno[mesNum] || {};
+      const status = c.status || 'PENDENTE';
+      const liberado = c.liberado_ate && new Date(c.liberado_ate) > new Date();
+      const hora = d => new Date(d).toLocaleString('pt-BR');
+      document.getElementById('mesSituacao').innerHTML = `Situação: <b>${status}</b>`
+        + (c.fechado_em && status === 'FECHADO' ? ` · fechado em ${hora(c.fechado_em)}${c.fechado_por ? ' por ' + c.fechado_por : ''}` : '')
+        + (c.reaberto_em && status === 'ABERTO' ? ` · <b class="text-amber-700">reaberto</b> em ${hora(c.reaberto_em)} por ${c.reaberto_por || ''} (exclusões bloqueadas)` : '')
+        + (liberado ? `<div class="text-amber-800 font-bold mt-1">🔓 Liberação excepcional até ${new Date(c.liberado_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} (${c.liberado_por || ''}): ${c.liberado_motivo || ''}</div>` : '');
+      const btn = (acao, titulo, desc, cor) => `<button onclick="acaoMes('${acao}')" class="w-full text-left p-3 rounded-xl bg-${cor}-50 hover:bg-${cor}-100 border border-${cor}-200 transition cursor-pointer">
+          <div class="font-bold text-${cor}-900 text-xs">${titulo}</div><div class="text-[10px] text-${cor}-700">${desc}</div></button>`;
+      const podeRH = ['RH', 'GESTOR'].includes(perfilIndex), gestor = perfilIndex === 'GESTOR';
+      let acoes = '';
+      if (status === 'PENDENTE' && podeRH) acoes += btn('ABRIR', '🔓 Abrir / Iniciar Período', 'Permitir lançamentos e importações', 'emerald');
+      if (status === 'ABERTO' && podeRH) acoes += btn('FECHAR', '🔒 Fechar Competência', 'Bloqueia o mês e faz o backup completo automaticamente', 'rose');
+      if (status === 'FECHADO' && gestor) {
+        acoes += liberado
+          ? btn('ENCERRAR_LIBERACAO', '⏹ Encerrar liberação agora', 'Volta a travar o mês imediatamente', 'slate')
+          : btn('LIBERAR', '🛠 Liberação excepcional (correção)', 'Janela curta para editar/incluir. Exclusão continua proibida. Exige senha e justificativa.', 'amber');
+        acoes += btn('REABRIR', '↩ Reabrir o mês', 'Só em extrema necessidade. Exige senha e justificativa. Exclusões continuam bloqueadas.', 'rose');
+      }
+      if (!acoes) acoes = `<div class="text-[11px] text-slate-500">${status === 'FECHADO' ? '🔒 Mês fechado. Somente o GESTOR pode liberar uma correção.' : 'Seu perfil não altera o status do mês.'}</div>`;
+      document.getElementById('mesAcoes').innerHTML = acoes;
+      document.getElementById('mesFormGestor').classList.add('hidden');
       document.getElementById('modalGerenciarMes').classList.remove('hidden');
+    }
+
+    function acaoMes(acao) {
+      if (acao === 'LIBERAR' || acao === 'REABRIR') {
+        document.getElementById('mesFormTitulo').innerText = acao === 'LIBERAR' ? '🛠 Liberação excepcional' : '↩ Reabrir o mês';
+        document.getElementById('mesBoxMinutos').classList.toggle('hidden', acao !== 'LIBERAR');
+        document.getElementById('mesJustificativa').value = '';
+        document.getElementById('mesSenha').value = '';
+        document.getElementById('mesBtnConfirmar').onclick = () => executarAcaoCompetencia(acao);
+        document.getElementById('mesFormGestor').classList.remove('hidden');
+        return;
+      }
+      if (acao === 'FECHAR' && !confirm('Fechar a competência? Depois de fechada, nenhum lançamento pode ser excluído e só o GESTOR libera correções.\n\nO backup completo será feito em seguida.')) return;
+      executarAcaoCompetencia(acao);
     }
 
     function fecharModalMes() {
       document.getElementById('modalGerenciarMes').classList.add('hidden');
     }
 
+    // Abrir / fechar / reabrir / liberar: tudo pela função do banco (regras e registro ficam lá)
     async function executarAcaoCompetencia(acao) {
-      const { mesNome, ano, mesNum } = mesSelecionadoContexto;
+      const { ano, mesNum } = mesSelecionadoContexto;
+      const precisaSenha = acao === 'LIBERAR' || acao === 'REABRIR';
+      const params = { p_ano: parseInt(ano, 10), p_mes: mesNum, p_acao: acao, p_justificativa: null, p_minutos: 15 };
+      if (precisaSenha) {
+        const senha = document.getElementById('mesSenha').value;
+        params.p_justificativa = document.getElementById('mesJustificativa').value.trim() || null;
+        params.p_minutos = parseInt(document.getElementById('mesMinutos').value, 10);
+        if (!params.p_justificativa || params.p_justificativa.length < 10) return alert('Escreva a justificativa (mínimo 10 caracteres).');
+        if (!senha) return alert('Digite a sua senha de GESTOR.');
+        // confirma a senha de novo (o banco só aceita se a senha foi digitada nos últimos 5 minutos)
+        const { error: errSenha } = await _supabase.auth.signInWithPassword({ email: emailIndex, password: senha });
+        document.getElementById('mesSenha').value = '';
+        if (errSenha) return alert('Senha incorreta.');
+      }
+      const { error } = await _supabase.rpc('fn_competencia_alterar', params);
+      if (error) return alert('Não foi possível: ' + error.message);
       fecharModalMes();
+      await carregarPeriodos();
+      if (acao === 'FECHAR') await fazerBackup(`${ano}-${String(mesNum).padStart(2, '0')}`);
+    }
 
-      const dataAtual = new Date().toISOString();
-      let payload = { status: acao };
-      if (acao === 'FECHADO') {
-        payload.fechado_em = dataAtual;
-      } else {
-        payload.fechado_em = null;
+    // ---------------------------------------------------------------------
+    // BACKUP COMPLETO: todas as tabelas em um arquivo JSON.
+    // Guarda uma cópia no Supabase (bucket privado "backups") e baixa outra no computador.
+    // ---------------------------------------------------------------------
+    async function fazerBackup(rotulo) {
+      const aviso = document.createElement('div');
+      aviso.className = 'fixed bottom-4 right-4 z-[70] bg-slate-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-2xl';
+      aviso.innerText = '💾 Gerando backup...';
+      document.body.appendChild(aviso);
+      try {
+        const { data: tabelas, error: errT } = await _supabase.rpc('fn_backup_tabelas');
+        if (errT) throw errT;
+        const dados = {};
+        for (const linha of tabelas || []) {
+          const t = typeof linha === 'string' ? linha : Object.values(linha)[0];
+          aviso.innerText = `💾 Backup: lendo ${t}...`;
+          dados[t] = [];
+          for (let de = 0; ; de += 1000) {
+            const { data, error } = await _supabase.from(t).select('*').range(de, de + 999);
+            if (error) { dados[t] = { erro: error.message }; break; }
+            dados[t].push(...data);
+            if (data.length < 1000) break;
+          }
+        }
+        const agora = new Date();
+        const carimbo = agora.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const conteudo = JSON.stringify({ sistema: 'folha-drogarema', gerado_em: agora.toISOString(), gerado_por: emailIndex, referencia: rotulo, tabelas: dados });
+        const arquivo = new Blob([conteudo], { type: 'application/json' });
+        const nome = `backup_drogarema_${rotulo}_${carimbo}.json`;
+        aviso.innerText = '💾 Backup: enviando cópia para o Supabase...';
+        const pasta = rotulo === 'manual' ? 'manual' : rotulo;
+        const { error: errUp } = await _supabase.storage.from('backups').upload(`${pasta}/${nome}`, arquivo, { upsert: false, contentType: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(arquivo); link.download = nome; document.body.appendChild(link); link.click(); link.remove();
+        const total = Object.values(dados).reduce((a, v) => a + (Array.isArray(v) ? v.length : 0), 0);
+        alert(`Backup concluído: ${Object.keys(dados).length} tabelas, ${total} registros.\n` +
+              `• Arquivo baixado no seu computador: ${nome}\n` +
+              (errUp ? `• ATENÇÃO: a cópia no Supabase falhou (${errUp.message}). Guarde o arquivo baixado.` : '• Cópia guardada no Supabase (Storage > backups).'));
+      } catch (e) {
+        alert('Falha no backup: ' + (e.message || e));
+      } finally {
+        aviso.remove();
       }
-
-      const { data } = await _supabase.from('competencias').select('*').eq('ano', ano).eq('mes', mesNum);
-      if (data && data.length > 0) {
-        await _supabase.from('competencias').update(payload).eq('ano', ano).eq('mes', mesNum);
-      } else {
-        await _supabase.from('competencias').insert([{ ano, mes: mesNum, ...payload }]);
-      }
-
-      carregarPeriodos();
     }
 
     async function carregarPeriodos() {
@@ -436,9 +521,11 @@
       let periodosMap = {};
       let auditMap = {};
       if (data) {
+        competenciasAno = {};
         data.forEach(p => {
           periodosMap[p.mes] = p.status;
           auditMap[p.mes] = p.fechado_em;
+          competenciasAno[p.mes] = p;
         });
       }
 
@@ -458,7 +545,7 @@
         let status = periodosMap[i];
 
         if (!status) {
-          status = (i === 8 && ano === '2026') ? 'ABERTO' : 'PENDENTE';
+          status = 'PENDENTE';
         }
 
         let isAtivaVisual = false;
@@ -500,6 +587,8 @@
             <div onclick="selecionarPeriodoAtivo('${mesNomeCompleto}', '${ano}')" class="cursor-pointer flex-1">
               <span class="font-bold text-xs block">${mesNomeCurto}</span>
               <span class="text-[9px] font-mono uppercase ${statusCor} mt-1 block">${status}</span>
+              ${competenciasAno[i] && competenciasAno[i].liberado_ate && new Date(competenciasAno[i].liberado_ate) > new Date() ? '<span class="text-[8px] font-bold text-amber-700 block">🔓 LIBERADO</span>' : ''}
+              ${competenciasAno[i] && competenciasAno[i].reaberto_em && status === 'ABERTO' ? '<span class="text-[8px] font-bold text-amber-700 block">REABERTO</span>' : ''}
             </div>
             <button onclick="abrirModalMes(event, '${mesNomeCompleto}', '${ano}', ${i})" title="Gerenciar status do mês" class="absolute top-1 right-1 text-slate-400 hover:text-slate-700 p-1 text-[10px] cursor-pointer opacity-70 group-hover:opacity-100 transition">
               ⚙️

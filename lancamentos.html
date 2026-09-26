@@ -50,6 +50,7 @@
 
         <!-- ABA 1: NOVO LANÇAMENTO -->
         <div id="abaNovo" class="space-y-4">
+          <div id="alertaLiberacao" class="hidden bg-amber-50 border border-amber-400 text-amber-900 p-3 rounded-lg text-xs font-bold"></div>
           <div id="alertaCompetenciaFechada" class="hidden bg-rose-50 border border-rose-300 text-rose-800 p-3 rounded-lg text-xs font-bold flex flex-col items-center gap-2">
             <span>⚠️ O PERÍODO ATIVO ESTÁ FECHADO. LANÇAMENTOS BLOQUEADOS.</span>
             <button type="button" onclick="tentarDesbloquearPeriodoComSenha()" class="bg-rose-700 hover:bg-rose-800 text-white font-bold px-3 py-1.5 rounded transition text-[11px] cursor-pointer">
@@ -359,6 +360,8 @@
     let abaAtiva = 'novo';
     let competenciaEstaFechada = false;
     let periodoForcadoDesbloqueado = false; 
+    let liberacaoAtiva = false;       // mês FECHADO com liberação excepcional do gestor (edita/inclui, não exclui)
+    let exclusaoBloqueada = false;    // mês reaberto ou em liberação: exclusão proibida pelo banco
     
     let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
     
@@ -439,8 +442,8 @@
         return;
       }
       alert('Competência fechada: o banco de dados bloqueia qualquer inclusão, edição ou exclusão neste mês.\n\n' +
-            'Para fazer uma correção, reabra o mês no Dashboard (engrenagem ⚙️ do mês), ajuste e feche novamente.\n' +
-            'Obs.: só um mês pode ficar ABERTO por vez.');
+            'Para uma correção: no Dashboard, engrenagem ⚙️ do mês > "Liberação excepcional" (senha + justificativa, de 10 a 30 minutos).\n' +
+            'Durante a liberação é possível incluir e editar; exclusão continua proibida. Tudo fica registrado na auditoria.');
     }
 
     async function inicializarTela() {
@@ -464,12 +467,23 @@
       const mesNum = parseInt(partes[0], 10);
       const anoNum = parseInt(partes[1], 10);
 
-      const { data } = await _supabase.from('competencias').select('status').eq('ano', anoNum).eq('mes', mesNum);
+      const { data } = await _supabase.from('competencias').select('*').eq('ano', anoNum).eq('mes', mesNum);
       
       let status = 'ABERTO';
+      const reg = (data && data[0]) || {};
       if (data && data.length > 0) {
         status = data[0].status;
       }
+      liberacaoAtiva = status === 'FECHADO' && !!reg.liberado_ate && new Date(reg.liberado_ate) > new Date();
+      exclusaoBloqueada = liberacaoAtiva || (status === 'ABERTO' && !!reg.reaberto_em);
+      const alertaLib = document.getElementById('alertaLiberacao');
+      if (alertaLib) {
+        alertaLib.classList.toggle('hidden', !exclusaoBloqueada);
+        alertaLib.innerText = liberacaoAtiva
+          ? `🛠 LIBERAÇÃO EXCEPCIONAL do gestor até ${new Date(reg.liberado_ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}: é possível incluir e editar. Exclusão continua proibida. Motivo: ${reg.liberado_motivo || '-'}`
+          : `↩ Mês REABERTO pelo gestor: exclusão de lançamentos continua proibida (corrija editando o valor).`;
+      }
+      if (liberacaoAtiva) status = 'ABERTO';
 
       if ((competenciaStr || competenciaRegraLancamento) === competenciaRegraLancamento) {
         atualizarEtiquetaCompetencia(status);
@@ -761,7 +775,7 @@
         .select('id, rubrica, valor, motivo_ajuste')
         .eq('funcionario_id', funcionarioId)
         .eq('competencia', competencia)
-        .or('rubrica.ilike.3004%,rubrica.ilike.3007%'); 
+        .ilike('motivo_ajuste', 'Automação Empréstimo #%'); // qualquer código de empréstimo (3004, 3007 a 3011)
 
       const partesComp = competencia.split('/');
       const numCompAtual = parseInt(partesComp[1]) * 12 + parseInt(partesComp[0]);
@@ -787,7 +801,7 @@
           // Pega dinamicamente o código do evento escolhido no contrato (padrão 3007 se não houver)
           const codigoEvento = String(emp.codigo_evento || '3007');
           const eventoDinamico = listaGlobalEventos.find(ev => String(ev.codigo_evento) === codigoEvento);
-          const descEvento = eventoDinamico ? eventoDinamico.descricao_do_evento : (codigoEvento === '3004' ? 'DESC. EMP. CRED. TRAB' : 'EMPRESTIMO EMPRESA 1 PF');
+          const descEvento = eventoDinamico ? eventoDinamico.descricao_do_evento : (codigoEvento === '3004' ? 'DESC. EMP. CRED. TRAB' : 'EMPRESTIMO EMPRESA 1');
 
           const tagParcela = `(${String(parcelaAtual).padStart(2, '0')}/${String(emp.qtd_parcelas).padStart(2, '0')})`;
           const rubricaExata = `${codigoEvento} - ${descEvento} ${tagParcela}`;
@@ -833,7 +847,7 @@
       const funcDados = listaGlobalFuncionarios.find(f => String(f.id) === String(funcionarioId));
       const salarioBase = funcDados ? parseFloat(funcDados.salario_base || 0) : 0;
 
-      if (!competenciaEstaFechada) {
+      if (!competenciaEstaFechada && !liberacaoAtiva) {
         await sincronizarEmprestimos(funcionarioId, competenciaRegraLancamento);
         await sincronizarSalarioBase(funcionarioId, competenciaRegraLancamento, salarioBase);
       }
@@ -1020,7 +1034,7 @@
             botoesAcao = `
               <td class="py-1 px-2 text-center">
                 <button type="button" onclick="prepararEdicaoPorId('${item.id}')" class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
-                ${itemTravado(item.id) ? `<span class="text-slate-300 px-1" title="Pago pelo Financeiro: não pode ser excluído">🔒</span>` : `<button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>`}
+                ${itemTravado(item.id) || exclusaoBloqueada ? `<span class="text-slate-300 px-1" title="${exclusaoBloqueada ? 'Mês fechado/reaberto: exclusão proibida' : 'Pago pelo Financeiro: não pode ser excluído'}">🔒</span>` : `<button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>`}
               </td>
             `;
           }
@@ -1068,7 +1082,7 @@
             botoesAcao = `
               <td class="py-1 px-2 text-center">
                 <button type="button" onclick="prepararEdicaoPorId('${item.id}')" class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
-                ${itemTravado(item.id) ? `<span class="text-slate-300 px-1" title="Pago pelo Financeiro: não pode ser excluído">🔒</span>` : `<button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>`}
+                ${itemTravado(item.id) || exclusaoBloqueada ? `<span class="text-slate-300 px-1" title="${exclusaoBloqueada ? 'Mês fechado/reaberto: exclusão proibida' : 'Pago pelo Financeiro: não pode ser excluído'}">🔒</span>` : `<button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>`}
               </td>
             `;
           }
@@ -1424,6 +1438,10 @@
         return;
       }
 
+      if (exclusaoBloqueada) {
+        alert('Mês fechado (em liberação) ou reaberto: exclusão não é permitida. Corrija editando o valor.');
+        return;
+      }
       if (itemTravado(id)) {
         alert('Este lançamento já foi PAGO pelo Financeiro e não pode ser excluído. Só é permitido trocar o evento (✎).');
         return;
