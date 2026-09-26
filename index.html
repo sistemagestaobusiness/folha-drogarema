@@ -718,7 +718,11 @@
           }
         });
 
+        // 13º, férias, rescisão e VT são pagos FORA do holerite: não entram neste cálculo
+        const codigosForaHolerite = new Set(evs.filter(e => e.pagamento_extra_tipo && e.pagamento_extra_tipo !== 'ADIANTAMENTO').map(e => String(e.codigo_evento)));
+        const foraDoHolerite = it => codigosForaHolerite.has((String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1]);
         itens.forEach(item => {
+          if (foraDoHolerite(item)) return;
           const val = parseFloat(item.valor || 0);
           const tipo = (item.tipo || 'PROVENTO').toUpperCase();
           const rubricaStr = String(item.rubrica || '').toUpperCase();

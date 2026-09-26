@@ -364,7 +364,11 @@
 
         const recibosMap = {};
 
+        // 13º, férias, rescisão e VT são pagos FORA do holerite: não entram neste cálculo
+        const codigosForaHolerite = new Set(eventos.filter(e => e.pagamento_extra_tipo && e.pagamento_extra_tipo !== 'ADIANTAMENTO').map(e => String(e.codigo_evento)));
+        const foraDoHolerite = it => codigosForaHolerite.has((String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1]);
         itensFolha.forEach(item => {
+          if (foraDoHolerite(item)) return;
           const rubrica = String(item.rubrica || '').toUpperCase();
           
           let codigo = '';

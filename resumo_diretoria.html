@@ -77,6 +77,9 @@
       { key: 'descontos', label: 'TOTAL DESCONTOS', colorH: 'bg-rose-100/70', colorB: 'bg-rose-50/20', colorD: 'bg-rose-100/50' },
       { key: 'liquido', label: 'LÍQUIDO RECEBIDO', colorH: 'bg-slate-200/80', colorB: 'bg-slate-50', colorD: 'bg-slate-200/60' },
       { key: 'custo_empresa', label: 'CUSTO EMPRESA', colorH: 'bg-teal-100/70', colorB: 'bg-teal-50/20', colorD: 'bg-teal-100/50' },
+      { key: 'vt', label: 'VALE-TRANSPORTE', colorH: 'bg-cyan-100/60', colorB: 'bg-cyan-50/20', colorD: 'bg-cyan-100/40' },
+      { key: 'inss_patronal', label: 'INSS PATRONAL 27%', colorH: 'bg-teal-50', colorB: 'bg-white', colorD: 'bg-teal-50' },
+      { key: 'fgts', label: 'FGTS 8%', colorH: 'bg-teal-50', colorB: 'bg-white', colorD: 'bg-teal-50' },
       { key: 'sm_gn', label: 'COM. SM E GN (2018)', colorH: 'bg-blue-100/60', colorB: 'bg-blue-50/20', colorD: 'bg-blue-100/40' },
       { key: 'perfumaria', label: 'COM. PERFUMARIA (2019)', colorH: 'bg-indigo-100/60', colorB: 'bg-indigo-50/20', colorD: 'bg-indigo-100/40' },
       { key: 'sidney', label: 'COM. SIDNEY (2020)', colorH: 'bg-purple-100/60', colorB: 'bg-purple-50/20', colorD: 'bg-purple-100/40' },
@@ -135,7 +138,7 @@
     }
 
     function initMetrics() {
-      return { bruto: 0, bruto_contabil: 0, bruto_nao_contabil: 0, descontos: 0, liquido: 0, custo_empresa: 0, sm_gn: 0, perfumaria: 0, sidney: 0, vitaminas: 0, he_fora: 0, freelance: 0 };
+      return { bruto: 0, bruto_contabil: 0, bruto_nao_contabil: 0, descontos: 0, liquido: 0, custo_empresa: 0, vt: 0, inss_patronal: 0, fgts: 0, sm_gn: 0, perfumaria: 0, sidney: 0, vitaminas: 0, he_fora: 0, freelance: 0, qtd_itens: 0 };
     }
 
     function initTotals() {
@@ -175,6 +178,10 @@
         });
 
         const dadosFuncMap = {};
+        // 13º, férias e rescisão são pagos fora do holerite (não entram aqui); o VT vira coluna própria no custo
+        const catEvento = {};
+        eventos.forEach(e => { if (e.pagamento_extra_tipo) catEvento[String(e.codigo_evento)] = e.pagamento_extra_tipo; });
+        const catDoItem = it => catEvento[(String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1]];
 
         itensFolha.forEach(item => {
           const fId = item.funcionario_id;
@@ -202,6 +209,9 @@
             dadosFuncMap[fId] = {
               nome: f.nome_registro,
               empresa: nomeEmpresa.toUpperCase(),
+              salarioBase: parseFloat(f.salario_base || 0),
+              registroDrogarema: String((empresaMatch && empresaMatch.razao_social) || f.empresa_registro || '').toUpperCase().includes('DROGAREMA'),
+              freelance: String(f.cargo || '').toUpperCase().includes('FREELANCE'),
               atual: initMetrics(),
               anterior: initMetrics()
             };
@@ -209,6 +219,10 @@
 
           const target = isAtual ? dadosFuncMap[fId].atual : dadosFuncMap[fId].anterior;
           const val = parseFloat(item.valor || 0);
+          target.qtd_itens++;
+          const cat = catDoItem(item);
+          if (cat === 'VALE_TRANSPORTE') { target.vt += val; return; }
+          if (cat && cat !== 'ADIANTAMENTO') return;
           const rubrica = String(item.rubrica || '').toUpperCase();
           const tipo = (item.tipo || 'PROVENTO').toUpperCase();
 
@@ -250,12 +264,12 @@
           ['atual', 'anterior'].forEach(per => {
             f[per].liquido = f[per].bruto - f[per].descontos;
             
-            const fgts = f[per].bruto_contabil * 0.08;
-            let inssPatronal = 0;
-            if (f.empresa.includes('DROGAREMA')) {
-              inssPatronal = f[per].bruto_contabil * 0.25;
-            }
-            f[per].custo_empresa = f[per].bruto + fgts + inssPatronal;
+            // Encargos sobre o SALÁRIO BASE do cadastro (só no mês em que o funcionário tem lançamento):
+            // INSS patronal 27% para registrados nas empresas DROGAREMA; FGTS 8% para todos, menos freelance
+            const temMes = f[per].qtd_itens > 0;
+            f[per].inss_patronal = temMes && f.registroDrogarema ? f.salarioBase * 0.27 : 0;
+            f[per].fgts = temMes && !f.freelance ? f.salarioBase * 0.08 : 0;
+            f[per].custo_empresa = f[per].bruto + f[per].vt + f[per].inss_patronal + f[per].fgts;
           });
           return f;
         });
