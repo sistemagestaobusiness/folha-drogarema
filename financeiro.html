@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Financeiro - Pagamentos a Realizar - Drogarema</title>
+  <title>Pagamentos Fora da Folha - Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -12,8 +12,8 @@
 
     <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-        <h1 class="text-xl font-bold text-slate-900 tracking-wide">FINANCEIRO · PAGAMENTOS A REALIZAR</h1>
-        <p class="text-xs text-slate-500">Tudo o que é pago fora do 5º dia útil · somente pendentes</p>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">PAGAMENTOS FORA DA FOLHA</h1>
+        <p id="subtitulo" class="text-xs text-slate-500">Tudo o que é pago fora do 5º dia útil · origem: tela de lançamentos (eventos marcados) ou aprovação de freelance / hora extra</p>
       </div>
       <div class="flex items-center gap-3">
         <div class="text-right">
@@ -28,38 +28,55 @@
     <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
 
     <div id="conteudo" class="hidden space-y-4">
+      <!-- ALERTA DE PROBLEMAS (Financeiro informou; RH/Gestor resolvem) -->
+      <div id="boxProblemas" class="hidden bg-rose-50 border-2 border-rose-400 rounded-xl p-4 space-y-2">
+        <div class="flex items-center gap-2 text-rose-800 font-black text-sm uppercase"><span class="animate-pulse">🚨</span> <span id="tituloProblemas">Urgente: o Financeiro não conseguiu pagar</span></div>
+        <div id="listaProblemas" class="space-y-2"></div>
+      </div>
+
+      <!-- INDICADORES (sempre sobre o que está a pagar) -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div class="bg-white border border-slate-200 rounded-xl p-4"><div class="text-[10px] font-bold text-slate-500 uppercase">Total a pagar</div><div id="kpiTotal" class="text-2xl font-black text-slate-900 font-mono">R$ 0,00</div><div id="kpiQtd" class="text-[11px] text-slate-500"></div></div>
         <div class="bg-rose-50 border border-rose-200 rounded-xl p-4"><div class="text-[10px] font-bold text-rose-700 uppercase">Vencidos</div><div id="kpiVencido" class="text-2xl font-black text-rose-700 font-mono">R$ 0,00</div><div id="kpiVencidoQtd" class="text-[11px] text-rose-700"></div></div>
         <div class="bg-amber-50 border border-amber-200 rounded-xl p-4"><div class="text-[10px] font-bold text-amber-700 uppercase">Vencem em até 3 dias</div><div id="kpiProximo" class="text-2xl font-black text-amber-700 font-mono">R$ 0,00</div><div id="kpiProximoQtd" class="text-[11px] text-amber-700"></div></div>
-        <div class="bg-white border border-slate-200 rounded-xl p-4"><div class="text-[10px] font-bold text-slate-500 uppercase">Com problema (no RH)</div><div id="kpiProblema" class="text-2xl font-black text-slate-500 font-mono">0</div><div class="text-[11px] text-slate-500">aguardando o RH corrigir</div></div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4"><div class="text-[10px] font-bold text-slate-500 uppercase">Com problema</div><div id="kpiProblema" class="text-2xl font-black text-slate-500 font-mono">0</div><div class="text-[11px] text-slate-500">aguardando o RH corrigir</div></div>
       </div>
 
-      <div id="chipsTipo" class="flex flex-wrap gap-2"></div>
+      <!-- ABAS -->
+      <div class="flex flex-wrap justify-between items-end gap-3">
+        <div class="flex flex-wrap gap-4 border-b border-slate-300">
+          <button data-aba="PENDENTE" onclick="trocarAba('PENDENTE')" class="aba pb-2 text-xs font-bold cursor-pointer">A PAGAR <span id="qPend" class="ml-1 bg-amber-100 text-amber-800 px-2 rounded-full">0</span></button>
+          <button data-aba="PAGO" onclick="trocarAba('PAGO')" class="aba pb-2 text-xs font-bold cursor-pointer">PAGOS (HISTÓRICO)</button>
+          <button data-aba="CANCELADO" onclick="trocarAba('CANCELADO')" class="aba pb-2 text-xs font-bold cursor-pointer">CANCELADOS</button>
+        </div>
+        <a id="linkLancamentos" href="lancamentos.html" class="hidden text-[11px] text-slate-500 hover:text-slate-800 underline">Para incluir um pagamento (13º, férias, adiantamento, VT, rescisão...) faça o lançamento do evento na tela de lançamentos →</a>
+      </div>
+
+      <!-- FILTROS -->
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-3 items-end text-xs">
+        <div id="chipsTipo" class="flex flex-wrap gap-2 w-full"></div>
+        <div class="flex-1 min-w-[200px]"><label class="block text-[10px] font-bold text-slate-500 uppercase">Funcionário</label>
+          <input type="text" id="fNome" oninput="clearTimeout(window._tN); window._tN = setTimeout(renderTabela, 200)" placeholder="🔍 Parte do nome..." autocomplete="off" class="w-full border border-slate-300 rounded p-1.5 uppercase"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Pagar de</label><input type="date" id="fDe" onchange="carregar()" class="border border-slate-300 rounded p-1.5 font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">até</label><input type="date" id="fAte" onchange="carregar()" class="border border-slate-300 rounded p-1.5 font-mono"></div>
+        <span id="resumo" class="text-[11px] text-slate-500"></span>
+      </div>
 
       <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
-        <div class="flex flex-wrap justify-between items-center gap-2 p-3 border-b border-slate-100 bg-slate-50">
+        <div id="barraSelecao" class="hidden flex flex-wrap justify-between items-center gap-2 p-3 border-b border-slate-100 bg-slate-50">
           <div class="text-xs"><b id="qtdSel">0</b> selecionado(s) · <b id="totalSel" class="font-mono">R$ 0,00</b></div>
-          <div class="flex gap-2">
-            <button onclick="abrirConfirmacao()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer">✅ CONFIRMAR PAGAMENTO DOS SELECIONADOS</button>
-          </div>
+          <button onclick="abrirConfirmacao()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer">✅ CONFIRMAR PAGAMENTO DOS SELECIONADOS</button>
         </div>
         <table class="w-full text-left text-xs">
-          <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase">
-            <tr>
-              <th class="p-3 w-8"><input type="checkbox" id="chkTodos" onchange="marcarTodos(this.checked)"></th>
-              <th class="p-3">Pagar em</th><th class="p-3">Tipo / origem</th><th class="p-3">Funcionário</th>
-              <th class="p-3">Empresa (registro)</th><th class="p-3">Dados bancários</th><th class="p-3 text-right">Valor</th><th class="p-3"></th>
-            </tr>
-          </thead>
+          <thead id="cabecalho" class="bg-slate-50 text-slate-500 text-[10px] uppercase"></thead>
           <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
-      <p class="text-[10px] text-slate-400">Ordenado pela data prevista de pagamento. Os comprovantes são anexados na confirmação (um geral para o lote e/ou um por funcionário).</p>
+      <p id="rodape" class="text-[10px] text-slate-400"></p>
     </div>
   </div>
 
-  <!-- CONFIRMAR PAGAMENTO -->
+  <!-- CONFIRMAR PAGAMENTO (Financeiro / Gestor) -->
   <div id="modalPagar" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl w-full max-w-lg p-5 space-y-3 shadow-2xl max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-2">
@@ -84,7 +101,7 @@
     </div>
   </div>
 
-  <!-- INFORMAR PROBLEMA -->
+  <!-- INFORMAR PROBLEMA (Financeiro / Gestor) -->
   <div id="modalProblema" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-2">
@@ -103,11 +120,36 @@
     </div>
   </div>
 
+  <!-- RESOLVER / CORRIGIR / DESFAZER (RH / Gestor) -->
+  <div id="modalResolver" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+        <h3 id="rsTitulo" class="font-bold text-sm">RESOLVER</h3>
+        <button onclick="fechar('modalResolver')" class="text-slate-400 font-bold cursor-pointer">✕</button>
+      </div>
+      <p id="rsInfo" class="text-xs text-slate-600"></p>
+      <div id="rsCampos" class="grid grid-cols-2 gap-2">
+        <div id="rsBoxValor"><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor (corrigir)</label><input type="number" step="0.01" id="rsValor" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Nova data de pagamento</label><input type="date" id="rsVenc" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+      </div>
+      <p id="rsDica" class="hidden text-[11px] bg-sky-50 border border-sky-200 text-sky-800 rounded p-2">Este pagamento veio da <b>tela de lançamentos</b>. Valor errado ou cancelamento: corrija ou exclua o lançamento lá (a fila se atualiza sozinha). Aqui só é possível reenviar ao Financeiro, com nova data se precisar.</p>
+      <textarea id="rsObs" rows="2" placeholder="O que foi feito / motivo (obrigatório)" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea>
+      <div id="rsBotoes" class="flex gap-2"></div>
+    </div>
+  </div>
+
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    // ---------------------------------------------------------------------
+    // TELA ÚNICA de pagamentos fora da folha. O que cada perfil pode fazer:
+    //   FINANCEIRO: vê a pagar, confirma (com comprovante) e informa problema
+    //   RH:         acompanha tudo, resolve problemas e corrige data/valor
+    //   GESTOR:     tudo acima + desfazer pagamento confirmado por engano
+    // As regras também estão no banco (funções fn_pagamento_*).
+    // ---------------------------------------------------------------------
     const TIPOS = {
       FREELANCE: { txt: 'Freelance', icone: '🧑‍🤝‍🧑', cls: 'bg-indigo-100 text-indigo-800' },
       HORA_EXTRA: { txt: 'Hora extra', icone: '⏰', cls: 'bg-orange-100 text-orange-800' },
@@ -119,13 +161,17 @@
       REEMBOLSO: { txt: 'Reembolso', icone: '↩', cls: 'bg-lime-100 text-lime-800' },
       OUTROS: { txt: 'Outros', icone: '•', cls: 'bg-slate-200 text-slate-700' }
     };
-    let perfil = null, itens = [], funcs = {}, empresas = [], filtroTipo = '', selecionados = new Set(), itemProblema = null;
+    let perfil = null, aba = 'PENDENTE', itens = [], funcs = {}, empresas = [], filtroTipo = '', selecionados = new Set(), itemProblema = null, atual = null;
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
     const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
     const somaDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     const fechar = id => document.getElementById(id).classList.add('hidden');
+    const nome = id => (funcs[id] || {}).nome_registro || '—';
+    const podePagar = () => ['FINANCEIRO', 'GESTOR'].includes(perfil);
+    const podeResolver = () => ['RH', 'GESTOR'].includes(perfil);
 
     async function sairSistema() {
       try { await _supabase.auth.signOut(); } catch (e) {}
@@ -144,6 +190,11 @@
       if (f.banco || f.conta) partes.push(`${esc(f.banco || '')} ag ${esc(f.agencia || '-')} cc ${esc(f.conta || '-')}${f.tipo_conta ? ' (' + esc(f.tipo_conta) + ')' : ''}`);
       return partes.length ? partes.join('<br>') : '<span class="text-amber-700 font-bold">⚠ sem dados no cadastro</span>';
     }
+    function origemHtml(i) {
+      return i.origem === 'LANCAMENTO'
+        ? `📋 Lançamento RH ${esc(i.competencia || '')} · ${esc(i.rubrica || '')}${i.descricao ? ' · ' + esc(i.descricao) : ''}`
+        : `🧑‍🤝‍🧑 ${esc(i.descricao || '')}`;
+    }
 
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
@@ -152,14 +203,16 @@
       perfil = u ? u.perfil : null;
       document.getElementById('lblUsuario').innerText = (user.email || '').toLowerCase();
       document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['FINANCEIRO', 'GESTOR'].includes(perfil)) {
+      if (!['FINANCEIRO', 'GESTOR', 'RH'].includes(perfil)) {
         const av = document.getElementById('avisoSemAcesso');
-        av.innerText = error ? 'Erro ao ler o perfil: ' + error.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela. RH e Gestor acompanham em "Pagamentos fora da folha".';
+        av.innerText = error ? 'Erro ao ler o perfil: ' + error.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
         av.classList.remove('hidden');
-        document.getElementById(['RH'].includes(perfil) ? 'btnPainel' : 'btnSair').classList.remove('hidden');
+        document.getElementById('btnSair').classList.remove('hidden');
         return;
       }
-      document.getElementById(perfil === 'GESTOR' ? 'btnPainel' : 'btnSair').classList.remove('hidden');
+      // Gestor e RH voltam ao painel; Financeiro só sai
+      document.getElementById(perfil === 'FINANCEIRO' ? 'btnSair' : 'btnPainel').classList.remove('hidden');
+      document.getElementById('linkLancamentos').classList.toggle('hidden', !podeResolver());
       document.getElementById('conteudo').classList.remove('hidden');
       const [rf, re] = await Promise.all([
         _supabase.from('funcionarios').select('*'),
@@ -167,41 +220,94 @@
       ]);
       (rf.data || []).forEach(f => funcs[f.id] = f);
       empresas = re.data || [];
+      trocarAba('PENDENTE');
+    }
+
+    function trocarAba(a) {
+      aba = a; filtroTipo = ''; selecionados.clear();
+      document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-400'}`);
       carregar();
     }
 
     async function carregar() {
-      const [rp, rprob] = await Promise.all([
-        _supabase.from('pagamentos_extras').select('*').eq('status', 'PENDENTE').order('vencimento').order('criado_em'),
-        _supabase.from('pagamentos_extras').select('id', { count: 'exact', head: true }).eq('status', 'PROBLEMA')
+      const de = document.getElementById('fDe').value, ate = document.getElementById('fAte').value;
+      let q = _supabase.from('pagamentos_extras').select('*').eq('status', aba);
+      if (de) q = q.gte('vencimento', de);
+      if (ate) q = q.lte('vencimento', ate);
+      q = aba === 'PENDENTE' ? q.order('vencimento').order('criado_em') : q.order('vencimento', { ascending: false });
+      const [rLista, rPend, rProb] = await Promise.all([
+        q,
+        _supabase.from('pagamentos_extras').select('valor, vencimento').eq('status', 'PENDENTE'),
+        _supabase.from('pagamentos_extras').select('*').eq('status', 'PROBLEMA').order('problema_em')
       ]);
-      itens = rp.data || [];
-      document.getElementById('kpiProblema').innerText = rprob.count || 0;
-      selecionados = new Set([...selecionados].filter(id => itens.some(i => i.id === id)));
+      itens = rLista.data || [];
+      if (rLista.error) { document.getElementById('tabela').innerHTML = `<tr><td class="p-4 text-rose-600">${esc(rLista.error.message)}</td></tr>`; return; }
+
+      // indicadores: sempre sobre o que está a pagar (independente da aba)
+      const pend = rPend.data || [];
       const h = hoje(), lim = somaDias(h, 3);
-      const venc = itens.filter(i => i.vencimento < h), prox = itens.filter(i => i.vencimento >= h && i.vencimento <= lim);
       const soma = l => l.reduce((a, i) => a + parseFloat(i.valor), 0);
-      document.getElementById('kpiTotal').innerText = fmtR(soma(itens));
-      document.getElementById('kpiQtd').innerText = `${itens.length} pagamento(s)`;
+      const venc = pend.filter(i => i.vencimento < h), prox = pend.filter(i => i.vencimento >= h && i.vencimento <= lim);
+      document.getElementById('qPend').innerText = pend.length;
+      document.getElementById('kpiTotal').innerText = fmtR(soma(pend));
+      document.getElementById('kpiQtd').innerText = `${pend.length} pagamento(s)`;
       document.getElementById('kpiVencido').innerText = fmtR(soma(venc));
       document.getElementById('kpiVencidoQtd').innerText = `${venc.length} pagamento(s)`;
       document.getElementById('kpiProximo').innerText = fmtR(soma(prox));
       document.getElementById('kpiProximoQtd').innerText = `${prox.length} pagamento(s)`;
 
+      // problemas: RH/Gestor resolvem; Financeiro só acompanha
+      const probs = rProb.data || [];
+      document.getElementById('kpiProblema').innerText = probs.length;
+      document.getElementById('boxProblemas').classList.toggle('hidden', probs.length === 0);
+      document.getElementById('tituloProblemas').innerText = podeResolver() ? 'Urgente: o Financeiro não conseguiu pagar' : 'Pagamentos devolvidos ao RH (aguardando correção)';
+      document.getElementById('listaProblemas').innerHTML = probs.map(p => `
+        <div class="bg-white border border-rose-200 rounded-lg p-3 flex flex-col md:flex-row justify-between gap-2 text-xs">
+          <div><b>${esc(nome(p.funcionario_id))}</b> · ${(TIPOS[p.tipo] || {}).txt || p.tipo} · <b class="font-mono">${fmtR(p.valor)}</b> · pagar em ${dbr(p.vencimento)}
+            <div class="text-[10px] text-slate-500">${origemHtml(p)}</div>
+            <div class="text-rose-700 font-bold mt-1">⚠ ${esc(p.problema_desc)}</div>
+            <div class="text-[10px] text-slate-500">${esc(p.problema_por || '')} em ${p.problema_em ? new Date(p.problema_em).toLocaleString('pt-BR') : ''}</div></div>
+          ${podeResolver() ? `<button onclick="abrirResolver('${p.id}')" class="self-start px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer whitespace-nowrap">RESOLVER</button>` : ''}
+        </div>`).join('');
+
+      // chips de tipo da aba atual
       const cont = {}; itens.forEach(i => cont[i.tipo] = (cont[i.tipo] || 0) + 1);
       document.getElementById('chipsTipo').innerHTML = [['', 'Todos', itens.length], ...Object.keys(cont).map(t => [t, (TIPOS[t] || {}).txt || t, cont[t]])]
-        .map(([k, t, n]) => `<button onclick="filtrarTipo('${k}')" class="px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer border ${filtroTipo === k ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-300'}">${esc(t)} <span class="opacity-70">${n}</span></button>`).join('');
+        .map(([k, t, n]) => `<button onclick="filtrarTipo('${k}')" class="px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer border ${filtroTipo === k ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-300'}">${k ? (TIPOS[k] || {}).icone || '' : ''} ${esc(t)} <span class="opacity-70">${n}</span></button>`).join('');
+      selecionados = new Set([...selecionados].filter(id => itens.some(i => i.id === id)));
       renderTabela();
     }
 
     function filtrarTipo(t) { filtroTipo = t; carregar(); }
 
+    function listaFiltrada() {
+      const termo = semAcento(document.getElementById('fNome').value.trim());
+      return itens.filter(i => (!filtroTipo || i.tipo === filtroTipo)
+        && (!termo || termo.split(/\s+/).every(p => semAcento(nome(i.funcionario_id)).includes(p))));
+    }
+
     function renderTabela() {
-      const lista = itens.filter(i => !filtroTipo || i.tipo === filtroTipo);
+      const lista = listaFiltrada();
       const h = hoje(), lim = somaDias(h, 3);
+      const aPagar = aba === 'PENDENTE';
+      const comSelecao = aPagar && podePagar();
+      document.getElementById('barraSelecao').classList.toggle('hidden', !comSelecao);
+      document.getElementById('resumo').innerText = `${lista.length} registro(s) · ${fmtR(lista.reduce((a, i) => a + parseFloat(i.valor), 0))}`;
+      document.getElementById('cabecalho').innerHTML = `<tr>
+        ${comSelecao ? '<th class="p-3 w-8"><input type="checkbox" id="chkTodos" onchange="marcarTodos(this.checked)"></th>' : ''}
+        <th class="p-3">${aPagar ? 'Pagar em' : aba === 'PAGO' ? 'Pago em' : 'Previsto'}</th><th class="p-3">Tipo / origem</th><th class="p-3">Funcionário</th>
+        ${aPagar ? '<th class="p-3">Empresa (registro)</th><th class="p-3">Dados bancários</th>' : '<th class="p-3">Situação</th>'}
+        <th class="p-3 text-right">Valor</th><th class="p-3"></th></tr>`;
+      document.getElementById('rodape').innerText = aPagar
+        ? 'Ordenado pela data prevista de pagamento. Os comprovantes são anexados na confirmação (um geral para o lote e/ou um por funcionário).'
+        : 'Histórico completo: quem lançou, quem pagou, banco, comprovante e correções.';
       const tb = document.getElementById('tabela');
-      if (lista.length === 0) { tb.innerHTML = '<tr><td colspan="8" class="p-10 text-center text-slate-400">🎉 Nenhum pagamento pendente.</td></tr>'; atualizarSel(); return; }
-      // Agrupa por data prevista de pagamento (sequência lógica do dia a dia do Financeiro)
+      const cols = comSelecao ? 8 : 7;
+      if (lista.length === 0) { tb.innerHTML = `<tr><td colspan="${cols}" class="p-10 text-center text-slate-400">${aPagar ? '🎉 Nenhum pagamento pendente.' : 'Nada por aqui.'}</td></tr>`; atualizarSel(); return; }
+
+      if (!aPagar) { tb.innerHTML = lista.map(i => linhaHistorico(i)).join(''); atualizarSel(); return; }
+
+      // A PAGAR: agrupado por data prevista de pagamento
       const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
       let dataAtual = null;
       tb.innerHTML = lista.map(i => {
@@ -209,48 +315,76 @@
         if (i.vencimento !== dataAtual) {
           dataAtual = i.vencimento;
           const doDia = lista.filter(x => x.vencimento === dataAtual);
-          const idsDia = doDia.map(x => x.id);
-          const todosMarcados = idsDia.every(id => selecionados.has(id));
-          const situacao = dataAtual < h ? ['bg-rose-600 text-white', '⚠ VENCIDO'] : dataAtual === h ? ['bg-emerald-600 text-white', 'HOJE'] : dataAtual <= lim ? ['bg-amber-400 text-amber-950', 'PRÓXIMOS DIAS'] : ['bg-slate-700 text-white', ''];
-          cab = `<tr class="${situacao[0]}"><td class="px-3 py-1.5"><input type="checkbox" ${todosMarcados ? 'checked' : ''} onchange="marcarDia('${dataAtual}', this.checked)" title="Selecionar todos do dia"></td>
-            <td colspan="7" class="px-3 py-1.5 text-[11px] font-black uppercase tracking-wide flex-wrap">📅 ${dbr(dataAtual)} · ${DIAS[new Date(dataAtual + 'T12:00:00').getDay()]} ${situacao[1] ? '· ' + situacao[1] : ''}
+          const todosMarcados = doDia.every(x => selecionados.has(x.id));
+          const sit = dataAtual < h ? ['bg-rose-600 text-white', '⚠ VENCIDO'] : dataAtual === h ? ['bg-emerald-600 text-white', 'HOJE'] : dataAtual <= lim ? ['bg-amber-400 text-amber-950', 'PRÓXIMOS DIAS'] : ['bg-slate-700 text-white', ''];
+          cab = `<tr class="${sit[0]}">${comSelecao ? `<td class="px-3 py-1.5"><input type="checkbox" ${todosMarcados ? 'checked' : ''} onchange="marcarDia('${dataAtual}', this.checked)" title="Selecionar todos do dia"></td>` : ''}
+            <td colspan="${comSelecao ? 7 : 7}" class="px-3 py-1.5 text-[11px] font-black uppercase tracking-wide">📅 ${dbr(dataAtual)} · ${DIAS[new Date(dataAtual + 'T12:00:00').getDay()]} ${sit[1] ? '· ' + sit[1] : ''}
               <span class="float-right font-mono">${doDia.length} pagamento(s) · ${fmtR(doDia.reduce((a, x) => a + parseFloat(x.valor), 0))}</span></td></tr>`;
         }
-        return cab + linhaItem(i, h, lim);
+        return cab + linhaAPagar(i, h, lim, comSelecao);
       }).join('');
       atualizarSel();
     }
 
-    function marcarDia(data, on) { itens.filter(i => i.vencimento === data && (!filtroTipo || i.tipo === filtroTipo)).forEach(i => on ? selecionados.add(i.id) : selecionados.delete(i.id)); renderTabela(); }
-
-    function linhaItem(i, h, lim) {
-      {
-        const f = funcs[i.funcionario_id] || {};
-        const tp = TIPOS[i.tipo] || { txt: i.tipo, cls: 'bg-slate-100' };
-        const corV = i.vencimento < h ? 'text-rose-700 font-black' : i.vencimento <= lim ? 'text-amber-700 font-bold' : 'text-slate-700';
-        return `<tr class="hover:bg-slate-50 ${selecionados.has(i.id) ? 'bg-emerald-50' : ''}">
-          <td class="p-3"><input type="checkbox" ${selecionados.has(i.id) ? 'checked' : ''} onchange="marcar('${i.id}', this.checked)"></td>
-          <td class="p-3 font-mono text-sm ${corV}">${dbr(i.vencimento)}${i.vencimento < h ? '<div class="text-[9px]">VENCIDO</div>' : ''}<div class="text-[9px] text-slate-400 font-normal">solicitado ${dbr(i.criado_em)}</div></td>
-          <td class="p-3"><span class="${tp.cls} px-2 py-1 rounded text-[11px] font-black uppercase whitespace-nowrap">${tp.icone || ''} ${tp.txt}</span>
-            <div class="text-[9px] text-slate-500 mt-1">${i.origem === 'LANCAMENTO' ? 'via lançamento do RH' : 'via solicitação aprovada'}</div></td>
-          <td class="p-3"><div class="font-bold">${esc(f.nome_registro || '—')}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.matricula ? ' · mat. ' + esc(f.matricula) : ''}</div>
-            <div class="text-[10px] text-slate-400">${i.origem === 'LANCAMENTO' ? '📋 Lançamento RH ' + esc(i.competencia || '') + ' · ' + esc(i.rubrica || '') + (i.descricao ? ' · ' + esc(i.descricao) : '') : '🧑‍🤝‍🧑 ' + esc(i.descricao || '')}</div>${i.resolucao_obs ? `<div class="text-[10px] text-sky-700">↩ RH: ${esc(i.resolucao_obs)}</div>` : ''}</td>
-          <td class="p-3 text-[11px]">${esc(empresaDe(f))}</td>
-          <td class="p-3 text-[11px]">${dadosBancarios(f)}</td>
-          <td class="p-3 text-right font-mono font-bold">${fmtR(i.valor)}</td>
-          <td class="p-3 text-right"><button onclick="abrirProblema('${i.id}')" class="text-[10px] px-2 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded font-bold cursor-pointer whitespace-nowrap">⚠ Problema</button></td>
-        </tr>`;
-      }
+    function celulaTipo(i) {
+      const tp = TIPOS[i.tipo] || { txt: i.tipo, cls: 'bg-slate-100' };
+      return `<td class="p-3"><span class="${tp.cls} px-2 py-1 rounded text-[11px] font-black uppercase whitespace-nowrap">${tp.icone || ''} ${tp.txt}</span>
+        <div class="text-[9px] text-slate-500 mt-1">${i.origem === 'LANCAMENTO' ? 'via lançamento do RH' : 'via solicitação aprovada'}</div></td>`;
+    }
+    function celulaFuncionario(i) {
+      const f = funcs[i.funcionario_id] || {};
+      return `<td class="p-3"><div class="font-bold">${esc(f.nome_registro || '—')}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.matricula ? ' · mat. ' + esc(f.matricula) : ''}</div>
+        <div class="text-[10px] text-slate-400">${origemHtml(i)}</div>
+        <div class="text-[10px] text-slate-400">lançado por ${esc(i.criado_por || '-')} em ${new Date(i.criado_em).toLocaleString('pt-BR')}</div>
+        ${i.resolucao_obs ? `<div class="text-[10px] text-sky-700">↩ RH: ${esc(i.resolucao_obs)}</div>` : ''}</td>`;
     }
 
+    function linhaAPagar(i, h, lim, comSelecao) {
+      const f = funcs[i.funcionario_id] || {};
+      const corV = i.vencimento < h ? 'text-rose-700 font-black' : i.vencimento <= lim ? 'text-amber-700 font-bold' : 'text-slate-700';
+      const acoes = [
+        podePagar() ? `<button onclick="abrirProblema('${i.id}')" class="text-[10px] px-2 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded font-bold cursor-pointer whitespace-nowrap">⚠ Problema</button>` : '',
+        podeResolver() ? `<button onclick="abrirResolver('${i.id}')" class="text-[10px] text-slate-500 hover:text-slate-800 underline cursor-pointer whitespace-nowrap">${i.origem === 'LANCAMENTO' ? 'mudar data' : 'corrigir / cancelar'}</button>` : ''
+      ].filter(Boolean).join('<br>');
+      return `<tr class="hover:bg-slate-50 ${selecionados.has(i.id) ? 'bg-emerald-50' : ''}">
+        ${comSelecao ? `<td class="p-3"><input type="checkbox" ${selecionados.has(i.id) ? 'checked' : ''} onchange="marcar('${i.id}', this.checked)"></td>` : ''}
+        <td class="p-3 font-mono text-sm ${corV}">${dbr(i.vencimento)}${i.vencimento < h ? '<div class="text-[9px]">VENCIDO</div>' : ''}<div class="text-[9px] text-slate-400 font-normal">solicitado ${dbr(i.criado_em)}</div></td>
+        ${celulaTipo(i)}${celulaFuncionario(i)}
+        <td class="p-3 text-[11px]">${esc(empresaDe(f))}</td>
+        <td class="p-3 text-[11px]">${dadosBancarios(f)}</td>
+        <td class="p-3 text-right font-mono font-bold">${fmtR(i.valor)}</td>
+        <td class="p-3 text-right space-y-1">${acoes}</td>
+      </tr>`;
+    }
+
+    function linhaHistorico(i) {
+      let sit = '';
+      if (i.status === 'PAGO') sit = `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold text-[10px]">✅ PAGO ${dbr(i.pago_em)}</span>
+        <div class="text-[10px] text-slate-500 mt-1">${esc(i.banco_pagador || '')} · ${esc(i.pago_por || '')}${i.pagamento_obs ? ' · ' + esc(i.pagamento_obs) : ''}</div>
+        ${i.comprovante_path ? `<button onclick="abrirComprovante('${esc(i.comprovante_path)}')" class="mt-1 text-[10px] font-bold text-indigo-700 underline cursor-pointer">📎 ver comprovante</button>` : '<div class="text-[10px] text-slate-400 mt-1">sem comprovante</div>'}`;
+      if (i.status === 'CANCELADO') sit = `<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold text-[10px]">CANCELADO</span><div class="text-[10px] text-slate-500 mt-1">${esc(i.resolucao_obs || '')}</div>`;
+      if (i.problema_desc) sit += `<div class="text-[10px] text-slate-400 mt-1">Houve problema: ${esc(i.problema_desc)}${i.resolucao_obs && i.status !== 'CANCELADO' ? ' → ' + esc(i.resolucao_obs) : ''}</div>`;
+      const acao = i.status === 'PAGO' && perfil === 'GESTOR' ? `<button onclick="abrirDesfazer('${i.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline cursor-pointer">desfazer</button>` : '';
+      return `<tr class="hover:bg-slate-50">
+        <td class="p-3 font-mono">${dbr(i.status === 'PAGO' ? i.pago_em : i.vencimento)}${i.status === 'PAGO' ? `<div class="text-[9px] text-slate-400">previsto ${dbr(i.vencimento)}</div>` : ''}</td>
+        ${celulaTipo(i)}${celulaFuncionario(i)}
+        <td class="p-3">${sit}</td>
+        <td class="p-3 text-right font-mono font-bold">${fmtR(i.valor)}</td>
+        <td class="p-3 text-right">${acao}</td>
+      </tr>`;
+    }
+
+    // ---------- seleção (Financeiro / Gestor) ----------
     function marcar(id, on) { on ? selecionados.add(id) : selecionados.delete(id); renderTabela(); }
-    function marcarTodos(on) { itens.filter(i => !filtroTipo || i.tipo === filtroTipo).forEach(i => on ? selecionados.add(i.id) : selecionados.delete(i.id)); renderTabela(); }
+    function marcarTodos(on) { listaFiltrada().forEach(i => on ? selecionados.add(i.id) : selecionados.delete(i.id)); renderTabela(); }
+    function marcarDia(data, on) { listaFiltrada().filter(i => i.vencimento === data).forEach(i => on ? selecionados.add(i.id) : selecionados.delete(i.id)); renderTabela(); }
     function atualizarSel() {
       const sel = itens.filter(i => selecionados.has(i.id));
       document.getElementById('qtdSel').innerText = sel.length;
       document.getElementById('totalSel').innerText = fmtR(sel.reduce((a, i) => a + parseFloat(i.valor), 0));
     }
 
+    // ---------- confirmar pagamento + comprovantes ----------
     function abrirConfirmacao() {
       const sel = itens.filter(i => selecionados.has(i.id));
       if (sel.length === 0) return alert('Selecione pelo menos um pagamento.');
@@ -260,14 +394,14 @@
       document.getElementById('pgArqGeral').value = '';
       document.getElementById('pgArqItens').innerHTML = sel.map(i => `
         <div class="flex items-center justify-between gap-2 py-1">
-          <span class="truncate"><b>${esc((funcs[i.funcionario_id] || {}).nome_registro || '—')}</b> · ${fmtR(i.valor)}</span>
+          <span class="truncate"><b>${esc(nome(i.funcionario_id))}</b> · ${fmtR(i.valor)}</span>
           <input type="file" data-id="${i.id}" accept=".pdf,image/*" class="pgArqItem text-[10px] w-44 shrink-0">
         </div>`).join('');
       document.getElementById('modalPagar').classList.remove('hidden');
     }
-    // Envia um arquivo ao Storage (bucket privado "comprovantes") e devolve o caminho
+
     async function enviarArquivo(arquivo, pasta) {
-      const nomeSeguro = arquivo.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
+      const nomeSeguro = arquivo.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
       const caminho = `${pasta}/${Date.now()}_${nomeSeguro}`;
       const { error } = await _supabase.storage.from('comprovantes').upload(caminho, arquivo, { upsert: false });
       if (error) throw new Error(`${arquivo.name}: ${error.message}`);
@@ -280,7 +414,6 @@
       if (!document.getElementById('pgData').value) return alert('Informe a data do pagamento.');
       if (!document.getElementById('pgBanco').value.trim()) return alert('Informe o banco pagador.');
       btn.disabled = true; btn.innerText = 'ENVIANDO...';
-      // 1) comprovantes primeiro (se falhar, nada é confirmado)
       const anexos = {};
       try {
         const geral = document.getElementById('pgArqGeral').files[0];
@@ -292,13 +425,11 @@
         btn.disabled = false; btn.innerText = 'CONFIRMAR';
         return alert('Falha ao enviar comprovante. Nenhum pagamento foi confirmado.\n' + e.message);
       }
-      // 2) confirma o pagamento
       const { data, error } = await _supabase.rpc('fn_pagamento_confirmar', {
         p_ids: ids, p_data: document.getElementById('pgData').value || null,
         p_banco: document.getElementById('pgBanco').value.trim() || null, p_obs: document.getElementById('pgObs').value.trim() || null
       });
       if (error) { btn.disabled = false; btn.innerText = 'CONFIRMAR'; return alert(error.message); }
-      // 3) vincula os comprovantes
       const falhas = [];
       for (const [id, caminho] of Object.entries(anexos)) {
         const { error: e2 } = await _supabase.rpc('fn_pagamento_anexar', { p_id: id, p_path: caminho });
@@ -310,10 +441,16 @@
       selecionados.clear(); fechar('modalPagar'); carregar();
     }
 
+    async function abrirComprovante(caminho) {
+      const { data, error } = await _supabase.storage.from('comprovantes').createSignedUrl(caminho, 120);
+      if (error) return alert('Não foi possível abrir o comprovante: ' + error.message);
+      window.open(data.signedUrl, '_blank');
+    }
+
+    // ---------- problema (Financeiro / Gestor) ----------
     function abrirProblema(id) {
       itemProblema = itens.find(i => i.id === id);
-      const f = funcs[itemProblema.funcionario_id] || {};
-      document.getElementById('prResumo').innerText = `${f.nome_registro || ''} · ${(TIPOS[itemProblema.tipo] || {}).txt || itemProblema.tipo} · ${fmtR(itemProblema.valor)} · vence ${dbr(itemProblema.vencimento)}`;
+      document.getElementById('prResumo').innerText = `${nome(itemProblema.funcionario_id)} · ${(TIPOS[itemProblema.tipo] || {}).txt || itemProblema.tipo} · ${fmtR(itemProblema.valor)} · pagar em ${dbr(itemProblema.vencimento)}`;
       document.getElementById('prDesc').value = '';
       document.getElementById('modalProblema').classList.remove('hidden');
     }
@@ -322,6 +459,50 @@
       const { error } = await _supabase.rpc('fn_pagamento_problema', { p_id: itemProblema.id, p_desc: document.getElementById('prDesc').value.trim() || null });
       if (error) return alert(error.message);
       selecionados.delete(itemProblema.id); fechar('modalProblema'); carregar();
+    }
+
+    // ---------- resolver / corrigir / desfazer (RH / Gestor) ----------
+    async function abrirResolver(id) {
+      const { data: p } = await _supabase.from('pagamentos_extras').select('*').eq('id', id).single();
+      if (!p) return;
+      atual = p;
+      const doLanc = p.origem === 'LANCAMENTO';
+      document.getElementById('rsTitulo').innerText = p.status === 'PROBLEMA' ? 'RESOLVER PROBLEMA' : doLanc ? 'MUDAR DATA DE PAGAMENTO' : 'CORRIGIR / CANCELAR';
+      document.getElementById('rsInfo').innerHTML = `<b>${esc(nome(p.funcionario_id))}</b> · ${(TIPOS[p.tipo] || {}).txt || p.tipo} · ${fmtR(p.valor)}${p.problema_desc && p.status === 'PROBLEMA' ? `<div class="text-rose-700 mt-1">Financeiro: ${esc(p.problema_desc)}</div>` : ''}`;
+      document.getElementById('rsCampos').classList.remove('hidden');
+      document.getElementById('rsBoxValor').classList.toggle('hidden', doLanc);
+      document.getElementById('rsDica').classList.toggle('hidden', !doLanc);
+      document.getElementById('rsValor').value = p.valor;
+      document.getElementById('rsVenc').value = p.vencimento;
+      document.getElementById('rsObs').value = '';
+      document.getElementById('rsBotoes').innerHTML = `
+        <button onclick="resolver('REENVIAR')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">${p.status === 'PROBLEMA' ? 'CORRIGIDO · REENVIAR AO FINANCEIRO' : 'SALVAR CORREÇÃO'}</button>
+        ${doLanc ? '' : `<button onclick="resolver('CANCELAR')" class="bg-rose-100 text-rose-700 font-bold px-3 py-2.5 rounded-lg text-xs cursor-pointer">CANCELAR PAGAMENTO</button>`}`;
+      document.getElementById('modalResolver').classList.remove('hidden');
+    }
+    async function resolver(acao) {
+      const { error } = await _supabase.rpc('fn_pagamento_resolver', {
+        p_id: atual.id, p_acao: acao, p_obs: document.getElementById('rsObs').value.trim() || null,
+        p_valor: atual.origem === 'LANCAMENTO' ? null : (parseFloat(document.getElementById('rsValor').value) || null),
+        p_vencimento: document.getElementById('rsVenc').value || null
+      });
+      if (error) return alert(error.message);
+      fechar('modalResolver'); carregar();
+    }
+    function abrirDesfazer(id) {
+      atual = { id };
+      document.getElementById('rsTitulo').innerText = 'DESFAZER PAGAMENTO';
+      document.getElementById('rsInfo').innerText = 'O pagamento volta para o Financeiro como pendente (e o lançamento de origem volta a poder ser corrigido). O motivo fica registrado.';
+      document.getElementById('rsCampos').classList.add('hidden');
+      document.getElementById('rsDica').classList.add('hidden');
+      document.getElementById('rsObs').value = '';
+      document.getElementById('rsBotoes').innerHTML = `<button onclick="desfazer()" class="flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">DESFAZER</button>`;
+      document.getElementById('modalResolver').classList.remove('hidden');
+    }
+    async function desfazer() {
+      const { error } = await _supabase.rpc('fn_pagamento_desfazer', { p_id: atual.id, p_obs: document.getElementById('rsObs').value.trim() || null });
+      if (error) return alert(error.message);
+      fechar('modalResolver'); carregar();
     }
 
     inicializar();
