@@ -90,6 +90,7 @@
           <input id="pgBanco" list="listaBancos" placeholder="Ex.: Itaú" class="w-full border border-slate-300 rounded p-2 text-xs">
           <datalist id="listaBancos"><option>Itaú</option><option>Bradesco</option><option>Santander</option><option>Banco do Brasil</option><option>Caixa</option><option>Sicoob</option><option>Sicredi</option><option>Inter</option><option>Dinheiro (tesouraria)</option></datalist></div>
       </div>
+      <p id="pgAvisoEmp" class="text-[11px] text-amber-800"></p>
       <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Observação</label><textarea id="pgObs" rows="2" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea></div>
       <div class="border border-slate-200 rounded-lg p-2 space-y-2">
         <div class="text-[10px] font-bold text-slate-500 uppercase">📎 Comprovantes (opcional · PDF ou imagem)</div>
@@ -161,6 +162,7 @@
       REEMBOLSO: { txt: 'Reembolso', icone: '↩', cls: 'bg-lime-100 text-lime-800' },
       OUTROS: { txt: 'Outros', icone: '•', cls: 'bg-slate-200 text-slate-700' }
     };
+    let contasEmpresas = [];
     let perfil = null, aba = 'PENDENTE', itens = [], funcs = {}, empresas = [], filtroTipo = '', selecionados = new Set(), itemProblema = null, atual = null;
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
@@ -179,16 +181,21 @@
       window.location.href = 'login.html';
     }
 
-    function empresaDe(f) {
+    function empresaObj(f) {
+      if (f.empresa_id) { const e = empresas.find(x => x.id === f.empresa_id); if (e) return e; }
       const c = String(f.cnpj || '').replace(/\D/g, '');
-      const e = c && empresas.find(x => String(x.cnpj || '').replace(/\D/g, '') === c);
-      return e ? (e.nome_fantasia || e.razao_social) : (f.empresa_registro || '—');
+      return (c && empresas.find(x => String(x.cnpj || '').replace(/\D/g, '') === c)) || null;
+    }
+    function empresaDe(f) {
+      const e = empresaObj(f);
+      return e ? `${e.nome_fantasia || e.razao_social}<div class="text-[9px] text-slate-400 font-mono">${esc(e.cnpj || '')}</div>` : esc(f.empresa_registro || '—');
     }
     function dadosBancarios(f) {
       const partes = [];
       if (f.pix_chave) partes.push(`<b>PIX</b> ${esc(f.pix_tipo ? f.pix_tipo + ': ' : '')}${esc(f.pix_chave)}`);
       if (f.banco || f.conta) partes.push(`${esc(f.banco || '')} ag ${esc(f.agencia || '-')} cc ${esc(f.conta || '-')}${f.tipo_conta ? ' (' + esc(f.tipo_conta) + ')' : ''}`);
-      return partes.length ? partes.join('<br>') : '<span class="text-amber-700 font-bold">⚠ sem dados no cadastro</span>';
+      const cpf = f.cpf ? `<div class="text-[9px] text-slate-400 font-mono">CPF ${esc(f.cpf)}</div>` : '';
+      return (partes.length ? partes.join('<br>') : '<span class="text-amber-700 font-bold">⚠ sem dados no cadastro</span>') + cpf;
     }
     function origemHtml(i) {
       return i.origem === 'LANCAMENTO'
@@ -216,8 +223,9 @@
       document.getElementById('conteudo').classList.remove('hidden');
       const [rf, re] = await Promise.all([
         _supabase.from('funcionarios').select('*'),
-        _supabase.from('empresas').select('cnpj, razao_social, nome_fantasia')
-      ]);
+        _supabase.from('empresas').select('id, cnpj, razao_social, nome_fantasia'),
+        _supabase.from('empresas_contas').select('*').eq('ativo', true)
+      ]).then(r => { contasEmpresas = (r[2] && r[2].data) || []; return r; });
       (rf.data || []).forEach(f => funcs[f.id] = f);
       empresas = re.data || [];
       trocarAba('PENDENTE');
@@ -350,7 +358,7 @@
         ${comSelecao ? `<td class="p-3"><input type="checkbox" ${selecionados.has(i.id) ? 'checked' : ''} onchange="marcar('${i.id}', this.checked)"></td>` : ''}
         <td class="p-3 font-mono text-sm ${corV}">${dbr(i.vencimento)}${i.vencimento < h ? '<div class="text-[9px]">VENCIDO</div>' : ''}<div class="text-[9px] text-slate-400 font-normal">solicitado ${dbr(i.criado_em)}</div></td>
         ${celulaTipo(i)}${celulaFuncionario(i)}
-        <td class="p-3 text-[11px]">${esc(empresaDe(f))}</td>
+        <td class="p-3 text-[11px]">${empresaDe(f)}</td>
         <td class="p-3 text-[11px]">${dadosBancarios(f)}</td>
         <td class="p-3 text-right font-mono font-bold">${fmtR(i.valor)}</td>
         <td class="p-3 text-right space-y-1">${acoes}</td>
@@ -390,6 +398,17 @@
       if (sel.length === 0) return alert('Selecione pelo menos um pagamento.');
       document.getElementById('pgResumo').innerText = `${sel.length} pagamento(s) · total ${fmtR(sel.reduce((a, i) => a + parseFloat(i.valor), 0))}. Todos recebem a mesma data e o mesmo banco.`;
       document.getElementById('pgData').value = hoje();
+      // banco pagador: contas cadastradas das empresas dos funcionários selecionados
+      const idsEmp = [...new Set(sel.map(i => (empresaObj(funcs[i.funcionario_id] || {}) || {}).id).filter(Boolean))];
+      const contas = contasEmpresas.filter(c => idsEmp.includes(c.empresa_id));
+      const rotuloConta = c => `${(empresas.find(e => e.id === c.empresa_id) || {}).nome_fantasia || ''} · ${c.banco} ag ${c.agencia || '-'} cc ${c.conta || '-'}`;
+      document.getElementById('listaBancos').innerHTML = contas.map(c => `<option>${esc(rotuloConta(c))}</option>`).join('')
+        + '<option>Dinheiro (tesouraria)</option>';
+      const principal = idsEmp.length === 1 ? (contas.find(c => c.principal) || (contas.length === 1 ? contas[0] : null)) : null;
+      document.getElementById('pgBanco').value = principal ? rotuloConta(principal) : '';
+      document.getElementById('pgAvisoEmp').innerHTML = idsEmp.length > 1
+        ? `⚠ Os selecionados são de <b>${idsEmp.length} empresas</b> diferentes (${idsEmp.map(id => esc((empresas.find(e => e.id === id) || {}).nome_fantasia || '')).join(', ')}). O ideal é confirmar por empresa, com a conta de cada uma.`
+        : (idsEmp.length === 1 && contas.length === 0 ? 'Esta empresa ainda não tem conta cadastrada (Cadastro de Empresas).' : '');
       document.getElementById('pgObs').value = '';
       document.getElementById('pgArqGeral').value = '';
       document.getElementById('pgArqItens').innerHTML = sel.map(i => `

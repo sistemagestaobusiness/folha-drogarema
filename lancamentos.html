@@ -568,7 +568,7 @@
 
    async function carregarFuncionariosGeral() {
       // Adicionado o campo salario_base na consulta
-      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base').order('nome_registro');
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base, salario_adicional, adicional_caixa, cargo').order('nome_registro');
       if (!error) {
         listaGlobalFuncionarios = data || [];
       }
@@ -775,6 +775,20 @@
     // NOVA INTELIGÊNCIA: SINCRONIZAÇÃO DINÂMICA (CONTÁBIL 3004 OU NÃO CONTÁBIL 3007)
     // -------------------------------------------------------------------------
     
+    // Lança uma vez por mês o valor fixo do cadastro no evento indicado (se ainda não houver lançamento dele no mês)
+    async function sincronizarValorCadastro(funcionarioId, competencia, codigo, valor, motivo) {
+      if (!valor || valor <= 0) return;
+      const { data: existentes } = await _supabase.from('folha_itens').select('id')
+        .eq('funcionario_id', funcionarioId).eq('competencia', competencia).ilike('rubrica', `${codigo} %`);
+      if (existentes && existentes.length > 0) return;
+      const ev = listaGlobalEventos.find(e => String(e.codigo_evento) === codigo);
+      if (!ev) return;
+      await _supabase.from('folha_itens').insert([{
+        funcionario_id: funcionarioId, rubrica: `${codigo} - ${ev.descricao_do_evento}`, tipo: ev.tipo_evento === 'DESCONTO' ? 'DESCONTO' : 'PROVENTO',
+        valor, valor_bruto: valor, abatimento_sigiloso: 0, motivo_ajuste: motivo, parcela_atual: 1, total_parcelas: 1, fixo: false, competencia
+      }]);
+    }
+
     async function sincronizarSalarioBase(funcionarioId, competencia, salarioBase) {
       if (!salarioBase || salarioBase <= 0) return; // Ignora se não houver salário cadastrado
 
@@ -899,6 +913,10 @@
       if (!competenciaEstaFechada && !liberacaoAtiva) {
         await sincronizarEmprestimos(funcionarioId, competenciaRegraLancamento);
         await sincronizarSalarioBase(funcionarioId, competenciaRegraLancamento, salarioBase);
+        // valores fixos do cadastro: salário adicional (2001, não contábil) e adicional de caixa (2028, só cargo CAIXA)
+        await sincronizarValorCadastro(funcionarioId, competenciaRegraLancamento, '2001', parseFloat((funcDados || {}).salario_adicional || 0), 'Salário adicional (Cadastro)');
+        if (String((funcDados || {}).cargo || '').includes('CAIXA'))
+          await sincronizarValorCadastro(funcionarioId, competenciaRegraLancamento, '2028', parseFloat((funcDados || {}).adicional_caixa || 0), 'Adicional de caixa (Cadastro)');
       }
 
       // Depois da sincronização, puxa a lista completa atualizada do banco

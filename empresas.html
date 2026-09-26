@@ -63,6 +63,26 @@
           </div>
         </div>
 
+        <div class="flex flex-wrap items-center gap-4 text-xs">
+          <label class="inline-flex items-center gap-2 font-bold text-slate-700 cursor-pointer"><input type="checkbox" id="inputInssPatronal"> Recolhe INSS patronal (27% sobre o salário base)</label>
+          <span class="text-[10px] text-slate-400">Usado no custo empresa do Resumo da Diretoria. FGTS (8%) vale para todas, exceto funcionários com cargo FREELANCE.</span>
+        </div>
+
+        <!-- CONTAS BANCÁRIAS (aparece ao editar uma empresa) -->
+        <div id="boxContas" class="hidden border border-indigo-200 bg-indigo-50/40 rounded-xl p-3 space-y-2">
+          <div class="text-[11px] font-black uppercase text-indigo-900">🏦 Contas bancárias da empresa <span class="font-normal normal-case text-slate-500">(aparecem como "banco pagador" na tela de pagamentos)</span></div>
+          <div id="listaContas" class="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100 text-xs"></div>
+          <div class="grid grid-cols-2 md:grid-cols-12 gap-2 items-end text-xs">
+            <div class="md:col-span-3"><label class="block text-[10px] font-bold text-slate-500 uppercase">Banco *</label><input id="ctBanco" list="listaBancosEmp" placeholder="Ex.: Sicredi" class="w-full border border-slate-300 rounded p-2">
+              <datalist id="listaBancosEmp"><option>Sicredi</option><option>Itaú</option><option>Bradesco</option><option>Santander</option><option>Banco do Brasil</option><option>Caixa</option><option>Sicoob</option><option>Inter</option></datalist></div>
+            <div class="md:col-span-2"><label class="block text-[10px] font-bold text-slate-500 uppercase">Agência / coop.</label><input id="ctAgencia" class="w-full border border-slate-300 rounded p-2 font-mono"></div>
+            <div class="md:col-span-2"><label class="block text-[10px] font-bold text-slate-500 uppercase">Conta</label><input id="ctConta" class="w-full border border-slate-300 rounded p-2 font-mono"></div>
+            <div class="md:col-span-3"><label class="block text-[10px] font-bold text-slate-500 uppercase">Descrição</label><input id="ctDescricao" placeholder="Ex.: conta salário / movimento" class="w-full border border-slate-300 rounded p-2"></div>
+            <div class="md:col-span-1"><label class="inline-flex items-center gap-1 text-[10px] font-bold"><input type="checkbox" id="ctPrincipal"> principal</label></div>
+            <div class="md:col-span-1"><button type="button" onclick="adicionarConta()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded cursor-pointer">+</button></div>
+          </div>
+        </div>
+
         <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
           <button type="button" onclick="resetarFormulario()" id="btnCancelar" class="hidden px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-lg transition text-xs cursor-pointer">
             Cancelar
@@ -98,12 +118,14 @@
               <th class="p-3">CNPJ</th>
               <th class="p-3">CÓD. CONTÁBIL</th>
               <th class="p-3">NOME FANTASIA</th>
+              <th class="p-3">INSS PATRONAL</th>
+              <th class="p-3">CONTAS</th>
               <th class="p-3">STATUS</th>
               <th class="p-3 text-right">AÇÕES</th>
             </tr>
           </thead>
           <tbody id="tabelaEmpresas" class="divide-y divide-slate-100">
-            <tr><td colspan="6" class="p-6 text-center text-slate-400">Carregando empresas...</td></tr>
+            <tr><td colspan="8" class="p-6 text-center text-slate-400">Carregando empresas...</td></tr>
           </tbody>
         </table>
       </div>
@@ -119,7 +141,43 @@
 
     let listaGlobalEmpresas = [];
 
+    // ---------- contas bancárias ----------
+    let contasPorEmpresa = {};
+    async function carregarContas() {
+      const { data } = await _supabase.from('empresas_contas').select('*').eq('ativo', true).order('criado_em');
+      contasPorEmpresa = {};
+      (data || []).forEach(c => { (contasPorEmpresa[c.empresa_id] = contasPorEmpresa[c.empresa_id] || []).push(c); });
+    }
+    function renderizarContas(empresaId) {
+      const lista = contasPorEmpresa[empresaId] || [];
+      document.getElementById('listaContas').innerHTML = lista.length === 0 ? '<div class="p-2 text-slate-400">Nenhuma conta cadastrada.</div>'
+        : lista.map(c => `<div class="p-2 flex justify-between items-center"><span><b>${c.banco}</b> · ag ${c.agencia || '-'} · cc ${c.conta || '-'}${c.descricao ? ' · ' + c.descricao : ''} ${c.principal ? '<span class="text-[10px] bg-indigo-100 text-indigo-800 px-1.5 rounded font-bold">principal</span>' : ''}</span>
+            <button type="button" onclick="removerConta('${c.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline cursor-pointer">remover</button></div>`).join('');
+    }
+    async function adicionarConta() {
+      const empresa_id = document.getElementById('empresaId').value;
+      const banco = document.getElementById('ctBanco').value.trim();
+      if (!empresa_id) return alert('Salve a empresa primeiro.');
+      if (!banco) return alert('Informe o banco.');
+      const principal = document.getElementById('ctPrincipal').checked;
+      if (principal) await _supabase.from('empresas_contas').update({ principal: false }).eq('empresa_id', empresa_id);
+      const { error } = await _supabase.from('empresas_contas').insert([{ empresa_id, banco, principal,
+        agencia: document.getElementById('ctAgencia').value.trim() || null, conta: document.getElementById('ctConta').value.trim() || null,
+        descricao: document.getElementById('ctDescricao').value.trim() || null }]);
+      if (error) return alert('Erro: ' + error.message);
+      ['ctBanco','ctAgencia','ctConta','ctDescricao'].forEach(i => document.getElementById(i).value = '');
+      document.getElementById('ctPrincipal').checked = false;
+      await carregarContas(); renderizarContas(empresa_id); renderizarTabela();
+    }
+    async function removerConta(id) {
+      if (!confirm('Remover esta conta da lista?')) return;
+      const { error } = await _supabase.from('empresas_contas').update({ ativo: false }).eq('id', id);
+      if (error) return alert('Erro: ' + error.message);
+      await carregarContas(); renderizarContas(document.getElementById('empresaId').value); renderizarTabela();
+    }
+
     async function carregarEmpresas() {
+      await carregarContas();
       const { data, error } = await _supabase.from('empresas').select('*').order('cnpj');
       if (!error) {
         listaGlobalEmpresas = data || [];
@@ -141,7 +199,7 @@
 
       const tbody = document.getElementById('tabelaEmpresas');
       if (dados.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhuma empresa encontrada.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">Nenhuma empresa encontrada.</td></tr>`;
         return;
       }
 
@@ -157,6 +215,8 @@
             <td class="p-3 font-mono text-slate-600">${e.cnpj || '-'}</td>
             <td class="p-3 font-mono text-slate-600">${e.cod_contabil || '-'}</td>
             <td class="p-3 text-emerald-700 font-medium">${e.nome_fantasia || '-'}</td>
+            <td class="p-3">${e.inss_patronal ? '<span class="text-[10px] font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded">27%</span>' : '<span class="text-slate-300">-</span>'}</td>
+            <td class="p-3 text-[11px]">${contasPorEmpresa[e.id] ? contasPorEmpresa[e.id].map(c => `${c.banco} ${c.conta || ''}${c.principal ? ' ★' : ''}`).join('<br>') : '<span class="text-amber-700">⚠ sem conta</span>'}</td>
             <td class="p-3">
               <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${statusStr}</span>
             </td>
@@ -179,6 +239,9 @@
       document.getElementById('inputCnpj').value = e.cnpj || '';
       document.getElementById('inputCodContabil').value = e.cod_contabil || '';
       document.getElementById('inputFantasia').value = e.nome_fantasia || '';
+      document.getElementById('inputInssPatronal').checked = !!e.inss_patronal;
+      document.getElementById('boxContas').classList.remove('hidden');
+      renderizarContas(e.id);
       document.getElementById('btnSalvar').innerText = '✓ ATUALIZAR EMPRESA';
       document.getElementById('btnCancelar').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -188,6 +251,7 @@
       document.getElementById('tituloForm').innerText = '+ NOVA EMPRESA';
       document.getElementById('formEmpresa').reset();
       document.getElementById('empresaId').value = '';
+      document.getElementById('boxContas').classList.add('hidden');
       document.getElementById('btnSalvar').innerText = '✓ SALVAR EMPRESA';
       document.getElementById('btnCancelar').classList.add('hidden');
     }
@@ -200,7 +264,8 @@
       const cod_contabil = document.getElementById('inputCodContabil').value;
       const nome_fantasia = document.getElementById('inputFantasia').value.toUpperCase();
 
-      const payload = { razao_social, cnpj, cod_contabil, nome_fantasia };
+      const inss_patronal = document.getElementById('inputInssPatronal').checked;
+      const payload = { razao_social, cnpj, cod_contabil, nome_fantasia, inss_patronal };
 
       if (id) {
         const { error } = await _supabase.from('empresas').update(payload).eq('id', id);
@@ -208,9 +273,9 @@
         else { resetarFormulario(); carregarEmpresas(); }
       } else {
         payload.status = 'Ativo';
-        const { error } = await _supabase.from('empresas').insert([payload]);
+        const { data: nova, error } = await _supabase.from('empresas').insert([payload]).select().single();
         if (error) alert('Erro ao cadastrar: ' + error.message);
-        else { resetarFormulario(); carregarEmpresas(); }
+        else { await carregarEmpresas(); prepararEdicao(nova.id); alert('Empresa cadastrada. Agora cadastre as contas bancárias logo abaixo.'); }
       }
     }
 

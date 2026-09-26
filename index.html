@@ -46,67 +46,64 @@
       <!-- ==========================================
            COLUNA 1: MENU LATERAL ESQUERDO (Navegação)
            ========================================== -->
-      <div class="lg:col-span-2 space-y-5">
+      <div class="lg:col-span-2 space-y-3">
         
-        <!-- Relatórios & Documentos -->
-        <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
-          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Relatórios</h3>
-          <div class="flex flex-col space-y-1 text-xs font-medium pt-1">
-            <a href="resumo_diretoria.html" class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>📈</span> <span>Resumo Diretoria</span>
-            </a>
-            <a href="recibo_pagamento.html" class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
-              <span>📄</span> <span>Gerar Recibos</span>
-            </a>
+        <!-- MENU ORGANIZADO POR ÁREA -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-emerald-50 text-emerald-800">📅 Folha do mês</h3>
+          <div class="flex flex-col p-1.5 text-[11px] font-medium">
+            <a href="lancamentos.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">✏️</span> <span>Lançamentos</span></a>
+            <a href="importar_alpha7.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📥</span> <span>Importar Alpha7 (comissões)</span></a>
+            <a href="importar_consumo_farmacia.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">💊</span> <span>Importar consumo farmácia</span></a>
+            <a href="emprestimos.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🤝</span> <span>Empréstimos</span></a>
           </div>
         </div>
 
-        <!-- Jornada e pagamentos extras (freelance, hora extra, aprovações, financeiro) -->
-        <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
-          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Jornada e Pagamentos Extras <span class="text-amber-600">(teste)</span></h3>
-          <div class="flex flex-col space-y-1 text-[11px] font-medium pt-1">
-            <a href="freelance_solicitacao.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>📝</span> <span>Solicitar (Líder)</span>
-            </a>
-            <a href="supervisor_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>🧭</span> <span>Aprovação Supervisor</span>
-            </a>
-            <a href="rh_aprovacao_freelance.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>✅</span> <span>Aprovação RH</span>
-            </a>
-            <a href="financeiro.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>💵</span> <span>Pagamentos fora da folha</span>
-            </a>
-            <a href="banco_horas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>⏱</span> <span>Banco de Horas</span>
-            </a>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-indigo-50 text-indigo-800">✅ Aprovações e jornada</h3>
+          <div class="flex flex-col p-1.5 text-[11px] font-medium">
+            <a href="freelance_solicitacao.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📝</span> <span>Solicitar freelance / hora extra</span></a>
+            <a href="supervisor_freelance.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🧭</span> <span>Aprovação do supervisor</span></a>
+            <a href="rh_aprovacao_freelance.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🗂</span> <span>Aprovação do RH</span></a>
+            <a href="banco_horas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">⏱</span> <span>Banco de horas</span></a>
           </div>
         </div>
 
-        <!-- Cadastros do Sistema -->
-        <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm space-y-2">
-          <h3 class="font-bold text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-100 pb-2">Cadastros e Segurança</h3>
-          <div class="flex flex-col space-y-1 text-[11px] font-medium pt-1">
-            <a href="funcionarios.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>👥</span> <span>Funcionários</span>
-            </a>
-            <a href="empresas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>🏢</span> <span>Empresas</span>
-            </a>
-            <a href="lojas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>🏪</span> <span>Lojas e Unidades</span>
-            </a>
-            <a href="rubricas.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>📋</span> <span>Rubricas (De>Para)</span>
-            </a>
-            <a href="eventos.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>⚡</span> <span>Tipos de Eventos</span>
-            </a>
-            <a href="auditoria.html" class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 text-slate-600 transition">
-              <span>🛡️</span> <span>Auditoria e Logs</span>
-            </a>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-sky-50 text-sky-800">💵 Financeiro</h3>
+          <div class="flex flex-col p-1.5 text-[11px] font-medium">
+            <a href="financeiro.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">💳</span> <span>Pagamentos fora da folha</span></a>
           </div>
         </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-amber-50 text-amber-800">📊 Relatórios</h3>
+          <div class="flex flex-col p-1.5 text-[11px] font-medium">
+            <a href="resumo_folha.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🧾</span> <span>Resumo da competência</span></a>
+            <a href="resumo_diretoria.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📈</span> <span>Resumo da diretoria</span></a>
+            <a href="recibo_pagamento.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📄</span> <span>Gerar recibos</span></a>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-slate-100 text-slate-700">🗃 Cadastros</h3>
+          <div class="flex flex-col p-1.5 text-[11px] font-medium">
+            <a href="funcionarios.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">👥</span> <span>Funcionários</span></a>
+            <a href="empresas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏢</span> <span>Empresas e contas bancárias</span></a>
+            <a href="lojas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏪</span> <span>Lojas e setores</span></a>
+            <a href="eventos.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">⚡</span> <span>Tipos de eventos</span></a>
+            <a href="rubricas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📋</span> <span>Rubricas Alpha7 (De>Para)</span></a>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-rose-50 text-rose-800">🛡 Segurança</h3>
+          <div class="flex flex-col p-1.5 text-[11px] font-medium">
+            <a href="auditoria.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🔎</span> <span>Auditoria e logs</span></a>
+          </div>
+        </div>
+
+        <div class="text-[10px] text-slate-400 px-2 leading-tight">Em construção: perfis e acessos · escala · férias · 13º · organograma</div>
 
       </div>
 

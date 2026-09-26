@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestão de Colaboradores - Sistema Drogarema</title>
+  <title>Cadastro de Funcionários - Sistema Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -16,481 +16,447 @@
     }
   </script>
 
-  <div class="max-w-7xl mx-auto space-y-6">
-    
-    <div class="sticky top-0 z-50 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+  <div class="max-w-7xl mx-auto space-y-5">
+
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-        <h1 class="text-xl font-bold text-slate-900 tracking-wide">GESTÃO DE COLABORADORES</h1>
-        <p class="text-xs text-slate-500">Vincule funcionários às empresas e lojas cadastradas</p>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">CADASTRO DE FUNCIONÁRIOS</h1>
+        <p class="text-xs text-slate-500">Dados pessoais · contrato · lotação e acesso · dados bancários · histórico · documentos</p>
       </div>
-      <div>
-        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">← PAINEL PRINCIPAL</a>
+      <div class="flex items-center gap-2">
+        <button onclick="abrirFicha(null)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer">+ NOVO FUNCIONÁRIO</button>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      
-      <!-- Coluna Esquerda: Formulário -->
-      <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm h-fit">
-        <h2 id="tituloForm" class="font-bold text-emerald-700 text-sm border-b border-slate-100 pb-2">ADICIONAR COLABORADOR</h2>
+    <!-- PENDÊNCIAS DE ATESTADO -->
+    <div id="boxPendencias" class="hidden bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-2">
+      <div class="text-amber-900 font-black text-xs uppercase">📎 Atestados pendentes de anexo</div>
+      <div id="listaPendencias" class="flex flex-wrap gap-2"></div>
+    </div>
 
-        <form id="formFuncionario" onsubmit="salvarFuncionario(event)" class="space-y-4">
-          <input type="hidden" id="funcId">
+    <!-- FILTROS -->
+    <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-3 items-end text-xs">
+      <div class="flex-1 min-w-[200px]"><label class="block text-[10px] font-bold text-slate-500 uppercase">Nome / CPF / matrícula</label>
+        <input type="text" id="fBusca" oninput="renderizarTabela()" placeholder="🔍 Digite parte do nome, CPF ou matrícula" autocomplete="off" class="w-full border border-slate-300 rounded p-1.5 uppercase"></div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Status</label>
+        <select id="fStatus" onchange="renderizarTabela()" class="border border-slate-300 rounded p-1.5 font-bold"><option value="ATIVO">Ativos</option><option value="INATIVO">Inativos</option><option value="">Todos</option></select></div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Empresa</label><select id="fEmpresa" onchange="renderizarTabela()" class="border border-slate-300 rounded p-1.5 max-w-[190px]"></select></div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Loja / setor</label><select id="fLoja" onchange="renderizarTabela()" class="border border-slate-300 rounded p-1.5 max-w-[160px]"></select></div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Cargo</label><select id="fCargo" onchange="renderizarTabela()" class="border border-slate-300 rounded p-1.5 max-w-[190px]"></select></div>
+      <span id="contador" class="text-[11px] text-slate-500 font-mono"></span>
+    </div>
 
-          <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nome de Registro *</label>
-            <input type="text" id="inputNome" required placeholder="Nome completo" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
-          </div>
-
-          <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Usuário Alpha7</label>
-            <input type="text" id="inputUsuarioAlpha7" placeholder="Ex: ALINE SILVA - 10" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
-          </div>
-
-          <!-- NOVO: Salário e Admissão -->
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Salário Base (R$) *</label>
-              <input type="number" step="0.01" id="inputSalarioBase" required placeholder="0.00" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Admissão *</label>
-              <input type="date" id="inputDataContratacao" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono text-slate-600">
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Cargo *</label>
-              <input type="text" id="inputCargo" required placeholder="Ex: CAIXA" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Matrícula</label>
-              <input type="text" id="inputMatricula" readonly placeholder="Auto" class="w-full bg-slate-100 border border-slate-300 rounded-lg p-2.5 text-slate-600 text-sm focus:outline-none font-mono cursor-not-allowed">
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Empresa de Registro *</label>
-            <select id="selectEmpresa" onchange="aoSelecionarEmpresa()" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
-              <option value="">-- SELECIONE A EMPRESA --</option>
-            </select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
-            <div>
-              <span class="text-[10px] text-slate-400 block uppercase font-bold">CNPJ</span>
-              <span id="infoCnpj" class="text-xs text-slate-700 font-mono">-</span>
-            </div>
-            <div>
-              <span class="text-[10px] text-slate-400 block uppercase font-bold">Empresa (Fantasia)</span>
-              <span id="infoFantasia" class="text-xs text-emerald-700 font-bold">-</span>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Loja que Trabalha *</label>
-            <select id="selectLoja" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono" disabled>
-              <option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>
-            </select>
-          </div>
-
-          <div class="pt-2 border-t border-slate-100">
-            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Observações (Texto Livre)</label>
-            <textarea id="inputObservacoes" rows="2" placeholder="Detalhes adicionais..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600"></textarea>
-          </div>
-
-          <div class="flex gap-2 pt-1">
-            <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer">
-              ✓ ADICIONAR COLABORADOR
-            </button>
-            <button type="button" onclick="resetarFormulario()" class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-lg transition text-xs cursor-pointer">
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Coluna Direita: Listagem -->
-      <div class="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-sm">
-        
-        <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center border-b border-slate-200 pb-3 gap-3">
-          <h2 class="font-bold text-slate-900 text-sm">COLABORADORES CADASTRADOS</h2>
-          
-          <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-end">
-            <input type="text" id="filtroNome" oninput="renderizarTabela()" placeholder="NOME (MÍN. 3 LETRAS)" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium uppercase max-w-[180px]">
-
-            <select id="filtroStatus" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium">
-              <option value="ATIVO">ATIVOS</option>
-              <option value="INATIVO">INATIVOS</option>
-              <option value="TODOS">TODOS OS STATUS</option>
-            </select>
-
-            <select id="filtroEmpresa" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[180px]">
-              <option value="">TODAS AS EMPRESAS</option>
-            </select>
-
-            <select id="filtroLoja" onchange="renderizarTabela()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-slate-800 text-xs font-medium font-mono max-w-[130px]">
-              <option value="">TODAS AS LOJAS</option>
-            </select>
-
-            <span id="contadorRegistros" class="text-xs text-slate-500 font-mono ml-1 whitespace-nowrap">0 reg.</span>
-          </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="border-b border-slate-200 text-slate-500">
-                <th class="p-3">MAT.</th>
-                <th class="p-3 w-48">NOME / USUÁRIO</th>
-                <th class="p-3">CARGO / SALÁRIO</th>
-                <th class="p-3">EMPRESA / LOJA / CNPJ</th>
-                <th class="p-3">STATUS</th>
-                <th class="p-3 text-right">AÇÕES</th>
-              </tr>
-            </thead>
-            <tbody id="tabelaFuncionarios" class="divide-y divide-slate-100">
-              <tr><td colspan="6" class="p-6 text-center text-slate-400">Carregando colaboradores...</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-      </div>
+    <!-- LISTA -->
+    <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase">
+          <tr><th class="p-3">Mat.</th><th class="p-3">Nome</th><th class="p-3">Cargo / salário</th><th class="p-3">Empresa · loja · período</th><th class="p-3">Status</th><th class="p-3 text-right"></th></tr>
+        </thead>
+        <tbody id="tabela" class="divide-y divide-slate-100"><tr><td colspan="6" class="p-6 text-center text-slate-400">Carregando...</td></tr></tbody>
+      </table>
     </div>
   </div>
+
+  <!-- FICHA DO FUNCIONÁRIO -->
+  <div id="modalFicha" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-4xl mx-auto my-4 shadow-2xl">
+      <div class="flex justify-between items-start p-5 border-b border-slate-100">
+        <div>
+          <h3 id="fichaTitulo" class="font-black text-slate-900 text-base">NOVO FUNCIONÁRIO</h3>
+          <p id="fichaSub" class="text-[11px] text-slate-500"></p>
+        </div>
+        <button onclick="fecharFicha()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer text-lg">✕</button>
+      </div>
+
+      <div class="flex flex-wrap gap-1 px-5 pt-3 border-b border-slate-100" id="abas">
+        <button data-aba="pessoal" onclick="trocarAba('pessoal')" class="aba">👤 Pessoal</button>
+        <button data-aba="contrato" onclick="trocarAba('contrato')" class="aba">📄 Contrato</button>
+        <button data-aba="lotacao" onclick="trocarAba('lotacao')" class="aba">🏪 Lotação e acesso</button>
+        <button data-aba="banco" onclick="trocarAba('banco')" class="aba">🏦 Dados bancários</button>
+        <button data-aba="historico" onclick="trocarAba('historico')" class="aba abaExistente">🕘 Histórico</button>
+        <button data-aba="documentos" onclick="trocarAba('documentos')" class="aba abaExistente">📎 Documentos <span id="badgePendDoc" class="hidden ml-1 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px]"></span></button>
+      </div>
+
+      <form id="formFicha" onsubmit="salvarFicha(event)" class="p-5 space-y-4 text-xs">
+        <input type="hidden" id="fId">
+
+        <!-- PESSOAL -->
+        <div data-painel="pessoal" class="painel grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div class="md:col-span-4"><label class="lbl">Nome completo (registro) *</label><input id="nome_registro" required class="inp uppercase"></div>
+          <div class="md:col-span-2"><label class="lbl">Data de nascimento</label><input type="date" id="data_nascimento" class="inp font-mono"></div>
+          <div class="md:col-span-2"><label class="lbl">CPF</label><input id="cpf" placeholder="000.000.000-00" onblur="this.value = mascaraCpf(this.value)" class="inp font-mono"></div>
+          <div class="md:col-span-2"><label class="lbl">RG</label><input id="rg" class="inp font-mono uppercase"></div>
+          <div class="md:col-span-2"><label class="lbl">Estado civil</label>
+            <select id="estado_civil" class="inp"><option value="">-</option><option>SOLTEIRO(A)</option><option>CASADO(A)</option><option>UNIÃO ESTÁVEL</option><option>DIVORCIADO(A)</option><option>VIÚVO(A)</option></select></div>
+          <div class="md:col-span-3"><label class="lbl">E-mail pessoal</label><input type="email" id="email" class="inp lowercase"></div>
+          <div class="md:col-span-3"><label class="lbl">Celular</label><input id="celular" placeholder="(00) 00000-0000" class="inp font-mono"></div>
+          <div class="md:col-span-2"><label class="lbl">CEP</label><input id="cep" placeholder="00000-000" onblur="buscarCep()" class="inp font-mono"></div>
+          <div class="md:col-span-3"><label class="lbl">Endereço</label><input id="endereco" class="inp uppercase"></div>
+          <div class="md:col-span-1"><label class="lbl">Número</label><input id="numero" class="inp uppercase"></div>
+          <div class="md:col-span-2"><label class="lbl">Complemento</label><input id="complemento" class="inp uppercase"></div>
+          <div class="md:col-span-2"><label class="lbl">Bairro</label><input id="bairro" class="inp uppercase"></div>
+          <div class="md:col-span-1"><label class="lbl">Cidade</label><input id="cidade" class="inp uppercase"></div>
+          <div class="md:col-span-1"><label class="lbl">UF</label><input id="uf" maxlength="2" class="inp uppercase"></div>
+          <div class="md:col-span-3"><label class="lbl">Usuário Alpha7</label><input id="usuario_alpha7" placeholder="Ex: ALINE SILVA - 10" class="inp uppercase"></div>
+          <div class="md:col-span-6"><label class="lbl">Observações</label><textarea id="observacoes" rows="2" class="inp"></textarea></div>
+        </div>
+
+        <!-- CONTRATO -->
+        <div data-painel="contrato" class="painel hidden grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div class="md:col-span-2"><label class="lbl">Matrícula</label><input id="matricula" readonly placeholder="automática" class="inp font-mono bg-slate-100 cursor-not-allowed"></div>
+          <div class="md:col-span-2"><label class="lbl">Admissão *</label><input type="date" id="data_contratacao" required class="inp font-mono"></div>
+          <div class="md:col-span-2"><label class="lbl">Rescisão</label><input type="date" id="data_rescisao" class="inp font-mono">
+            <p class="text-[10px] text-slate-400 mt-0.5">Com data, o funcionário fica INATIVO a partir dela.</p></div>
+          <div class="md:col-span-3"><label class="lbl">Cargo *</label><select id="cargo" required onchange="atualizarCaixa()" class="inp font-bold"></select></div>
+          <div class="md:col-span-3"><label class="lbl">Salário base (R$) *</label><input type="number" step="0.01" min="0" id="salario_base" required class="inp font-mono">
+            <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2000 SALARIO (contábil).</p></div>
+          <div class="md:col-span-3"><label class="lbl">Salário adicional - acordo (R$)</label><input type="number" step="0.01" min="0" id="salario_adicional" class="inp font-mono">
+            <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2001 SALARIO (não contábil).</p></div>
+          <div id="boxCaixa" class="md:col-span-3 hidden"><label class="lbl">Adicional de caixa (R$)</label><input type="number" step="0.01" min="0" id="adicional_caixa" class="inp font-mono">
+            <p class="text-[10px] text-slate-400 mt-0.5">Só para o cargo CAIXA. Lançado no evento 2028 ADICIONAL DE CAIXA.</p></div>
+          <div id="infoStatus" class="md:col-span-6 text-[11px]"></div>
+        </div>
+
+        <!-- LOTAÇÃO E ACESSO -->
+        <div data-painel="lotacao" class="painel hidden space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+            <div class="md:col-span-3"><label class="lbl">Empresa de registro *</label><select id="empresa_id" required onchange="mostrarEmpresa()" class="inp"></select>
+              <p id="infoEmpresa" class="text-[10px] text-slate-500 mt-0.5 font-mono"></p></div>
+            <div class="md:col-span-2"><label class="lbl">Loja / setor onde trabalha *</label><select id="loja_id" required class="inp font-bold"></select></div>
+            <div class="md:col-span-1"><label class="lbl">Período</label>
+              <select id="periodo_trabalho" class="inp"><option value="">-</option><option value="COMERCIAL">Comercial</option><option value="INTERMEDIARIO">Intermediário</option><option value="NOTURNO">Noturno</option></select></div>
+            <div class="md:col-span-6"><label class="inline-flex items-center gap-2 cursor-pointer font-bold text-slate-700"><input type="checkbox" id="lider_loja" onchange="aoMarcarLider()"> Líder / responsável da loja</label>
+              <p class="text-[10px] text-slate-400">O supervisor também pode ajustar loja e período (para a escala); toda mudança fica no histórico.</p></div>
+          </div>
+          <div class="border border-indigo-200 bg-indigo-50/50 rounded-xl p-3 space-y-2">
+            <div class="text-[11px] font-black uppercase text-indigo-900">🔐 Acesso ao sistema</div>
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+              <div class="md:col-span-3"><label class="lbl">E-mail de acesso (login)</label><input type="email" id="email_acesso" oninput="mostrarAcesso()" class="inp lowercase"></div>
+              <div class="md:col-span-2"><label class="lbl">Perfil</label>
+                <select id="perfilAcesso" class="inp font-bold"><option value="">Sem acesso</option><option value="LIDER">Líder de loja</option><option value="SUPERVISOR">Supervisor</option><option value="RH">RH</option><option value="FINANCEIRO">Financeiro</option><option value="GESTOR">Gestor</option></select></div>
+              <div class="md:col-span-1 flex items-end"><button type="button" id="btnAcesso" onclick="salvarAcesso()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg cursor-pointer">Salvar acesso</button></div>
+            </div>
+            <p id="infoAcesso" class="text-[10px] text-slate-600"></p>
+            <p class="text-[10px] text-slate-400">O login (senha) continua sendo criado no Supabase: Authentication › Users › Add user, com o mesmo e-mail. Somente o GESTOR define o perfil.</p>
+          </div>
+        </div>
+
+        <!-- BANCÁRIO -->
+        <div data-painel="banco" class="painel hidden grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div class="md:col-span-2"><label class="lbl">Tipo da chave PIX</label>
+            <select id="pix_tipo" class="inp"><option value="">-</option><option>CPF</option><option>CELULAR</option><option>E-MAIL</option><option>ALEATÓRIA</option><option>CNPJ</option></select></div>
+          <div class="md:col-span-4"><label class="lbl">Chave PIX</label><input id="pix_chave" class="inp font-mono"></div>
+          <div class="md:col-span-2"><label class="lbl">Banco</label><input id="banco" list="listaBancos" placeholder="Ex.: Sicredi" class="inp">
+            <datalist id="listaBancos"><option>Sicredi</option><option>Itaú</option><option>Bradesco</option><option>Santander</option><option>Banco do Brasil</option><option>Caixa</option><option>Nubank</option><option>Inter</option><option>Sicoob</option><option>C6</option></datalist></div>
+          <div class="md:col-span-1"><label class="lbl">Agência / coop.</label><input id="agencia" class="inp font-mono"></div>
+          <div class="md:col-span-2"><label class="lbl">Conta</label><input id="conta" class="inp font-mono"></div>
+          <div class="md:col-span-1"><label class="lbl">Tipo</label><select id="tipo_conta" class="inp"><option value="">-</option><option>SALÁRIO</option><option>CORRENTE</option><option>POUPANÇA</option></select></div>
+          <p class="md:col-span-6 text-[10px] text-slate-400">Estes dados aparecem para o Financeiro na hora de pagar (13º, férias, adiantamento, VT, freelance...).</p>
+        </div>
+
+        <!-- HISTÓRICO -->
+        <div data-painel="historico" class="painel hidden">
+          <div id="listaHistorico" class="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-[50vh] overflow-y-auto"></div>
+        </div>
+
+        <!-- DOCUMENTOS -->
+        <div data-painel="documentos" class="painel hidden space-y-3">
+          <div id="pendDoc" class="hidden bg-amber-50 border border-amber-300 rounded-lg p-2 text-[11px] text-amber-900"></div>
+          <div class="border border-slate-200 rounded-lg p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+            <div class="md:col-span-1"><label class="lbl">Tipo</label>
+              <select id="docTipo" onchange="document.getElementById('docBoxPend').classList.toggle('hidden', this.value !== 'ATESTADO')" class="inp">
+                <option value="ATESTADO">Atestado</option><option value="CONTRATO">Contrato</option><option value="DOCUMENTO_PESSOAL">Documento pessoal</option><option value="OUTROS">Outros</option></select></div>
+            <div class="md:col-span-2"><label class="lbl">Descrição</label><input id="docDescricao" class="inp"></div>
+            <div class="md:col-span-1"><label class="lbl">Data ref.</label><input type="date" id="docData" class="inp font-mono"></div>
+            <div class="md:col-span-2"><label class="lbl">Arquivo (PDF ou imagem)</label><input type="file" id="docArquivo" accept=".pdf,image/*" class="w-full text-[11px]"></div>
+            <div id="docBoxPend" class="md:col-span-4"><label class="lbl">Referente à falta (baixa a pendência)</label><select id="docPendencia" class="inp"></select></div>
+            <div class="md:col-span-2"><button type="button" onclick="enviarDocumento()" id="btnDoc" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded-lg cursor-pointer">📎 Anexar documento</button></div>
+          </div>
+          <div id="listaDocs" class="border border-slate-200 rounded-lg divide-y divide-slate-100"></div>
+        </div>
+
+        <div id="rodapeSalvar" class="flex gap-2 pt-3 border-t border-slate-100">
+          <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg text-xs cursor-pointer">✓ SALVAR CADASTRO</button>
+          <button type="button" onclick="fecharFicha()" class="px-5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs cursor-pointer">Fechar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display:block; font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:2px; }
+    .inp { width:100%; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:8px; font-size:12px; color:#1e293b; }
+    .inp:focus { outline:none; border-color:#059669; background:#fff; }
+    .aba { padding:8px 12px; font-size:11px; font-weight:700; color:#94a3b8; border-bottom:2px solid transparent; cursor:pointer; }
+    .aba.ativa { color:#047857; border-color:#059669; }
+  </style>
 
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let listaGlobalEmpresas = [];
-    let listaGlobalLojas = [];
-    let listaGlobalFuncionarios = [];
+    // Campos da ficha que vão direto para a tabela funcionarios
+    const CAMPOS = ['nome_registro','data_nascimento','cpf','rg','estado_civil','email','celular','cep','endereco','numero','complemento',
+      'bairro','cidade','uf','usuario_alpha7','observacoes','data_contratacao','data_rescisao','cargo','salario_base','salario_adicional',
+      'adicional_caixa','empresa_id','loja_id','periodo_trabalho','lider_loja','email_acesso','pix_tipo','pix_chave','banco','agencia','conta','tipo_conta'];
+    const MAIUSCULAS = ['nome_registro','rg','endereco','numero','complemento','bairro','cidade','uf','usuario_alpha7'];
+    const ROTULO_CAMPO = { nome_registro: 'Nome', cargo: 'Cargo', salario_base: 'Salário base', salario_adicional: 'Salário adicional', adicional_caixa: 'Adicional de caixa',
+      data_contratacao: 'Admissão', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
+      lider_loja: 'Líder da loja', email_acesso: 'E-mail de acesso', pix_tipo: 'Tipo PIX', pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', tipo_conta: 'Tipo de conta', cpf: 'CPF' };
+
+    let perfil = null, funcs = [], empresas = [], lojas = [], cargos = [], usuarios = [], pendencias = [], atual = null;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const $ = id => document.getElementById(id);
+    const nomeEmpresa = id => { const e = empresas.find(x => x.id === id); return e ? (e.nome_fantasia || e.razao_social) : ''; };
+    const nomeLoja = id => (lojas.find(x => x.id === id) || {}).nome_loja || '';
+
+    function mascaraCpf(v) {
+      const d = String(v || '').replace(/\D/g, '').slice(0, 11);
+      return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : v;
+    }
+
+    async function buscarCep() {
+      const cep = $('cep').value.replace(/\D/g, '');
+      if (cep.length !== 8) return;
+      $('cep').value = cep.slice(0, 5) + '-' + cep.slice(5);
+      try {
+        const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const j = await r.json();
+        if (j.erro) return;
+        if (!$('endereco').value) $('endereco').value = norm(j.logradouro);
+        if (!$('bairro').value) $('bairro').value = norm(j.bairro);
+        if (!$('cidade').value) $('cidade').value = norm(j.localidade);
+        if (!$('uf').value) $('uf').value = norm(j.uf);
+      } catch (e) { /* sem internet para o CEP: preenche à mão */ }
+    }
 
     async function inicializar() {
-      await carregarEmpresas();
-      await carregarLojas();
-      await carregarFuncionarios();
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      _supabase.rpc('fn_funcionarios_aplicar_rescisoes').then(() => {});
+      const [re, rl, rc, ru] = await Promise.all([
+        _supabase.from('empresas').select('*').order('nome_fantasia'),
+        _supabase.from('lojas').select('*').order('nome_loja'),
+        _supabase.from('cargos').select('*').eq('ativo', true).order('ordem'),
+        _supabase.from('usuarios_sistema').select('*')
+      ]);
+      empresas = re.data || []; lojas = rl.data || []; cargos = rc.data || []; usuarios = ru.data || [];
+      const opts = (lista, v, t, vazio) => `<option value="">${vazio}</option>` + lista.map(x => `<option value="${esc(x[v])}">${esc(t(x))}</option>`).join('');
+      $('fEmpresa').innerHTML = opts(empresas, 'id', e => e.nome_fantasia || e.razao_social, 'Todas');
+      $('fLoja').innerHTML = opts(lojas, 'id', l => l.nome_loja, 'Todas');
+      $('fCargo').innerHTML = opts(cargos, 'nome', c => c.nome, 'Todos');
+      $('empresa_id').innerHTML = opts(empresas.filter(e => String(e.status || 'Ativo').toLowerCase() === 'ativo'), 'id', e => `${e.nome_fantasia || ''} · ${e.razao_social || ''}`, '-- selecione --');
+      $('loja_id').innerHTML = opts(lojas.filter(l => l.ativo !== false), 'id', l => l.nome_loja, '-- selecione --');
+      $('cargo').innerHTML = opts(cargos, 'nome', c => c.nome, '-- selecione --');
+      if (perfil !== 'GESTOR') { $('btnAcesso').disabled = true; $('btnAcesso').classList.add('opacity-40', 'cursor-not-allowed'); $('perfilAcesso').disabled = true; }
+      await carregar();
     }
 
-    async function carregarEmpresas() {
-      const { data, error } = await _supabase.from('empresas').select('id, cnpj, razao_social, nome_fantasia').order('cnpj');
-      if (!error) {
-        listaGlobalEmpresas = data || [];
-        
-        const selectForm = document.getElementById('selectEmpresa');
-        selectForm.innerHTML = '<option value="">-- SELECIONE A EMPRESA --</option>' + 
-          listaGlobalEmpresas.map(e => `
-            <option value="${e.id}" data-cnpj="${e.cnpj || ''}" data-fantasia="${e.nome_fantasia || ''}" data-razao="${e.razao_social}">
-              ${e.cnpj ? e.cnpj + ' - ' : ''}${e.nome_fantasia ? '[' + e.nome_fantasia + '] ' : ''}${e.razao_social}
-            </option>
-          `).join('');
-
-        const filtroEmpresa = document.getElementById('filtroEmpresa');
-        filtroEmpresa.innerHTML = '<option value="">TODAS AS EMPRESAS</option>' + 
-          listaGlobalEmpresas.map(e => `
-            <option value="${e.cnpj || ''}">${e.cnpj ? e.cnpj + ' - ' : ''}${e.razao_social}</option>
-          `).join('');
-      }
-    }
-
-    async function carregarLojas() {
-      const { data, error } = await _supabase.from('lojas').select('*');
-      if (!error) {
-        listaGlobalLojas = data || [];
-
-        const filtroLoja = document.getElementById('filtroLoja');
-        filtroLoja.innerHTML = '<option value="">TODAS AS LOJAS</option>' + 
-          listaGlobalLojas.map(l => {
-            const nomeL = l.nome_loja || l.loja || l.nome || 'Loja';
-            return `<option value="${nomeL}">${nomeL}</option>`;
-          }).join('');
-      }
-    }
-
-    function aoSelecionarEmpresa(lojaValorParaSelecionar = null) {
-      const selectEmpresa = document.getElementById('selectEmpresa');
-      const empresaId = selectEmpresa.value;
-      const selectLoja = document.getElementById('selectLoja');
-      const infoCnpj = document.getElementById('infoCnpj');
-      const infoFantasia = document.getElementById('infoFantasia');
-      const inputMatricula = document.getElementById('inputMatricula');
-      const funcId = document.getElementById('funcId').value;
-
-      if (!empresaId) {
-        infoCnpj.innerText = '-';
-        infoFantasia.innerText = '-';
-        selectLoja.innerHTML = '<option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>';
-        selectLoja.disabled = true;
-        if (!funcId) inputMatricula.value = '';
-        return;
-      }
-
-      const opt = selectEmpresa.selectedOptions[0];
-      const cnpj = opt.getAttribute('data-cnpj') || '';
-      const fantasia = opt.getAttribute('data-fantasia') || '-';
-      const razaoSocial = opt.getAttribute('data-razao') || '';
-
-      infoCnpj.innerText = cnpj || '-';
-      infoFantasia.innerText = fantasia;
-
-      selectLoja.innerHTML = '<option value="">-- SELECIONE A LOJA --</option>' + 
-        listaGlobalLojas.map(l => {
-          const nomeL = l.nome_loja || l.loja || l.nome || 'Loja';
-          return `<option value="${nomeL}">${nomeL}</option>`;
-        }).join('');
-
-      selectLoja.disabled = false;
-      if (lojaValorParaSelecionar !== null && lojaValorParaSelecionar !== undefined && lojaValorParaSelecionar !== '') {
-        selectLoja.value = lojaValorParaSelecionar;
-      }
-
-      if (!funcId) {
-        const cnpjLimpo = cnpj.replace(/\D/g, '');
-        const funcDaEmpresa = listaGlobalFuncionarios.filter(f => {
-          const fCnpjLimpo = String(f.cnpj || '').replace(/\D/g, '');
-          if (fCnpjLimpo && fCnpjLimpo === cnpjLimpo) return true;
-          if (String(f.empresa_registro || '').includes(razaoSocial)) return true;
-          return false;
-        });
-
-        let maxMatricula = 1000;
-        funcDaEmpresa.forEach(f => {
-          const matNum = parseInt(f.matricula, 10);
-          if (!isNaN(matNum) && matNum > maxMatricula) {
-            maxMatricula = matNum;
-          }
-        });
-
-        inputMatricula.value = maxMatricula + 1;
-      }
-    }
-
-    async function carregarFuncionarios() {
-      const { data, error } = await _supabase.from('funcionarios').select('*').order('nome_registro');
-      if (!error) {
-        listaGlobalFuncionarios = data || [];
-        renderizarTabela();
-      }
-    }
-
-    function formatarDataBR(dataIso) {
-      if (!dataIso) return '-';
-      const partes = dataIso.split('-');
-      if (partes.length !== 3) return dataIso;
-      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    async function carregar() {
+      const [rf, rp] = await Promise.all([
+        _supabase.from('funcionarios').select('*').order('nome_registro'),
+        _supabase.from('vw_pendencias_atestado').select('*').order('data_servico')
+      ]);
+      funcs = rf.data || [];
+      pendencias = rp.data || [];
+      const box = $('boxPendencias');
+      box.classList.toggle('hidden', pendencias.length === 0);
+      $('listaPendencias').innerHTML = pendencias.map(p => {
+        const f = funcs.find(x => x.id === p.funcionario_id) || {};
+        return `<button onclick="abrirFicha('${p.funcionario_id}', 'documentos')" class="bg-white border border-amber-300 hover:bg-amber-100 rounded-lg px-3 py-1.5 text-[11px] text-left cursor-pointer">
+          <b>${esc(f.nome_registro || '—')}</b><br><span class="text-amber-800">falta em ${dbr(p.data_servico)} · ${esc(p.loja_solicitante || '')}</span></button>`;
+      }).join('');
+      renderizarTabela();
     }
 
     function renderizarTabela() {
-      const nomeFiltro = document.getElementById('filtroNome').value.toUpperCase().trim();
-      const statusFiltro = document.getElementById('filtroStatus').value;
-      const cnpjFiltro = document.getElementById('filtroEmpresa').value;
-      const lojaFiltro = document.getElementById('filtroLoja').value;
-
-      let dados = listaGlobalFuncionarios;
-
-      if (nomeFiltro.length >= 3) {
-        dados = dados.filter(f => String(f.nome_registro || '').toUpperCase().includes(nomeFiltro));
-      }
-
-      if (statusFiltro !== 'TODOS') {
-        dados = dados.filter(f => String(f.status || 'ATIVO').toUpperCase() === statusFiltro);
-      }
-
-      if (cnpjFiltro) {
-        const cnpjFiltroLimpo = cnpjFiltro.replace(/\D/g, '');
-        dados = dados.filter(f => {
-          const funcCnpjLimpo = String(f.cnpj || '').replace(/\D/g, '');
-          if (funcCnpjLimpo && funcCnpjLimpo === cnpjFiltroLimpo) return true;
-          if (String(f.empresa_registro || '').replace(/\D/g, '').includes(cnpjFiltroLimpo)) return true;
-          return false;
-        });
-      }
-
-      if (lojaFiltro) {
-        dados = dados.filter(f => String(f.loja_trabalha || '').toUpperCase().includes(lojaFiltro.toUpperCase()));
-      }
-
-      document.getElementById('contadorRegistros').innerText = `${dados.length} reg.`;
-
-      const tbody = document.getElementById('tabelaFuncionarios');
-      if (dados.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhum colaborador encontrado com esses filtros.</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = dados.map(f => {
-        const statusStr = f.status || 'ATIVO';
-        const isAtivo = statusStr.toUpperCase() === 'ATIVO';
-        const badgeClass = isAtivo ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200';
-        
-        let nomeLoja = f.loja_trabalha || '-';
-        if (f.loja_trabalha) {
-          const numLojaStr = String(f.loja_trabalha).trim();
-          const lojaEncontrada = listaGlobalLojas.find(l => {
-            const lNome = String(l.nome_loja || l.loja || '').trim();
-            return lNome.includes(numLojaStr) || lNome.endsWith(numLojaStr);
-          });
-          if (lojaEncontrada) {
-            nomeLoja = lojaEncontrada.nome_loja || lojaEncontrada.loja;
-          }
-        }
-
-        let cnpjEmpresa = f.cnpj || '';
-        if (!cnpjEmpresa && f.empresa_id) {
-          const empMatch = listaGlobalEmpresas.find(e => String(e.id) === String(f.empresa_id));
-          if (empMatch) cnpjEmpresa = empMatch.cnpj || '';
-        }
-        if (!cnpjEmpresa && f.empresa_registro) {
-          const empMatch = listaGlobalEmpresas.find(e => f.empresa_registro.includes(e.razao_social));
-          if (empMatch) cnpjEmpresa = empMatch.cnpj || '';
-        }
-
-        const iconeObs = f.observacoes && f.observacoes.trim() !== '' ? `<span title="Possui observações" class="ml-1 cursor-help">📝</span>` : '';
-        const salFormatado = parseFloat(f.salario_base || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2});
-
-        return `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 font-mono text-slate-600">${f.matricula || '-'}</td>
-            <td class="p-3">
-              <div class="font-bold text-slate-900">${f.nome_registro} ${iconeObs}</div>
-              <div class="text-[10px] text-slate-400 font-mono">${f.usuario_alpha7 || ''}</div>
-              <div class="text-[10px] text-emerald-700 mt-0.5">Admissão: ${formatarDataBR(f.data_contratacao)}</div>
-            </td>
-            <td class="p-3">
-              <div class="text-slate-700 font-medium">${f.cargo || '-'}</div>
-              <div class="text-[11px] text-slate-500 font-mono mt-0.5">R$ ${salFormatado}</div>
-            </td>
-            <td class="p-3">
-              <div class="text-[11px] text-slate-700 font-mono truncate max-w-[200px]" title="${f.empresa_registro}">${f.empresa_registro || '-'}</div>
-              <div class="text-[10px] text-emerald-700 font-medium">Loja: ${nomeLoja}</div>
-              <div class="text-[10px] text-slate-400 font-mono">CNPJ: ${cnpjEmpresa || 'Não informado'}</div>
-            </td>
-            <td class="p-3">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${statusStr}</span>
-            </td>
-            <td class="p-3 text-right whitespace-nowrap space-x-1">
-              <button onclick="prepararEdicao('${f.id}')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition cursor-pointer">✏️ Editar</button>
-              <button onclick="alternarStatusFunc('${f.id}', '${statusStr}')" class="px-2 py-1 ${isAtivo ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'} rounded font-bold text-[10px] transition cursor-pointer">${isAtivo ? '🔒 Inativar' : '🔓 Ativar'}</button>
-            </td>
-          </tr>
-        `;
+      const termo = norm($('fBusca').value.trim()), st = $('fStatus').value, emp = $('fEmpresa').value, loja = $('fLoja').value, cargo = $('fCargo').value;
+      const lista = funcs.filter(f =>
+        (!st || String(f.status || 'ATIVO').toUpperCase() === st) && (!emp || f.empresa_id === emp) && (!loja || f.loja_id === loja) && (!cargo || f.cargo === cargo)
+        && (!termo || termo.split(/\s+/).every(p => norm(f.nome_registro).includes(p) || String(f.cpf || '').replace(/\D/g, '').includes(p.replace(/\D/g, '') || '#') || String(f.matricula || '') === p)));
+      $('contador').innerText = `${lista.length} funcionário(s)`;
+      if (lista.length === 0) { $('tabela').innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400">Nenhum funcionário com esse filtro.</td></tr>'; return; }
+      $('tabela').innerHTML = lista.map(f => {
+        const ativo = String(f.status || 'ATIVO').toUpperCase() === 'ATIVO';
+        const pend = pendencias.filter(p => p.funcionario_id === f.id).length;
+        const faltando = [!f.cpf && 'CPF', !(f.pix_chave || f.conta) && 'dados bancários', !f.loja_id && 'loja', !f.empresa_id && 'empresa'].filter(Boolean);
+        return `<tr class="hover:bg-slate-50 cursor-pointer" onclick="abrirFicha('${f.id}')">
+          <td class="p-3 font-mono text-slate-500">${esc(f.matricula || '-')}</td>
+          <td class="p-3"><div class="font-bold text-slate-900">${esc(f.nome_registro)} ${f.lider_loja ? '<span class="text-[9px] bg-indigo-100 text-indigo-800 px-1.5 rounded font-black">LÍDER</span>' : ''}</div>
+            <div class="text-[10px] text-slate-400 font-mono">${esc(f.cpf || '')}${f.data_contratacao ? ' · admissão ' + dbr(f.data_contratacao) : ''}${f.data_rescisao ? ' · rescisão ' + dbr(f.data_rescisao) : ''}</div>
+            ${pend ? `<div class="text-[10px] font-bold text-amber-700">📎 ${pend} atestado(s) pendente(s)</div>` : ''}
+            ${faltando.length && ativo ? `<div class="text-[10px] text-slate-400">falta: ${faltando.join(', ')}</div>` : ''}</td>
+          <td class="p-3"><div class="font-medium">${esc(f.cargo || '-')}</div><div class="text-[10px] text-slate-500 font-mono">${fmtR(f.salario_base)}${parseFloat(f.salario_adicional || 0) > 0 ? ' + ' + fmtR(f.salario_adicional) : ''}</div></td>
+          <td class="p-3"><div>${esc(nomeEmpresa(f.empresa_id) || f.empresa_registro || '-')}</div><div class="text-[10px] text-emerald-700 font-bold">${esc(nomeLoja(f.loja_id) || f.loja_trabalha || '-')}${f.periodo_trabalho ? ' · ' + f.periodo_trabalho.toLowerCase() : ''}</div></td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${ativo ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${esc(f.status || 'ATIVO')}</span></td>
+          <td class="p-3 text-right"><span class="text-[10px] text-slate-400 underline">abrir ficha</span></td>
+        </tr>`;
       }).join('');
     }
 
-    async function alternarStatusFunc(id, statusAtual) {
-      const novoStatus = String(statusAtual).toUpperCase() === 'ATIVO' ? 'INATIVO' : 'ATIVO';
-      const acaoTexto = novoStatus === 'INATIVO' ? 'inativar' : 'ativar';
-
-      if (confirm(`Deseja realmente ${acaoTexto} este colaborador?`)) {
-        const { error } = await _supabase.from('funcionarios').update({ status: novoStatus }).eq('id', id);
-        if (error) alert('Erro ao alterar status: ' + error.message);
-        else carregarFuncionarios();
-      }
+    // ---------------- ficha ----------------
+    function trocarAba(aba) {
+      document.querySelectorAll('.aba').forEach(b => b.classList.toggle('ativa', b.dataset.aba === aba));
+      document.querySelectorAll('.painel').forEach(p => p.classList.toggle('hidden', p.dataset.painel !== aba));
+      $('rodapeSalvar').classList.toggle('hidden', aba === 'historico' || aba === 'documentos');
+      if (aba === 'historico') carregarHistorico();
+      if (aba === 'documentos') carregarDocumentos();
     }
 
-    function prepararEdicao(id) {
-      const f = listaGlobalFuncionarios.find(item => String(item.id) === String(id));
-      if (!f) return;
-
-      document.getElementById('tituloForm').innerText = 'EDITAR COLABORADOR';
-      document.getElementById('funcId').value = f.id;
-      document.getElementById('inputNome').value = f.nome_registro || '';
-      document.getElementById('inputUsuarioAlpha7').value = f.usuario_alpha7 || '';
-      document.getElementById('inputCargo').value = f.cargo || '';
-      document.getElementById('inputMatricula').value = f.matricula || '';
-      document.getElementById('inputObservacoes').value = f.observacoes || '';
-      document.getElementById('inputSalarioBase').value = f.salario_base || '';
-      document.getElementById('inputDataContratacao').value = f.data_contratacao || '';
-
-      let empresaMatch = null;
-      if (f.empresa_id) empresaMatch = listaGlobalEmpresas.find(e => String(e.id) === String(f.empresa_id));
-      if (!empresaMatch && f.cnpj) {
-        const cnpjLimpo = String(f.cnpj).replace(/\D/g, '');
-        empresaMatch = listaGlobalEmpresas.find(e => (e.cnpj || '').replace(/\D/g, '') === cnpjLimpo);
+    function abrirFicha(id, aba) {
+      atual = id ? funcs.find(f => f.id === id) : null;
+      $('formFicha').reset();
+      $('fId').value = atual ? atual.id : '';
+      CAMPOS.forEach(c => {
+        const el = $(c); if (!el) return;
+        const v = atual ? atual[c] : null;
+        if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? '';
+      });
+      $('matricula').value = atual ? (atual.matricula || '') : '';
+      // cargo antigo que não está na lista: mantém como opção
+      if (atual && atual.cargo && !cargos.some(c => c.nome === atual.cargo)) {
+        $('cargo').insertAdjacentHTML('beforeend', `<option value="${esc(atual.cargo)}">${esc(atual.cargo)} (fora da lista)</option>`); $('cargo').value = atual.cargo;
       }
-      if (!empresaMatch && f.empresa_registro) empresaMatch = listaGlobalEmpresas.find(e => e.cnpj && f.empresa_registro.includes(e.cnpj));
-      if (!empresaMatch && f.empresa_registro) empresaMatch = listaGlobalEmpresas.find(e => f.empresa_registro.includes(e.razao_social));
+      $('fichaTitulo').innerText = atual ? atual.nome_registro : 'NOVO FUNCIONÁRIO';
+      $('fichaSub').innerText = atual ? `Matrícula ${atual.matricula || '-'} · ${atual.cargo || ''} · ${nomeLoja(atual.loja_id) || atual.loja_trabalha || ''}` : 'A matrícula é gerada automaticamente ao salvar.';
+      document.querySelectorAll('.abaExistente').forEach(b => b.classList.toggle('hidden', !atual));
+      const pend = atual ? pendencias.filter(p => p.funcionario_id === atual.id) : [];
+      $('badgePendDoc').classList.toggle('hidden', pend.length === 0); $('badgePendDoc').innerText = pend.length;
+      $('infoStatus').innerHTML = atual ? `Status atual: <b>${esc(atual.status || 'ATIVO')}</b>` : '';
+      mostrarEmpresa(); atualizarCaixa(); mostrarAcesso();
+      $('modalFicha').classList.remove('hidden');
+      trocarAba(aba || 'pessoal');
+    }
+    function fecharFicha() { $('modalFicha').classList.add('hidden'); }
 
-      if (empresaMatch) {
-        document.getElementById('selectEmpresa').value = empresaMatch.id;
-        
-        let lojaAlvo = f.loja_trabalha || '';
-        const lojaObj = listaGlobalLojas.find(l => {
-          const lNome = String(l.nome_loja || l.loja || '').trim();
-          return lNome.includes(String(lojaAlvo)) || lNome.endsWith(String(lojaAlvo));
-        });
-        if (lojaObj) lojaAlvo = lojaObj.nome_loja || lojaObj.loja;
-
-        aoSelecionarEmpresa(lojaAlvo);
-      } else {
-        document.getElementById('selectEmpresa').value = '';
-        aoSelecionarEmpresa();
-      }
-
-      document.getElementById('btnSalvar').innerText = '✓ ATUALIZAR COLABORADOR';
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    function mostrarEmpresa() {
+      const e = empresas.find(x => x.id === $('empresa_id').value);
+      $('infoEmpresa').innerText = e ? `${e.razao_social || ''} · CNPJ ${e.cnpj || '-'}${e.inss_patronal ? ' · INSS patronal' : ''}` : '';
+    }
+    function atualizarCaixa() {
+      const ehCaixa = String($('cargo').value).includes('CAIXA');
+      $('boxCaixa').classList.toggle('hidden', !ehCaixa);
+      if (!ehCaixa) $('adicional_caixa').value = '';
+    }
+    function aoMarcarLider() {
+      if ($('lider_loja').checked && perfil === 'GESTOR' && !$('perfilAcesso').value) $('perfilAcesso').value = 'LIDER';
+    }
+    function mostrarAcesso() {
+      const email = String($('email_acesso').value || '').toLowerCase();
+      const u = usuarios.find(x => x.email === email);
+      $('perfilAcesso').value = u ? u.perfil : ($('lider_loja').checked && email ? 'LIDER' : '');
+      $('infoAcesso').innerHTML = !email ? 'Sem e-mail de acesso cadastrado.'
+        : u ? `Acesso atual: <b>${esc(u.perfil)}</b>${u.loja_id ? ' · ' + esc(nomeLoja(u.loja_id)) : ''}${u.ativo === false ? ' · <b class="text-rose-700">inativo</b>' : ''}`
+        : 'Este e-mail ainda não tem perfil no sistema.';
     }
 
-    function resetarFormulario() {
-      document.getElementById('tituloForm').innerText = 'ADICIONAR COLABORADOR';
-      document.getElementById('formFuncionario').reset();
-      document.getElementById('funcId').value = '';
-      document.getElementById('inputMatricula').value = '';
-      document.getElementById('inputObservacoes').value = '';
-      document.getElementById('inputSalarioBase').value = '';
-      document.getElementById('inputDataContratacao').value = '';
-      document.getElementById('infoCnpj').innerText = '-';
-      document.getElementById('infoFantasia').innerText = '-';
-      document.getElementById('selectLoja').innerHTML = '<option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>';
-      document.getElementById('selectLoja').disabled = true;
-      document.getElementById('btnSalvar').innerText = '✓ ADICIONAR COLABORADOR';
-    }
-
-    async function salvarFuncionario(e) {
+    async function salvarFicha(e) {
       e.preventDefault();
-      const id = document.getElementById('funcId').value;
-      const nome_registro = document.getElementById('inputNome').value.toUpperCase();
-      const usuario_alpha7 = document.getElementById('inputUsuarioAlpha7').value.toUpperCase();
-      const cargo = document.getElementById('inputCargo').value.toUpperCase();
-      const matricula = document.getElementById('inputMatricula').value;
-      const observacoes = document.getElementById('inputObservacoes').value;
-      const salario_base = parseFloat(document.getElementById('inputSalarioBase').value) || 0;
-      const data_contratacao = document.getElementById('inputDataContratacao').value || null;
-      
-      const selectEmpresa = document.getElementById('selectEmpresa');
-      const empresa_registro = selectEmpresa.selectedOptions[0]?.text || '';
-      const loja_trabalha = document.getElementById('selectLoja').value || null;
-      const cnpj = selectEmpresa.selectedOptions[0]?.getAttribute('data-cnpj') || null;
-
-      const payload = {
-        nome_registro,
-        usuario_alpha7,
-        cargo,
-        matricula,
-        empresa_registro,
-        loja_trabalha,
-        cnpj,
-        observacoes,
-        salario_base,
-        data_contratacao
-      };
-
-      if (id) {
-        const { error } = await _supabase.from('funcionarios').update(payload).eq('id', id);
-        if (error) alert('Erro ao atualizar: ' + error.message);
-        else { resetarFormulario(); carregarFuncionarios(); }
-      } else {
-        payload.status = 'ATIVO';
-        const { error } = await _supabase.from('funcionarios').insert([payload]);
-        if (error) alert('Erro ao cadastrar: ' + error.message);
-        else { resetarFormulario(); carregarFuncionarios(); }
+      const payload = {};
+      CAMPOS.forEach(c => {
+        const el = $(c); if (!el) return;
+        let v = el.type === 'checkbox' ? el.checked : el.value;
+        if (el.type === 'number') v = v === '' ? 0 : parseFloat(v);
+        else if (typeof v === 'string') { v = v.trim(); if (MAIUSCULAS.includes(c)) v = norm(v); if (v === '') v = null; }
+        payload[c] = v;
+      });
+      payload.cpf = payload.cpf ? mascaraCpf(payload.cpf) : null;
+      if (!payload.empresa_id || !payload.loja_id) { trocarAba('lotacao'); return alert('Informe a empresa de registro e a loja/setor.'); }
+      if (!payload.cargo || !payload.data_contratacao) { trocarAba('contrato'); return alert('Informe cargo e admissão.'); }
+      if (payload.cpf) {
+        const dup = funcs.find(f => f.cpf && f.cpf.replace(/\D/g, '') === payload.cpf.replace(/\D/g, '') && f.id !== $('fId').value);
+        if (dup && !confirm(`O CPF ${payload.cpf} já está no cadastro de ${dup.nome_registro}. Salvar mesmo assim?`)) return;
       }
+      const btn = $('btnSalvar'); btn.disabled = true;
+      const id = $('fId').value;
+      const { data, error } = id
+        ? await _supabase.from('funcionarios').update(payload).eq('id', id).select().single()
+        : await _supabase.from('funcionarios').insert([payload]).select().single();
+      btn.disabled = false;
+      if (error) return alert('Erro ao salvar: ' + error.message);
+      await carregar();
+      alert(id ? 'Cadastro atualizado.' : `Funcionário cadastrado. Matrícula ${data.matricula}.`);
+      abrirFicha(data.id, id ? undefined : 'lotacao');
     }
 
+    async function salvarAcesso() {
+      if (perfil !== 'GESTOR') return alert('Somente o GESTOR define acesso.');
+      const email = $('email_acesso').value.trim().toLowerCase(), p = $('perfilAcesso').value;
+      if (!email) return alert('Informe o e-mail de acesso.');
+      if (!$('fId').value) return alert('Salve o cadastro primeiro.');
+      const { error } = p
+        ? await _supabase.rpc('fn_usuario_acesso', { p_email: email, p_perfil: p, p_loja_id: $('loja_id').value || null, p_nome: $('nome_registro').value.trim(), p_ativo: true })
+        : await _supabase.rpc('fn_usuario_acesso', { p_email: email, p_perfil: (usuarios.find(x => x.email === email) || {}).perfil || 'LIDER', p_loja_id: $('loja_id').value || null, p_nome: $('nome_registro').value.trim(), p_ativo: false });
+      if (error) return alert(error.message);
+      await _supabase.from('funcionarios').update({ email_acesso: email }).eq('id', $('fId').value);
+      const { data } = await _supabase.from('usuarios_sistema').select('*'); usuarios = data || [];
+      mostrarAcesso();
+      alert(p ? `Acesso salvo: ${email} como ${p}. Lembre de criar o login no Supabase (Authentication › Users) se ainda não existir.` : 'Acesso desativado.');
+    }
+
+    async function carregarHistorico() {
+      const { data } = await _supabase.from('funcionarios_historico').select('*').eq('funcionario_id', $('fId').value).order('alterado_em', { ascending: false });
+      $('listaHistorico').innerHTML = (data || []).length === 0 ? '<div class="p-4 text-center text-slate-400">Nenhuma alteração registrada ainda.</div>'
+        : data.map(h => `<div class="p-2 flex justify-between gap-3 text-[11px]">
+            <div><b>${esc(ROTULO_CAMPO[h.campo] || h.campo)}</b>: <span class="text-rose-700 line-through">${esc(h.valor_de ?? '(vazio)')}</span> → <span class="text-emerald-700 font-bold">${esc(h.valor_para ?? '(vazio)')}</span></div>
+            <div class="text-slate-400 text-right whitespace-nowrap">${esc(h.alterado_por || '')}<br>${new Date(h.alterado_em).toLocaleString('pt-BR')}</div></div>`).join('');
+    }
+
+    async function carregarDocumentos() {
+      const id = $('fId').value;
+      const pend = pendencias.filter(p => p.funcionario_id === id);
+      $('pendDoc').classList.toggle('hidden', pend.length === 0);
+      $('pendDoc').innerHTML = `⚠ <b>${pend.length} atestado(s) pendente(s)</b>: ` + pend.map(p => `falta em ${dbr(p.data_servico)} (${esc(p.loja_solicitante || '')})`).join(' · ');
+      $('docPendencia').innerHTML = '<option value="">(nenhuma)</option>' + pend.map(p => `<option value="${p.solicitacao_id}">Falta em ${dbr(p.data_servico)} · ${esc(p.loja_solicitante || '')}</option>`).join('');
+      if (pend.length) { $('docTipo').value = 'ATESTADO'; $('docPendencia').value = pend[0].solicitacao_id; $('docData').value = pend[0].data_servico; }
+      $('docBoxPend').classList.toggle('hidden', $('docTipo').value !== 'ATESTADO');
+      const { data, error } = await _supabase.from('funcionarios_documentos').select('*').eq('funcionario_id', id).order('enviado_em', { ascending: false });
+      if (error) { $('listaDocs').innerHTML = `<div class="p-3 text-rose-600">${esc(error.message)}</div>`; return; }
+      $('listaDocs').innerHTML = (data || []).length === 0 ? '<div class="p-4 text-center text-slate-400">Nenhum documento anexado.</div>'
+        : data.map(d => `<div class="p-2 flex justify-between items-center gap-3 text-[11px]">
+            <div><span class="bg-slate-100 px-1.5 rounded font-bold text-[10px]">${esc(d.tipo)}</span> ${esc(d.descricao || '')} ${d.data_referencia ? '· ' + dbr(d.data_referencia) : ''}
+              <div class="text-[10px] text-slate-400">${esc(d.enviado_por || '')} em ${new Date(d.enviado_em).toLocaleString('pt-BR')}</div></div>
+            <button type="button" onclick="abrirDocumento('${esc(d.arquivo_path)}')" class="text-indigo-700 font-bold underline cursor-pointer">abrir</button></div>`).join('');
+    }
+
+    async function enviarDocumento() {
+      const id = $('fId').value, arq = $('docArquivo').files[0];
+      if (!arq) return alert('Escolha o arquivo.');
+      const btn = $('btnDoc'); btn.disabled = true; btn.innerText = 'Enviando...';
+      const nome = arq.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
+      const caminho = `${id}/${Date.now()}_${nome}`;
+      const { error: e1 } = await _supabase.storage.from('documentos').upload(caminho, arq);
+      if (e1) { btn.disabled = false; btn.innerText = '📎 Anexar documento'; return alert('Falha no envio: ' + e1.message); }
+      const tipo = $('docTipo').value;
+      const { error: e2 } = await _supabase.from('funcionarios_documentos').insert([{
+        funcionario_id: id, tipo, descricao: $('docDescricao').value.trim() || null, data_referencia: $('docData').value || null,
+        arquivo_path: caminho, solicitacao_id: tipo === 'ATESTADO' ? ($('docPendencia').value || null) : null }]);
+      btn.disabled = false; btn.innerText = '📎 Anexar documento';
+      if (e2) return alert('Arquivo enviado, mas não foi registrado: ' + e2.message);
+      $('docArquivo').value = ''; $('docDescricao').value = '';
+      await carregar();
+      abrirFicha(id, 'documentos');
+    }
+
+    async function abrirDocumento(caminho) {
+      const { data, error } = await _supabase.storage.from('documentos').createSignedUrl(caminho, 120);
+      if (error) return alert('Não foi possível abrir: ' + error.message);
+      window.open(data.signedUrl, '_blank');
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharFicha(); });
     inicializar();
+  </script>
+  <!-- Bloqueio por inatividade (15 minutos) -->
+  <script>
+    let tempoInatividade;
+    function resetarTemporizador() { clearTimeout(tempoInatividade); tempoInatividade = setTimeout(() => { localStorage.removeItem('usuario_drogarema'); alert('Sessão expirada por inatividade. Faça login novamente.'); window.location.href = 'login.html'; }, 15 * 60 * 1000); }
+    ['load','mousemove','keypress','click','scroll'].forEach(ev => window.addEventListener(ev, resetarTemporizador));
   </script>
 </body>
 </html>

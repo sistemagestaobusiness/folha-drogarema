@@ -210,7 +210,9 @@
               nome: f.nome_registro,
               empresa: nomeEmpresa.toUpperCase(),
               salarioBase: parseFloat(f.salario_base || 0),
-              registroDrogarema: String((empresaMatch && empresaMatch.razao_social) || f.empresa_registro || '').toUpperCase().includes('DROGAREMA'),
+              // INSS patronal: marcação no cadastro da empresa (se não houver, usa o nome DROGAREMA na razão social)
+              registroDrogarema: empresaMatch && typeof empresaMatch.inss_patronal === 'boolean' ? empresaMatch.inss_patronal
+                : String((empresaMatch && empresaMatch.razao_social) || f.empresa_registro || '').toUpperCase().includes('DROGAREMA'),
               freelance: String(f.cargo || '').toUpperCase().includes('FREELANCE'),
               atual: initMetrics(),
               anterior: initMetrics()
