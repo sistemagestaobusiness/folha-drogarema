@@ -108,7 +108,8 @@
           <div class="md:col-span-2"><label class="lbl">Matrícula</label><input id="matricula" readonly placeholder="automática" class="inp font-mono bg-slate-100 cursor-not-allowed"></div>
           <div class="md:col-span-2"><label class="lbl">Admissão *</label><input type="date" id="data_contratacao" required class="inp font-mono"></div>
           <div class="md:col-span-2"><label class="lbl">Rescisão</label><input type="date" id="data_rescisao" class="inp font-mono">
-            <p class="text-[10px] text-slate-400 mt-0.5">Com data, o funcionário fica INATIVO a partir dela.</p></div>
+            <p class="text-[10px] text-slate-400 mt-0.5">Com data, o funcionário fica INATIVO a partir dela.</p>
+            <p id="aviso13Resc" class="hidden mt-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-300 rounded p-1.5"></p></div>
           <div class="md:col-span-2"><label class="lbl">Data-base das férias</label><input type="date" id="ferias_data_base" class="inp font-mono"></div>
           <div class="md:col-span-4 flex items-end"><p class="text-[10px] text-slate-400 pb-2">Preencha só se o período aquisitivo for diferente da admissão (ex.: transferência entre empresas, acordo). Em branco, as férias contam da admissão. <a href="ferias.html" class="text-emerald-700 font-bold hover:underline">🏖 abrir férias</a></p></div>
           <div class="md:col-span-3"><label class="lbl">Cargo *</label><select id="cargo" required onchange="atualizarCaixa()" class="inp font-bold"></select></div>
@@ -131,6 +132,8 @@
               <select id="periodo_trabalho" class="inp"><option value="">-</option><option value="COMERCIAL">Comercial</option><option value="INTERMEDIARIO">Intermediário</option><option value="NOTURNO">Noturno</option></select></div>
             <div class="md:col-span-6"><label class="inline-flex items-center gap-2 cursor-pointer font-bold text-slate-700"><input type="checkbox" id="lider_loja" onchange="aoMarcarLider()"> Líder / responsável da loja</label>
               <p class="text-[10px] text-slate-400">O supervisor também pode ajustar loja e período (para a escala); toda mudança fica no histórico.</p></div>
+            <div class="md:col-span-3"><label class="lbl">Função no organograma (só se for diferente do cargo)</label><select id="organograma_funcao" class="inp"></select>
+              <p class="text-[10px] text-slate-400">Ex.: registrado como farmacêutico, mas atua como supervisor. Não muda o cargo nem a folha. <a href="organograma.html" class="text-indigo-700 font-bold hover:underline">🏛 ver organograma</a></p></div>
           </div>
           <div class="border border-indigo-200 bg-indigo-50/50 rounded-xl p-3 space-y-2">
             <div class="text-[11px] font-black uppercase text-indigo-900">🔐 Acesso ao sistema</div>
@@ -209,10 +212,10 @@
     // Campos da ficha que vão direto para a tabela funcionarios
     const CAMPOS = ['nome_registro','data_nascimento','cpf','rg','estado_civil','email','celular','cep','endereco','numero','complemento',
       'bairro','cidade','uf','usuario_alpha7','observacoes','data_contratacao','data_rescisao','cargo','salario_base','salario_adicional',
-      'adicional_caixa','ferias_data_base','empresa_id','loja_id','periodo_trabalho','lider_loja','email_acesso','pix_tipo','pix_chave','banco','agencia','conta','tipo_conta'];
+      'adicional_caixa','ferias_data_base','organograma_funcao','empresa_id','loja_id','periodo_trabalho','lider_loja','email_acesso','pix_tipo','pix_chave','banco','agencia','conta','tipo_conta'];
     const MAIUSCULAS = ['nome_registro','rg','endereco','numero','complemento','bairro','cidade','uf','usuario_alpha7'];
     const ROTULO_CAMPO = { nome_registro: 'Nome', cargo: 'Cargo', salario_base: 'Salário base', salario_adicional: 'Salário adicional', adicional_caixa: 'Adicional de caixa',
-      data_contratacao: 'Admissão', ferias_data_base: 'Data-base das férias', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
+      data_contratacao: 'Admissão', organograma_funcao: 'Função no organograma', ferias_data_base: 'Data-base das férias', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
       lider_loja: 'Líder da loja', email_acesso: 'E-mail de acesso', pix_tipo: 'Tipo PIX', pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', tipo_conta: 'Tipo de conta', cpf: 'CPF' };
 
     let perfisLista = [], telasLista = [], perfilTelas = [], telasExtras = [], meuEmail = '';
@@ -272,8 +275,12 @@
       $('empresa_id').innerHTML = opts(empresas.filter(e => String(e.status || 'Ativo').toLowerCase() === 'ativo'), 'id', e => `${e.nome_fantasia || ''} · ${e.razao_social || ''}`, '-- selecione --');
       $('loja_id').innerHTML = opts(lojas.filter(l => l.ativo !== false), 'id', l => l.nome_loja, '-- selecione --');
       $('cargo').innerHTML = opts(cargos, 'nome', c => c.nome, '-- selecione --');
+      $('organograma_funcao').innerHTML = opts(cargos, 'nome', c => c.nome, '(mesma do cargo)');
       if (!['GESTOR', 'RH'].includes(perfil)) { $('btnAcesso').disabled = true; $('btnAcesso').classList.add('opacity-40', 'cursor-not-allowed'); $('perfilAcesso').disabled = true; }
       await carregar();
+      // vindo do organograma / outra tela: abre a ficha direto
+      const qid = new URLSearchParams(location.search).get('id');
+      if (qid && funcs.some(f => f.id === qid)) abrirFicha(qid, 'lotacao');
     }
 
     async function carregar() {
@@ -327,8 +334,20 @@
       if (aba === 'documentos') carregarDocumentos();
     }
 
+    // antecipação de 13º sem desconto: aviso para a rescisão
+    async function aviso13(id) {
+      const el = $('aviso13Resc'); el.classList.add('hidden');
+      if (!id) return;
+      const { data } = await _supabase.rpc('fn_decimo_detalhe', { p_func: id });
+      const saldo = data ? parseFloat(data.saldo_antecipacao || 0) : 0;
+      if (saldo <= 0.009) return;
+      el.innerHTML = `🎄 Recebeu antecipação de 13º: R$ ${saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ainda sem desconto. Na rescisão, lançar o desconto ${esc((data.eventos || {}).COMPENSACAO_RESCISAO || '')} — sem ele o Financeiro não paga a rescisão.`;
+      el.classList.remove('hidden');
+    }
+
     function abrirFicha(id, aba) {
       atual = id ? funcs.find(f => f.id === id) : null;
+      aviso13(id);
       $('formFicha').reset();
       $('fId').value = atual ? atual.id : '';
       CAMPOS.forEach(c => {

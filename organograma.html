@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Organograma - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1600px] mx-auto space-y-4">
+
+    <div class="noprint sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">🏛 ORGANOGRAMA</h1>
+        <p class="text-xs text-slate-500">Montado automaticamente pelo cadastro: cargo (ou função no organograma), loja/setor e líder da loja</p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+        <a id="lnkEscala" href="escala.html" class="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-lg font-bold text-xs border border-sky-300">📅 Escala</a>
+        <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+        <a id="btnVoltar" href="freelance_solicitacao.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← Voltar</a>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div class="noprint bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3 text-xs">
+        <select id="selVisao" onchange="renderizar()" class="border border-slate-300 rounded-lg p-2 font-bold bg-slate-50 min-w-[220px]"></select>
+        <span id="lblResumo" class="text-slate-500"></span>
+        <div class="ml-auto flex gap-2">
+          <button id="btnConfig" onclick="$('boxConfig').classList.toggle('hidden')" class="hidden px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">⚙ Níveis dos cargos</button>
+          <button onclick="window.print()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold cursor-pointer">🖨 Imprimir</button>
+        </div>
+      </div>
+
+      <div id="boxConfig" class="noprint hidden bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+        <h3 class="font-black text-sm">⚙ Nível de cada cargo no organograma</h3>
+        <p class="text-[11px] text-slate-500">1 Diretoria · 2 Gestão e apoio (supervisor, RH, financeiro, logística...) · 3 Liderança de loja · 4 Farmacêuticos · 5 Equipe · "Não aparece" (ex.: freelance). Quem tem função diferente do cargo registrado: ajuste "Função no organograma" no cadastro (aba Lotação).</p>
+        <div id="gradeCargos" class="grid grid-cols-1 md:grid-cols-3 gap-2"></div>
+        <button onclick="salvarNiveis()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer">SALVAR NÍVEIS</button>
+      </div>
+
+      <div id="avisos"></div>
+      <div id="titulo" class="hidden print:block text-lg font-black"></div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-x-auto"><div id="arvore" class="tree min-w-max mx-auto"></div></div>
+      <p class="noprint text-[10px] text-slate-400">Para mudar o organograma, altere no cadastro do funcionário: cargo, loja/setor, "Líder da loja" ou "Função no organograma".</p>
+    </div>
+  </div>
+
+  <style>
+    .tree ul { padding-top: 22px; position: relative; display: flex; justify-content: center; margin: 0; }
+    .tree li { list-style: none; position: relative; padding: 22px 6px 0; display: flex; flex-direction: column; align-items: center; }
+    .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #94a3b8; width: 50%; height: 22px; }
+    .tree li::after { right: auto; left: 50%; border-left: 2px solid #94a3b8; }
+    .tree li:only-child::after, .tree li:only-child::before { display: none; }
+    .tree li:only-child { padding-top: 0; }
+    .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
+    .tree li:last-child::before { border-right: 2px solid #94a3b8; border-radius: 0 6px 0 0; }
+    .tree li:first-child::after { border-radius: 6px 0 0 0; }
+    .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #94a3b8; width: 0; height: 22px; }
+    .tree > ul { padding-top: 0; }
+    .no { border-radius: 10px; padding: 8px 12px; min-width: 150px; max-width: 230px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+    .no .n { font-weight: 800; font-size: 12px; line-height: 1.2; }
+    .no .c { font-size: 10px; opacity: .8; text-transform: uppercase; margin-top: 2px; }
+    .grp { text-align: left; }
+    .grp .n { text-align: center; }
+    .grp ul.lista { display: block; padding: 4px 0 0; }
+    .grp ul.lista li { display: block; padding: 1px 0; font-size: 11px; }
+    .grp ul.lista li::before, .grp ul.lista li::after, .tree ul.lista::before { display: none; }
+    @media print {
+      @page { size: A4 landscape; margin: 8mm; }
+      .noprint { display: none !important; } #titulo { display: block !important; }
+      body { background: #fff !important; padding: 0 !important; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const COR = { 1: 'bg-slate-800 text-white', 2: 'bg-indigo-600 text-white', 3: 'bg-emerald-600 text-white', 4: 'bg-sky-100 text-sky-900 border border-sky-300', 5: 'bg-white text-slate-800 border border-slate-300' };
+    let perfil = null, minhaLoja = null, funcs = [], lojas = [], cargos = [];
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const curto = n => { const p = String(n || '').trim().split(/\s+/); return p.length > 1 ? p[0] + ' ' + p[p.length - 1] : p[0]; };
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '';
+    const ehLoja = id => /^LOJA\s/i.test(nomeLoja(id));
+    const funcao = f => (f.organograma_funcao || f.cargo || '').trim();
+    const cargoDe = f => cargos.find(c => c.nome === funcao(f));
+    const nivel = f => { const c = cargoDe(f); let n = c ? c.nivel : null; if (f.lider_loja && ehLoja(f.loja_id) && (n == null || n > 3)) n = 3; return n; };
+    const rh = () => ['RH', 'GESTOR'].includes(perfil);
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || '-';
+      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      $(rh() ? 'btnPainel' : 'btnVoltar').classList.remove('hidden');
+      if (perfil === 'SUPERVISOR') $('btnVoltar').href = 'supervisor_freelance.html';
+      $('btnConfig').classList.toggle('hidden', !rh());
+      const [rf, rl, rc] = await Promise.all([
+        _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, status, lider_loja, organograma_funcao').eq('status', 'ATIVO').order('nome_registro'),
+        _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja'),
+        _supabase.from('cargos').select('*').order('ordem')
+      ]);
+      if (rf.error) { $('aviso').innerText = 'Erro ao carregar: ' + rf.error.message; $('aviso').classList.remove('hidden'); return; }
+      funcs = rf.data || []; lojas = (rl.data || []).filter(l => l.ativo !== false); cargos = rc.data || [];
+      const opLojas = lojas.filter(l => perfil === 'LIDER' ? l.id === minhaLoja : perfil === 'SUPERVISOR' ? ehLoja(l.id) : true);
+      $('selVisao').innerHTML = (rh() ? '<option value="GERAL">🏢 Empresa (visão geral)</option>' : '') + opLojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      if (perfil === 'LIDER') $('selVisao').disabled = true;
+      if (!$('selVisao').options.length) { $('aviso').innerText = 'Seu usuário não está ligado a uma loja.'; $('aviso').classList.remove('hidden'); return; }
+      renderConfig();
+      $('conteudo').classList.remove('hidden');
+      renderizar();
+    }
+
+    // ---------- blocos visuais ----------
+    function pessoa(f, extra) {
+      const n = nivel(f);
+      return `<div class="no ${COR[n] || COR[5]}" title="${esc(f.nome_registro)}"><div class="n">${esc(curto(f.nome_registro))}</div><div class="c">${esc(funcao(f))}${extra ? ' · ' + extra : ''}</div></div>`;
+    }
+    function grupo(titulo, lista, cls) {
+      return `<div class="no grp ${cls || COR[5]}"><div class="n">${esc(titulo)} <span class="opacity-60">(${lista.length})</span></div>
+        <ul class="lista">${lista.map(f => `<li title="${esc(f.nome_registro)}">• ${esc(curto(f.nome_registro))}${f.organograma_funcao && f.organograma_funcao !== f.cargo ? '' : ''}</li>`).join('')}</ul></div>`;
+    }
+    const caixa = (html, cls) => `<div class="no ${cls}">${html}</div>`;
+    const li = (conteudo, filhos) => `<li>${conteudo}${filhos && filhos.length ? `<ul>${filhos.join('')}</ul>` : ''}</li>`;
+
+    // equipe de uma loja/setor agrupada por cargo (níveis 4 e 5)
+    function equipeAgrupada(membros) {
+      const r = [];
+      const farma = membros.filter(f => nivel(f) === 4);
+      if (farma.length) r.push(li(farma.length <= 2 ? farma.map(f => pessoa(f)).join('<div class="h-1"></div>') : grupo('Farmacêuticos', farma, COR[4])));
+      const porCargo = {};
+      membros.filter(f => nivel(f) === 5).forEach(f => (porCargo[funcao(f)] = porCargo[funcao(f)] || []).push(f));
+      Object.keys(porCargo).sort().forEach(c => r.push(li(grupo(c, porCargo[c]))));
+      return r;
+    }
+
+    function arvoreLoja(lojaId) {
+      const membros = funcs.filter(f => f.loja_id === lojaId && nivel(f) != null);
+      const lideres = membros.filter(f => nivel(f) <= 3);
+      const equipe = membros.filter(f => nivel(f) >= 4);
+      const supervisores = funcs.filter(f => nivel(f) === 2 && funcao(f) === 'SUPERVISOR');
+      const topoLider = lideres.length ? lideres.map(f => pessoa(f, lideres.length > 1 ? '' : 'líder')).join('<div class="h-1"></div>')
+        : caixa('<div class="n">Sem líder definido</div><div class="c">marque "Líder da loja" no cadastro</div>', 'border-2 border-dashed border-rose-400 text-rose-700 bg-rose-50');
+      const noLoja = li(caixa(`<div class="n">${esc(nomeLoja(lojaId))}</div><div class="c">${membros.length} pessoa(s)</div>`, 'bg-amber-100 text-amber-900 border border-amber-300'),
+        [li(topoLider, equipeAgrupada(equipe))]);
+      const raiz = ehLoja(lojaId) && supervisores.length ? li(supervisores.map(f => pessoa(f, 'supervisão')).join(''), [noLoja]) : noLoja;
+      $('lblResumo').innerText = `${membros.length} pessoa(s) · ${lideres.length} líder(es) · ${equipe.length} na equipe`;
+      return `<ul>${raiz}</ul>`;
+    }
+
+    function arvoreGeral() {
+      const ativos = funcs.filter(f => nivel(f) != null);
+      const diretoria = ativos.filter(f => nivel(f) === 1).sort((a, b) => (funcao(b) === 'SOCIO MAJORITARIO') - (funcao(a) === 'SOCIO MAJORITARIO') || a.nome_registro.localeCompare(b.nome_registro));
+      const gestao = ativos.filter(f => nivel(f) === 2);
+      const supervisores = gestao.filter(f => funcao(f) === 'SUPERVISOR');
+      const lojasLoja = lojas.filter(l => ehLoja(l.id));
+      const setores = lojas.filter(l => !ehLoja(l.id));
+      const noLojaResumo = l => { const m = ativos.filter(f => f.loja_id === l.id); const lid = m.filter(f => nivel(f) <= 3);
+        return li(`<button onclick="abrirLoja('${l.id}')" class="no bg-amber-100 text-amber-900 border border-amber-300 hover:ring-2 hover:ring-amber-400 cursor-pointer">
+          <div class="n">${esc(l.nome_loja)}</div><div class="c">${lid.length ? 'líder: ' + esc(lid.map(f => curto(f.nome_registro)).join(', ')) : '<b class="text-rose-700">sem líder</b>'}</div><div class="c">${m.length} pessoa(s) · ver ›</div></button>`); };
+      const filhosSup = lojasLoja.map(noLojaResumo);
+      // setor administrativo: fica embaixo do gestor dele quando só há um gestor (nível 2) no setor
+      const doGestor = {}, soltos = [];
+      setores.forEach(s => {
+        const m = ativos.filter(f => f.loja_id === s.id && nivel(f) >= 3);
+        if (!m.length) return;
+        const g = gestao.filter(f => f.loja_id === s.id && funcao(f) !== 'SUPERVISOR');
+        const no = li(grupo(s.nome_loja, m, 'bg-slate-100 text-slate-800 border border-slate-300'));
+        if (g.length === 1) (doGestor[g[0].id] = doGestor[g[0].id] || []).push(no); else soltos.push(no);
+      });
+      const filhos = [];
+      gestao.forEach(f => filhos.push(li(pessoa(f), funcao(f) === 'SUPERVISOR' && f === supervisores[0] ? filhosSup : (doGestor[f.id] || []))));
+      if (!supervisores.length) filhos.push(...filhosSup);
+      filhos.push(...soltos);
+      const topo = diretoria.length ? diretoria.map(f => pessoa(f)).join('<div class="h-1"></div>')
+        : caixa('<div class="n">Diretoria</div><div class="c">nenhum cargo de nível 1</div>', 'border-2 border-dashed border-slate-400');
+      $('lblResumo').innerText = `${ativos.length} pessoa(s) ativas no organograma · ${lojasLoja.length} lojas · ${setores.length} setores`;
+      return `<ul>${li(`<div class="flex gap-2 items-start">${topo}</div>`, filhos)}</ul>`;
+    }
+    function abrirLoja(id) { $('selVisao').value = id; renderizar(); }
+
+    // ---------- avisos (cadastro incompleto) ----------
+    function avisos(lojaId) {
+      const lista = [];
+      const escopo = funcs.filter(f => lojaId === 'GERAL' || f.loja_id === lojaId);
+      const lnk = f => rh() ? ` <a href="funcionarios.html?id=${f.id}" class="underline font-bold">corrigir</a>` : '';
+      escopo.filter(f => f.loja_id && !(f.cargo || '').trim()).forEach(f => lista.push(`<b>${esc(f.nome_registro)}</b> está na ${esc(nomeLoja(f.loja_id))} mas <b>não tem cargo</b>.${lnk(f)}`));
+      if (lojaId === 'GERAL') funcs.filter(f => !f.loja_id && funcao(f) !== 'FREELANCE').forEach(f => lista.push(`<b>${esc(f.nome_registro)}</b> não tem loja/setor.${lnk(f)}`));
+      escopo.filter(f => (f.cargo || '').trim() && !cargoDe(f)).forEach(f => lista.push(`<b>${esc(f.nome_registro)}</b>: cargo "${esc(funcao(f))}" não está na lista de cargos (fica fora do organograma).${lnk(f)}`));
+      (lojaId === 'GERAL' ? lojas.filter(l => ehLoja(l.id)) : lojas.filter(l => l.id === lojaId && ehLoja(l.id))).forEach(l => {
+        const lid = funcs.filter(f => f.loja_id === l.id && nivel(f) != null && nivel(f) <= 3);
+        if (!lid.length) lista.push(`<b>${esc(l.nome_loja)}</b> está sem líder (marque "Líder da loja" no cadastro de quem lidera).`);
+        if (lid.length > 1) lista.push(`<b>${esc(l.nome_loja)}</b> tem ${lid.length} líderes: ${esc(lid.map(f => curto(f.nome_registro)).join(', '))}. Confira se está certo.`);
+      });
+      $('avisos').innerHTML = lista.length ? `<div class="noprint bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs space-y-1"><div class="font-black">⚠ Ajustes no cadastro (${lista.length})</div>${lista.map(t => `<div>• ${t}</div>`).join('')}</div>` : '';
+    }
+
+    function renderizar() {
+      const v = $('selVisao').value;
+      $('arvore').innerHTML = v === 'GERAL' ? arvoreGeral() : arvoreLoja(v);
+      $('titulo').innerText = 'Organograma · ' + (v === 'GERAL' ? 'Drogarema' : nomeLoja(v));
+      avisos(v);
+    }
+
+    // ---------- níveis dos cargos (RH/Gestor) ----------
+    function renderConfig() {
+      const ops = [['', 'Não aparece'], ['1', '1 Diretoria'], ['2', '2 Gestão e apoio'], ['3', '3 Liderança'], ['4', '4 Farmacêuticos'], ['5', '5 Equipe']];
+      $('gradeCargos').innerHTML = cargos.filter(c => c.ativo !== false).map(c => `<label class="flex items-center justify-between gap-2 text-[11px] border border-slate-200 rounded-lg px-2 py-1">
+        <span class="font-bold">${esc(c.nome)}</span><select data-cargo="${esc(c.nome)}" class="nivelCargo border border-slate-300 rounded p-1 text-[11px]">${ops.map(([k, t]) => `<option value="${k}" ${String(c.nivel ?? '') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`).join('');
+    }
+    async function salvarNiveis() {
+      const mud = [...document.querySelectorAll('.nivelCargo')].map(s => ({ nome: s.dataset.cargo, nivel: s.value ? parseInt(s.value, 10) : null }))
+        .filter(m => String((cargos.find(c => c.nome === m.nome) || {}).nivel ?? '') !== String(m.nivel ?? ''));
+      for (const m of mud) {
+        const { error } = await _supabase.from('cargos').update({ nivel: m.nivel }).eq('nome', m.nome);
+        if (error) return alert('Erro ao salvar ' + m.nome + ': ' + error.message);
+        cargos.find(c => c.nome === m.nome).nivel = m.nivel;
+      }
+      alert(mud.length ? `${mud.length} cargo(s) atualizado(s).` : 'Nada mudou.');
+      renderizar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

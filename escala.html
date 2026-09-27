@@ -182,7 +182,7 @@
 
       const [rl, rf] = await Promise.all([
         _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja'),
-        _supabase.from('funcionarios').select('id, nome_registro, cargo, loja_id, data_contratacao, data_rescisao, periodo_trabalho, status').eq('status', 'ATIVO').order('nome_registro')
+        _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, data_contratacao, data_rescisao, periodo_trabalho, status').eq('status', 'ATIVO').order('nome_registro')
       ]);
       lojas = (rl.data || []).filter(l => l.ativo !== false);
       funcs = rf.data || [];

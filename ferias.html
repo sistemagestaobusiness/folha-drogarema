@@ -196,7 +196,7 @@
     async function carregar() {
       await _supabase.rpc('fn_ferias_atualizar_periodos');
       const [rf, rl, rp, rs] = await Promise.all([
-        _supabase.from('funcionarios').select('id, nome_registro, cargo, loja_id, data_contratacao, status').eq('status', 'ATIVO').order('nome_registro'),
+        _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, data_contratacao, status').eq('status', 'ATIVO').order('nome_registro'),
         _supabase.from('lojas').select('id, nome_loja').order('nome_loja'),
         _supabase.from('vw_ferias_periodos').select('*').order('limite_gozo'),
         _supabase.from('ferias_solicitacoes').select('*').order('data_inicio')

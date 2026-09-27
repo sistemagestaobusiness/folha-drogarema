@@ -74,6 +74,7 @@
               <select id="selectFuncionarioNovo" onchange="carregarLancamentosNovo()" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 disabled:opacity-50" disabled>
                 <option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>
               </select>
+              <div id="alerta13" class="hidden mt-2 bg-rose-50 border-2 border-rose-400 text-rose-800 rounded-lg p-2.5 text-[11px] leading-snug"></div>
             </div>
 
             <div class="relative">
@@ -714,6 +715,53 @@
         if (irmao) campo.value = mapaPagExtras[irmao.id].vencimento;
       }
       if (extra === 'DECIMO_TERCEIRO') mostrarInfo13();
+      else if (extra === 'RESCISAO' && saldo13.valor > 0.009) {
+        const box = document.getElementById('info13');
+        box.innerHTML = `<div class="text-rose-700 font-bold">⚠ Este funcionário tem ANTECIPAÇÃO DE 13º sem desconto: ${fmtR13(saldo13.valor)}.</div>
+          <div>Ao salvar a rescisão, o sistema oferece lançar o desconto <b>${escaparHtml(saldo13.eventos.COMPENSACAO_RESCISAO || '')}</b>. Sem ele, o Financeiro não consegue pagar a rescisão.</div>`;
+        box.classList.remove('hidden');
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 13º: ANTECIPAÇÃO EM ABERTO (quem já recebeu não recebe de novo)
+    // ---------------------------------------------------------------------
+    let saldo13 = { valor: 0, eventos: {} };
+    const fmtR13 = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    async function carregarAlerta13(funcionarioId) {
+      const box = document.getElementById('alerta13');
+      saldo13 = { valor: 0, eventos: {} };
+      box.classList.add('hidden');
+      if (!funcionarioId) return;
+      const { data, error } = await _supabase.rpc('fn_decimo_detalhe', { p_func: funcionarioId });
+      if (error || !data) return;
+      saldo13 = { valor: parseFloat(data.saldo_antecipacao || 0), eventos: data.eventos || {} };
+      if (saldo13.valor <= 0.009) return;
+      const antecip = (data.itens || []).filter(i => i.papel === 'ANTECIPACAO').map(i => `${escaparHtml(i.competencia)} (${fmtR13(i.valor)}${i.pagamento_status === 'PAGO' ? ', pago' : ''})`).join(', ');
+      box.innerHTML = `<div class="font-black uppercase">🎄 Já recebeu antecipação de 13º — ${fmtR13(saldo13.valor)} ainda sem desconto</div>
+        <div>Recebido em: ${antecip}. <b>Não tem direito de receber esse valor de novo.</b></div>
+        <div>Na parcela do 13º lance o desconto <b>${escaparHtml(saldo13.eventos.COMPENSACAO_DECIMO_TERCEIRO || '')}</b>; na rescisão, <b>${escaparHtml(saldo13.eventos.COMPENSACAO_RESCISAO || '')}</b>. O sistema oferece isso ao salvar.</div>
+        <a href="decimo_terceiro.html" class="underline font-bold">Ver controle do 13º →</a>`;
+      box.classList.remove('hidden');
+    }
+
+    // depois de salvar a parcela do 13º (ou a rescisão): oferece o desconto da antecipação
+    async function oferecerDesconto13(eventoSel, valorLancado, funcionario_id, vencimentoPag) {
+      if (saldo13.valor <= 0.009 || !eventoSel || eventoSel.tipo_evento !== 'PROVENTO') return;
+      const ehParcela = ['PARCELA1', 'PARCELA2'].includes(eventoSel.decimo_papel);
+      const ehRescisao = eventoSel.pagamento_extra_tipo === 'RESCISAO';
+      if (!ehParcela && !ehRescisao) return;
+      const rubricaDesc = saldo13.eventos[ehRescisao ? 'COMPENSACAO_RESCISAO' : 'COMPENSACAO_DECIMO_TERCEIRO'];
+      if (!rubricaDesc) return alert('Evento de desconto da antecipação não encontrado. Rode o SQL da etapa do 13º.');
+      const valor = Math.round(Math.min(saldo13.valor, parseFloat(valorLancado || 0)) * 100) / 100;
+      if (!(valor > 0)) return;
+      const resto = saldo13.valor - valor;
+      if (!confirm(`🎄 Este funcionário já recebeu ${fmtR13(saldo13.valor)} de ANTECIPAÇÃO DE 13º.\n\nLançar agora o desconto "${rubricaDesc}" de ${fmtR13(valor)} no mesmo pagamento?` +
+          (resto > 0.009 ? `\n\n(ainda ficarão ${fmtR13(resto)} para descontar depois)` : '') + '\n\nSem o desconto, o Financeiro não consegue pagar.')) return;
+      const { error } = await _supabase.from('folha_itens').insert([{ rubrica: rubricaDesc, tipo: 'DESCONTO', valor, valor_bruto: valor, abatimento_sigiloso: 0,
+        motivo_ajuste: 'Desconto da antecipação de 13º (automático)', parcela_atual: 1, total_parcelas: 1, fixo: false,
+        vencimento_pagamento: vencimentoPag, funcionario_id, competencia: competenciaRegraLancamento }]);
+      if (error) alert('Erro ao lançar o desconto da antecipação: ' + error.message);
     }
 
     // 13º: o que já foi lançado / pago no ano para este funcionário (evita pagar duas vezes)
@@ -736,7 +784,8 @@
       box.innerHTML = `<div class="font-bold uppercase text-[10px] mb-1">🎄 13º de ${ano} deste funcionário</div>`
         + (linhas || '<div>Nenhum lançamento de 13º no ano.</div>')
         + `<div class="mt-1">Parcelas lançadas no ano: <b>${fmt(bruto)}</b>${func.salario_base ? ` · salário base ${fmt(func.salario_base)}` : ''}</div>`
-        + (func.salario_base && bruto > parseFloat(func.salario_base) ? '<div class="text-rose-700 font-bold">⚠ As parcelas já passam do salário base. Confira antes de lançar.</div>' : '');
+        + (func.salario_base && bruto > parseFloat(func.salario_base) ? '<div class="text-rose-700 font-bold">⚠ As parcelas já passam do salário base. Confira antes de lançar.</div>' : '')
+        + (saldo13.valor > 0.009 ? `<div class="mt-1 text-rose-700 font-bold">⚠ Antecipação sem desconto: ${fmtR13(saldo13.valor)}. Ao salvar a parcela, o sistema oferece o desconto ${escaparHtml(saldo13.eventos.COMPENSACAO_DECIMO_TERCEIRO || '')}.</div>` : '');
       box.classList.remove('hidden');
     }
 
@@ -905,6 +954,7 @@
       }
 
       const funcNome = document.getElementById('selectFuncionarioNovo').selectedOptions[0]?.text || '';
+      carregarAlerta13(funcionarioId);
       document.getElementById('subtituloContexto').innerText = `Competência Ativa: ${competenciaRegraLancamento} | Colaborador: ${funcNome}`;
 
       // Puxa o salário base mapeado
@@ -1023,6 +1073,7 @@
     }
 
     function limparTabelasDireita() {
+      document.getElementById('alerta13').classList.add('hidden');
       document.getElementById('secForaLanc').classList.add('hidden');
       document.getElementById('secForaFreela').classList.add('hidden');
       document.getElementById('blocoForaFolha').classList.add('hidden');
@@ -1432,6 +1483,7 @@
         alert((idEdicao ? 'Erro ao atualizar lançamento: ' : 'Erro ao salvar lançamento: ') + error.message);
         return;
       }
+      if (!idEdicao) await oferecerDesconto13(eventoSel, valorFinal, funcionario_id, vencimentoPag);
       cancelarEdicao();
       carregarLancamentosNovo();
     }

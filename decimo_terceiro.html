@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controle do 13º - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1500px] mx-auto space-y-4">
+
+    <div class="noprint sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">🎄 CONTROLE DO 13º SALÁRIO</h1>
+        <p class="text-xs text-slate-500">Antecipações × parcelas de novembro/dezembro × rescisões — para nunca pagar duas vezes</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+        <a href="lancamentos.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">📝 Lançamentos</a>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <!-- COMO FUNCIONA -->
+      <details class="noprint bg-white rounded-xl border border-slate-200 p-3 text-xs text-slate-600">
+        <summary class="font-bold text-slate-800 cursor-pointer">ℹ Como funciona (clique para ver)</summary>
+        <ol class="list-decimal ml-5 mt-2 space-y-1">
+          <li><b>Antecipação</b> (pedido do funcionário ao longo do ano): o RH lança o evento <b id="evAnt">-</b> na tela de Lançamentos. Fica fora do holerite (3º quadro) e vai para o Financeiro.</li>
+          <li><b>Novembro/dezembro</b>: a contabilidade manda o holerite do 13º; o RH lança <b id="evParc">-</b> (e INSS/IRRF). Quem recebeu antecipação: lançar junto o desconto <b id="evComp">-</b> — o sistema oferece isso sozinho ao salvar a parcela.</li>
+          <li><b>Rescisão</b> com antecipação em aberto: lançar o desconto <b id="evCompResc">-</b> junto do pagamento da rescisão.</li>
+          <li><b>Trava</b>: enquanto houver antecipação sem desconto, o Financeiro <b>não consegue</b> marcar como pago o 13º nem a rescisão desse funcionário. Exceção só pelo Gestor (baixa com motivo).</li>
+        </ol>
+      </details>
+
+      <!-- FILTROS -->
+      <div class="noprint bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3 text-xs">
+        <div class="flex items-center gap-1">
+          <button onclick="mudarAno(-1)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">◀</button>
+          <span id="lblAno" class="min-w-[60px] text-center font-black text-lg"></span>
+          <button onclick="mudarAno(1)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">▶</button>
+        </div>
+        <select id="fLoja" onchange="renderizar()" class="border border-slate-300 rounded-lg p-2 bg-slate-50"></select>
+        <select id="fSituacao" onchange="renderizar()" class="border border-slate-300 rounded-lg p-2 bg-slate-50">
+          <option value="">Todas as situações</option>
+          <option value="DESCONTAR">⚠ Antecipação a descontar</option>
+          <option value="ANTECIPOU">Recebeu antecipação no ano</option>
+          <option value="RESCISAO">Rescindidos no ano</option>
+          <option value="SEM_PARCELA">Sem parcela lançada</option>
+        </select>
+        <input id="fNome" oninput="renderizar()" placeholder="🔍 funcionário" class="border border-slate-300 rounded-lg p-2 bg-slate-50 w-44">
+        <div class="ml-auto flex gap-2">
+          <button onclick="exportarCsv()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">⬇ CSV</button>
+          <button onclick="window.print()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold cursor-pointer">🖨 Imprimir</button>
+        </div>
+      </div>
+
+      <!-- RESUMO -->
+      <div id="cards" class="grid grid-cols-2 md:grid-cols-5 gap-3"></div>
+
+      <!-- ALERTAS -->
+      <div id="alertas"></div>
+
+      <!-- TABELA -->
+      <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-slate-50 text-[10px] uppercase text-slate-500">
+            <tr>
+              <th class="p-2 text-left">Funcionário</th>
+              <th class="p-2 text-center" title="meses com 15 dias ou mais trabalhados no ano">Avos</th>
+              <th class="p-2 text-right" title="salário base × avos ÷ 12 — só referência; o valor oficial vem da contabilidade">Estimativa</th>
+              <th class="p-2 text-right">Antecipado</th>
+              <th class="p-2 text-right">Descontado</th>
+              <th class="p-2 text-right">A descontar</th>
+              <th class="p-2 text-center">1ª parcela</th>
+              <th class="p-2 text-center">2ª parcela</th>
+              <th class="p-2 text-left">Situação</th>
+            </tr>
+          </thead>
+          <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-slate-400">Estimativa = salário base × avos ÷ 12 (apenas referência; o valor oficial é o do holerite da contabilidade). Clique no funcionário para ver o extrato.</p>
+    </div>
+  </div>
+
+  <!-- MODAL: EXTRATO -->
+  <div id="mDet" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-2xl mx-auto my-10 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 id="dTitulo" class="font-black text-sm">EXTRATO DO 13º</h3><button onclick="fechar('mDet')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <div id="dCorpo" class="space-y-3"></div>
+      <div id="dBaixa" class="hidden border-t border-slate-100 pt-3 space-y-2">
+        <h4 class="font-black text-xs text-rose-800">Baixa excepcional (somente Gestor)</h4>
+        <p class="text-[11px] text-slate-500">Use só quando a antecipação foi resolvida fora do sistema (ex.: devolvida pelo funcionário). Fica registrada com seu nome e o motivo.</p>
+        <div class="grid grid-cols-3 gap-2">
+          <input type="number" step="0.01" id="bValor" placeholder="valor" class="inp font-mono">
+          <input id="bMotivo" placeholder="motivo (obrigatório)" class="inp col-span-2">
+        </div>
+        <button onclick="darBaixa()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded-lg cursor-pointer">DAR BAIXA</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .inp { width:100%; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:7px; font-size:12px; color:#1e293b; }
+    @media print { .noprint { display:none !important; } body { background:#fff !important; padding:0 !important; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    let perfil = null, ano = new Date().getFullYear(), linhas = [], lojas = [], eventos = {}, atual = null;
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+    const fechar = id => $(id).classList.add('hidden');
+    const num = v => parseFloat(v || 0);
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || '-';
+      const [rl, re] = await Promise.all([
+        _supabase.from('lojas').select('id, nome_loja').order('nome_loja'),
+        _supabase.from('tipos_eventos').select('codigo_evento, descricao_do_evento, decimo_papel, pagamento_extra_tipo').not('decimo_papel', 'is', null)
+      ]);
+      lojas = rl.data || [];
+      (re.data || []).forEach(e => { eventos[e.decimo_papel + (e.decimo_papel === 'COMPENSACAO' ? '_' + e.pagamento_extra_tipo : '')] = `${e.codigo_evento} - ${e.descricao_do_evento}`; });
+      $('evAnt').innerText = eventos.ANTECIPACAO || '(evento de antecipação)';
+      $('evParc').innerText = [eventos.PARCELA1, eventos.PARCELA2].filter(Boolean).join(' / ');
+      $('evComp').innerText = eventos.COMPENSACAO_DECIMO_TERCEIRO || '-';
+      $('evCompResc').innerText = eventos.COMPENSACAO_RESCISAO || '-';
+      $('fLoja').innerHTML = '<option value="">Todas as lojas/setores</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+    }
+
+    async function carregar() {
+      $('lblAno').innerText = ano;
+      const { data, error } = await _supabase.rpc('fn_decimo_resumo', { p_ano: ano });
+      if (error) { $('aviso').innerText = 'Erro ao carregar: ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      linhas = data || [];
+      renderizar();
+    }
+    function mudarAno(n) { ano += n; carregar(); }
+
+    function situacao(l) {
+      const saldo = num(l.saldo_antecipacao), resc = l.data_rescisao && String(l.data_rescisao).slice(0, 4) <= String(ano);
+      if (saldo > 0.009 && resc) return { cls: 'bg-rose-600 text-white', txt: `⚠ RESCISÃO: descontar ${fmtR(saldo)} (${(eventos.COMPENSACAO_RESCISAO || '').split(' ')[0]})`, ordem: 0 };
+      if (saldo > 0.009) return { cls: 'bg-rose-100 text-rose-800', txt: `⚠ Já antecipou: descontar ${fmtR(saldo)} na parcela (${(eventos.COMPENSACAO_DECIMO_TERCEIRO || '').split(' ')[0]})`, ordem: 1 };
+      if (num(l.parcela2) > 0) return { cls: 'bg-emerald-100 text-emerald-800', txt: l.parcela2_pago ? '✓ 13º pago' : '✓ 2ª parcela lançada (a pagar)', ordem: 5 };
+      if (num(l.parcela1) > 0) return { cls: 'bg-sky-100 text-sky-800', txt: l.parcela1_pago ? '1ª parcela paga' : '1ª parcela lançada (a pagar)', ordem: 4 };
+      if (num(l.antecipado) > 0) return { cls: 'bg-emerald-50 text-emerald-700', txt: '✓ Antecipação já descontada', ordem: 3 };
+      return { cls: 'bg-slate-100 text-slate-500', txt: 'Aguardando nov/dez', ordem: 6 };
+    }
+
+    function filtradas() {
+      const loja = $('fLoja').value, sit = $('fSituacao').value, termo = norm($('fNome').value.trim());
+      return linhas.filter(l => (!loja || l.loja_id === loja) && (!termo || norm(l.nome).includes(termo))
+        && (!sit || (sit === 'DESCONTAR' && num(l.saldo_antecipacao) > 0.009) || (sit === 'ANTECIPOU' && num(l.antecipado) > 0)
+                 || (sit === 'RESCISAO' && l.data_rescisao && String(l.data_rescisao).startsWith(String(ano)))
+                 || (sit === 'SEM_PARCELA' && !num(l.parcela1) && !num(l.parcela2))));
+    }
+
+    function renderizar() {
+      const ls = filtradas().map(l => ({ ...l, s: situacao(l) })).sort((a, b) => a.s.ordem - b.s.ordem || a.nome.localeCompare(b.nome));
+      const soma = (arr, k) => arr.reduce((a, l) => a + num(l[k]), 0);
+      const aDesc = linhas.filter(l => num(l.saldo_antecipacao) > 0.009);
+      const antec = linhas.filter(l => num(l.antecipado) > 0);
+      const card = (t, v, sub, cls) => `<div class="bg-white rounded-xl border ${cls || 'border-slate-200'} p-3"><div class="text-[10px] uppercase font-bold text-slate-500">${t}</div><div class="text-lg font-black">${v}</div><div class="text-[10px] text-slate-400">${sub}</div></div>`;
+      $('cards').innerHTML = card('Antecipações no ano', fmtR(soma(antec, 'antecipado')), `${antec.length} funcionário(s)`)
+        + card('A descontar', fmtR(soma(aDesc, 'saldo_antecipacao')), `${aDesc.length} funcionário(s)`, aDesc.length ? 'border-rose-400 ring-2 ring-rose-100' : '')
+        + card('1ª parcela lançada', linhas.filter(l => num(l.parcela1) > 0).length + ' / ' + linhas.length, fmtR(soma(linhas, 'parcela1')))
+        + card('2ª parcela lançada', linhas.filter(l => num(l.parcela2) > 0).length + ' / ' + linhas.length, fmtR(soma(linhas, 'parcela2')))
+        + card('Estimativa total (base)', fmtR(soma(linhas, 'estimativa')), 'salário base × avos ÷ 12');
+      const resc = aDesc.filter(l => l.data_rescisao);
+      $('alertas').innerHTML = aDesc.length ? `<div class="bg-rose-50 border border-rose-300 rounded-xl p-3 text-xs space-y-1">
+          <div class="font-black text-rose-800">⚠ ${aDesc.length} funcionário(s) já receberam antecipação e AINDA NÃO TÊM o desconto lançado</div>
+          <div class="text-rose-700">Eles não têm direito de receber esse valor de novo. Ao lançar a parcela do 13º (ou a rescisão), lance também o desconto. O Financeiro fica travado até isso ser feito.</div>
+          ${resc.length ? `<div class="font-bold text-rose-900">Rescisões com antecipação em aberto: ${resc.map(l => esc(l.nome) + ' (' + fmtR(l.saldo_antecipacao) + ')').join(', ')}</div>` : ''}</div>` : '';
+      $('tabela').innerHTML = ls.map(l => {
+        const parc = (v, pago) => num(v) > 0 ? `<span class="font-mono font-bold ${pago ? 'text-emerald-700' : 'text-sky-700'}">${fmtR(v)}</span><div class="text-[9px] ${pago ? 'text-emerald-600' : 'text-amber-600'}">${pago ? 'PAGO' : 'a pagar'}</div>` : '<span class="text-slate-300">—</span>';
+        return `<tr class="hover:bg-slate-50 cursor-pointer ${num(l.saldo_antecipacao) > 0.009 ? 'bg-rose-50/40' : ''}" onclick="abrirDetalhe('${l.funcionario_id}')">
+          <td class="p-2"><div class="font-bold">${esc(l.nome)}</div><div class="text-[10px] text-slate-400">${esc(nomeLoja(l.loja_id))} · ${esc(l.cargo || '')} · adm. ${dbr(l.data_contratacao)}${l.data_rescisao ? ' · <b class="text-rose-700">rescisão ' + dbr(l.data_rescisao) + '</b>' : ''}</div></td>
+          <td class="p-2 text-center font-mono">${l.avos}/12</td>
+          <td class="p-2 text-right font-mono text-slate-500">${num(l.estimativa) ? fmtR(l.estimativa) : '<span class="text-slate-300" title="sem salário base no cadastro">—</span>'}</td>
+          <td class="p-2 text-right font-mono">${num(l.antecipado) ? fmtR(l.antecipado) + (num(l.antecipado_pago) < num(l.antecipado) ? '<div class="text-[9px] text-amber-600">a pagar ' + fmtR(num(l.antecipado) - num(l.antecipado_pago)) + '</div>' : '') : '<span class="text-slate-300">—</span>'}</td>
+          <td class="p-2 text-right font-mono">${num(l.compensado) + num(l.baixado) ? fmtR(num(l.compensado) + num(l.baixado)) : '<span class="text-slate-300">—</span>'}</td>
+          <td class="p-2 text-right font-mono font-black ${num(l.saldo_antecipacao) > 0.009 ? 'text-rose-700' : 'text-slate-300'}">${num(l.saldo_antecipacao) > 0.009 ? fmtR(l.saldo_antecipacao) : '—'}</td>
+          <td class="p-2 text-center">${parc(l.parcela1, l.parcela1_pago)}</td>
+          <td class="p-2 text-center">${parc(l.parcela2, l.parcela2_pago)}</td>
+          <td class="p-2"><span class="px-2 py-1 rounded-lg text-[10px] font-bold ${l.s.cls}">${l.s.txt}</span></td></tr>`;
+      }).join('') || '<tr><td colspan="9" class="p-6 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
+    }
+
+    async function abrirDetalhe(fid) {
+      const l = linhas.find(x => x.funcionario_id === fid); atual = l;
+      const { data, error } = await _supabase.rpc('fn_decimo_detalhe', { p_func: fid });
+      if (error) return alert('Erro: ' + error.message);
+      const PAPEL = { ANTECIPACAO: '💰 Antecipação', COMPENSACAO: '➖ Desconto da antecipação', PARCELA1: '1ª parcela', PARCELA2: '2ª parcela', INSS: 'INSS 13º', IRRF: 'IRRF 13º', DIFERENCA: 'Dif. 13º' };
+      $('dTitulo').innerText = 'EXTRATO DO 13º · ' + l.nome;
+      const saldo = num(data.saldo_antecipacao);
+      $('dCorpo').innerHTML = `<div class="${saldo > 0.009 ? 'bg-rose-50 border-rose-300 text-rose-800' : 'bg-emerald-50 border-emerald-300 text-emerald-800'} border rounded-lg p-2 font-bold">
+          ${saldo > 0.009 ? `⚠ Antecipação sem desconto: ${fmtR(saldo)}. Não tem direito de receber esse valor de novo.` : '✓ Nenhuma antecipação pendente de desconto.'}</div>
+        <table class="w-full text-[11px]"><thead class="text-[10px] uppercase text-slate-400"><tr><th class="text-left p-1">Competência</th><th class="text-left p-1">Lançamento</th><th class="text-right p-1">Valor</th><th class="text-left p-1">Pagamento</th></tr></thead>
+        <tbody class="divide-y divide-slate-100">${(data.itens || []).map(i => `<tr class="${i.papel === 'ANTECIPACAO' ? 'bg-amber-50' : i.papel === 'COMPENSACAO' ? 'bg-emerald-50' : ''}">
+          <td class="p-1 font-mono">${esc(i.competencia)}</td><td class="p-1"><b>${PAPEL[i.papel] || i.papel}</b><div class="text-[10px] text-slate-400">${esc(i.rubrica)}</div></td>
+          <td class="p-1 text-right font-mono ${i.tipo === 'DESCONTO' ? 'text-rose-700' : ''}">${i.tipo === 'DESCONTO' ? '−' : ''}${fmtR(i.valor)}</td>
+          <td class="p-1">${i.pagamento_status === 'PAGO' ? `<span class="text-emerald-700 font-bold">PAGO ${dbr(i.pago_em)}</span>` : i.pagamento_status ? `<span class="text-amber-700">${esc(i.pagamento_status)} · venc. ${dbr(i.vencimento)}</span>` : '<span class="text-slate-400">no holerite</span>'}</td></tr>`).join('')
+          || '<tr><td colspan="4" class="p-3 text-center text-slate-400">Nenhum lançamento de 13º.</td></tr>'}</tbody></table>
+        ${(data.baixas || []).length ? `<div class="text-[11px]"><b>Baixas excepcionais:</b> ${(data.baixas || []).map(b => `${fmtR(b.valor)} em ${dbr(b.criado_em)} por ${esc(b.criado_por)} — ${esc(b.motivo)}`).join('<br>')}</div>` : ''}`;
+      $('dBaixa').classList.toggle('hidden', !(perfil === 'GESTOR' && saldo > 0.009));
+      $('bValor').value = saldo > 0 ? saldo.toFixed(2) : ''; $('bMotivo').value = '';
+      $('mDet').classList.remove('hidden');
+    }
+
+    async function darBaixa() {
+      const valor = parseFloat($('bValor').value), motivo = $('bMotivo').value.trim();
+      if (!(valor > 0)) return alert('Informe o valor.');
+      if (motivo.length < 10) return alert('Descreva o motivo (mínimo 10 caracteres).');
+      if (!confirm(`Dar baixa de ${fmtR(valor)} na antecipação de ${atual.nome}?\nIsso libera o pagamento do 13º/rescisão sem o desconto.`)) return;
+      const { error } = await _supabase.rpc('fn_decimo_baixa', { p_func: atual.funcionario_id, p_ano: ano, p_valor: valor, p_motivo: motivo });
+      if (error) return alert('Erro: ' + error.message);
+      fechar('mDet'); carregar();
+    }
+
+    function exportarCsv() {
+      const cab = ['Funcionario', 'Loja', 'Cargo', 'Admissao', 'Rescisao', 'Avos', 'Estimativa', 'Antecipado', 'Descontado', 'A descontar', '1a parcela', '1a paga', '2a parcela', '2a paga', 'INSS', 'IRRF', 'Situacao'];
+      const n = v => num(v).toFixed(2).replace('.', ',');
+      const rows = filtradas().map(l => [l.nome, nomeLoja(l.loja_id), l.cargo || '', dbr(l.data_contratacao), l.data_rescisao ? dbr(l.data_rescisao) : '', l.avos,
+        n(l.estimativa), n(l.antecipado), n(num(l.compensado) + num(l.baixado)), n(l.saldo_antecipacao), n(l.parcela1), l.parcela1_pago ? 'SIM' : '', n(l.parcela2), l.parcela2_pago ? 'SIM' : '', n(l.inss), n(l.irrf), situacao(l).txt]);
+      const csv = [cab, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `controle_13_${ano}.csv`; a.click();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
