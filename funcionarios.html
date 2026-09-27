@@ -109,6 +109,8 @@
           <div class="md:col-span-2"><label class="lbl">Admissão *</label><input type="date" id="data_contratacao" required class="inp font-mono"></div>
           <div class="md:col-span-2"><label class="lbl">Rescisão</label><input type="date" id="data_rescisao" class="inp font-mono">
             <p class="text-[10px] text-slate-400 mt-0.5">Com data, o funcionário fica INATIVO a partir dela.</p></div>
+          <div class="md:col-span-2"><label class="lbl">Data-base das férias</label><input type="date" id="ferias_data_base" class="inp font-mono"></div>
+          <div class="md:col-span-4 flex items-end"><p class="text-[10px] text-slate-400 pb-2">Preencha só se o período aquisitivo for diferente da admissão (ex.: transferência entre empresas, acordo). Em branco, as férias contam da admissão. <a href="ferias.html" class="text-emerald-700 font-bold hover:underline">🏖 abrir férias</a></p></div>
           <div class="md:col-span-3"><label class="lbl">Cargo *</label><select id="cargo" required onchange="atualizarCaixa()" class="inp font-bold"></select></div>
           <div class="md:col-span-3"><label class="lbl">Salário base (R$) *</label><input type="number" step="0.01" min="0" id="salario_base" required class="inp font-mono">
             <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2000 SALARIO (contábil).</p></div>
@@ -207,10 +209,10 @@
     // Campos da ficha que vão direto para a tabela funcionarios
     const CAMPOS = ['nome_registro','data_nascimento','cpf','rg','estado_civil','email','celular','cep','endereco','numero','complemento',
       'bairro','cidade','uf','usuario_alpha7','observacoes','data_contratacao','data_rescisao','cargo','salario_base','salario_adicional',
-      'adicional_caixa','empresa_id','loja_id','periodo_trabalho','lider_loja','email_acesso','pix_tipo','pix_chave','banco','agencia','conta','tipo_conta'];
+      'adicional_caixa','ferias_data_base','empresa_id','loja_id','periodo_trabalho','lider_loja','email_acesso','pix_tipo','pix_chave','banco','agencia','conta','tipo_conta'];
     const MAIUSCULAS = ['nome_registro','rg','endereco','numero','complemento','bairro','cidade','uf','usuario_alpha7'];
     const ROTULO_CAMPO = { nome_registro: 'Nome', cargo: 'Cargo', salario_base: 'Salário base', salario_adicional: 'Salário adicional', adicional_caixa: 'Adicional de caixa',
-      data_contratacao: 'Admissão', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
+      data_contratacao: 'Admissão', ferias_data_base: 'Data-base das férias', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
       lider_loja: 'Líder da loja', email_acesso: 'E-mail de acesso', pix_tipo: 'Tipo PIX', pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', tipo_conta: 'Tipo de conta', cpf: 'CPF' };
 
     let perfisLista = [], telasLista = [], perfilTelas = [], telasExtras = [], meuEmail = '';

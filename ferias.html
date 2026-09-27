@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Férias - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+  <div class="max-w-[1400px] mx-auto space-y-5">
+
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">🏖 FÉRIAS</h1>
+        <p id="subtitulo" class="text-xs text-slate-500">Líder solicita · Supervisor dá ciência · RH aprova, envia à contabilidade e lança · Financeiro paga</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+        <a id="lnkSolic" href="freelance_solicitacao.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">📝 Freelance / HE</a>
+        <a id="lnkSup" href="supervisor_freelance.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">🧭 Aprovações</a>
+        <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+        <button id="btnSair" onclick="sairSistema()" class="hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
+      </div>
+    </div>
+
+    <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <!-- ABAS -->
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div id="abas" class="flex flex-wrap gap-4 border-b border-slate-300"></div>
+        <div class="flex items-center gap-2 text-xs">
+          <select id="fLoja" onchange="renderizar()" class="border border-slate-300 rounded p-1.5 bg-white"></select>
+          <input id="fNome" oninput="renderizar()" placeholder="🔍 funcionário" class="border border-slate-300 rounded p-1.5 bg-white w-40">
+          <button id="btnNova" onclick="abrirSolicitar(null)" class="hidden px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">+ SOLICITAR FÉRIAS</button>
+        </div>
+      </div>
+
+      <!-- EQUIPE (vencimentos por funcionário) -->
+      <div data-painel="equipe" class="painel hidden">
+        <div class="flex flex-wrap gap-3 text-[10px] mb-3">
+          <span class="px-2 py-1 rounded bg-rose-100 text-rose-800 font-bold">🔴 prazo para sair em até 60 dias</span>
+          <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 font-bold">🟡 até 120 dias</span>
+          <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-bold">🟢 tranquilo</span>
+          <span class="px-2 py-1 rounded bg-slate-200 text-slate-600 font-bold">⚪ ainda adquirindo (não pode sair)</span>
+        </div>
+        <div id="gradeEquipe" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+      </div>
+
+      <!-- SOLICITAÇÕES (líder e supervisor) -->
+      <div data-painel="solicitacoes" class="painel hidden">
+        <div id="listaSolic" class="space-y-2"></div>
+      </div>
+
+      <!-- RH: FLUXO POR ETAPA -->
+      <div data-painel="rh" class="painel hidden">
+        <div id="kanban" class="grid grid-cols-1 md:grid-cols-5 gap-3"></div>
+      </div>
+
+      <!-- CALENDÁRIO ANUAL -->
+      <div data-painel="calendario" class="painel hidden space-y-3">
+        <div class="flex items-center gap-2">
+          <button onclick="mudarAno(-1)" class="px-2 py-1 bg-white border border-slate-300 rounded cursor-pointer">◀</button>
+          <span id="lblAno" class="font-black text-lg font-mono"></span>
+          <button onclick="mudarAno(1)" class="px-2 py-1 bg-white border border-slate-300 rounded cursor-pointer">▶</button>
+          <span class="text-[11px] text-slate-500 ml-2">Clique no mês para ver os dias. Inclui solicitações em andamento (tracejado) e aprovadas/lançadas (cheio).</span>
+        </div>
+        <div id="gradeAno" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3"></div>
+        <div id="detalheMes" class="hidden bg-white border border-slate-200 rounded-xl p-4 overflow-x-auto"></div>
+      </div>
+
+      <!-- RH: VENCIMENTOS GERAL -->
+      <div data-painel="vencimentos" class="painel hidden">
+        <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase"><tr><th class="p-3">Funcionário</th><th class="p-3">Loja / setor</th><th class="p-3">Período aquisitivo</th><th class="p-3">Vence (limite)</th><th class="p-3">Sair até</th><th class="p-3 text-center">Direito</th><th class="p-3 text-center">Programado</th><th class="p-3 text-center">Saldo</th><th class="p-3"></th></tr></thead>
+            <tbody id="tabVenc" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SOLICITAR -->
+  <div id="mSolic" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-lg mx-auto my-8 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 class="font-black text-sm">SOLICITAR FÉRIAS</h3><button onclick="fechar('mSolic')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <div><label class="lbl">Funcionário *</label><select id="sFunc" onchange="carregarPeriodosModal()" class="inp font-bold"></select></div>
+      <div><label class="lbl">Período aquisitivo</label><select id="sPeriodo" onchange="atualizarPrevia()" class="inp"></select><p id="sInfoPeriodo" class="text-[10px] text-slate-500 mt-1"></p></div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="lbl">Início das férias *</label><input type="date" id="sInicio" onchange="atualizarPrevia()" class="inp font-mono"></div>
+        <div><label class="lbl">Dias de férias *</label><input type="number" id="sDias" min="5" max="30" value="30" oninput="atualizarPrevia()" class="inp font-mono"></div>
+      </div>
+      <div class="flex flex-wrap gap-1" id="sAtalhos"></div>
+      <div><label class="lbl">Vender dias (abono pecuniário)</label>
+        <select id="sAbono" onchange="atualizarPrevia()" class="inp"><option value="0">Não vender</option><option value="10">Vender 10 dias</option><option value="5">Vender 5 dias</option></select></div>
+      <div id="sPrevia" class="rounded-lg p-3 bg-sky-50 border border-sky-200 text-[11px]"></div>
+      <div><label class="lbl">Observação</label><textarea id="sObs" rows="2" class="inp"></textarea></div>
+      <p class="text-[10px] text-slate-400">Regras CLT: até 3 períodos · um deles com pelo menos 14 dias · os demais com pelo menos 5 dias.</p>
+      <button onclick="enviarSolicitacao()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">ENVIAR SOLICITAÇÃO</button>
+    </div>
+  </div>
+
+  <!-- MODAL: CÁLCULO DA CONTABILIDADE (RH) -->
+  <div id="mCalc" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-auto my-10 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 class="font-black text-sm">CÁLCULO DA CONTABILIDADE</h3><button onclick="fechar('mCalc')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <p id="cInfo" class="text-[11px] text-slate-600"></p>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="lbl">Valor líquido das férias (R$) *</label><input type="number" step="0.01" id="cValor" class="inp font-mono"></div>
+        <div><label class="lbl">Data prevista de pagamento *</label><input type="date" id="cData" class="inp font-mono"><p class="text-[10px] text-slate-400">CLT: até 2 dias antes do início.</p></div>
+      </div>
+      <div><label class="lbl">Holerite de férias (PDF, opcional)</label><input type="file" id="cArquivo" accept=".pdf,image/*" class="w-full text-[11px]"></div>
+      <button id="cBtn" onclick="salvarCalculo()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">SALVAR CÁLCULO</button>
+    </div>
+  </div>
+
+  <!-- MODAL: AJUSTAR PERÍODO (RH) -->
+  <div id="mPer" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-auto my-10 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 class="font-black text-sm">AJUSTAR PERÍODO AQUISITIVO</h3><button onclick="fechar('mPer')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <p id="pInfo" class="text-[11px] text-slate-600"></p>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="lbl">Dias de direito</label><input type="number" id="pDireito" min="0" max="30" class="inp font-mono"><p class="text-[10px] text-slate-400">Menos de 30 quando há faltas (art. 130 CLT).</p></div>
+        <div><label class="lbl">Dias já gozados (fora do sistema)</label><input type="number" id="pGozados" min="0" max="30" class="inp font-mono"></div>
+        <div><label class="lbl">Vencimento (limite para gozo)</label><input type="date" id="pLimite" class="inp font-mono"></div>
+        <div><label class="lbl">Situação</label><select id="pStatus" class="inp"><option value="ABERTO">Aberto</option><option value="QUITADO">Quitado</option></select></div>
+      </div>
+      <div><label class="lbl">Observação</label><input id="pObs" class="inp"></div>
+      <button onclick="salvarPeriodo()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg cursor-pointer">SALVAR</button>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display:block; font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:2px; }
+    .inp { width:100%; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:7px; font-size:12px; color:#1e293b; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const ETAPAS = {
+      SOLICITADA:    { txt: 'Solicitada',            cls: 'bg-amber-100 text-amber-800' },
+      PRE_APROVADA:  { txt: 'Pré-aprovada pelo RH',  cls: 'bg-sky-100 text-sky-800' },
+      CONTABILIDADE: { txt: 'Na contabilidade',      cls: 'bg-indigo-100 text-indigo-800' },
+      CALCULADA:     { txt: 'Calculada',             cls: 'bg-violet-100 text-violet-800' },
+      LANCADA:       { txt: 'Aprovada e lançada',    cls: 'bg-emerald-100 text-emerald-800' },
+      RECUSADA:      { txt: 'Recusada',              cls: 'bg-rose-100 text-rose-800' },
+      CANCELADA:     { txt: 'Cancelada',             cls: 'bg-slate-200 text-slate-600' }
+    };
+    const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    let perfil = null, minhaLoja = null, meuEmail = '', aba = null, ano = new Date().getFullYear();
+    let funcs = [], lojas = [], periodos = [], solic = [], pagamentos = {}, atual = null;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const $ = id => document.getElementById(id);
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    const addDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const difDias = (a, b) => Math.round((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 86400000);
+    const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const fechar = id => $(id).classList.add('hidden');
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+    const ehLoja = id => /^LOJA\s/i.test(nomeLoja(id));
+    const func = id => funcs.find(f => f.id === id) || {};
+    const ativa = s => !['RECUSADA', 'CANCELADA'].includes(s.status);
+
+    async function sairSistema() { try { await _supabase.auth.signOut(); } catch (e) {} localStorage.removeItem('usuario_drogarema'); location.href = 'login.html'; }
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null; meuEmail = (user.email || '').toLowerCase();
+      $('lblUsuario').innerText = meuEmail; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) {
+        $('avisoSemAcesso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('avisoSemAcesso').classList.remove('hidden'); $('btnSair').classList.remove('hidden'); return;
+      }
+      const rhg = ['RH', 'GESTOR'].includes(perfil);
+      $(rhg ? 'btnPainel' : 'btnSair').classList.remove('hidden');
+      if (perfil === 'LIDER') $('lnkSolic').classList.remove('hidden');
+      if (perfil === 'SUPERVISOR') $('lnkSup').classList.remove('hidden');
+      $('btnNova').classList.toggle('hidden', perfil === 'SUPERVISOR');
+      $('conteudo').classList.remove('hidden');
+      const abas = perfil === 'LIDER' ? [['equipe', '👥 Minha equipe'], ['solicitacoes', '📋 Minhas solicitações'], ['calendario', '📅 Calendário da loja']]
+        : perfil === 'SUPERVISOR' ? [['solicitacoes', '👁 Para ciência'], ['calendario', '📅 Calendário das lojas'], ['equipe', '👥 Vencimentos das lojas']]
+        : [['rh', '🗂 Fluxo do RH'], ['calendario', '📅 Calendário geral'], ['vencimentos', '⏳ Vencimentos'], ['equipe', '👥 Por funcionário']];
+      $('abas').innerHTML = abas.map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t} <span id="q_${k}" class="hidden ml-1 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px]"></span></button>`).join('');
+      if (perfil === 'LIDER') { $('fLoja').classList.add('hidden'); }
+      await carregar();
+      trocarAba(abas[0][0]);
+    }
+
+    async function carregar() {
+      await _supabase.rpc('fn_ferias_atualizar_periodos');
+      const [rf, rl, rp, rs] = await Promise.all([
+        _supabase.from('funcionarios').select('id, nome_registro, cargo, loja_id, data_contratacao, status').eq('status', 'ATIVO').order('nome_registro'),
+        _supabase.from('lojas').select('id, nome_loja').order('nome_loja'),
+        _supabase.from('vw_ferias_periodos').select('*').order('limite_gozo'),
+        _supabase.from('ferias_solicitacoes').select('*').order('data_inicio')
+      ]);
+      lojas = rl.data || [];
+      // escopo: líder = só a loja dele; supervisor = só lojas (LOJA 01..07); RH/Gestor = todos
+      const noEscopo = f => perfil === 'LIDER' ? f.loja_id === minhaLoja : perfil === 'SUPERVISOR' ? ehLoja(f.loja_id) : true;
+      funcs = (rf.data || []).filter(noEscopo);
+      const ids = new Set(funcs.map(f => f.id));
+      periodos = (rp.data || []).filter(p => ids.has(p.funcionario_id));
+      solic = (rs.data || []).filter(s => ids.has(s.funcionario_id));
+      // situação do pagamento das férias lançadas
+      pagamentos = {};
+      const itens = solic.filter(s => s.folha_item_id).map(s => s.folha_item_id);
+      if (itens.length && ['RH', 'GESTOR'].includes(perfil)) {
+        const { data: fi } = await _supabase.from('folha_itens').select('id, pagamento_extra_id').in('id', itens);
+        const pids = (fi || []).map(x => x.pagamento_extra_id).filter(Boolean);
+        const { data: pg } = pids.length ? await _supabase.from('pagamentos_extras').select('id, status, pago_em').in('id', pids) : { data: [] };
+        (fi || []).forEach(x => { const p = (pg || []).find(y => y.id === x.pagamento_extra_id); if (p) pagamentos[x.id] = p; });
+      }
+      const lojasEscopo = [...new Set(funcs.map(f => f.loja_id))];
+      $('fLoja').innerHTML = '<option value="">Todas as lojas/setores</option>' + lojas.filter(l => lojasEscopo.includes(l.id)).map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      const pendCiencia = solic.filter(s => ativa(s) && !s.supervisor_ciente_em && s.status !== 'LANCADA').length;
+      const pendRh = solic.filter(s => ['SOLICITADA', 'PRE_APROVADA', 'CONTABILIDADE', 'CALCULADA'].includes(s.status)).length;
+      const badge = (k, n) => { const el = $('q_' + k); if (el) { el.innerText = n; el.classList.toggle('hidden', !n); } };
+      badge('solicitacoes', perfil === 'SUPERVISOR' ? pendCiencia : 0); badge('rh', pendRh);
+    }
+
+    function trocarAba(a) {
+      aba = a;
+      document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-emerald-600 text-emerald-700' : 'text-slate-400'}`);
+      document.querySelectorAll('.painel').forEach(p => p.classList.toggle('hidden', p.dataset.painel !== a));
+      renderizar();
+    }
+
+    function filtrados() {
+      const loja = $('fLoja').value, termo = norm($('fNome').value.trim());
+      return funcs.filter(f => (!loja || f.loja_id === loja) && (!termo || norm(f.nome_registro).includes(termo)));
+    }
+
+    function renderizar() {
+      if (aba === 'equipe') renderEquipe();
+      if (aba === 'solicitacoes') renderSolicitacoes();
+      if (aba === 'rh') renderKanban();
+      if (aba === 'calendario') renderAno();
+      if (aba === 'vencimentos') renderVencimentos();
+    }
+
+    // período que o funcionário precisa gozar primeiro (completo, em aberto, com saldo)
+    function situacao(f) {
+      const ps = periodos.filter(p => p.funcionario_id === f.id && p.status === 'ABERTO').sort((a, b) => a.aquisitivo_inicio.localeCompare(b.aquisitivo_inicio));
+      const completo = ps.find(p => p.aquisitivo_fim < hoje() && p.saldo > 0);
+      const alvo = completo || ps[ps.length - 1];
+      if (!alvo) return { cor: 'slate', texto: 'Sem período calculado (confira a admissão no cadastro).' };
+      if (!completo) return { p: alvo, cor: 'slate', texto: `Adquirindo até ${dbr(alvo.aquisitivo_fim)} · pode sair a partir de ${dbr(addDias(alvo.aquisitivo_fim, 1))}` };
+      const sairAte = addDias(alvo.limite_gozo, -(alvo.saldo) + 1);
+      const faltam = difDias(sairAte, hoje());
+      return { p: alvo, sairAte, faltam, cor: faltam <= 60 ? 'rose' : faltam <= 120 ? 'amber' : 'emerald',
+               texto: `Vence em ${dbr(alvo.limite_gozo)} · precisa sair até ${dbr(sairAte)} (${faltam < 0 ? 'VENCIDO' : faltam + ' dias'})` };
+    }
+
+    function chipSolic(s) {
+      const e = ETAPAS[s.status] || { txt: s.status, cls: 'bg-slate-100' };
+      return `<span class="inline-block ${e.cls} px-1.5 py-0.5 rounded text-[10px] font-bold mr-1 mb-1">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · ${s.dias}d · ${e.txt}</span>`;
+    }
+
+    function renderEquipe() {
+      const lista = filtrados().map(f => ({ f, s: situacao(f) })).sort((a, b) => (a.s.faltam ?? 9999) - (b.s.faltam ?? 9999));
+      $('gradeEquipe').innerHTML = lista.length === 0 ? '<div class="text-slate-400 p-6">Nenhum funcionário.</div>' : lista.map(({ f, s }) => {
+        const minhas = solic.filter(x => x.funcionario_id === f.id && ativa(x) && x.data_fim >= hoje());
+        const cor = { rose: 'border-rose-400 bg-rose-50', amber: 'border-amber-400 bg-amber-50', emerald: 'border-emerald-300 bg-white', slate: 'border-slate-200 bg-white' }[s.cor];
+        return `<div class="border-2 ${cor} rounded-xl p-3 space-y-1.5">
+          <div class="flex justify-between items-start gap-2"><div><div class="font-black text-sm text-slate-900">${esc(f.nome_registro)}</div>
+            <div class="text-[10px] text-slate-500">${esc(f.cargo || '')} · ${esc(nomeLoja(f.loja_id))} · admissão ${dbr(f.data_contratacao)}</div></div>
+            ${perfil !== 'SUPERVISOR' && s.p ? `<button onclick="abrirSolicitar('${f.id}')" class="shrink-0 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded cursor-pointer">Solicitar</button>` : ''}</div>
+          <div class="text-[11px] font-bold ${s.cor === 'rose' ? 'text-rose-800' : s.cor === 'amber' ? 'text-amber-800' : 'text-slate-700'}">${s.texto}</div>
+          ${s.p ? `<div class="text-[10px] text-slate-500">Período ${dbr(s.p.aquisitivo_inicio)} a ${dbr(s.p.aquisitivo_fim)} · saldo <b>${s.p.saldo} dia(s)</b> de ${s.p.dias_direito}</div>` : ''}
+          <div>${minhas.map(chipSolic).join('')}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function linhaTempo(s) {
+      const passo = (ok, txt) => `<span class="${ok ? 'text-emerald-700 font-bold' : 'text-slate-300'}">${ok ? '●' : '○'} ${txt}</span>`;
+      const pago = s.folha_item_id && pagamentos[s.folha_item_id] && pagamentos[s.folha_item_id].status === 'PAGO';
+      return `<div class="flex flex-wrap gap-x-3 text-[10px]">${passo(true, 'Solicitada')}${passo(!!s.supervisor_ciente_em, 'Supervisor ciente')}
+        ${passo(!!s.pre_aprovado_em, 'RH pré-aprovou')}${passo(!!s.contabilidade_em, 'Contabilidade')}${passo(!!s.calculado_em, 'Calculada')}${passo(s.status === 'LANCADA', 'Lançada')}
+        ${['RH', 'GESTOR'].includes(perfil) ? passo(pago, 'Paga') : ''}</div>`;
+    }
+
+    function renderSolicitacoes() {
+      const ids = new Set(filtrados().map(f => f.id));
+      let lista = solic.filter(s => ids.has(s.funcionario_id));
+      if (perfil === 'LIDER') lista = lista.filter(s => s.solicitado_por === meuEmail || true);
+      lista.sort((a, b) => (perfil === 'SUPERVISOR' ? (!!a.supervisor_ciente_em - !!b.supervisor_ciente_em) : 0) || b.solicitado_em.localeCompare(a.solicitado_em));
+      $('listaSolic').innerHTML = lista.length === 0 ? '<div class="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400">Nenhuma solicitação.</div>' : lista.map(s => {
+        const f = func(s.funcionario_id), e = ETAPAS[s.status];
+        const acoes = [];
+        if (perfil === 'SUPERVISOR' && ativa(s) && !s.supervisor_ciente_em) acoes.push(`<button onclick="ciencia('${s.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">👁 Ciente</button>`);
+        if (perfil === 'LIDER' && s.status === 'SOLICITADA' && s.solicitado_por === meuEmail) acoes.push(`<button onclick="cancelar('${s.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline cursor-pointer">cancelar</button>`);
+        return `<div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col md:flex-row justify-between gap-2">
+          <div class="space-y-1"><div class="font-bold text-slate-900">${esc(f.nome_registro)} <span class="text-[10px] font-normal text-slate-500">${esc(nomeLoja(f.loja_id))}</span></div>
+            <div class="text-sm font-mono">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · <b>${s.dias} dias</b>${s.dias_abono ? ` + ${s.dias_abono} vendidos` : ''} · retorna ${dbr(addDias(s.data_fim, 1))}</div>
+            ${linhaTempo(s)}
+            ${s.status === 'RECUSADA' ? `<div class="text-[11px] text-rose-700 font-bold">Motivo: ${esc(s.recusado_motivo)}</div>` : ''}
+            ${s.rh_obs ? `<div class="text-[11px] text-slate-600">RH: ${esc(s.rh_obs)}</div>` : ''}
+            ${s.observacao_lider ? `<div class="text-[11px] text-slate-500 italic">"${esc(s.observacao_lider)}"</div>` : ''}</div>
+          <div class="flex flex-col items-end gap-1"><span class="${e.cls} px-2 py-0.5 rounded text-[10px] font-bold">${e.txt}</span>
+            ${s.supervisor_ciente_em ? `<span class="text-[10px] text-slate-400">ciente ${esc(s.supervisor_ciente_por || '')}</span>` : ''}${acoes.join('')}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderKanban() {
+      const ids = new Set(filtrados().map(f => f.id));
+      const col = (st, titulo, cor) => {
+        let lista = solic.filter(s => s.status === st && ids.has(s.funcionario_id));
+        if (st === 'LANCADA') lista = lista.filter(s => s.data_fim >= addDias(hoje(), -30));
+        return `<div class="bg-white/70 border border-slate-200 rounded-xl p-2 space-y-2 min-h-[200px]">
+          <div class="text-[11px] font-black uppercase ${cor} px-1">${titulo} <span class="text-slate-400">${lista.length}</span></div>
+          ${lista.map(cardRh).join('') || '<div class="text-[10px] text-slate-300 px-1">vazio</div>'}</div>`;
+      };
+      $('kanban').innerHTML = col('SOLICITADA', '1 · Novas', 'text-amber-700') + col('PRE_APROVADA', '2 · Pré-aprovadas', 'text-sky-700')
+        + col('CONTABILIDADE', '3 · Na contabilidade', 'text-indigo-700') + col('CALCULADA', '4 · Calculadas', 'text-violet-700') + col('LANCADA', '5 · Lançadas', 'text-emerald-700');
+    }
+
+    function cardRh(s) {
+      const f = func(s.funcionario_id);
+      const btn = (acao, txt, cls) => `<button onclick="acaoRh('${s.id}','${acao}')" class="text-[10px] font-bold px-2 py-1 rounded cursor-pointer ${cls}">${txt}</button>`;
+      let acoes = '';
+      if (s.status === 'SOLICITADA') acoes = btn('PRE_APROVAR', '✓ Pré-aprovar', 'bg-sky-600 text-white') + btn('RECUSAR', 'Recusar', 'bg-rose-100 text-rose-700');
+      if (s.status === 'PRE_APROVADA') acoes = btn('CONTABILIDADE', '📤 Enviado à contabilidade', 'bg-indigo-600 text-white') + btn('VOLTAR', '↩', 'bg-slate-100');
+      if (s.status === 'CONTABILIDADE') acoes = btn('CALCULADA', '🧾 Registrar cálculo', 'bg-violet-600 text-white') + btn('RECUSAR', 'Recusar', 'bg-rose-100 text-rose-700');
+      if (s.status === 'CALCULADA') acoes = btn('LANCAR', '💸 Lançar e enviar ao Financeiro', 'bg-emerald-600 text-white') + btn('CALCULADA', '✎', 'bg-slate-100') + btn('VOLTAR', '↩', 'bg-slate-100');
+      const pg = s.folha_item_id && pagamentos[s.folha_item_id];
+      const perto = difDias(s.data_inicio, hoje());
+      return `<div class="bg-white border ${perto <= 15 && s.status !== 'LANCADA' ? 'border-rose-400' : 'border-slate-200'} rounded-lg p-2 space-y-1 text-[11px]">
+        <div class="font-bold text-slate-900 leading-tight">${esc(f.nome_registro)}</div>
+        <div class="text-[10px] text-slate-500">${esc(nomeLoja(f.loja_id))}${s.supervisor_ciente_em ? ' · 👁 supervisor ciente' : ehLoja(f.loja_id) ? ' · <span class="text-amber-700">aguardando ciência</span>' : ''}</div>
+        <div class="font-mono">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · ${s.dias}d${s.dias_abono ? ' +' + s.dias_abono + ' vend.' : ''}</div>
+        ${perto <= 15 && s.status !== 'LANCADA' ? `<div class="text-[10px] font-bold text-rose-700">⚠ começa em ${perto} dia(s)</div>` : ''}
+        ${s.valor_liquido ? `<div class="text-[10px]">Líquido <b>${fmtR(s.valor_liquido)}</b> · pagar ${dbr(s.data_pagamento)}</div>` : ''}
+        ${s.status === 'LANCADA' ? `<div class="text-[10px]">${pg ? (pg.status === 'PAGO' ? `✅ pago ${dbr(pg.pago_em)}` : '💸 aguardando o Financeiro') : 'lançado ' + esc(s.competencia || '')}</div>` : ''}
+        ${s.holerite_path ? `<button onclick="abrirArquivo('${esc(s.holerite_path)}')" class="text-[10px] text-indigo-700 underline cursor-pointer">📎 holerite</button>` : ''}
+        <div class="flex flex-wrap gap-1 pt-1">${acoes}</div></div>`;
+    }
+
+    // ---------- calendário ----------
+    function mudarAno(n) { ano += n; renderAno(); }
+    function solicDoPeriodo(ini, fim) {
+      const ids = new Set(filtrados().map(f => f.id));
+      return solic.filter(s => ativa(s) && ids.has(s.funcionario_id) && s.data_inicio <= fim && s.data_fim >= ini);
+    }
+    function renderAno() {
+      $('lblAno').innerText = ano; $('detalheMes').classList.add('hidden');
+      $('gradeAno').innerHTML = MESES.map((m, i) => {
+        const ini = `${ano}-${String(i + 1).padStart(2, '0')}-01`, fim = new Date(ano, i + 1, 0).toISOString().slice(0, 10);
+        const lista = solicDoPeriodo(ini, fim);
+        const pessoas = [...new Set(lista.map(s => s.funcionario_id))];
+        return `<button onclick="abrirMes(${i})" class="text-left bg-white border ${pessoas.length ? 'border-emerald-300' : 'border-slate-200'} hover:shadow rounded-xl p-3 cursor-pointer min-h-[110px]">
+          <div class="flex justify-between items-center"><b>${m}</b><span class="text-[10px] ${pessoas.length ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'} px-2 rounded-full font-bold">${pessoas.length}</span></div>
+          <div class="mt-1 space-y-0.5">${pessoas.slice(0, 5).map(id => `<div class="text-[10px] truncate">🏖 ${esc(func(id).nome_registro)}</div>`).join('')}
+          ${pessoas.length > 5 ? `<div class="text-[10px] text-slate-400">+ ${pessoas.length - 5}</div>` : ''}</div></button>`;
+      }).join('');
+    }
+    function abrirMes(i) {
+      const dias = new Date(ano, i + 1, 0).getDate();
+      const ini = `${ano}-${String(i + 1).padStart(2, '0')}-01`, fim = `${ano}-${String(i + 1).padStart(2, '0')}-${dias}`;
+      const lista = solicDoPeriodo(ini, fim).sort((a, b) => (nomeLoja(func(a.funcionario_id).loja_id)).localeCompare(nomeLoja(func(b.funcionario_id).loja_id)) || a.data_inicio.localeCompare(b.data_inicio));
+      const dSem = d => new Date(ano, i, d).getDay();
+      const cab = Array.from({ length: dias }, (_, k) => `<th class="w-6 text-[9px] font-normal ${[0, 6].includes(dSem(k + 1)) ? 'text-rose-400' : 'text-slate-400'}">${k + 1}</th>`).join('');
+      const linhas = lista.map(s => {
+        const f = func(s.funcionario_id), fechado = ['LANCADA', 'CALCULADA', 'CONTABILIDADE', 'PRE_APROVADA'].includes(s.status);
+        const cel = Array.from({ length: dias }, (_, k) => {
+          const d = `${ano}-${String(i + 1).padStart(2, '0')}-${String(k + 1).padStart(2, '0')}`;
+          const em = d >= s.data_inicio && d <= s.data_fim;
+          return `<td class="h-5 ${em ? (fechado ? 'bg-emerald-500' : 'bg-amber-200 border border-dashed border-amber-500') : ([0, 6].includes(dSem(k + 1)) ? 'bg-slate-50' : '')}"></td>`;
+        }).join('');
+        return `<tr><td class="pr-2 whitespace-nowrap text-[11px] font-bold">${esc(f.nome_registro)}<div class="text-[9px] font-normal text-slate-400">${esc(nomeLoja(f.loja_id))} · ${ETAPAS[s.status].txt}</div></td>${cel}</tr>`;
+      }).join('');
+      $('detalheMes').innerHTML = `<div class="flex justify-between items-center mb-2"><b>${MESES[i]} / ${ano}</b><button onclick="document.getElementById('detalheMes').classList.add('hidden')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>`
+        + (lista.length ? `<table class="border-separate border-spacing-0.5"><thead><tr><th></th>${cab}</tr></thead><tbody>${linhas}</tbody></table>` : '<div class="text-slate-400">Ninguém de férias neste mês.</div>');
+      $('detalheMes').classList.remove('hidden');
+      $('detalheMes').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function renderVencimentos() {
+      const ids = new Set(filtrados().map(f => f.id));
+      const lista = periodos.filter(p => ids.has(p.funcionario_id) && p.status === 'ABERTO' && p.aquisitivo_fim < hoje());
+      $('tabVenc').innerHTML = lista.length === 0 ? '<tr><td colspan="9" class="p-6 text-center text-slate-400">Nenhum período vencendo.</td></tr>' : lista.map(p => {
+        const sairAte = addDias(p.limite_gozo, -p.saldo + 1), faltam = difDias(sairAte, hoje());
+        const cor = p.saldo <= 0 ? 'text-emerald-700' : faltam <= 60 ? 'text-rose-700 font-black' : faltam <= 120 ? 'text-amber-700 font-bold' : '';
+        return `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${esc(p.nome_registro)}</td><td class="p-3">${esc(nomeLoja(p.loja_id))}</td>
+          <td class="p-3 font-mono">${dbr(p.aquisitivo_inicio)} a ${dbr(p.aquisitivo_fim)}</td><td class="p-3 font-mono">${dbr(p.limite_gozo)}</td>
+          <td class="p-3 font-mono ${cor}">${p.saldo > 0 ? dbr(sairAte) + (faltam < 0 ? ' · VENCIDO' : '') : 'programado'}</td>
+          <td class="p-3 text-center">${p.dias_direito}${p.dias_gozados_anterior ? ` <span class="text-[10px] text-slate-400">(-${p.dias_gozados_anterior})</span>` : ''}</td>
+          <td class="p-3 text-center">${p.dias_programados}</td><td class="p-3 text-center font-bold">${p.saldo}</td>
+          <td class="p-3"><button onclick="abrirPeriodo('${p.id}')" class="text-[10px] underline text-slate-500 cursor-pointer">ajustar</button></td></tr>`;
+      }).join('');
+    }
+
+    // ---------- solicitar ----------
+    function abrirSolicitar(funcId) {
+      $('sFunc').innerHTML = funcs.map(f => `<option value="${f.id}">${esc(f.nome_registro)} · ${esc(nomeLoja(f.loja_id))}</option>`).join('');
+      if (funcId) $('sFunc').value = funcId;
+      $('sInicio').value = ''; $('sDias').value = 30; $('sAbono').value = '0'; $('sObs').value = '';
+      $('sAtalhos').innerHTML = [30, 20, 15, 14, 10, 5].map(n => `<button type="button" onclick="document.getElementById('sDias').value=${n}; atualizarPrevia()" class="px-2 py-1 border border-slate-300 rounded text-[11px] font-bold cursor-pointer hover:bg-slate-50">${n} dias</button>`).join('');
+      carregarPeriodosModal();
+      $('mSolic').classList.remove('hidden');
+    }
+    function carregarPeriodosModal() {
+      const ps = periodos.filter(p => p.funcionario_id === $('sFunc').value && p.status === 'ABERTO' && p.saldo > 0);
+      $('sPeriodo').innerHTML = ps.map(p => `<option value="${p.id}">${dbr(p.aquisitivo_inicio)} a ${dbr(p.aquisitivo_fim)} · saldo ${p.saldo} dia(s) · vence ${dbr(p.limite_gozo)}</option>`).join('') || '<option value="">Sem saldo disponível</option>';
+      atualizarPrevia();
+    }
+    function atualizarPrevia() {
+      const p = periodos.find(x => x.id === $('sPeriodo').value);
+      const ini = $('sInicio').value, dias = parseInt($('sDias').value, 10) || 0, abono = parseInt($('sAbono').value, 10) || 0;
+      if (!p) { $('sPrevia').innerHTML = 'Este funcionário não tem saldo de férias disponível.'; return; }
+      const partes = solic.filter(s => s.periodo_id === p.id && ativa(s));
+      $('sInfoPeriodo').innerText = partes.length ? `Já programado: ${partes.map(s => `${dbr(s.data_inicio)} (${s.dias}d)`).join(', ')}` : '';
+      const avisos = [];
+      if (p.aquisitivo_fim >= (ini || hoje())) avisos.push(`⚠ O período aquisitivo termina em ${dbr(p.aquisitivo_fim)}: as férias só podem começar depois disso.`);
+      if (dias + abono > p.saldo) avisos.push(`⚠ Saldo insuficiente: restam ${p.saldo} dia(s).`);
+      if (dias < 5) avisos.push('⚠ Mínimo de 5 dias por período.');
+      if (partes.length >= 2) avisos.push('⚠ Este seria o 3º (último) período permitido.');
+      if (ini && addDias(ini, dias - 1) > p.limite_gozo) avisos.push(`⚠ Termina depois do vencimento (${dbr(p.limite_gozo)}): gera pagamento em dobro.`);
+      if (ini && [5, 6].includes(new Date(ini + 'T12:00:00').getDay())) avisos.push('⚠ A CLT não permite iniciar férias 2 dias antes de feriado ou do descanso semanal (evite sexta/sábado).');
+      $('sPrevia').innerHTML = ini ? `<b>${dbr(ini)} → ${dbr(addDias(ini, dias - 1))}</b> · ${dias} dia(s)${abono ? ` + ${abono} vendidos` : ''} · retorna em <b>${dbr(addDias(ini, dias))}</b><br>Saldo após: ${p.saldo - dias - abono} dia(s)` : 'Informe o início.';
+      if (avisos.length) $('sPrevia').innerHTML += `<div class="mt-1 text-amber-800 font-bold">${avisos.join('<br>')}</div>`;
+    }
+    async function enviarSolicitacao() {
+      if (!$('sPeriodo').value) return alert('Sem saldo disponível.');
+      if (!$('sInicio').value) return alert('Informe o início.');
+      const { error } = await _supabase.rpc('fn_ferias_solicitar', { p_funcionario: $('sFunc').value, p_periodo: $('sPeriodo').value, p_inicio: $('sInicio').value,
+        p_dias: parseInt($('sDias').value, 10), p_abono: parseInt($('sAbono').value, 10) || 0, p_obs: $('sObs').value.trim() || null });
+      if (error) return alert(error.message);
+      fechar('mSolic'); await carregar(); renderizar();
+      alert('Solicitação enviada. O supervisor é avisado para ciência e o RH segue com a aprovação.');
+    }
+
+    // ---------- ações ----------
+    async function ciencia(id) {
+      const { error } = await _supabase.rpc('fn_ferias_ciencia', { p_id: id });
+      if (error) return alert(error.message);
+      await carregar(); renderizar();
+    }
+    async function cancelar(id) {
+      const motivo = prompt('Motivo do cancelamento:'); if (!motivo) return;
+      const { error } = await _supabase.rpc('fn_ferias_cancelar', { p_id: id, p_motivo: motivo });
+      if (error) return alert(error.message);
+      await carregar(); renderizar();
+    }
+    async function acaoRh(id, acao) {
+      atual = solic.find(s => s.id === id);
+      if (acao === 'CALCULADA') {
+        const f = func(atual.funcionario_id);
+        $('cInfo').innerText = `${f.nome_registro} · ${dbr(atual.data_inicio)} a ${dbr(atual.data_fim)} (${atual.dias} dias)`;
+        $('cValor').value = atual.valor_liquido || ''; $('cData').value = atual.data_pagamento || addDias(atual.data_inicio, -2); $('cArquivo').value = '';
+        $('mCalc').classList.remove('hidden'); return;
+      }
+      let obs = null;
+      if (acao === 'RECUSAR') { obs = prompt('Motivo da recusa (volta para o líder):'); if (!obs) return; }
+      if (acao === 'PRE_APROVAR') { obs = prompt('Observação / restrição (opcional):', '') ; if (obs === null) return; }
+      if (acao === 'LANCAR' && !confirm(`Lançar ${fmtR(atual.valor_liquido)} no evento 2061 (pagamento de férias) na competência aberta, com pagamento previsto em ${dbr(atual.data_pagamento)}?\n\nO valor vai para a tela do Financeiro.`)) return;
+      const { error } = await _supabase.rpc('fn_ferias_rh', { p_id: id, p_acao: acao, p_obs: obs || null });
+      if (error) return alert(error.message);
+      await carregar(); renderizar();
+    }
+    async function salvarCalculo() {
+      const btn = $('cBtn'); btn.disabled = true;
+      let caminho = null;
+      const arq = $('cArquivo').files[0];
+      if (arq) {
+        const nome = arq.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
+        caminho = `${atual.funcionario_id}/ferias_${Date.now()}_${nome}`;
+        const { error: e1 } = await _supabase.storage.from('documentos').upload(caminho, arq);
+        if (e1) { btn.disabled = false; return alert('Falha ao enviar o holerite: ' + e1.message); }
+        await _supabase.from('funcionarios_documentos').insert([{ funcionario_id: atual.funcionario_id, tipo: 'OUTROS', arquivo_path: caminho,
+          descricao: `Holerite de férias ${dbr(atual.data_inicio)} a ${dbr(atual.data_fim)}`, data_referencia: atual.data_inicio }]);
+      }
+      const { error } = await _supabase.rpc('fn_ferias_rh', { p_id: atual.id, p_acao: 'CALCULADA', p_valor: parseFloat($('cValor').value) || null,
+        p_data_pagamento: $('cData').value || null, p_holerite: caminho });
+      btn.disabled = false;
+      if (error) return alert(error.message);
+      fechar('mCalc'); await carregar(); renderizar();
+    }
+    async function abrirArquivo(caminho) {
+      const { data, error } = await _supabase.storage.from('documentos').createSignedUrl(caminho, 120);
+      if (error) return alert(error.message); window.open(data.signedUrl, '_blank');
+    }
+    function abrirPeriodo(id) {
+      atual = periodos.find(p => p.id === id);
+      $('pInfo').innerText = `${atual.nome_registro} · período ${dbr(atual.aquisitivo_inicio)} a ${dbr(atual.aquisitivo_fim)}`;
+      $('pDireito').value = atual.dias_direito; $('pGozados').value = atual.dias_gozados_anterior; $('pLimite').value = atual.limite_gozo;
+      $('pStatus').value = atual.status; $('pObs').value = atual.observacao || '';
+      $('mPer').classList.remove('hidden');
+    }
+    async function salvarPeriodo() {
+      const { error } = await _supabase.rpc('fn_ferias_periodo_ajustar', { p_id: atual.id, p_dias_direito: parseInt($('pDireito').value, 10),
+        p_gozados_anterior: parseInt($('pGozados').value, 10) || 0, p_limite: $('pLimite').value || null, p_status: $('pStatus').value, p_obs: $('pObs').value });
+      if (error) return alert(error.message);
+      fechar('mPer'); await carregar(); renderizar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
