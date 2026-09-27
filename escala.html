@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escala - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1500px] mx-auto space-y-4">
+
+    <div class="noprint sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">📅 ESCALA DAS LOJAS</h1>
+        <p class="text-xs text-slate-500">Quem trabalha em cada dia · férias e faltas entram sozinhas · freelance/HE contam na cobertura</p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+        <a id="lnkSolic" href="freelance_solicitacao.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">📝 Freelance / HE</a>
+        <a id="lnkSup" href="supervisor_freelance.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">🧭 Aprovações</a>
+        <a href="ferias.html" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs border border-emerald-300">🏖 Férias</a>
+        <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+        <button id="btnSair" onclick="sairSistema()" class="hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
+      </div>
+    </div>
+
+    <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-3">
+      <!-- BARRA DE NAVEGAÇÃO -->
+      <div class="noprint bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3 text-xs">
+        <select id="selLoja" onchange="trocarLoja()" class="border border-slate-300 rounded-lg p-2 font-bold bg-slate-50"></select>
+        <div class="flex rounded-lg border border-slate-300 overflow-hidden" id="botoesVisao">
+          <button data-v="mes" onclick="trocarVisao('mes')" class="vis px-3 py-2 font-bold cursor-pointer">Mês</button>
+          <button data-v="semana" onclick="trocarVisao('semana')" class="vis px-3 py-2 font-bold cursor-pointer border-l border-slate-300">Semana</button>
+          <button data-v="dia" onclick="trocarVisao('dia')" class="vis px-3 py-2 font-bold cursor-pointer border-l border-slate-300">Dia</button>
+          <button data-v="config" onclick="trocarVisao('config')" class="vis px-3 py-2 font-bold cursor-pointer border-l border-slate-300">⚙ Configurar</button>
+        </div>
+        <div id="navData" class="flex items-center gap-1">
+          <button onclick="mover(-1)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">◀</button>
+          <span id="lblPeriodo" class="min-w-[170px] text-center font-black text-slate-800 text-sm"></span>
+          <button onclick="mover(1)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">▶</button>
+          <button onclick="irHoje()" class="ml-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">Hoje</button>
+        </div>
+        <span id="lblSomenteLeitura" class="hidden px-2 py-1 rounded bg-slate-100 text-slate-500 font-bold">👁 somente consulta</span>
+        <button id="btnImprimir" onclick="window.print()" class="ml-auto px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold cursor-pointer">🖨 Imprimir</button>
+      </div>
+
+      <div id="avisoPadrao" class="noprint hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs"></div>
+
+      <div id="legenda" class="noprint flex flex-wrap gap-2 text-[10px] font-bold">
+        <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800">7:00 manhã</span>
+        <span class="px-2 py-1 rounded bg-sky-100 text-sky-800">11:00 intermediário</span>
+        <span class="px-2 py-1 rounded bg-indigo-100 text-indigo-800">14:00 tarde/noite</span>
+        <span class="px-2 py-1 rounded bg-slate-200 text-slate-600">F folga</span>
+        <span class="px-2 py-1 rounded bg-amber-200 text-amber-900">🏖 férias</span>
+        <span class="px-2 py-1 rounded border border-dashed border-amber-500 text-amber-800">🏖? férias pedidas</span>
+        <span class="px-2 py-1 rounded bg-rose-200 text-rose-900">FA falta</span>
+        <span class="px-2 py-1 rounded bg-pink-200 text-pink-900">AT atestado</span>
+        <span class="px-2 py-1 rounded bg-purple-200 text-purple-900">AF afastado</span>
+        <span class="px-2 py-1 rounded bg-white border border-slate-300 text-slate-600">→ em outra loja</span>
+        <span class="px-2 py-1 rounded bg-violet-100 text-violet-800">★ freelance / HE</span>
+        <span class="px-2 py-1 rounded bg-white border-2 border-slate-700 text-slate-600">borda = alterado no dia</span>
+      </div>
+
+      <div id="tituloImpressao" class="hidden print:block text-lg font-black"></div>
+      <div data-visao="mes" class="visao hidden"><div id="gradeMes" class="bg-white rounded-xl border border-slate-200 overflow-x-auto"></div></div>
+      <div data-visao="semana" class="visao hidden"><div id="gradeSemana" class="grid grid-cols-1 md:grid-cols-7 gap-2"></div></div>
+      <div data-visao="dia" class="visao hidden space-y-3"><div id="gradeDia" class="bg-white rounded-xl border border-slate-200 p-4 overflow-x-auto"></div><div id="faltasDia"></div></div>
+      <div data-visao="config" class="visao hidden space-y-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <div class="flex flex-wrap justify-between items-center gap-2">
+            <div><h3 class="font-black text-sm">🏪 Funcionamento da loja</h3><p class="text-[11px] text-slate-500">O mínimo é quantas pessoas precisam estar na loja ao mesmo tempo. Abaixo disso a escala fica vermelha.</p></div>
+            <div class="flex gap-2 text-xs"><button onclick="copiarSegunda()" class="edit px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">Copiar segunda → terça a sexta</button>
+              <button onclick="salvarHorarioLoja()" class="edit px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">SALVAR FUNCIONAMENTO</button></div>
+          </div>
+          <div id="tabHorarioLoja" class="overflow-x-auto"></div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <div><h3 class="font-black text-sm">👥 Horário padrão de cada funcionário</h3>
+            <p class="text-[11px] text-slate-500">Vale para todas as semanas. Mudanças de um dia só (troca de folga, horário diferente, falta) são feitas clicando no dia na visão do mês. Domingos alternados: informe um domingo em que a pessoa TRABALHA.</p></div>
+          <div id="tabPadroes" class="overflow-x-auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ALTERAR UM DIA -->
+  <div id="mDia" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-auto my-10 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 id="dTitulo" class="font-black text-sm">ALTERAR DIA</h3><button onclick="fechar('mDia')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <p id="dInfo" class="text-[11px] text-slate-600"></p>
+      <div id="dTipos" class="grid grid-cols-3 gap-1.5"></div>
+      <div id="dBoxHora" class="hidden grid grid-cols-2 gap-2">
+        <div><label class="lbl">Entrada</label><input type="time" id="dEntrada" class="inp font-mono"></div>
+        <div><label class="lbl">Saída</label><input type="time" id="dSaida" class="inp font-mono"></div>
+        <div class="col-span-2"><label class="lbl">Trabalha na loja</label><select id="dLoja" class="inp"></select></div>
+      </div>
+      <div><label class="lbl">Repetir até (opcional)</label><input type="date" id="dAte" class="inp font-mono"><p class="text-[10px] text-slate-400">Ex.: atestado de 5 dias. Aplica o mesmo em todos os dias do intervalo.</p></div>
+      <div><label class="lbl">Observação</label><input id="dObs" class="inp" placeholder="ex.: troca de folga com Fulana"></div>
+      <button onclick="salvarDia()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg cursor-pointer">SALVAR</button>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display:block; font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:2px; }
+    .inp { width:100%; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:7px; font-size:12px; color:#1e293b; }
+    .cel { min-width:34px; height:30px; font-size:10px; font-weight:800; text-align:center; border-radius:6px; line-height:30px; white-space:nowrap; }
+    .mini { width:74px; padding:4px; font-size:11px; }
+    @media print {
+      @page { size: A4 landscape; margin: 8mm; }
+      body { background:#fff !important; padding:0 !important; }
+      .noprint { display:none !important; }
+      #tituloImpressao { display:block !important; }
+      .cel { min-width:24px; height:22px; line-height:22px; font-size:8px; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const DSEM = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const TIPOS = {
+      TRABALHO: { txt: 'Trabalha', cls: 'bg-emerald-100 text-emerald-800' },
+      FOLGA:    { txt: 'Folga',    cls: 'bg-slate-200 text-slate-600', cod: 'F' },
+      FALTA:    { txt: 'Falta',    cls: 'bg-rose-200 text-rose-900', cod: 'FA' },
+      ATESTADO: { txt: 'Atestado', cls: 'bg-pink-200 text-pink-900', cod: 'AT' },
+      AFASTADO: { txt: 'Afastado', cls: 'bg-purple-200 text-purple-900', cod: 'AF' },
+      FERIAS:   { txt: 'Férias',   cls: 'bg-amber-200 text-amber-900', cod: '🏖' },
+      FERIAS_PEDIDA: { txt: 'Férias pedidas (aguardando RH)', cls: 'border border-dashed border-amber-500 text-amber-800 bg-amber-50', cod: '🏖?' },
+      EMPRESTADO: { txt: 'Em outra loja', cls: 'bg-white border border-slate-300 text-slate-600', cod: '→' },
+      FECHADA:  { txt: 'Loja fechada', cls: 'bg-slate-50 text-slate-300', cod: '—' },
+      SEM:      { txt: 'Sem horário padrão', cls: 'bg-slate-50 text-slate-400', cod: '·' },
+      FORA:     { txt: 'Fora do contrato', cls: 'text-slate-200', cod: '' }
+    };
+    const AUSENCIAS_FREELA = { FALTA_DIA: 'FALTA', ATESTADO: 'ATESTADO', AUSENCIA: 'FALTA' };
+
+    let perfil = null, minhaLoja = null, lojas = [], lojaSel = null, podeEditar = false;
+    let funcs = [], padroes = {}, horario = {}, excecoes = [], ferias = [], freelas = [];
+    let visao = 'mes', dataRef = null, carregado = { ini: null, fim: null, loja: null }, editando = null, tipoDia = 'FOLGA';
+
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const $ = id => document.getElementById(id);
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    const addDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const difDias = (a, b) => Math.round((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 86400000);
+    const dow = iso => new Date(iso + 'T12:00:00').getDay();
+    const hm = t => t ? String(t).slice(0, 5) : '';
+    const toMin = t => { if (!t) return null; const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+    const minHm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+    const curto = t => { const [h, m] = hm(t).split(':'); return parseInt(h, 10) + (m !== '00' ? ':' + m : 'h'); };
+    const fechar = id => $(id).classList.add('hidden');
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+    const func = id => funcs.find(f => f.id === id) || { nome_registro: '?' };
+    const primeiroNome = n => { const p = String(n || '').split(' '); return p.length > 1 ? p[0] + ' ' + p[p.length - 1][0] + '.' : p[0]; };
+    const inicioMes = iso => iso.slice(0, 8) + '01';
+    const fimMes = iso => { const d = new Date(iso.slice(0, 8) + '01T12:00:00'); d.setMonth(d.getMonth() + 1); d.setDate(0); return d.toISOString().slice(0, 10); };
+    const inicioSemana = iso => addDias(iso, -dow(iso));   // semana de domingo a sábado
+    const corTurno = ent => { const m = toMin(ent); return m < 600 ? 'bg-emerald-100 text-emerald-800' : m < 780 ? 'bg-sky-100 text-sky-800' : 'bg-indigo-100 text-indigo-800'; };
+
+    async function sairSistema() { try { await _supabase.auth.signOut(); } catch (e) {} localStorage.removeItem('usuario_drogarema'); location.href = 'login.html'; }
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) {
+        $('avisoSemAcesso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('avisoSemAcesso').classList.remove('hidden'); $('btnSair').classList.remove('hidden'); return;
+      }
+      if (perfil === 'LIDER' && !minhaLoja) {
+        $('avisoSemAcesso').innerText = 'Seu usuário de líder não está ligado a uma loja. Peça ao RH para informar a loja no seu acesso.'; $('avisoSemAcesso').classList.remove('hidden'); $('btnSair').classList.remove('hidden'); return;
+      }
+      $(['RH', 'GESTOR'].includes(perfil) ? 'btnPainel' : 'btnSair').classList.remove('hidden');
+      if (perfil === 'LIDER') $('lnkSolic').classList.remove('hidden');
+      if (perfil === 'SUPERVISOR') $('lnkSup').classList.remove('hidden');
+
+      const [rl, rf] = await Promise.all([
+        _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja'),
+        _supabase.from('funcionarios').select('id, nome_registro, cargo, loja_id, data_contratacao, data_rescisao, periodo_trabalho, status').eq('status', 'ATIVO').order('nome_registro')
+      ]);
+      lojas = (rl.data || []).filter(l => l.ativo !== false);
+      funcs = rf.data || [];
+      const escopo = perfil === 'LIDER' ? lojas.filter(l => l.id === minhaLoja)
+        : perfil === 'SUPERVISOR' ? lojas.filter(l => /^LOJA\s/i.test(l.nome_loja)) : lojas;
+      $('selLoja').innerHTML = escopo.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      if (perfil === 'LIDER') $('selLoja').disabled = true;
+      let salva = null; try { salva = localStorage.getItem('escala_loja'); } catch (e) {}
+      lojaSel = escopo.some(l => l.id === salva) ? salva : (escopo[0] || {}).id;
+      if (!lojaSel) { $('avisoSemAcesso').innerText = 'Nenhuma loja disponível.'; $('avisoSemAcesso').classList.remove('hidden'); return; }
+      $('selLoja').value = lojaSel;
+      dataRef = hoje();
+      $('conteudo').classList.remove('hidden');
+      await trocarLoja(true);
+    }
+
+    async function trocarLoja(inicial) {
+      lojaSel = $('selLoja').value;
+      try { localStorage.setItem('escala_loja', lojaSel); } catch (e) {}
+      podeEditar = ['RH', 'GESTOR'].includes(perfil) || (perfil === 'LIDER' && lojaSel === minhaLoja);
+      $('lblSomenteLeitura').classList.toggle('hidden', podeEditar);
+      const [rh, rp] = await Promise.all([
+        _supabase.from('escala_loja_horario').select('*').eq('loja_id', lojaSel),
+        _supabase.from('escala_funcionario').select('*')
+      ]);
+      horario = {}; (rh.data || []).forEach(h => horario[h.dia_semana] = h);
+      padroes = {}; (rp.data || []).forEach(p => padroes[p.funcionario_id] = p);
+      carregado = { ini: null, fim: null };
+      if (inicial !== true && visao === 'config') return renderizar();
+      await garantirPeriodo(); renderizar();
+    }
+
+    // intervalo exibido na visão atual
+    function intervaloVisao() {
+      if (visao === 'semana') return [inicioSemana(dataRef), addDias(inicioSemana(dataRef), 6)];
+      if (visao === 'dia') return [dataRef, dataRef];
+      return [inicioMes(dataRef), fimMes(dataRef)];
+    }
+
+    async function garantirPeriodo(forcar) {
+      const [a, b] = intervaloVisao();
+      if (!forcar && carregado.ini && a >= carregado.ini && b <= carregado.fim) return;
+      const ini = addDias(inicioMes(a), -7), fim = addDias(fimMes(b), 7);
+      const [re, rf, rs] = await Promise.all([
+        _supabase.from('escala_dias').select('*').gte('data', ini).lte('data', fim),
+        _supabase.from('ferias_solicitacoes').select('id, funcionario_id, data_inicio, data_fim, status').lte('data_inicio', fim).gte('data_fim', ini),
+        _supabase.from('freelance_solicitacoes').select('id, funcionario_id, funcionario_ausente_id, loja_id, data_servico, hora_inicio, hora_fim, motivo, status, tipo_solicitacao')
+          .gte('data_servico', ini).lte('data_servico', fim)
+      ]);
+      if (re.error) alert('Erro ao carregar a escala: ' + re.error.message);
+      excecoes = re.data || [];
+      ferias = (rf.data || []).filter(s => !['RECUSADA', 'CANCELADA'].includes(s.status));
+      freelas = (rs.data || []).filter(s => !['REJEITADA', 'CANCELADA'].includes(s.status));
+      carregado = { ini, fim };
+    }
+
+    // ------------------------------------------------------------------
+    // REGRA DO DIA: férias > exceção do dia > falta informada no freelance > padrão
+    // ------------------------------------------------------------------
+    function diaFunc(f, iso) {
+      if ((f.data_contratacao && iso < f.data_contratacao) || (f.data_rescisao && iso > f.data_rescisao)) return { tipo: 'FORA' };
+      const fe = ferias.find(s => s.funcionario_id === f.id && s.data_inicio <= iso && s.data_fim >= iso);
+      if (fe) return { tipo: fe.status === 'SOLICITADA' ? 'FERIAS_PEDIDA' : 'FERIAS', origem: 'FERIAS' };
+      const ex = excecoes.find(e => e.funcionario_id === f.id && e.data === iso);
+      if (ex) {
+        if (ex.tipo !== 'TRABALHO') return { tipo: ex.tipo, origem: 'DIA', obs: ex.observacao };
+        return { tipo: 'TRABALHO', entrada: hm(ex.entrada), saida: hm(ex.saida), loja: ex.loja_id || f.loja_id, origem: 'DIA', obs: ex.observacao };
+      }
+      const fl = freelas.find(s => s.funcionario_ausente_id === f.id && s.data_servico === iso && AUSENCIAS_FREELA[s.motivo]);
+      if (fl) return { tipo: AUSENCIAS_FREELA[fl.motivo], origem: 'FREELA', obs: 'informado na solicitação de freelance' };
+      const p = padroes[f.id];
+      if (!p) return { tipo: 'SEM' };
+      const d = dow(iso), h = horario[d];
+      if (h && h.aberta === false) return { tipo: 'FECHADA' };
+      if (d === 0) {
+        if (p.domingo === 'FOLGA') return { tipo: 'FOLGA' };
+        if (p.domingo === 'ALTERNADO' && p.domingo_ref && Math.abs(Math.round(difDias(iso, p.domingo_ref) / 7)) % 2 === 1) return { tipo: 'FOLGA' };
+        return { tipo: 'TRABALHO', entrada: hm(p.dom_entrada || p.entrada), saida: hm(p.dom_saida || p.saida), loja: f.loja_id };
+      }
+      if ((p.folgas || []).map(Number).includes(d)) return { tipo: 'FOLGA' };
+      if (d === 6) return { tipo: 'TRABALHO', entrada: hm(p.sab_entrada || p.entrada), saida: hm(p.sab_saida || p.saida), loja: f.loja_id };
+      return { tipo: 'TRABALHO', entrada: hm(p.entrada), saida: hm(p.saida), loja: f.loja_id };
+    }
+
+    // pessoas da loja num dia (da loja + emprestadas de outras) e extras (freelance/HE)
+    function pessoasDia(iso) {
+      const lista = [];
+      funcs.forEach(f => {
+        const r = diaFunc(f, iso);
+        if (f.loja_id === lojaSel) {
+          if (r.tipo === 'TRABALHO' && r.loja !== lojaSel) lista.push({ f, r: { ...r, tipo: 'EMPRESTADO', obs: 'trabalhando na ' + nomeLoja(r.loja) } });
+          else lista.push({ f, r });
+        } else if (r.tipo === 'TRABALHO' && r.loja === lojaSel) {
+          lista.push({ f, r: { ...r, veioDe: f.loja_id } });
+        }
+      });
+      const extras = freelas.filter(s => s.loja_id === lojaSel && s.data_servico === iso).map(s => ({
+        f: func(s.funcionario_id), extra: s,
+        r: { tipo: 'TRABALHO', entrada: hm(s.hora_inicio), saida: hm(s.hora_fim), extra: true }
+      }));
+      return { lista, extras };
+    }
+
+    // cobertura por meia hora dentro do funcionamento
+    function cobertura(iso) {
+      const h = horario[dow(iso)];
+      const { lista, extras } = pessoasDia(iso);
+      const trab = [...lista, ...extras].filter(p => p.r.tipo === 'TRABALHO' && p.r.entrada && p.r.saida);
+      const n = trab.length;
+      if (!h || h.aberta === false || !h.abre || !h.fecha) return { n, slots: [], minimo: h ? h.minimo : null, falta: false, h };
+      let a = toMin(h.abre), b = toMin(h.fecha); if (b <= a) b += 1440;
+      const slots = [];
+      for (let m = a; m < b; m += 30) {
+        const ids = new Set();
+        trab.forEach(p => {
+          let e = toMin(p.r.entrada), s = toMin(p.r.saida); if (s <= e) s += 1440;
+          if (m >= e && m < s) ids.add(p.f.id || p.extra.id);
+        });
+        slots.push({ m, qtd: ids.size });
+      }
+      const falta = slots.some(s => s.qtd < h.minimo);
+      return { n, slots, minimo: h.minimo, falta, h };
+    }
+
+    function buracos(cob) {
+      const r = []; let atual = null;
+      cob.slots.forEach(s => {
+        if (s.qtd < cob.minimo) { if (!atual) atual = { ini: s.m, fim: s.m + 30, falta: cob.minimo - s.qtd }; else { atual.fim = s.m + 30; atual.falta = Math.max(atual.falta, cob.minimo - s.qtd); } }
+        else if (atual) { r.push(atual); atual = null; }
+      });
+      if (atual) r.push(atual);
+      return r;
+    }
+
+    // ------------------------------------------------------------------
+    // NAVEGAÇÃO
+    // ------------------------------------------------------------------
+    async function trocarVisao(v) { visao = v; if (v !== 'config') await garantirPeriodo(); renderizar(); }
+    async function mover(n) {
+      if (visao === 'semana') dataRef = addDias(dataRef, 7 * n);
+      else if (visao === 'dia') dataRef = addDias(dataRef, n);
+      else { const d = new Date(inicioMes(dataRef) + 'T12:00:00'); d.setMonth(d.getMonth() + n); dataRef = d.toISOString().slice(0, 10); }
+      await garantirPeriodo(); renderizar();
+    }
+    async function irHoje() { dataRef = hoje(); await garantirPeriodo(); renderizar(); }
+    async function abrirDia(iso) { dataRef = iso; visao = 'dia'; await garantirPeriodo(); renderizar(); }
+
+    function renderizar() {
+      document.querySelectorAll('.vis').forEach(b => b.classList.toggle('bg-slate-800', b.dataset.v === visao));
+      document.querySelectorAll('.vis').forEach(b => b.classList.toggle('text-white', b.dataset.v === visao));
+      document.querySelectorAll('.visao').forEach(p => p.classList.toggle('hidden', p.dataset.visao !== visao));
+      $('navData').classList.toggle('hidden', visao === 'config');
+      $('legenda').classList.toggle('hidden', visao === 'config');
+      $('btnImprimir').classList.toggle('hidden', visao === 'config');
+      const [a, b] = intervaloVisao();
+      const mesTxt = iso => MESES[parseInt(iso.slice(5, 7), 10) - 1] + ' / ' + iso.slice(0, 4);
+      $('lblPeriodo').innerText = visao === 'mes' ? mesTxt(dataRef) : visao === 'semana' ? `${dbr(a).slice(0, 5)} a ${dbr(b)}` : `${DSEM[dow(dataRef)]} ${dbr(dataRef)}`;
+      $('tituloImpressao').innerText = `Escala ${nomeLoja(lojaSel)} · ${$('lblPeriodo').innerText}`;
+      const semPadrao = funcs.filter(f => f.loja_id === lojaSel && !padroes[f.id]);
+      const semHorario = !Object.keys(horario).length;
+      const avisos = [];
+      if (semHorario) avisos.push('A loja ainda não tem horário de funcionamento e mínimo de pessoas.');
+      if (semPadrao.length) avisos.push(`${semPadrao.length} funcionário(s) sem horário padrão: ${semPadrao.slice(0, 6).map(f => esc(primeiroNome(f.nome_registro))).join(', ')}${semPadrao.length > 6 ? '…' : ''}.`);
+      $('avisoPadrao').innerHTML = avisos.length ? `⚠ ${avisos.join(' ')} ${visao !== 'config' ? `<button onclick="trocarVisao('config')" class="ml-2 underline font-bold cursor-pointer">Configurar agora</button>` : ''}` : '';
+      $('avisoPadrao').classList.toggle('hidden', !avisos.length);
+      document.querySelectorAll('.edit').forEach(b => b.classList.toggle('hidden', !podeEditar));
+      if (visao === 'mes') renderMes();
+      if (visao === 'semana') renderSemana();
+      if (visao === 'dia') renderDia();
+      if (visao === 'config') renderConfig();
+    }
+
+    function celula(p, iso) {
+      const r = p.r, t = TIPOS[r.tipo] || TIPOS.SEM;
+      const borda = r.origem === 'DIA' ? 'ring-2 ring-slate-700 ring-inset' : '';
+      let txt = t.cod, cls = t.cls;
+      if (r.tipo === 'TRABALHO') { txt = curto(r.entrada); cls = corTurno(r.entrada); if (r.veioDe) txt = '↘' + txt; }
+      const dica = `${p.f.nome_registro} · ${DSEM[dow(iso)]} ${dbr(iso)}\n${r.tipo === 'TRABALHO' ? r.entrada + ' às ' + r.saida : t.txt}${r.veioDe ? '\nveio da ' + nomeLoja(r.veioDe) : ''}${r.obs ? '\n' + r.obs : ''}`;
+      const clic = p.extra ? '' : `onclick="abrirEdicao('${p.f.id}','${iso}')"`;
+      return `<div class="cel ${cls} ${borda} ${clic ? 'cursor-pointer hover:opacity-80' : ''}" title="${esc(dica)}" ${clic}>${esc(txt)}</div>`;
+    }
+
+    function renderMes() {
+      const ini = inicioMes(dataRef), fim = fimMes(dataRef);
+      const dias = []; for (let d = ini; d <= fim; d = addDias(d, 1)) dias.push(d);
+      const porDia = {}; dias.forEach(d => porDia[d] = pessoasDia(d));
+      // linhas: funcionários da loja + quem veio emprestado em algum dia do mês
+      const ids = new Map();
+      funcs.filter(f => f.loja_id === lojaSel).forEach(f => ids.set(f.id, f));
+      dias.forEach(d => porDia[d].lista.forEach(p => { if (!ids.has(p.f.id)) ids.set(p.f.id, p.f); }));
+      const extrasNomes = new Map();
+      dias.forEach(d => porDia[d].extras.forEach(p => extrasNomes.set(p.extra.funcionario_id, p.f)));
+      const linhas = [...ids.values()];
+      const cab = dias.map(d => { const w = dow(d), hj = d === hoje();
+        return `<th class="p-1 text-center cursor-pointer hover:bg-slate-100 ${w === 0 ? 'bg-rose-50' : ''} ${hj ? 'bg-amber-100' : ''}" onclick="abrirDia('${d}')" title="abrir o dia"><div class="text-[9px] text-slate-400">${DSEM[w][0]}</div><div class="text-[11px] font-black">${parseInt(d.slice(8), 10)}</div></th>`; }).join('');
+      const corpo = linhas.map(f => {
+        const outra = f.loja_id !== lojaSel;
+        return `<tr class="border-t border-slate-100"><td class="sticky left-0 bg-white z-10 p-1.5 pr-3 min-w-[170px]"><div class="text-[11px] font-bold text-slate-800 truncate max-w-[190px]" title="${esc(f.nome_registro)}">${esc(f.nome_registro)}</div>
+          <div class="text-[9px] text-slate-400">${esc(f.cargo || '')}${outra ? ' · de ' + esc(nomeLoja(f.loja_id)) : ''}${padroes[f.id] && !outra ? ' · ' + hm(padroes[f.id].entrada) + '–' + hm(padroes[f.id].saida) : ''}</div></td>
+          ${dias.map(d => { const p = porDia[d].lista.find(x => x.f.id === f.id); return `<td class="p-0.5">${p ? celula(p, d) : '<div class="cel"></div>'}</td>`; }).join('')}</tr>`;
+      }).join('');
+      const extras = [...extrasNomes.entries()].map(([fid, f]) => `<tr class="border-t border-violet-100 bg-violet-50/40"><td class="sticky left-0 bg-violet-50 z-10 p-1.5"><div class="text-[11px] font-bold text-violet-900 truncate max-w-[190px]">★ ${esc(f.nome_registro)}</div><div class="text-[9px] text-violet-500">freelance / hora extra</div></td>
+        ${dias.map(d => { const s = porDia[d].extras.find(x => x.extra.funcionario_id === fid);
+          return `<td class="p-0.5">${s ? `<div class="cel bg-violet-100 text-violet-800" title="${esc((s.extra.tipo_solicitacao || 'FREELANCE') + ' · ' + (s.r.entrada || '?') + ' às ' + (s.r.saida || '?') + ' · ' + s.extra.status)}">★${s.r.entrada ? curto(s.r.entrada) : ''}</div>` : '<div class="cel"></div>'}</td>`; }).join('')}</tr>`).join('');
+      const rodape = dias.map(d => { const c = cobertura(d);
+        const cls = c.minimo == null || !c.slots.length ? 'text-slate-400' : c.falta ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white';
+        const dica = !c.slots.length ? 'sem horário de funcionamento' : c.falta ? 'abaixo do mínimo em algum horário — clique para ver' : 'mínimo atendido o dia todo';
+        return `<td class="p-0.5"><div class="cel ${cls} cursor-pointer" title="${dica}" onclick="abrirDia('${d}')">${c.n}</div></td>`; }).join('');
+      $('gradeMes').innerHTML = linhas.length || extrasNomes.size ? `<table class="text-xs border-collapse"><thead><tr><th class="sticky left-0 bg-white z-10 text-left p-2 text-[10px] uppercase text-slate-500">Funcionário</th>${cab}</tr></thead>
+        <tbody>${corpo}${extras}</tbody><tfoot><tr class="border-t-2 border-slate-300"><td class="sticky left-0 bg-white z-10 p-1.5 text-[10px] font-black uppercase text-slate-600">Pessoas no dia<div class="text-[9px] font-normal normal-case text-slate-400">verde = mínimo atendido</div></td>${rodape}</tr></tfoot></table>`
+        : '<p class="p-6 text-center text-slate-400">Nenhum funcionário ativo nesta loja.</p>';
+    }
+
+    function renderSemana() {
+      const ini = inicioSemana(dataRef); const dias = []; for (let i = 0; i < 7; i++) dias.push(addDias(ini, i));
+      $('gradeSemana').innerHTML = dias.map(d => {
+        const { lista, extras } = pessoasDia(d), c = cobertura(d);
+        const trab = [...lista.filter(p => p.r.tipo === 'TRABALHO'), ...extras].sort((a, b) => (a.r.entrada || '').localeCompare(b.r.entrada || ''));
+        const fora = lista.filter(p => !['TRABALHO', 'FORA', 'FECHADA'].includes(p.r.tipo));
+        const selo = !c.slots.length ? '<span class="text-slate-400">sem horário</span>' : c.falta ? `<span class="px-1.5 py-0.5 rounded bg-rose-500 text-white">⚠ abaixo de ${c.minimo}</span>` : `<span class="px-1.5 py-0.5 rounded bg-emerald-500 text-white">✓ ${c.minimo}+</span>`;
+        return `<div class="bg-white rounded-xl border ${d === hoje() ? 'border-amber-400 ring-2 ring-amber-200' : 'border-slate-200'} p-2 space-y-1.5 min-h-[160px]">
+          <button onclick="abrirDia('${d}')" class="w-full flex justify-between items-center text-left cursor-pointer"><span class="font-black text-xs ${dow(d) === 0 ? 'text-rose-700' : ''}">${DSEM[dow(d)]} ${dbr(d).slice(0, 5)}</span><span class="text-[9px] font-bold">${selo}</span></button>
+          ${c.h && c.h.aberta !== false && c.h.abre ? `<div class="text-[9px] text-slate-400">loja ${hm(c.h.abre)}–${hm(c.h.fecha)}</div>` : c.h && c.h.aberta === false ? '<div class="text-[9px] text-slate-400">loja fechada</div>' : ''}
+          ${trab.map(p => `<div class="flex items-center gap-1 text-[10px] rounded px-1.5 py-1 ${p.extra ? 'bg-violet-100 text-violet-900' : corTurno(p.r.entrada)} ${p.r.origem === 'DIA' ? 'ring-1 ring-slate-700' : ''}" ${p.extra ? '' : `onclick="abrirEdicao('${p.f.id}','${d}')"`} style="cursor:${p.extra ? 'default' : 'pointer'}">
+            <span class="font-mono font-bold">${p.r.entrada || '?'}–${p.r.saida || '?'}</span><span class="truncate font-bold">${p.extra ? '★ ' : ''}${esc(primeiroNome(p.f.nome_registro))}${p.r.veioDe ? ' ↘' : ''}</span></div>`).join('') || '<p class="text-[10px] text-slate-400">ninguém escalado</p>'}
+          ${fora.length ? `<div class="pt-1 border-t border-slate-100 flex flex-wrap gap-1">${fora.map(p => `<span class="text-[9px] px-1 rounded ${TIPOS[p.r.tipo].cls} cursor-pointer" onclick="abrirEdicao('${p.f.id}','${d}')" title="${esc(TIPOS[p.r.tipo].txt + (p.r.obs ? ' · ' + p.r.obs : ''))}">${TIPOS[p.r.tipo].cod} ${esc(primeiroNome(p.f.nome_registro))}</span>`).join('')}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    function renderDia() {
+      const d = dataRef, { lista, extras } = pessoasDia(d), c = cobertura(d);
+      const trab = [...lista.filter(p => p.r.tipo === 'TRABALHO'), ...extras].filter(p => p.r.entrada && p.r.saida).sort((a, b) => a.r.entrada.localeCompare(b.r.entrada));
+      const semHora = extras.filter(p => !p.r.entrada || !p.r.saida);
+      // escala de horas: funcionamento da loja ou o intervalo das pessoas
+      let a = c.h && c.h.abre ? toMin(c.h.abre) : 7 * 60, b = c.h && c.h.fecha ? toMin(c.h.fecha) : 22 * 60; if (b <= a) b += 1440;
+      trab.forEach(p => { let e = toMin(p.r.entrada), s = toMin(p.r.saida); if (s <= e) s += 1440; a = Math.min(a, e); b = Math.max(b, s); });
+      a = Math.floor(a / 60) * 60; b = Math.ceil(b / 60) * 60;
+      const pos = m => ((m - a) / (b - a) * 100).toFixed(2) + '%';
+      const horas = []; for (let m = a; m <= b; m += 60) horas.push(m);
+      const regua = `<div class="relative h-5 ml-[180px] text-[9px] text-slate-400">${horas.map(m => `<span class="absolute -translate-x-1/2" style="left:${pos(m)}">${minHm(m).slice(0, 2)}h</span>`).join('')}</div>`;
+      const grade = `<div class="absolute inset-0 pointer-events-none">${horas.map(m => `<div class="absolute top-0 bottom-0 border-l border-slate-100" style="left:${pos(m)}"></div>`).join('')}</div>`;
+      const loja = c.h && c.h.abre && c.h.aberta !== false ? (() => { let e = toMin(c.h.abre), s = toMin(c.h.fecha); if (s <= e) s += 1440; return `<div class="absolute top-0 bottom-0 bg-emerald-50/60" style="left:${pos(e)};width:calc(${pos(s)} - ${pos(e)})"></div>`; })() : '';
+      const linhas = trab.map(p => { let e = toMin(p.r.entrada), s = toMin(p.r.saida); if (s <= e) s += 1440;
+        const cls = p.extra ? 'bg-violet-500' : toMin(p.r.entrada) < 600 ? 'bg-emerald-500' : toMin(p.r.entrada) < 780 ? 'bg-sky-500' : 'bg-indigo-500';
+        const pad = padroes[p.f.id];
+        return `<div class="flex items-center h-8 border-t border-slate-50">
+          <div class="w-[180px] shrink-0 pr-2 text-[11px] font-bold truncate ${p.extra ? 'text-violet-800' : ''}" title="${esc(p.f.nome_registro)}">${p.extra ? '★ ' : ''}${esc(p.f.nome_registro)}${p.r.veioDe ? ' <span class="text-[9px] text-slate-400">(' + esc(nomeLoja(p.r.veioDe)) + ')</span>' : ''}</div>
+          <div class="relative flex-1 h-full">${grade}${loja}<div class="absolute top-1 bottom-1 rounded-md ${cls} ${p.r.origem === 'DIA' ? 'ring-2 ring-slate-800' : ''} text-white text-[10px] font-bold px-2 flex items-center ${p.extra ? '' : 'cursor-pointer'}" style="left:${pos(e)};width:calc(${pos(s)} - ${pos(e)})" ${p.extra ? '' : `onclick="abrirEdicao('${p.f.id}','${d}')"`} title="${esc(p.r.entrada + ' às ' + p.r.saida + (pad && !p.extra ? ' · intervalo ' + pad.intervalo_min + ' min' : '') + (p.extra ? ' · ' + (p.extra.tipo_solicitacao || 'FREELANCE') + ' ' + p.extra.status : ''))}">${p.r.entrada}–${p.r.saida}</div></div></div>`; }).join('');
+      const barra = c.slots.length ? `<div class="flex items-center h-9 border-t-2 border-slate-300 mt-1">
+          <div class="w-[180px] shrink-0 pr-2 text-[10px] font-black uppercase text-slate-600">Na loja<div class="text-[9px] font-normal normal-case text-slate-400">mínimo ${c.minimo}</div></div>
+          <div class="relative flex-1 h-full">${c.slots.map(s => `<div class="absolute top-1 bottom-1 border-r border-white text-[9px] font-black text-white flex items-center justify-center ${s.qtd < c.minimo ? 'bg-rose-500' : 'bg-emerald-500'}" style="left:${pos(s.m)};width:calc(${pos(s.m + 30)} - ${pos(s.m)})" title="${minHm(s.m)}: ${s.qtd} pessoa(s)">${s.qtd}</div>`).join('')}</div></div>` : '';
+      $('gradeDia').innerHTML = `<div class="min-w-[720px]"><div class="flex justify-between items-center mb-2"><h3 class="font-black text-sm">${DSEM[dow(d)]} ${dbr(d)} · ${esc(nomeLoja(lojaSel))}</h3>
+        <span class="text-[11px] text-slate-500">${c.h ? (c.h.aberta === false ? 'loja fechada' : 'funcionamento ' + hm(c.h.abre) + '–' + hm(c.h.fecha)) : 'sem horário de funcionamento'}</span></div>
+        ${regua}${linhas || '<p class="text-slate-400 text-xs py-4">Ninguém escalado neste dia.</p>'}${barra}</div>`;
+      // buracos + ausentes
+      const bs = c.slots.length ? buracos(c) : [];
+      const fora = lista.filter(p => !['TRABALHO', 'FORA', 'FECHADA'].includes(p.r.tipo));
+      const podePedir = ['LIDER', 'RH', 'GESTOR'].includes(perfil) && d >= hoje();
+      $('faltasDia').innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="bg-white rounded-xl border ${bs.length ? 'border-rose-300' : 'border-slate-200'} p-3 space-y-2"><h4 class="font-black text-xs">${bs.length ? '⚠ Horários abaixo do mínimo' : '✓ Cobertura'}</h4>
+          ${bs.map(x => `<div class="flex flex-wrap items-center justify-between gap-2 text-xs bg-rose-50 rounded-lg p-2"><span><b>${minHm(x.ini)} às ${minHm(x.fim)}</b> · falta ${x.falta} pessoa(s)</span>
+            ${podePedir ? `<a href="freelance_solicitacao.html?loja=${lojaSel}&data=${d}&inicio=${minHm(x.ini)}&fim=${minHm(x.fim)}&motivo=ESCALA" class="px-2.5 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold text-[11px]">★ Pedir freelance / HE</a>` : ''}</div>`).join('')
+            || `<p class="text-[11px] text-slate-500">${c.slots.length ? 'O mínimo de pessoas está atendido em todo o horário de funcionamento.' : 'Configure o funcionamento da loja para ver a cobertura.'}</p>`}
+          ${semHora.length ? `<p class="text-[10px] text-slate-500">★ ${semHora.map(p => esc(primeiroNome(p.f.nome_registro))).join(', ')}: freelance/HE sem horário informado (não entra na cobertura).</p>` : ''}
+          <p class="text-[10px] text-slate-400">O horário de almoço não é descontado da cobertura.</p></div>
+        <div class="bg-white rounded-xl border border-slate-200 p-3 space-y-1.5"><h4 class="font-black text-xs">Fora da loja neste dia</h4>
+          ${fora.map(p => `<div class="flex justify-between items-center text-[11px] ${podeEditar ? 'cursor-pointer hover:bg-slate-50' : ''} rounded px-1" onclick="abrirEdicao('${p.f.id}','${d}')"><span class="font-bold">${esc(p.f.nome_registro)}</span><span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${TIPOS[p.r.tipo].cls}">${esc(TIPOS[p.r.tipo].txt)}${p.r.obs ? ' · ' + esc(p.r.obs) : ''}</span></div>`).join('') || '<p class="text-[11px] text-slate-400">Ninguém.</p>'}</div></div>`;
+    }
+
+    // ------------------------------------------------------------------
+    // ALTERAR UM DIA
+    // ------------------------------------------------------------------
+    function abrirEdicao(fid, iso) {
+      const f = func(fid), r = diaFunc(f, iso);
+      const podeEste = ['RH', 'GESTOR'].includes(perfil) || (perfil === 'LIDER' && (f.loja_id === minhaLoja || lojaSel === minhaLoja));
+      if (!podeEste) return;
+      if (r.tipo === 'FERIAS' || r.tipo === 'FERIAS_PEDIDA') return alert(`${f.nome_registro} está de férias em ${dbr(iso)}.\nAlterações de férias são feitas na tela de Férias.`);
+      if (r.tipo === 'FORA') return;
+      editando = { f, iso, r };
+      $('dTitulo').innerText = `${DSEM[dow(iso)].toUpperCase()} ${dbr(iso)}`;
+      $('dInfo').innerHTML = `<b>${esc(f.nome_registro)}</b> · hoje na escala: <b>${esc(r.tipo === 'TRABALHO' ? r.entrada + '–' + r.saida : (TIPOS[r.tipo] || {}).txt)}</b>${r.origem === 'DIA' ? ' (alterado no dia)' : r.origem === 'FREELA' ? ' (informado no freelance)' : ''}`;
+      const ops = [['PADRAO', '↺ Padrão'], ['TRABALHO', '✓ Trabalha'], ['FOLGA', 'F Folga'], ['FALTA', 'FA Falta'], ['ATESTADO', 'AT Atestado'], ['AFASTADO', 'AF Afastado']];
+      tipoDia = r.origem === 'DIA' ? r.tipo : r.tipo === 'TRABALHO' ? 'FOLGA' : 'TRABALHO';
+      $('dTipos').innerHTML = ops.map(([k, t]) => `<button data-t="${k}" onclick="escolherTipoDia('${k}')" class="tdia px-2 py-2 rounded-lg border font-bold cursor-pointer">${t}</button>`).join('');
+      const p = padroes[f.id];
+      $('dEntrada').value = r.entrada || (p ? hm(p.entrada) : ''); $('dSaida').value = r.saida || (p ? hm(p.saida) : '');
+      const lojasOp = ['RH', 'GESTOR'].includes(perfil) ? lojas : lojas.filter(l => l.id === minhaLoja || l.id === f.loja_id);
+      $('dLoja').innerHTML = lojasOp.map(l => `<option value="${l.id}">${esc(l.nome_loja)}${l.id === f.loja_id ? ' (dele)' : ''}</option>`).join('');
+      $('dLoja').value = r.loja || (f.loja_id === lojaSel ? f.loja_id : lojaSel);
+      $('dAte').value = ''; $('dAte').min = iso; $('dObs').value = r.origem === 'DIA' ? (r.obs || '') : '';
+      escolherTipoDia(tipoDia);
+      $('mDia').classList.remove('hidden');
+    }
+    function escolherTipoDia(k) {
+      tipoDia = k;
+      document.querySelectorAll('.tdia').forEach(b => b.className = `tdia px-2 py-2 rounded-lg border font-bold cursor-pointer ${b.dataset.t === k ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-300'}`);
+      $('dBoxHora').classList.toggle('hidden', k !== 'TRABALHO');
+    }
+    async function salvarDia() {
+      const { f, iso } = editando, ate = $('dAte').value;
+      if (ate && ate < iso) return alert('"Repetir até" precisa ser depois do dia escolhido.');
+      const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) datas.push(d);
+      if (datas.length > 62) return alert('No máximo 62 dias de uma vez.');
+      if (tipoDia === 'TRABALHO' && (!$('dEntrada').value || !$('dSaida').value)) return alert('Informe entrada e saída.');
+      const { error } = await _supabase.rpc('fn_escala_dia', { p_funcionario: f.id, p_datas: datas, p_tipo: tipoDia,
+        p_entrada: tipoDia === 'TRABALHO' ? $('dEntrada').value : null, p_saida: tipoDia === 'TRABALHO' ? $('dSaida').value : null,
+        p_loja: tipoDia === 'TRABALHO' ? $('dLoja').value : null, p_obs: $('dObs').value.trim() || null });
+      if (error) return alert('Erro: ' + error.message);
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
+    }
+
+    // ------------------------------------------------------------------
+    // CONFIGURAR
+    // ------------------------------------------------------------------
+    function renderConfig() {
+      const dis = podeEditar ? '' : 'disabled';
+      const ordem = [1, 2, 3, 4, 5, 6, 0];
+      $('tabHorarioLoja').innerHTML = `<table class="text-xs"><thead><tr class="text-[10px] uppercase text-slate-500"><th class="text-left p-1.5">Dia</th><th class="p-1.5">Abre?</th><th class="p-1.5">Abertura</th><th class="p-1.5">Fechamento</th><th class="p-1.5">Mínimo de pessoas</th></tr></thead><tbody>
+        ${ordem.map(d => { const h = horario[d] || {}; const aberta = h.aberta !== false;
+          return `<tr class="border-t border-slate-100"><td class="p-1.5 font-bold ${d === 0 ? 'text-rose-700' : ''}">${DSEM[d]}</td>
+          <td class="p-1.5 text-center"><input type="checkbox" id="hA${d}" ${aberta ? 'checked' : ''} ${dis} class="accent-emerald-600 w-4 h-4"></td>
+          <td class="p-1.5"><input type="time" id="hI${d}" value="${hm(h.abre)}" ${dis} class="inp mini font-mono"></td>
+          <td class="p-1.5"><input type="time" id="hF${d}" value="${hm(h.fecha)}" ${dis} class="inp mini font-mono"></td>
+          <td class="p-1.5"><input type="number" id="hM${d}" min="0" max="50" value="${h.minimo ?? 1}" ${dis} class="inp mini font-mono text-center"></td></tr>`; }).join('')}</tbody></table>`;
+      const lista = funcs.filter(f => f.loja_id === lojaSel);
+      $('tabPadroes').innerHTML = lista.length ? `<table class="text-xs w-full"><thead><tr class="text-[10px] uppercase text-slate-500 text-left">
+          <th class="p-1.5">Funcionário</th><th class="p-1.5">Entrada</th><th class="p-1.5">Saída</th><th class="p-1.5">Intervalo</th><th class="p-1.5">Folga fixa</th><th class="p-1.5">Domingo</th><th class="p-1.5">Sábado diferente</th><th class="p-1.5">Domingo diferente</th><th></th></tr></thead><tbody>
+        ${lista.map(f => { const p = padroes[f.id] || {}; const fol = (p.folgas || []).map(Number);
+          return `<tr class="border-t border-slate-100 align-top ${padroes[f.id] ? '' : 'bg-amber-50/60'}">
+            <td class="p-1.5 min-w-[170px]"><div class="font-bold">${esc(f.nome_registro)}</div><div class="text-[9px] text-slate-400">${esc(f.cargo || '')}${f.periodo_trabalho ? ' · ' + esc(f.periodo_trabalho) : ''}${padroes[f.id] ? '' : ' · <b class="text-amber-700">sem padrão</b>'}</div></td>
+            <td class="p-1.5"><input type="time" id="pE_${f.id}" value="${hm(p.entrada)}" ${dis} class="inp mini font-mono"></td>
+            <td class="p-1.5"><input type="time" id="pS_${f.id}" value="${hm(p.saida)}" ${dis} class="inp mini font-mono"></td>
+            <td class="p-1.5"><select id="pI_${f.id}" ${dis} class="inp mini">${[0, 15, 30, 60, 90, 120].map(m => `<option value="${m}" ${(p.intervalo_min ?? 60) === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></td>
+            <td class="p-1.5 whitespace-nowrap">${[1, 2, 3, 4, 5, 6].map(d => `<label class="inline-flex flex-col items-center mr-1 text-[9px] font-bold text-slate-500">${DSEM[d][0]}<input type="checkbox" class="pF_${f.id} accent-slate-700" value="${d}" ${fol.includes(d) ? 'checked' : ''} ${dis}></label>`).join('')}</td>
+            <td class="p-1.5"><select id="pD_${f.id}" ${dis} onchange="$('pR_${f.id}').classList.toggle('hidden', this.value !== 'ALTERNADO')" class="inp mini w-[110px]">
+                ${[['FOLGA', 'Folga'], ['TRABALHA', 'Trabalha'], ['ALTERNADO', 'Alternado']].map(([k, t]) => `<option value="${k}" ${(p.domingo || 'FOLGA') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+              <input type="date" id="pR_${f.id}" value="${p.domingo_ref || ''}" ${dis} title="um domingo em que trabalha" class="inp mini font-mono mt-1 w-[120px] ${p.domingo === 'ALTERNADO' ? '' : 'hidden'}"></td>
+            <td class="p-1.5 whitespace-nowrap"><input type="time" id="pSE_${f.id}" value="${hm(p.sab_entrada)}" ${dis} class="inp mini font-mono"> <input type="time" id="pSS_${f.id}" value="${hm(p.sab_saida)}" ${dis} class="inp mini font-mono"></td>
+            <td class="p-1.5 whitespace-nowrap"><input type="time" id="pDE_${f.id}" value="${hm(p.dom_entrada)}" ${dis} class="inp mini font-mono"> <input type="time" id="pDS_${f.id}" value="${hm(p.dom_saida)}" ${dis} class="inp mini font-mono"></td>
+            <td class="p-1.5 whitespace-nowrap">${podeEditar ? `<button onclick="salvarPadrao('${f.id}')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">Salvar</button>
+              ${padroes[f.id] ? `<button onclick="removerPadrao('${f.id}')" title="remover padrão" class="ml-1 px-2 py-1.5 bg-slate-100 hover:bg-rose-100 rounded-lg font-bold cursor-pointer">✕</button>` : ''}` : ''}</td></tr>`; }).join('')}</tbody></table>`
+        : '<p class="text-slate-400 text-xs">Nenhum funcionário ativo nesta loja. A loja de cada funcionário é informada no cadastro (aba Lotação).</p>';
+    }
+
+    function copiarSegunda() {
+      [2, 3, 4, 5].forEach(d => { $('hA' + d).checked = $('hA1').checked; $('hI' + d).value = $('hI1').value; $('hF' + d).value = $('hF1').value; $('hM' + d).value = $('hM1').value; });
+    }
+    async function salvarHorarioLoja() {
+      const dias = [0, 1, 2, 3, 4, 5, 6].map(d => ({ dia: d, aberta: $('hA' + d).checked, abre: $('hI' + d).value, fecha: $('hF' + d).value, minimo: parseInt($('hM' + d).value, 10) || 0 }));
+      const faltando = dias.filter(d => d.aberta && (!d.abre || !d.fecha)).map(d => DSEM[d.dia]);
+      if (faltando.length) return alert('Informe abertura e fechamento de: ' + faltando.join(', ') + '\n(ou desmarque "Abre?" nos dias em que a loja fecha).');
+      const { error } = await _supabase.rpc('fn_escala_horario_loja', { p_loja: lojaSel, p_dias: dias });
+      if (error) return alert('Erro: ' + error.message);
+      alert('Funcionamento salvo.'); await trocarLoja();
+    }
+    async function salvarPadrao(fid) {
+      const v = id => $(id + '_' + fid).value;
+      const dados = { entrada: v('pE'), saida: v('pS'), intervalo_min: parseInt(v('pI'), 10),
+        folgas: [...document.querySelectorAll('.pF_' + fid)].filter(c => c.checked).map(c => parseInt(c.value, 10)),
+        domingo: v('pD'), domingo_ref: v('pD') === 'ALTERNADO' ? v('pR') : null,
+        sab_entrada: v('pSE'), sab_saida: v('pSS'), dom_entrada: v('pDE'), dom_saida: v('pDS') };
+      if (!dados.entrada || !dados.saida) return alert('Informe entrada e saída.');
+      if (!!dados.sab_entrada !== !!dados.sab_saida || !!dados.dom_entrada !== !!dados.dom_saida) return alert('No horário diferente de sábado/domingo, informe entrada e saída (ou deixe os dois em branco).');
+      if (dados.domingo === 'ALTERNADO' && (!dados.domingo_ref || dow(dados.domingo_ref) !== 0)) return alert('Domingos alternados: informe um DOMINGO em que a pessoa trabalha.');
+      const { error } = await _supabase.rpc('fn_escala_padrao', { p_funcionario: fid, p_dados: dados });
+      if (error) return alert('Erro: ' + error.message);
+      const { data } = await _supabase.from('escala_funcionario').select('*').eq('funcionario_id', fid);
+      if (data && data[0]) padroes[fid] = data[0];
+      renderizar();
+    }
+    async function removerPadrao(fid) {
+      if (!confirm('Remover o horário padrão de ' + func(fid).nome_registro + '? As alterações de dias específicos continuam.')) return;
+      const { error } = await _supabase.rpc('fn_escala_padrao', { p_funcionario: fid, p_dados: null });
+      if (error) return alert('Erro: ' + error.message);
+      delete padroes[fid]; renderizar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

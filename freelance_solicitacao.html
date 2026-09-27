@@ -24,6 +24,7 @@
           <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
         </div>
         <a href="ferias.html" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs border border-emerald-300">🏖 FÉRIAS</a>
+        <a href="escala.html" class="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-lg font-bold text-xs border border-sky-300">📅 ESCALA</a>
         <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
         <button id="btnSair" onclick="sairSistema()" class="hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
       </div>
@@ -312,8 +313,22 @@
       escolherTipo('FREELANCE');
       await Promise.all([carregarLojas(), carregarFuncionarios()]);
       iniciarCombos();
+      preencherPelaEscala();
       atualizarTabelaCarrinho();
       await carregarHistorico();
+    }
+
+    // vindo da Escala ("Pedir freelance / HE"): já preenche loja, data, horário e motivo
+    function preencherPelaEscala() {
+      const q = new URLSearchParams(location.search);
+      if (!q.get('data')) return;
+      const sel = document.getElementById('selectLoja');
+      if (q.get('loja') && !sel.disabled && listaLojas.some(l => l.id === q.get('loja'))) sel.value = q.get('loja');
+      document.getElementById('inputData').value = q.get('data');
+      if (q.get('inicio')) document.getElementById('inputHoraInicio').value = q.get('inicio');
+      if (q.get('fim')) document.getElementById('inputHoraFim').value = q.get('fim');
+      if (q.get('motivo')) { document.getElementById('selectMotivo').value = q.get('motivo'); aoMudarMotivo(); }
+      calcularHoras();
     }
 
     async function carregarLojas() {
