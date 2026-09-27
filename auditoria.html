@@ -3,201 +3,251 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auditoria de Alterações - Sistema</title>
+  <title>Auditoria - Sistema Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] font-sans min-h-screen p-4 sm:p-8">
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1500px] mx-auto space-y-4">
 
-  <div class="max-w-7xl mx-auto">
-    
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 gap-4">
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div>
-        <h1 class="text-xl font-bold text-slate-900">🛡️ Trilha de Auditoria</h1>
-        <p class="text-xs text-slate-500 mt-0.5">Histórico completo de inserções, edições e exclusões realizadas no sistema</p>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">🛡️ AUDITORIA</h1>
+        <p class="text-xs text-slate-500">Toda inclusão, alteração e exclusão do sistema: quem, quando, o que era e o que ficou</p>
       </div>
-      <div class="flex items-center gap-3">
-        <button onclick="carregarAuditoria()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs transition shadow-xs cursor-pointer">
-          🔄 Atualizar Registros
-        </button>
-        <a href="index.html" class="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs transition border border-slate-300 shadow-2xs">
-          ← Voltar ao Painel
-        </a>
+      <div class="flex items-center gap-2">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+        <a href="index.html" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
       </div>
     </div>
 
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-wrap gap-4 items-center">
-      <div class="flex flex-col">
-        <label class="text-[10px] font-bold text-slate-500 uppercase mb-1">Filtrar por Operação</label>
-        <select id="filtroOperacao" onchange="filtrarLogs()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-emerald-600">
-          <option value="">Todas as Operações</option>
-          <option value="INSERT">Inserção (INSERT)</option>
-          <option value="UPDATE">Alteração (UPDATE)</option>
-          <option value="DELETE">Exclusão (DELETE)</option>
-        </select>
-      </div>
-      <div class="flex flex-col flex-1 min-w-[240px]">
-        <label class="text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar por ID, Rubrica ou E-mail</label>
-        <input type="text" id="filtroTexto" onkeyup="filtrarLogs()" placeholder="Digite para filtrar..." class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-emerald-600">
-      </div>
+    <!-- FILTROS -->
+    <div class="bg-white rounded-xl border border-slate-200 p-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 text-xs items-end">
+      <div><label class="lbl">De</label><input type="date" id="fDe" class="inp font-mono"></div>
+      <div><label class="lbl">Até</label><input type="date" id="fAte" class="inp font-mono"></div>
+      <div><label class="lbl">Tela / cadastro</label><select id="fTabela" class="inp"></select></div>
+      <div><label class="lbl">Ação</label><select id="fAcao" class="inp"><option value="">Todas</option><option value="INSERT">Inclusão</option><option value="UPDATE">Alteração</option><option value="DELETE">Exclusão</option></select></div>
+      <div><label class="lbl">Usuário</label><select id="fUsuario" class="inp"><option value="">Todos</option></select></div>
+      <div class="col-span-2 md:col-span-1"><label class="lbl">Funcionário</label><input id="fFunc" list="listaFuncs" placeholder="nome" class="inp"><datalist id="listaFuncs"></datalist></div>
+      <div><label class="lbl">Competência</label><input id="fComp" placeholder="MM/AAAA" class="inp font-mono"></div>
+      <div class="flex gap-1"><button onclick="buscar(true)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg cursor-pointer">🔎 Buscar</button>
+        <button onclick="limpar()" title="limpar filtros" class="px-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">✕</button></div>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase text-[10px] tracking-wider">
-              <th class="py-3 px-4 font-bold">Data / Hora</th>
-              <th class="py-3 px-4 font-bold">Operação</th>
-              <th class="py-3 px-4 font-bold">Usuário / Sistema</th>
-              <th class="py-3 px-4 font-bold">Registro ID</th>
-              <th class="py-3 px-4 font-bold">O que mudou (Detalhes)</th>
-            </tr>
-          </thead>
-          <tbody id="tabelaLogs" class="divide-y divide-slate-200 text-slate-700">
-            <tr>
-              <td colspan="5" class="text-center py-8 text-slate-400">Carregando histórico de auditoria...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <input id="fTexto" oninput="renderizar()" placeholder="🔍 filtrar no resultado (valor, rubrica, nome...)" class="border border-slate-300 rounded-lg p-2 bg-white w-72">
+      <span id="lblResumo" class="text-slate-500"></span>
+      <button onclick="exportarCsv()" class="ml-auto px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">⬇ CSV</button>
     </div>
 
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="bg-slate-50 text-[10px] uppercase text-slate-500">
+          <tr><th class="p-2 text-left w-[130px]">Quando</th><th class="p-2 text-left">Quem</th><th class="p-2 text-left">Tela</th><th class="p-2 text-left">Ação</th><th class="p-2 text-left">Registro</th><th class="p-2 text-left">O que mudou (de → para)</th><th></th></tr>
+        </thead>
+        <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
+      </table>
+      <div class="p-3 text-center"><button id="btnMais" onclick="buscar(false)" class="hidden px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold text-xs cursor-pointer">Carregar mais</button></div>
+    </div>
   </div>
 
+  <!-- MODAL: REGISTRO COMPLETO -->
+  <div id="mDet" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-3xl mx-auto my-10 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 id="dTitulo" class="font-black text-sm">REGISTRO</h3><button onclick="$('mDet').classList.add('hidden')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <div id="dCorpo"></div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display:block; font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:2px; }
+    .inp { width:100%; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:7px; font-size:12px; color:#1e293b; }
+  </style>
+
   <script>
-    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
-    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const POR_PAGINA = 200;
+    const TELAS = {
+      folha_itens: 'Lançamentos', funcionarios: 'Cadastro de funcionários', funcionarios_documentos: 'Documentos do funcionário',
+      empresas: 'Empresas', empresas_contas: 'Contas bancárias das empresas', lojas: 'Lojas e setores', tipos_eventos: 'Tipos de eventos',
+      rubricas: 'Rubricas Alpha7', cargos: 'Cargos', emprestimos: 'Empréstimos', pagamentos_dinheiro: 'Pagamento em dinheiro (resumo)',
+      pagamentos_extras: 'Pagamentos (Financeiro)', competencias: 'Competência (abrir/fechar)', freelance_solicitacoes: 'Freelance / hora extra',
+      banco_horas_movimentos: 'Banco de horas', ferias_periodos: 'Férias (períodos)', ferias_solicitacoes: 'Férias (solicitações)',
+      escala_loja_horario: 'Escala (funcionamento da loja)', escala_funcionario: 'Escala (horário padrão)', escala_dias: 'Escala (alteração do dia)',
+      usuarios_sistema: 'Acessos (usuários)', perfis: 'Perfis', perfil_telas: 'Telas do perfil', usuario_telas_extra: 'Telas extras do usuário',
+      decimo_baixas: '13º (baixa de antecipação)'
+    };
+    const ACAO = { INSERT: ['Inclusão', 'bg-emerald-100 text-emerald-800'], UPDATE: ['Alteração', 'bg-amber-100 text-amber-800'], DELETE: ['Exclusão', 'bg-rose-100 text-rose-800'] };
+    const ROTULO = {
+      nome_registro: 'Nome', cargo: 'Cargo', salario_base: 'Salário base', salario_adicional: 'Salário adicional', adicional_caixa: 'Adicional de caixa',
+      data_contratacao: 'Admissão', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
+      lider_loja: 'Líder da loja', email_acesso: 'E-mail de acesso', pix_tipo: 'Tipo PIX', pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência',
+      conta: 'Conta', tipo_conta: 'Tipo de conta', cpf: 'CPF', rg: 'RG', rubrica: 'Evento', valor: 'Valor', valor_bruto: 'Valor bruto',
+      abatimento_sigiloso: 'Abatimento', tipo: 'Tipo', competencia: 'Competência', vencimento_pagamento: 'Vencimento', vencimento: 'Vencimento',
+      motivo_ajuste: 'Motivo', fixo: 'Fixo', parcela_atual: 'Parcela', total_parcelas: 'Total de parcelas', ajustes: 'Ajustes',
+      descricao_do_evento: 'Descrição', codigo_evento: 'Código', natureza_do_evento: 'Natureza', tipo_evento: 'Tipo do evento',
+      nome_loja: 'Nome da loja', ativo: 'Ativo', nome_fantasia: 'Nome fantasia', razao_social: 'Razão social', cnpj: 'CNPJ', perfil: 'Perfil',
+      pago_em: 'Pago em', banco_pagador: 'Banco pagador', data_servico: 'Data do serviço', hora_inicio: 'Início', hora_fim: 'Fim',
+      data_inicio: 'Início', dias: 'Dias', dias_abono: 'Abono', valor_liquido: 'Valor líquido', data_pagamento: 'Data de pagamento',
+      entrada: 'Entrada', saida: 'Saída', folgas: 'Folgas', domingo: 'Domingo', data: 'Data', observacao: 'Observação', motivo: 'Motivo',
+      organograma_funcao: 'Função no organograma', ferias_data_base: 'Data-base das férias', nome: 'Nome', nivel: 'Nível', mes: 'Mês', ano: 'Ano'
+    };
+    const OCULTOS = ['id', 'created_at', 'criado_em', 'updated_at', 'atualizado_em', 'criado_por', 'atualizado_por'];
 
-    let listaGlobalLogs = [];
+    let registros = [], pagina = 0, funcs = [], lojas = [], empresas = [];
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const hojeIso = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    const addDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const nomeFunc = id => (funcs.find(f => f.id === id) || {}).nome_registro;
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja;
+    const nomeEmp = id => { const e = empresas.find(x => x.id === id); return e ? (e.nome_fantasia || e.razao_social) : null; };
+    const dataHora = t => { const d = new Date(t); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
 
-    async function carregarAuditoria() {
-      const tbody = document.getElementById('tabelaLogs');
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-400">Buscando dados no banco...</td></tr>`;
+    function valorLegivel(campo, v) {
+      if (v === null || v === undefined || v === '') return '∅';
+      if (campo === 'funcionario_id' || campo === 'funcionario_ausente_id') return nomeFunc(v) || v;
+      if (campo === 'loja_id') return nomeLoja(v) || v;
+      if (campo === 'empresa_id') return nomeEmp(v) || v;
+      if (typeof v === 'boolean') return v ? 'sim' : 'não';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.split('-').reverse().join('/');
+      if (typeof v === 'object') return JSON.stringify(v).slice(0, 120);
+      if (typeof v === 'number' && /valor|salario|adicional|abatimento/.test(campo)) return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      return String(v);
+    }
 
-      const { data, error } = await _supabase
-        .from('audit_logs')
-        .select('*')
-        .order('changed_at', { ascending: false })
-        .limit(150); // Traz os últimos 150 eventos
-
-      if (error) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-rose-600 font-bold">Erro ao carregar auditoria: ${error.message}</td></tr>`;
-        return;
+    // descrição curta do registro, por tela
+    function descricao(r) {
+      const d = r.new_data || r.old_data || {};
+      const f = nomeFunc(d.funcionario_id) || '';
+      const v = x => valorLegivel('valor', x);
+      switch (r.table_name) {
+        case 'folha_itens': return `${f} · ${d.rubrica || ''} · ${v(d.valor)} · ${d.competencia || ''}`;
+        case 'funcionarios': return d.nome_registro;
+        case 'empresas': return d.nome_fantasia || d.razao_social;
+        case 'empresas_contas': return `${nomeEmp(d.empresa_id) || ''} · ${d.banco || ''} ag ${d.agencia || ''} cc ${d.conta || ''}`;
+        case 'lojas': return d.nome_loja;
+        case 'tipos_eventos': return `${d.codigo_evento} - ${d.descricao_do_evento}`;
+        case 'rubricas': return `${d.rubrica_alpha7 || ''} → ${d.resumo_mapeado || ''}`;
+        case 'cargos': return d.nome;
+        case 'competencias': return `${String(d.mes).padStart(2, '0')}/${d.ano} · ${d.status}`;
+        case 'pagamentos_extras': return `${f} · ${d.tipo} · ${v(d.valor)} · ${d.status}`;
+        case 'pagamentos_dinheiro': return `${f} · ${v(d.valor)} · ${d.competencia || ''}`;
+        case 'freelance_solicitacoes': return `${f} · ${d.tipo_solicitacao || ''} · ${valorLegivel('data', d.data_servico)} · ${d.status}`;
+        case 'ferias_solicitacoes': return `${f} · ${valorLegivel('d', d.data_inicio)} · ${d.dias}d · ${d.status}`;
+        case 'ferias_periodos': return `${f} · período ${valorLegivel('d', d.aquisitivo_inicio)}`;
+        case 'escala_dias': return `${f} · ${valorLegivel('d', d.data)} · ${d.tipo}`;
+        case 'escala_funcionario': return `${f} · ${String(d.entrada || '').slice(0, 5)}–${String(d.saida || '').slice(0, 5)}`;
+        case 'escala_loja_horario': return `${nomeLoja(d.loja_id) || ''} · ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.dia_semana] || ''}`;
+        case 'usuarios_sistema': return `${d.email} · ${d.perfil}`;
+        case 'perfis': return d.codigo || d.nome;
+        case 'perfil_telas': return `${d.perfil} → ${d.tela}`;
+        case 'usuario_telas_extra': return `${d.email} → ${d.tela}`;
+        case 'decimo_baixas': return `${f} · ${v(d.valor)} · ${d.motivo || ''}`;
+        default: return f || d.nome || d.descricao || r.record_id;
       }
-
-      listaGlobalLogs = data || [];
-      renderizarTabela(listaGlobalLogs);
     }
 
-    function renderizarTabela(logs) {
-      const tbody = document.getElementById('tabelaLogs');
-      
-      if (logs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-400">Nenhum registro de auditoria encontrado.</td></tr>`;
-        return;
+    function mudancas(r) {
+      if (r.operation === 'UPDATE') {
+        return (r.campos || []).filter(c => !OCULTOS.includes(c)).map(c => `<div><b>${esc(ROTULO[c] || c)}:</b> <span class="text-rose-700 line-through">${esc(valorLegivel(c, (r.old_data || {})[c]))}</span> → <span class="text-emerald-700 font-bold">${esc(valorLegivel(c, (r.new_data || {})[c]))}</span></div>`).join('') || '<span class="text-slate-400">—</span>';
       }
-
-      let html = '';
-      logs.forEach(log => {
-        const dataObj = new Date(log.changed_at);
-        const dataFormatada = !isNaN(dataObj) ? dataObj.toLocaleString('pt-BR') : log.changed_at;
-
-        // Estilo da etiqueta de operação
-        let badgeClass = 'bg-slate-100 text-slate-700 border-slate-300';
-        if (log.operation === 'INSERT') badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-        if (log.operation === 'UPDATE') badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
-        if (log.operation === 'DELETE') badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
-
-        // Formatador de detalhes amigável
-        let detalhesHtml = '';
-        if (log.operation === 'INSERT') {
-          detalhesHtml = `<span class="text-emerald-600 font-semibold">Novo registro criado.</span> 
-                          <span class="text-slate-500">Rubrica: <b>${log.new_data?.rubrica || '-'}</b> | Valor: <b>R$ ${log.new_data?.valor || '0,00'}</b></span>`;
-        } else if (log.operation === 'DELETE') {
-          detalhesHtml = `<span class="text-rose-600 font-semibold">Registro excluído.</span> 
-                          <span class="text-slate-500">Rubrica: <b>${log.old_data?.rubrica || '-'}</b> | Valor: <b>R$ ${log.old_data?.valor || '0,00'}</b></span>`;
-        } else if (log.operation === 'UPDATE') {
-          let mudancas = [];
-          const oldD = log.old_data || {};
-          const newD = log.new_data || {};
-          
-          // Compara campos principais
-          ['rubrica', 'valor', 'competencia', 'tipo'].forEach(campo => {
-            if (oldD[campo] !== newD[campo]) {
-              mudancas.push(`<br>• <b>${campo}</b>: <span class="text-rose-500 line-through">${oldD[campo] ?? 'vazio'}</span> ➔ <span class="text-emerald-600 font-bold">${newD[campo] ?? 'vazio'}</span>`);
-            }
-          });
-
-          if (mudancas.length > 0) {
-            detalhesHtml = `<span class="text-amber-700 font-semibold">Campos alterados:</span> ${mudancas.join('')}`;
-          } else {
-            detalhesHtml = `<span class="text-slate-500">Atualização sem alteração nos campos principais.</span>`;
-          }
-        }
-
-        html += `
-          <tr class="hover:bg-slate-50/70 transition">
-            <td class="py-3 px-4 font-mono whitespace-nowrap text-slate-600">${dataFormatada}</td>
-            <td class="py-3 px-4 whitespace-nowrap">
-              <span class="px-2.5 py-1 rounded-md text-[10px] font-bold border ${badgeClass}">${log.operation}</span>
-            </td>
-            <td class="py-3 px-4 text-slate-600">${log.changed_by || 'Sistema / Anon'}</td>
-            <td class="py-3 px-4 font-mono text-slate-500">${log.record_id || '-'}</td>
-            <td class="py-3 px-4 leading-relaxed">${detalhesHtml}</td>
-          </tr>
-        `;
-      });
-
-      tbody.innerHTML = html;
+      const d = r.new_data || r.old_data || {};
+      const chaves = ['valor', 'rubrica', 'status', 'cargo', 'salario_base', 'perfil', 'tipo', 'vencimento', 'vencimento_pagamento', 'data_inicio', 'dias'].filter(k => d[k] !== undefined && d[k] !== null);
+      return `<span class="text-slate-500">${chaves.slice(0, 4).map(k => `${esc(ROTULO[k] || k)}: ${esc(valorLegivel(k, d[k]))}`).join(' · ')}</span>`;
     }
 
-    function filtrarLogs() {
-      const opFiltro = document.getElementById('filtroOperacao').value;
-      const textoFiltro = document.getElementById('filtroTexto').value.toLowerCase();
-
-      let filtrados = listaGlobalLogs.filter(log => {
-        const matchOp = !opFiltro || log.operation === opFiltro;
-        
-        const stringBusca = JSON.stringify(log).toLowerCase();
-        const matchTexto = !textoFiltro || stringBusca.includes(textoFiltro);
-
-        return matchOp && matchTexto;
-      });
-
-      renderizarTabela(filtrados);
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = u ? u.perfil : '-';
+      const [rf, rl, re, ru] = await Promise.all([
+        _supabase.from('funcionarios').select('id, nome_registro').order('nome_registro'),
+        _supabase.from('lojas').select('id, nome_loja'),
+        _supabase.from('empresas').select('id, nome_fantasia, razao_social'),
+        _supabase.from('usuarios_sistema').select('email').order('email')
+      ]);
+      funcs = rf.data || []; lojas = rl.data || []; empresas = re.data || [];
+      $('listaFuncs').innerHTML = funcs.map(f => `<option value="${esc(f.nome_registro)}">`).join('');
+      $('fTabela').innerHTML = '<option value="">Todas</option>' + Object.entries(TELAS).sort((a, b) => a[1].localeCompare(b[1])).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('');
+      $('fUsuario').innerHTML = '<option value="">Todos</option>' + (ru.data || []).map(x => `<option value="${esc(x.email)}">${esc(x.email)}</option>`).join('');
+      limpar();
     }
 
-    // Carregar ao abrir a página
-    carregarAuditoria();
-  </script>
-<!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
-  <script>
-    let tempoInatividade;
-    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
-
-    function resetarTemporizador() {
-      clearTimeout(tempoInatividade);
-      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
+    function limpar() {
+      $('fDe').value = addDias(hojeIso(), -7); $('fAte').value = hojeIso();
+      ['fTabela', 'fAcao', 'fUsuario', 'fFunc', 'fComp', 'fTexto'].forEach(id => $(id).value = '');
+      buscar(true);
     }
 
-    function fazerLogoutPorInatividade() {
-      // Remove a credencial salva
-      localStorage.removeItem('usuario_drogarema');
-      
-      // Alerta o usuário e redireciona para o login
-      alert('Sessão expirada por inatividade. Faça login novamente.');
-      window.location.href = 'login.html';
+    async function buscar(novo) {
+      if (novo) { pagina = 0; registros = []; }
+      let q = _supabase.from('vw_auditoria').select('*').order('changed_at', { ascending: false });
+      if ($('fDe').value) q = q.gte('changed_at', $('fDe').value + 'T00:00:00-03:00');
+      if ($('fAte').value) q = q.lte('changed_at', $('fAte').value + 'T23:59:59-03:00');
+      if ($('fTabela').value) q = q.eq('table_name', $('fTabela').value);
+      if ($('fAcao').value) q = q.eq('operation', $('fAcao').value);
+      if ($('fUsuario').value) q = q.eq('changed_by', $('fUsuario').value);
+      if ($('fComp').value.trim()) q = q.eq('competencia', $('fComp').value.trim());
+      const nome = $('fFunc').value.trim();
+      if (nome) {
+        const f = funcs.find(x => x.nome_registro === nome);
+        if (!f) return alert('Escolha o funcionário na lista.');
+        q = q.eq('funcionario_id', f.id);
+      }
+      const { data, error } = await q.range(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA - 1);
+      if (error) return alert('Erro ao buscar: ' + error.message);
+      registros = registros.concat(data || []);
+      $('btnMais').classList.toggle('hidden', (data || []).length < POR_PAGINA);
+      pagina++;
+      renderizar();
     }
 
-    // Monitora eventos de movimento do mouse, cliques e digitação
-    window.onload = resetarTemporizador;
-    window.onmousemove = resetarTemporizador;
-    window.onkeypress = resetarTemporizador;
-    window.onclick = resetarTemporizador;
-    window.onscroll = resetarTemporizador;
+    function filtrados() {
+      const t = $('fTexto').value.trim().toLowerCase();
+      if (!t) return registros;
+      return registros.filter(r => (descricao(r) + ' ' + JSON.stringify(r.old_data || {}) + ' ' + JSON.stringify(r.new_data || {}) + ' ' + r.changed_by).toLowerCase().includes(t));
+    }
+
+    function renderizar() {
+      const ls = filtrados();
+      const porUsuario = {}; ls.forEach(r => porUsuario[r.changed_by] = (porUsuario[r.changed_by] || 0) + 1);
+      $('lblResumo').innerText = `${ls.length} registro(s) · ` + Object.entries(porUsuario).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([u, n]) => `${u}: ${n}`).join(' · ');
+      $('tabela').innerHTML = ls.map(r => {
+        const [txt, cls] = ACAO[r.operation] || [r.operation, ''];
+        return `<tr class="align-top hover:bg-slate-50">
+          <td class="p-2 font-mono text-[11px] whitespace-nowrap">${dataHora(r.changed_at)}</td>
+          <td class="p-2 text-[11px]">${esc(r.changed_by)}</td>
+          <td class="p-2 text-[11px] font-bold">${esc(TELAS[r.table_name] || r.table_name)}</td>
+          <td class="p-2"><span class="px-2 py-0.5 rounded font-bold text-[10px] ${cls}">${txt}</span></td>
+          <td class="p-2 text-[11px] max-w-[320px]">${esc(descricao(r))}</td>
+          <td class="p-2 text-[11px] space-y-0.5">${mudancas(r)}</td>
+          <td class="p-2"><button onclick="verRegistro(${r.id})" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded font-bold cursor-pointer" title="ver todos os campos">🔍</button></td></tr>`;
+      }).join('') || '<tr><td colspan="7" class="p-6 text-center text-slate-400">Nenhuma alteração neste filtro.</td></tr>';
+    }
+
+    function verRegistro(id) {
+      const r = registros.find(x => x.id === id); if (!r) return;
+      const o = r.old_data || {}, n = r.new_data || {};
+      const campos = [...new Set([...Object.keys(o), ...Object.keys(n)])].sort();
+      $('dTitulo').innerText = `${(ACAO[r.operation] || [r.operation])[0].toUpperCase()} · ${TELAS[r.table_name] || r.table_name} · ${dataHora(r.changed_at)} · ${r.changed_by}`;
+      $('dCorpo').innerHTML = `<table class="w-full text-[11px]"><thead class="text-[10px] uppercase text-slate-400"><tr><th class="text-left p-1">Campo</th><th class="text-left p-1">Antes</th><th class="text-left p-1">Depois</th></tr></thead><tbody class="divide-y divide-slate-100">
+        ${campos.map(c => { const mud = JSON.stringify(o[c]) !== JSON.stringify(n[c]);
+          return `<tr class="${mud && r.operation === 'UPDATE' ? 'bg-amber-50 font-bold' : ''}"><td class="p-1">${esc(ROTULO[c] || c)}</td><td class="p-1 text-rose-700">${r.operation === 'INSERT' ? '' : esc(valorLegivel(c, o[c]))}</td><td class="p-1 text-emerald-700">${r.operation === 'DELETE' ? '' : esc(valorLegivel(c, n[c]))}</td></tr>`; }).join('')}</tbody></table>`;
+      $('mDet').classList.remove('hidden');
+    }
+
+    function exportarCsv() {
+      const linhas = filtrados().map(r => [dataHora(r.changed_at), r.changed_by, TELAS[r.table_name] || r.table_name, (ACAO[r.operation] || [r.operation])[0], descricao(r),
+        r.operation === 'UPDATE' ? (r.campos || []).filter(c => !OCULTOS.includes(c)).map(c => `${ROTULO[c] || c}: ${valorLegivel(c, (r.old_data || {})[c])} -> ${valorLegivel(c, (r.new_data || {})[c])}`).join(' | ') : '']);
+      const csv = [['Quando', 'Quem', 'Tela', 'Acao', 'Registro', 'Mudancas'], ...linhas].map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `auditoria_${$('fDe').value}_${$('fAte').value}.csv`; a.click();
+    }
+
+    inicializar();
   </script>
 </body>
 </html>
