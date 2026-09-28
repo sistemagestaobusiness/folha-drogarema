@@ -80,7 +80,7 @@
       { key: 'custo_empresa', label: 'CUSTO EMPRESA', colorH: 'bg-teal-100/70', colorB: 'bg-teal-50/20', colorD: 'bg-teal-100/50' },
       { key: 'vt', label: 'VALE-TRANSPORTE', colorH: 'bg-cyan-100/60', colorB: 'bg-cyan-50/20', colorD: 'bg-cyan-100/40' },
       { key: 'inss_patronal', label: 'INSS PATRONAL 27%', colorH: 'bg-teal-50', colorB: 'bg-white', colorD: 'bg-teal-50' },
-      { key: 'fgts', label: 'FGTS 8%', colorH: 'bg-teal-50', colorB: 'bg-white', colorD: 'bg-teal-50' },
+      { key: 'fgts', label: 'FGTS (contábil ou 8%)', colorH: 'bg-teal-50', colorB: 'bg-white', colorD: 'bg-teal-50' },
       { key: 'sm_gn', label: 'COM. SM E GN (2018)', colorH: 'bg-blue-100/60', colorB: 'bg-blue-50/20', colorD: 'bg-blue-100/40' },
       { key: 'perfumaria', label: 'COM. PERFUMARIA (2019)', colorH: 'bg-indigo-100/60', colorB: 'bg-indigo-50/20', colorD: 'bg-indigo-100/40' },
       { key: 'sidney', label: 'COM. SIDNEY (2020)', colorH: 'bg-purple-100/60', colorB: 'bg-purple-50/20', colorD: 'bg-purple-100/40' },
@@ -159,13 +159,17 @@
       document.getElementById('labelCompetencia').innerText = `${compAtual} (vs ${compAnterior})`;
 
       try {
-        const [resFunc, resFolha, resEventos, resEmpresas] = await Promise.all([
+        const [resFunc, resFolha, resEventos, resEmpresas, resFgts] = await Promise.all([
           _supabase.from('funcionarios').select('*'),
           // Busca lançamentos dos DOIS meses
           _supabase.from('folha_itens').select('*').in('competencia', [compAtual, compAnterior]),
           _supabase.from('tipos_eventos').select('*'),
-          _supabase.from('empresas').select('*')
+          _supabase.from('empresas').select('*'),
+          // FGTS informado pela contabilidade (quando existe, substitui a estimativa de 8%)
+          _supabase.from('fgts_contabil').select('funcionario_id, competencia, valor').in('competencia', [compAtual, compAnterior])
         ]);
+        const fgtsContabil = {};
+        (resFgts.data || []).forEach(g => fgtsContabil[g.funcionario_id + '|' + g.competencia] = parseFloat(g.valor || 0));
 
         const funcionarios = resFunc.data || [];
         const itensFolha = resFolha.data || [];
@@ -208,6 +212,7 @@
             }
 
             dadosFuncMap[fId] = {
+              id: f.id,
               nome: f.nome_registro,
               empresa: nomeEmpresa.toUpperCase(),
               salarioBase: parseFloat(f.salario_base || 0),
@@ -271,7 +276,8 @@
             // INSS patronal 27% para registrados nas empresas DROGAREMA; FGTS 8% para todos, menos freelance
             const temMes = f[per].qtd_itens > 0;
             f[per].inss_patronal = temMes && f.registroDrogarema ? f.salarioBase * 0.27 : 0;
-            f[per].fgts = temMes && !f.freelance ? f.salarioBase * 0.08 : 0;
+            const chaveFgts = f.id + '|' + (per === 'atual' ? compAtual : compAnterior);
+            f[per].fgts = chaveFgts in fgtsContabil ? fgtsContabil[chaveFgts] : (temMes && !f.freelance ? f.salarioBase * 0.08 : 0);
             f[per].custo_empresa = f[per].bruto + f[per].vt + f[per].inss_patronal + f[per].fgts;
           });
           return f;

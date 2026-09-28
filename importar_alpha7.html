@@ -138,8 +138,12 @@
     let competenciaRegraLancamento = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
     document.getElementById('labelCompetencia').innerText = `${competenciaRegraLancamento} (ABERTA)`;
 
+    // nome sem acento/espaços extras, para comparar com o cadastro e com os nomes antigos (nomes_alternativos)
+    const normNome = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+    const nomesDoFunc = f => [f.nome_registro, ...(f.nomes_alternativos || [])].map(normNome);
+
     async function carregarBasesDados() {
-      const { data: funcData } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7').eq('status', 'ATIVO');
+      const { data: funcData } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7, nomes_alternativos').eq('status', 'ATIVO');
       funcionariosSistema = funcData || [];
 
       const { data: rubData } = await _supabase.from('rubricas').select('*');
@@ -224,7 +228,8 @@
 
         let funcEncontrado = funcionariosSistema.find(f => f.usuario_alpha7 && f.usuario_alpha7.toUpperCase() === usuario.toUpperCase());
         if (!funcEncontrado) {
-          funcEncontrado = funcionariosSistema.find(f => f.nome_registro.toUpperCase().includes(usuario.split('-')[0].trim().toUpperCase()));
+          const un = normNome(usuario.split('-')[0]);
+          funcEncontrado = un ? funcionariosSistema.find(f => nomesDoFunc(f).some(n => n.includes(un))) : null;
         }
 
         const planoRemUpper = planoRem.toUpperCase();
@@ -249,6 +254,7 @@
           id: Math.random().toString(36).substr(2, 9),
           usuario_alpha7: usuario,
           funcionario_id: funcEncontrado ? funcEncontrado.id : '',
+          vinculo_auto: funcEncontrado ? funcEncontrado.id : '',
           plano_remuneracao: planoRem,
           resumo_mapeado: resumoMapeado,
           codigo_evento: eventoEncontrado ? eventoEncontrado.codigo_evento : '',
@@ -389,7 +395,10 @@
       if (error) {
         alert('Erro ao salvar no banco: ' + error.message);
       } else {
-        alert(`Comissões importadas e salvas com sucesso na competência ${competenciaRegraLancamento}!`);
+        // vínculos feitos à mão: grava o usuário do Alpha7 no cadastro (só quando ainda está vazio)
+        const manuais = lista.filter(d => d.funcionario_id !== d.vinculo_auto);
+        for (const d of manuais) await _supabase.rpc('fn_funcionario_usuario_alpha7', { p_id: d.funcionario_id, p_usuario: d.usuario_alpha7 });
+        alert(`Comissões importadas e salvas com sucesso na competência ${competenciaRegraLancamento}!` + (manuais.length ? `\n\n${manuais.length} vínculo(s) feito(s) à mão foram memorizados.` : ''));
         window.location.href = 'lancamentos.html';
       }
     }

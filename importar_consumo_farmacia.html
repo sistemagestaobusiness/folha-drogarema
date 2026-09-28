@@ -128,11 +128,14 @@
     document.getElementById('labelCompetencia').innerText = `${competenciaRegraLancamento} (ABERTA)`;
 
     async function carregarFuncionarios() {
-      const { data } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7').eq('status', 'ATIVO');
+      const { data } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7, nomes_alternativos').eq('status', 'ATIVO');
       funcionariosSistema = data || [];
     }
 
     carregarFuncionarios();
+    // nome sem acento/espaços extras, para comparar com o cadastro e com os nomes antigos (nomes_alternativos)
+    const normNome = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+    const nomesDoFunc = f => [f.nome_registro, ...(f.nomes_alternativos || [])].map(normNome);
 
     function processarPlanilha(e) {
       const file = e.target.files[0];
@@ -198,15 +201,18 @@
         if (!cliente || cliente.toUpperCase().includes('TOTAL') || isNaN(valorDebito) || valorDebito <= 0) continue;
 
         // Tenta vincular automaticamente o funcionário pelo nome exato ou parcial
-        let funcEncontrado = funcionariosSistema.find(f => f.nome_registro.toUpperCase() === cliente.toUpperCase());
+        // 1º nome igual (cadastro ou nome antigo), 2º um nome contém o outro
+        const cn = normNome(cliente);
+        let funcEncontrado = funcionariosSistema.find(f => nomesDoFunc(f).includes(cn));
         if (!funcEncontrado) {
-          funcEncontrado = funcionariosSistema.find(f => f.nome_registro.toUpperCase().includes(cliente.toUpperCase()) || cliente.toUpperCase().includes(f.nome_registro.toUpperCase()));
+          funcEncontrado = funcionariosSistema.find(f => nomesDoFunc(f).some(n => n.includes(cn) || cn.includes(n)));
         }
 
         dadosProcessados.push({
           id: Math.random().toString(36).substr(2, 9),
           cliente: cliente,
           funcionario_id: funcEncontrado ? funcEncontrado.id : '',
+          vinculo_auto: funcEncontrado ? funcEncontrado.id : '',
           rubrica: '3018 - CONSUMO FARMACIA',
           tipo: 'DESCONTO',
           valor: valorDebito
@@ -288,7 +294,10 @@
       if (error) {
         alert('Erro ao salvar no banco: ' + error.message);
       } else {
-        alert(`Descontos de Consumo Farmácia importados e salvos com sucesso na competência ${competenciaRegraLancamento}!`);
+        // vínculos feitos à mão: guarda o nome do arquivo no funcionário para achar sozinho no próximo mês
+        const manuais = dadosProcessados.filter(d => d.funcionario_id && d.funcionario_id !== d.vinculo_auto);
+        for (const d of manuais) await _supabase.rpc('fn_funcionario_nome_alternativo', { p_id: d.funcionario_id, p_nome: d.cliente });
+        alert(`Descontos de Consumo Farmácia importados e salvos com sucesso na competência ${competenciaRegraLancamento}!` + (manuais.length ? `\n\n${manuais.length} vínculo(s) feito(s) à mão foram memorizados para as próximas importações.` : ''));
         window.location.href = 'lancamentos.html';
       }
     }
