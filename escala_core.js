@@ -57,7 +57,7 @@
       const [re, rf, rs] = await Promise.all([
         sb.from('escala_dias').select('*').gte('data', a).lte('data', b),
         sb.from('ferias_solicitacoes').select('id, funcionario_id, data_inicio, data_fim, status').lte('data_inicio', b).gte('data_fim', a),
-        sb.from('freelance_solicitacoes').select('id, funcionario_id, funcionario_ausente_id, loja_id, data_servico, hora_inicio, hora_fim, motivo, status, tipo_solicitacao, tratamento_ausencia')
+        sb.from('freelance_solicitacoes').select('id, funcionario_id, funcionario_ausente_id, loja_id, data_servico, hora_inicio, hora_fim, motivo, status, tipo_solicitacao, tratamento_ausencia, cargo_exercido')
           .gte('data_servico', a).lte('data_servico', b)
       ]);
       if (re.error && !st.erro) st.erro = re.error.message;
@@ -106,7 +106,7 @@
       if ((f.data_contratacao && iso < f.data_contratacao) || (f.data_rescisao && iso > f.data_rescisao)) return { tipo: 'FORA' };
       if ((opts.ausentes || []).some(a => a.funcionario_id === f.id && a.ini <= iso && a.fim >= iso)) return { tipo: 'FERIAS', origem: 'SIMULADA' };
       const fe = (st.ferias[f.id] || []).find(s => s.data_inicio <= iso && s.data_fim >= iso && s.id !== opts.ignorarFerias);
-      if (fe) return { tipo: fe.status === 'SOLICITADA' ? 'FERIAS_PEDIDA' : 'FERIAS', origem: 'FERIAS' };
+      if (fe) return { tipo: fe.status === 'SOLICITADA' ? 'FERIAS_PEDIDA' : 'FERIAS', origem: 'FERIAS', ini: fe.data_inicio, fim: fe.data_fim };
       const ex = st.exc[f.id + '|' + iso];
       if (ex && !(opts.previsto && ['FALTA', 'ATESTADO', 'AFASTADO'].includes(ex.tipo))) {
         if (ex.tipo !== 'TRABALHO') return { tipo: ex.tipo, origem: 'DIA', obs: ex.observacao, exc: ex };

@@ -6,6 +6,7 @@
   <title>Organograma - Sistema Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
@@ -29,6 +30,7 @@
     <div id="conteudo" class="hidden space-y-4">
       <div class="noprint bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3 text-xs">
         <select id="selVisao" onchange="renderizar()" class="border border-slate-300 rounded-lg p-2 font-bold bg-slate-50 min-w-[220px]"></select>
+        <label class="flex items-center gap-1 font-bold text-slate-600">📅 Situação em <input type="date" id="dataRef" onchange="trocarData()" class="border border-slate-300 rounded-lg p-1.5 font-mono bg-slate-50"></label>
         <span id="lblResumo" class="text-slate-500"></span>
         <div class="ml-auto flex gap-2">
           <button id="btnConfig" onclick="$('boxConfig').classList.toggle('hidden')" class="hidden px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold cursor-pointer">⚙ Níveis dos cargos</button>
@@ -69,6 +71,8 @@
     .grp .n { text-align: center; }
     .grp ul.lista { display: block; padding: 4px 0 0; }
     .grp ul.lista li { display: block; padding: 1px 0; font-size: 11px; }
+    .chip { display: inline-block; font-size: 9px; font-weight: 800; padding: 0 5px; border-radius: 6px; margin-left: 3px; vertical-align: 1px; text-transform: none; }
+    .fora { opacity: .55; }
     .grp ul.lista li::before, .grp ul.lista li::after, .tree ul.lista::before { display: none; }
     @media print {
       @page { size: A4 landscape; margin: 8mm; }
@@ -84,13 +88,78 @@
     let perfil = null, minhaLoja = null, funcs = [], lojas = [], cargos = [];
     const $ = id => document.getElementById(id);
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-    const curto = n => { const p = String(n || '').trim().split(/\s+/); return p.length > 1 ? p[0] + ' ' + p[p.length - 1] : p[0]; };
+    // nome curto (primeiro + último); se duas pessoas ficarem iguais (ex.: SANDRO GOTO), entra o nome do meio
+    const curtoBase = n => { const p = String(n || '').trim().split(/\s+/); return p.length > 1 ? p[0] + ' ' + p[p.length - 1] : p[0]; };
+    const LIGA = ['DA', 'DE', 'DO', 'DAS', 'DOS', 'E'];
+    const curto = n => {
+      const nome = String(n || '').trim(), base = curtoBase(nome);
+      if (!funcs.some(f => String(f.nome_registro || '').trim() !== nome && curtoBase(f.nome_registro) === base)) return base;
+      const p = nome.split(/\s+/), meio = p.slice(1, -1).filter(x => !LIGA.includes(x.toUpperCase()));
+      return meio.length ? `${p[0]} ${meio[0]} ${p[p.length - 1]}` : nome;
+    };
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '';
     const ehLoja = id => /^LOJA\s/i.test(nomeLoja(id));
     const funcao = f => (f.organograma_funcao || f.cargo || '').trim();
     const cargoDe = f => cargos.find(c => c.nome === funcao(f));
     const nivel = f => { const c = cargoDe(f); let n = c ? c.nivel : null; if (f.lider_loja && ehLoja(f.loja_id) && (n == null || n > 3)) n = 3; return n; };
     const rh = () => ['RH', 'GESTOR'].includes(perfil);
+
+    // ---------- escala: situação do dia e farmacêutico ----------
+    const EC = window.EscalaCore ? EscalaCore.criar(_supabase) : null;
+    let escalaOk = false;
+    const hojeIso = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    const dataRef = () => $('dataRef').value || hojeIso();
+    const dm = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+    const ehFarma = f => /FARMAC[EÊ]UTIC/i.test(funcao(f) + ' ' + (f.cargo || ''));
+    const CHIP = {
+      FERIAS: ['🏖 férias', 'bg-sky-100 text-sky-800'], FERIAS_PEDIDA: ['🏖 férias (pedida)', 'bg-sky-50 text-sky-700'],
+      FOLGA: ['folga', 'bg-slate-200 text-slate-600'], FALTA: ['❌ falta', 'bg-rose-100 text-rose-800'],
+      ATESTADO: ['🩺 atestado', 'bg-rose-100 text-rose-800'], AFASTADO: ['afastado', 'bg-amber-100 text-amber-800'],
+      EMPRESTADO: ['em outra loja', 'bg-violet-100 text-violet-800']
+    };
+    async function carregarEscala() {
+      escalaOk = false;
+      if (!EC) return;
+      try { await EC.garantir(dataRef(), EC.util.addDias(dataRef(), 6)); escalaOk = true; } catch (e) { console.warn('escala:', e); }
+    }
+    async function trocarData() { await carregarEscala(); renderizar(); }
+    function situacao(f) {
+      if (!escalaOk) return null;
+      const r = EC.dia(f.id, dataRef());
+      if (r.tipo === 'TRABALHO' && r.loja && r.loja !== f.loja_id) return { ...r, tipo: 'EMPRESTADO' };
+      return r;
+    }
+    function chip(f) {
+      const r = situacao(f); if (!r) return '';
+      if (r.tipo === 'TRABALHO') return `<span class="chip bg-emerald-100 text-emerald-800">${r.entrada}–${r.saida}</span>`;
+      const c = CHIP[r.tipo]; if (!c) return '';
+      return `<span class="chip ${c[1]}">${c[0]}${r.fim ? ' até ' + dm(r.fim) : ''}</span>`;
+    }
+    const trabalhando = f => { const r = situacao(f); return !!r && r.tipo === 'TRABALHO'; };
+    // horários da loja sem farmacêutico (a lei exige farmacêutico durante todo o funcionamento)
+    function semFarmaceutico(lojaId, iso) {
+      if (!escalaOk || !EC.temEscala(lojaId)) return null;
+      const cob = EC.cobertura(lojaId, iso);
+      if (!cob.h || cob.fechada || !cob.h.abre || !cob.h.fecha) return null;
+      const U = EC.util, porId = id => funcs.find(x => x.id === id);
+      const farmas = cob.trab.filter(p => p.extra ? /FARMAC[EÊ]UT/i.test(p.extra.cargo_exercido || '') : ehFarma(porId(p.f.id) || p.f));
+      const [a, b] = U.faixa(cob.h.abre, cob.h.fecha), buracos = []; let atual = null;
+      for (let m = a; m < b; m += 30) {
+        const tem = farmas.some(p => { const fx = U.faixa(p.r.entrada, p.r.saida); return fx && m >= fx[0] && m < fx[1]; });
+        if (!tem) { if (!atual) atual = { ini: m, fim: m + 30 }; else atual.fim = m + 30; } else if (atual) { buracos.push(atual); atual = null; }
+      }
+      if (atual) buracos.push(atual);
+      return buracos.map(x => (x.ini === a && x.fim === b) ? 'o dia todo' : `${U.minHm(x.ini)}–${U.minHm(x.fim)}`);
+    }
+    // resumo do dia para o cartão da loja
+    function resumoDia(lojaId, membros) {
+      if (!escalaOk) return '';
+      if (!EC.temEscala(lojaId)) return `<div class="c" style="opacity:.6">escala não cadastrada</div>`;
+      const trab = membros.filter(trabalhando).length;
+      const sf = ehLoja(lojaId) ? semFarmaceutico(lojaId, dataRef()) : null;
+      return `<div class="c">📅 ${dm(dataRef())}: ${trab} de ${membros.length} trabalhando</div>`
+        + (sf && sf.length ? `<div class="c" style="opacity:1"><span class="chip bg-rose-600 text-white">⚠ sem farmacêutico ${esc(sf.join(', '))}</span></div>` : '');
+    }
 
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
@@ -114,6 +183,8 @@
       if (perfil === 'LIDER') $('selVisao').disabled = true;
       if (!$('selVisao').options.length) { $('aviso').innerText = 'Seu usuário não está ligado a uma loja.'; $('aviso').classList.remove('hidden'); return; }
       renderConfig();
+      $('dataRef').value = hojeIso();
+      await carregarEscala();
       $('conteudo').classList.remove('hidden');
       renderizar();
     }
@@ -121,11 +192,12 @@
     // ---------- blocos visuais ----------
     function pessoa(f, extra) {
       const n = nivel(f);
-      return `<div class="no ${COR[n] || COR[5]}" title="${esc(f.nome_registro)}"><div class="n">${esc(curto(f.nome_registro))}</div><div class="c">${esc(funcao(f))}${extra ? ' · ' + extra : ''}</div></div>`;
+      const r = situacao(f), fora = r && !['TRABALHO', 'SEM', 'FECHADA'].includes(r.tipo);
+      return `<div class="no ${COR[n] || COR[5]} ${fora ? 'fora' : ''}" title="${esc(f.nome_registro)}"><div class="n">${esc(curto(f.nome_registro))}</div><div class="c">${esc(funcao(f))}${extra ? ' · ' + extra : ''}</div>${chip(f) ? `<div class="mt-0.5">${chip(f)}</div>` : ''}</div>`;
     }
     function grupo(titulo, lista, cls) {
       return `<div class="no grp ${cls || COR[5]}"><div class="n">${esc(titulo)} <span class="opacity-60">(${lista.length})</span></div>
-        <ul class="lista">${lista.map(f => `<li title="${esc(f.nome_registro)}">• ${esc(curto(f.nome_registro))}${f.organograma_funcao && f.organograma_funcao !== f.cargo ? '' : ''}</li>`).join('')}</ul></div>`;
+        <ul class="lista">${lista.map(f => `<li title="${esc(f.nome_registro)}" class="${(situacao(f) && !['TRABALHO', 'SEM', 'FECHADA'].includes(situacao(f).tipo)) ? 'fora' : ''}">• ${esc(curto(f.nome_registro))}${chip(f)}</li>`).join('')}</ul></div>`;
     }
     const caixa = (html, cls) => `<div class="no ${cls}">${html}</div>`;
     const li = (conteudo, filhos) => `<li>${conteudo}${filhos && filhos.length ? `<ul>${filhos.join('')}</ul>` : ''}</li>`;
@@ -148,7 +220,7 @@
       const supervisores = funcs.filter(f => nivel(f) === 2 && funcao(f) === 'SUPERVISOR');
       const topoLider = lideres.length ? lideres.map(f => pessoa(f, lideres.length > 1 ? '' : 'líder')).join('<div class="h-1"></div>')
         : caixa('<div class="n">Sem líder definido</div><div class="c">marque "Líder da loja" no cadastro</div>', 'border-2 border-dashed border-rose-400 text-rose-700 bg-rose-50');
-      const noLoja = li(caixa(`<div class="n">${esc(nomeLoja(lojaId))}</div><div class="c">${membros.length} pessoa(s)</div>`, 'bg-amber-100 text-amber-900 border border-amber-300'),
+      const noLoja = li(caixa(`<div class="n">${esc(nomeLoja(lojaId))}</div><div class="c">${membros.length} pessoa(s)</div>${resumoDia(lojaId, membros)}`, 'bg-amber-100 text-amber-900 border border-amber-300'),
         [li(topoLider, equipeAgrupada(equipe))]);
       const raiz = ehLoja(lojaId) && supervisores.length ? li(supervisores.map(f => pessoa(f, 'supervisão')).join(''), [noLoja]) : noLoja;
       $('lblResumo').innerText = `${membros.length} pessoa(s) · ${lideres.length} líder(es) · ${equipe.length} na equipe`;
@@ -164,7 +236,7 @@
       const setores = lojas.filter(l => !ehLoja(l.id));
       const noLojaResumo = l => { const m = ativos.filter(f => f.loja_id === l.id); const lid = m.filter(f => nivel(f) <= 3);
         return li(`<button onclick="abrirLoja('${l.id}')" class="no bg-amber-100 text-amber-900 border border-amber-300 hover:ring-2 hover:ring-amber-400 cursor-pointer">
-          <div class="n">${esc(l.nome_loja)}</div><div class="c">${lid.length ? 'líder: ' + esc(lid.map(f => curto(f.nome_registro)).join(', ')) : '<b class="text-rose-700">sem líder</b>'}</div><div class="c">${m.length} pessoa(s) · ver ›</div></button>`); };
+          <div class="n">${esc(l.nome_loja)}</div><div class="c">${lid.length ? 'líder: ' + esc(lid.map(f => curto(f.nome_registro)).join(', ')) : '<b class="text-rose-700">sem líder</b>'}</div><div class="c">${m.length} pessoa(s) · ver ›</div>${resumoDia(l.id, m)}</button>`); };
       const filhosSup = lojasLoja.map(noLojaResumo);
       // setor administrativo: fica embaixo do gestor dele quando só há um gestor (nível 2) no setor
       const doGestor = {}, soltos = [];
@@ -199,7 +271,15 @@
         if (!lid.length) lista.push(`<b>${esc(l.nome_loja)}</b> está sem líder (marque "Líder da loja" no cadastro de quem lidera).`);
         if (lid.length > 1) lista.push(`<b>${esc(l.nome_loja)}</b> tem ${lid.length} líderes: ${esc(lid.map(f => curto(f.nome_registro)).join(', '))}. Confira se está certo.`);
       });
-      $('avisos').innerHTML = lista.length ? `<div class="noprint bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs space-y-1"><div class="font-black">⚠ Ajustes no cadastro (${lista.length})</div>${lista.map(t => `<div>• ${t}</div>`).join('')}</div>` : '';
+      // farmacêutico nos próximos 7 dias (a partir da data escolhida)
+      const farma = [];
+      if (escalaOk) (lojaId === 'GERAL' ? lojas.filter(l => ehLoja(l.id)) : lojas.filter(l => l.id === lojaId && ehLoja(l.id))).forEach(l => {
+        const dias = [];
+        for (let i = 0; i < 7; i++) { const d = EC.util.addDias(dataRef(), i), sf = semFarmaceutico(l.id, d); if (sf && sf.length) dias.push(`${EC.util.DIAS[EC.util.dow(d)]} ${dm(d)} (${sf.join(', ')})`); }
+        if (dias.length) farma.push(`<b>${esc(l.nome_loja)}</b>: ${esc(dias.join(' · '))}`);
+      });
+      const boxFarma = farma.length ? `<div class="bg-rose-50 border-2 border-rose-300 text-rose-800 rounded-xl p-3 text-xs space-y-1"><div class="font-black">💊 Sem farmacêutico na escala (próximos 7 dias) — a lei exige farmacêutico durante todo o horário de funcionamento</div>${farma.map(t => `<div>• ${t}</div>`).join('')}<div class="text-[10px] text-rose-700">Ajuste na <a href="escala.html" class="underline font-bold">Escala</a> ou peça freelance de farmacêutico.</div></div>` : '';
+      $('avisos').innerHTML = `<div class="noprint space-y-2">${boxFarma}` + (lista.length ? `<div class="bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs space-y-1"><div class="font-black">⚠ Ajustes no cadastro (${lista.length})</div>${lista.map(t => `<div>• ${t}</div>`).join('')}</div>` : '') + '</div>';
     }
 
     function renderizar() {

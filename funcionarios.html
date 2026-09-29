@@ -114,8 +114,8 @@
           <div class="md:col-span-2"><label class="lbl">Data-base das férias</label><input type="date" id="ferias_data_base" class="inp font-mono"></div>
           <div class="md:col-span-4 flex items-end"><p class="text-[10px] text-slate-400 pb-2">Preencha só se o período aquisitivo for diferente da admissão (ex.: transferência entre empresas, acordo). Em branco, as férias contam da admissão. <a href="ferias.html" class="text-emerald-700 font-bold hover:underline">🏖 abrir férias</a></p></div>
           <div class="md:col-span-3"><label class="lbl">Cargo *</label><select id="cargo" required onchange="atualizarCaixa()" class="inp font-bold"></select></div>
-          <div class="md:col-span-3"><label class="lbl">Salário base (R$) *</label><input type="number" step="0.01" min="0" id="salario_base" required class="inp font-mono">
-            <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2000 SALARIO (contábil).</p></div>
+          <div class="md:col-span-3"><label class="lbl">Salário base (R$) *</label><input type="number" step="0.01" min="0" id="salario_base" class="inp font-mono">
+            <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2000 SALARIO (contábil). Sem registro: deixe em branco e preencha só o salário adicional.</p></div>
           <div class="md:col-span-3"><label class="lbl">Salário adicional - acordo (R$)</label><input type="number" step="0.01" min="0" id="salario_adicional" class="inp font-mono">
             <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2001 SALARIO (não contábil).</p></div>
           <div id="boxCaixa" class="md:col-span-3 hidden"><label class="lbl">Adicional de caixa (R$)</label><input type="number" step="0.01" min="0" id="adicional_caixa" class="inp font-mono">
@@ -510,7 +510,9 @@
         ['nome_registro', 'pessoal', 'Nome completo'],
         ['cargo', 'contrato', 'Cargo'],
         ...(freela ? [] : [['data_contratacao', 'contrato', 'Admissão']]),
-        ...(freela || socio ? [] : [['salario_base', 'contrato', 'Salário base'], ['empresa_id', 'lotacao', 'Empresa de registro']]),
+        // sem registro (só salário "por fora"): o salário base contábil pode ficar em branco
+        ...(freela || socio || payload.salario_adicional > 0 ? [] : [['salario_base', 'contrato', 'Salário base (ou o salário adicional, se não for registrado)']]),
+        ...(freela || socio ? [] : [['empresa_id', 'lotacao', 'Empresa de registro']]),
         ['loja_id', 'lotacao', 'Loja / setor onde trabalha']
       ];
       const ABA = { pessoal: 'Pessoal', contrato: 'Contrato', lotacao: 'Lotação e acesso' };
