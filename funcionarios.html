@@ -207,7 +207,7 @@
         <div><label class="lbl">Nível</label><select id="cNovoNivel" class="inp"></select></div>
         <button onclick="salvarCargo(null)" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">+ Criar</button>
       </div>
-      <div class="max-h-[60vh] overflow-y-auto"><table class="w-full"><thead class="text-[10px] uppercase text-slate-400 sticky top-0 bg-white"><tr><th class="text-left p-1">Nome</th><th class="p-1">Nível</th><th class="p-1">Ativo</th><th class="p-1">Em uso</th><th></th></tr></thead><tbody id="tabCargos" class="divide-y divide-slate-100"></tbody></table></div>
+      <div class="max-h-[60vh] overflow-y-auto"><table class="w-full"><thead class="text-[10px] uppercase text-slate-400 sticky top-0 bg-white"><tr><th class="text-left p-1">Nome</th><th class="p-1">Nível</th><th class="p-1">Ativo</th><th class="p-1" title="só o Gestor usa e edita (ex.: sócios)">Só gestor</th><th class="p-1">Em uso</th><th></th></tr></thead><tbody id="tabCargos" class="divide-y divide-slate-100"></tbody></table></div>
     </div>
   </div>
 
@@ -305,20 +305,24 @@
       const op = (lista, vazio) => `<option value="">${vazio}</option>` + lista.map(c => `<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
       const guarda = ['cargo', 'organograma_funcao', 'fCargo'].map(id => $(id).value);
       $('fCargo').innerHTML = op(todosCargos, 'Todos');
-      $('cargo').innerHTML = op(cargos, '-- selecione --');
-      $('organograma_funcao').innerHTML = op(cargos, '(mesma do cargo)');
+      const usaveis = cargos.filter(c => perfil === 'GESTOR' || !c.restrito);   // cargos "só gestor" (sócios) não aparecem para o RH
+      $('cargo').innerHTML = op(usaveis, '-- selecione --');
+      $('organograma_funcao').innerHTML = op(usaveis, '(mesma do cargo)');
       ['cargo', 'organograma_funcao', 'fCargo'].forEach((id, i) => { $(id).value = guarda[i]; });
     }
     function abrirCargos() {
       const uso = n => funcs.filter(f => f.cargo === n || f.organograma_funcao === n).length;
       $('cNovoNivel').innerHTML = NIVEIS.map(([k, t]) => `<option value="${k}" ${k === '5' ? 'selected' : ''}>${t}</option>`).join('');
-      $('tabCargos').innerHTML = todosCargos.map((c, i) => `<tr class="${c.ativo === false ? 'opacity-50' : ''}">
-        <td class="p-1"><input id="cn_${i}" value="${esc(c.nome)}" class="inp uppercase py-1"></td>
-        <td class="p-1"><select id="cl_${i}" class="inp py-1">${NIVEIS.map(([k, t]) => `<option value="${k}" ${String(c.nivel ?? '') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
-        <td class="p-1 text-center"><input type="checkbox" id="ca_${i}" ${c.ativo !== false ? 'checked' : ''} class="w-4 h-4 accent-emerald-600"></td>
+      const gestor = perfil === 'GESTOR';
+      $('tabCargos').innerHTML = todosCargos.map((c, i) => { const trava = c.restrito && !gestor ? 'disabled' : '';
+        return `<tr class="${c.ativo === false ? 'opacity-50' : ''}">
+        <td class="p-1"><input id="cn_${i}" value="${esc(c.nome)}" ${trava} class="inp uppercase py-1"></td>
+        <td class="p-1"><select id="cl_${i}" ${trava} class="inp py-1">${NIVEIS.map(([k, t]) => `<option value="${k}" ${String(c.nivel ?? '') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td class="p-1 text-center"><input type="checkbox" id="ca_${i}" ${c.ativo !== false ? 'checked' : ''} ${trava} class="w-4 h-4 accent-emerald-600"></td>
+        <td class="p-1 text-center"><input type="checkbox" id="cr_${i}" ${c.restrito ? 'checked' : ''} ${gestor ? '' : 'disabled'} class="w-4 h-4 accent-rose-600"></td>
         <td class="p-1 text-center font-mono">${uso(c.nome)}</td>
-        <td class="p-1 whitespace-nowrap"><button onclick="salvarCargo(${i})" class="px-2 py-1 bg-slate-800 text-white rounded font-bold cursor-pointer">Salvar</button>
-          ${uso(c.nome) ? '' : `<button onclick="excluirCargo(${i})" class="px-2 py-1 bg-rose-50 text-rose-700 rounded font-bold cursor-pointer">Excluir</button>`}</td></tr>`).join('');
+        <td class="p-1 whitespace-nowrap">${trava ? '<span class="text-[10px] text-slate-400 font-bold">🔒 só gestor</span>' : `<button onclick="salvarCargo(${i})" class="px-2 py-1 bg-slate-800 text-white rounded font-bold cursor-pointer">Salvar</button>
+          ${uso(c.nome) ? '' : `<button onclick="excluirCargo(${i})" class="px-2 py-1 bg-rose-50 text-rose-700 rounded font-bold cursor-pointer">Excluir</button>`}`}</td></tr>`; }).join('');
       $('mCargos').classList.remove('hidden');
     }
     async function recarregarCargos() {
@@ -330,7 +334,8 @@
       const novo = i === null;
       const params = novo
         ? { p_nome_atual: null, p_nome_novo: $('cNovo').value, p_ativo: true, p_nivel: $('cNovoNivel').value ? parseInt($('cNovoNivel').value, 10) : null }
-        : { p_nome_atual: todosCargos[i].nome, p_nome_novo: $('cn_' + i).value, p_ativo: $('ca_' + i).checked, p_nivel: $('cl_' + i).value ? parseInt($('cl_' + i).value, 10) : null };
+        : { p_nome_atual: todosCargos[i].nome, p_nome_novo: $('cn_' + i).value, p_ativo: $('ca_' + i).checked, p_nivel: $('cl_' + i).value ? parseInt($('cl_' + i).value, 10) : null,
+            p_restrito: perfil === 'GESTOR' ? $('cr_' + i).checked : null };
       if (!String(params.p_nome_novo || '').trim()) return alert('Informe o nome do cargo.');
       if (!novo && params.p_nome_novo.trim().toUpperCase() !== params.p_nome_atual) {
         const n = funcs.filter(f => f.cargo === params.p_nome_atual || f.organograma_funcao === params.p_nome_atual).length;
@@ -432,6 +437,14 @@
       const pend = atual ? pendencias.filter(p => p.funcionario_id === atual.id) : [];
       $('badgePendDoc').classList.toggle('hidden', pend.length === 0); $('badgePendDoc').innerText = pend.length;
       $('infoStatus').innerHTML = atual ? `Status atual: <b>${esc(atual.status || 'ATIVO')}</b>` : '';
+      // cadastro de sócio: o RH só consulta
+      const soGestor = atual && perfil !== 'GESTOR' && todosCargos.some(c => c.restrito && (c.nome === atual.cargo || c.nome === atual.organograma_funcao));
+      if (soGestor) {
+        ['cargo', 'organograma_funcao'].forEach(id => { const v = atual[id]; if (v && ![...$(id).options].some(o => o.value === v)) $(id).insertAdjacentHTML('beforeend', `<option value="${esc(v)}">${esc(v)}</option>`); $(id).value = v || ''; });
+        $('fichaSub').innerText += ' · 🔒 cadastro de sócio: somente o Gestor altera';
+      }
+      $('formFicha').querySelectorAll('input, select, textarea').forEach(el => { if (el.id !== 'matricula') el.disabled = !!soGestor; });
+      $('btnSalvar').classList.toggle('hidden', !!soGestor);
       mostrarEmpresa(); atualizarCaixa(); mostrarAcesso();
       $('modalFicha').classList.remove('hidden');
       trocarAba(aba || 'pessoal');
@@ -491,11 +504,13 @@
       payload.cpf = payload.cpf ? mascaraCpf(payload.cpf) : null;
       // campos obrigatórios: avisa o que falta e em qual aba (freelance não precisa de admissão nem salário)
       const freela = String(payload.cargo || '').includes('FREELANCE');
+      // sócios (cargos "só gestor"): servem para o organograma; não exigem salário nem empresa de registro
+      const socio = todosCargos.some(c => c.restrito && (c.nome === payload.cargo || c.nome === payload.organograma_funcao));
       const OBRIG = [
         ['nome_registro', 'pessoal', 'Nome completo'],
         ['cargo', 'contrato', 'Cargo'],
-        ...(freela ? [] : [['data_contratacao', 'contrato', 'Admissão'], ['salario_base', 'contrato', 'Salário base']]),
-        ['empresa_id', 'lotacao', 'Empresa de registro'],
+        ...(freela ? [] : [['data_contratacao', 'contrato', 'Admissão']]),
+        ...(freela || socio ? [] : [['salario_base', 'contrato', 'Salário base'], ['empresa_id', 'lotacao', 'Empresa de registro']]),
         ['loja_id', 'lotacao', 'Loja / setor onde trabalha']
       ];
       const ABA = { pessoal: 'Pessoal', contrato: 'Contrato', lotacao: 'Lotação e acesso' };
