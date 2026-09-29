@@ -80,7 +80,7 @@
         <button data-aba="documentos" onclick="trocarAba('documentos')" class="aba abaExistente">📎 Documentos <span id="badgePendDoc" class="hidden ml-1 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px]"></span></button>
       </div>
 
-      <form id="formFicha" onsubmit="salvarFicha(event)" class="p-5 space-y-4 text-xs">
+      <form id="formFicha" novalidate onsubmit="salvarFicha(event)" class="p-5 space-y-4 text-xs">
         <input type="hidden" id="fId">
 
         <!-- PESSOAL -->
@@ -489,8 +489,24 @@
         payload[c] = v;
       });
       payload.cpf = payload.cpf ? mascaraCpf(payload.cpf) : null;
-      if (!payload.empresa_id || !payload.loja_id) { trocarAba('lotacao'); return alert('Informe a empresa de registro e a loja/setor.'); }
-      if (!payload.cargo || !payload.data_contratacao) { trocarAba('contrato'); return alert('Informe cargo e admissão.'); }
+      // campos obrigatórios: avisa o que falta e em qual aba (freelance não precisa de admissão nem salário)
+      const freela = String(payload.cargo || '').includes('FREELANCE');
+      const OBRIG = [
+        ['nome_registro', 'pessoal', 'Nome completo'],
+        ['cargo', 'contrato', 'Cargo'],
+        ...(freela ? [] : [['data_contratacao', 'contrato', 'Admissão'], ['salario_base', 'contrato', 'Salário base']]),
+        ['empresa_id', 'lotacao', 'Empresa de registro'],
+        ['loja_id', 'lotacao', 'Loja / setor onde trabalha']
+      ];
+      const ABA = { pessoal: 'Pessoal', contrato: 'Contrato', lotacao: 'Lotação e acesso' };
+      const faltando = OBRIG.filter(([c]) => c === 'salario_base' ? !(payload[c] > 0) : !payload[c]);
+      document.querySelectorAll('.inp').forEach(el => el.classList.remove('!border-rose-500', 'ring-2', 'ring-rose-200'));
+      if (faltando.length) {
+        faltando.forEach(([c]) => $(c).classList.add('!border-rose-500', 'ring-2', 'ring-rose-200'));
+        trocarAba(faltando[0][1]);
+        $(faltando[0][0]).focus();
+        return alert('Para salvar, preencha:\n\n' + faltando.map(([, a, t]) => `• ${t} (aba ${ABA[a]})`).join('\n'));
+      }
       if (payload.cpf) {
         const dup = funcs.find(f => f.cpf && f.cpf.replace(/\D/g, '') === payload.cpf.replace(/\D/g, '') && f.id !== $('fId').value);
         if (dup && !confirm(`O CPF ${payload.cpf} já está no cadastro de ${dup.nome_registro}. Salvar mesmo assim?`)) return;
