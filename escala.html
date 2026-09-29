@@ -225,7 +225,7 @@
     async function garantirPeriodo(forcar) {
       const [a, b] = intervaloVisao();
       if (!forcar && carregado.ini && a >= carregado.ini && b <= carregado.fim) return;
-      const ini = addDias(inicioMes(a), -7), fim = addDias(fimMes(b), 7);
+      const ini = addDias(inicioMes(a), -21), fim = addDias(fimMes(b), 7);
       const [re, rf, rs] = await Promise.all([
         _supabase.from('escala_dias').select('*').gte('data', ini).lte('data', fim),
         _supabase.from('ferias_solicitacoes').select('id, funcionario_id, data_inicio, data_fim, status').lte('data_inicio', fim).gte('data_fim', ini),
@@ -257,10 +257,21 @@
       if (!p) return { tipo: 'SEM' };
       const d = dow(iso), h = horario[d];
       if (h && h.aberta === false) return { tipo: 'FECHADA' };
+      const trabalhoDoDia = () => d === 0 ? { tipo: 'TRABALHO', entrada: hm(p.dom_entrada || p.entrada), saida: hm(p.dom_saida || p.saida), loja: f.loja_id }
+        : d === 6 ? { tipo: 'TRABALHO', entrada: hm(p.sab_entrada || p.entrada), saida: hm(p.sab_saida || p.saida), loja: f.loja_id }
+        : { tipo: 'TRABALHO', entrada: hm(p.entrada), saida: hm(p.saida), loja: f.loja_id };
+      // ciclo (5x1, 6x1, 4x2...): conta a partir de um dia de folga de referência; a folga "anda" pela semana
+      if (p.regime === 'CICLO' && p.ciclo_ref && p.ciclo_trabalho && p.ciclo_folga) {
+        const n = p.ciclo_trabalho + p.ciclo_folga;
+        const k = ((difDias(iso, p.ciclo_ref) % n) + n) % n;
+        return k < p.ciclo_folga ? { tipo: 'FOLGA' } : trabalhoDoDia();
+      }
       if (d === 0) {
         if (p.domingo === 'FOLGA') return { tipo: 'FOLGA' };
-        if (p.domingo === 'ALTERNADO' && p.domingo_ref && Math.abs(Math.round(difDias(iso, p.domingo_ref) / 7)) % 2 === 1) return { tipo: 'FOLGA' };
-        return { tipo: 'TRABALHO', entrada: hm(p.dom_entrada || p.entrada), saida: hm(p.dom_saida || p.saida), loja: f.loja_id };
+        // referência = um domingo de FOLGA; alternado repete a cada 2 semanas, "2 trabalha / 1 folga" a cada 3
+        const ciclo = p.domingo === 'ALTERNADO' ? 2 : p.domingo === 'DOIS_UM' ? 3 : 0;
+        if (ciclo && p.domingo_ref && ((Math.round(difDias(iso, p.domingo_ref) / 7) % ciclo) + ciclo) % ciclo === 0) return { tipo: 'FOLGA' };
+        return trabalhoDoDia();
       }
       if ((p.folgas || []).map(Number).includes(d)) return { tipo: 'FOLGA' };
       if (d === 6) return { tipo: 'TRABALHO', entrada: hm(p.sab_entrada || p.entrada), saida: hm(p.sab_saida || p.saida), loja: f.loja_id };
@@ -365,6 +376,20 @@
       return `<div class="cel ${cls} ${borda} ${clic ? 'cursor-pointer hover:opacity-80' : ''}" title="${esc(dica)}" ${clic}>${esc(txt)}</div>`;
     }
 
+    // quem trabalha 3 domingos seguidos (a regra do comércio pede 1 domingo de folga a cada 3 semanas)
+    function avisosDomingo(ini, fim) {
+      const doms = []; for (let d = addDias(ini, -14); d <= fim; d = addDias(d, 1)) if (dow(d) === 0) doms.push(d);
+      const r = [];
+      funcs.filter(f => f.loja_id === lojaSel && padroes[f.id]).forEach(f => {
+        let seq = [];
+        doms.forEach(d => {
+          if (diaFunc(f, d).tipo === 'TRABALHO') { seq.push(d); if (seq.length >= 3 && d >= ini) { r.push({ f, dias: seq.slice(-3) }); seq = []; } }
+          else seq = [];
+        });
+      });
+      return r;
+    }
+
     function renderMes() {
       const ini = inicioMes(dataRef), fim = fimMes(dataRef);
       const dias = []; for (let d = ini; d <= fim; d = addDias(d, 1)) dias.push(d);
@@ -391,9 +416,11 @@
         const cls = c.minimo == null || !c.slots.length ? 'text-slate-400' : c.falta ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white';
         const dica = !c.slots.length ? 'sem horário de funcionamento' : c.falta ? 'abaixo do mínimo em algum horário — clique para ver' : 'mínimo atendido o dia todo';
         return `<td class="p-0.5"><div class="cel ${cls} cursor-pointer" title="${dica}" onclick="abrirDia('${d}')">${c.n}</div></td>`; }).join('');
-      $('gradeMes').innerHTML = linhas.length || extrasNomes.size ? `<table class="text-xs border-collapse"><thead><tr><th class="sticky left-0 bg-white z-10 text-left p-2 text-[10px] uppercase text-slate-500">Funcionário</th>${cab}</tr></thead>
+      const tabelaMes = linhas.length || extrasNomes.size ? `<table class="text-xs border-collapse"><thead><tr><th class="sticky left-0 bg-white z-10 text-left p-2 text-[10px] uppercase text-slate-500">Funcionário</th>${cab}</tr></thead>
         <tbody>${corpo}${extras}</tbody><tfoot><tr class="border-t-2 border-slate-300"><td class="sticky left-0 bg-white z-10 p-1.5 text-[10px] font-black uppercase text-slate-600">Pessoas no dia<div class="text-[9px] font-normal normal-case text-slate-400">verde = mínimo atendido</div></td>${rodape}</tr></tfoot></table>`
         : '<p class="p-6 text-center text-slate-400">Nenhum funcionário ativo nesta loja.</p>';
+      const av = avisosDomingo(ini, fim);
+      $('gradeMes').innerHTML = (av.length ? `<div class="noprint m-2 bg-amber-50 border border-amber-300 text-amber-900 rounded-lg p-2 text-[11px]"><b>⚠ Domingos seguidos:</b> ${av.map(a => `${esc(primeiroNome(a.f.nome_registro))} trabalha ${a.dias.map(d => dbr(d).slice(0, 5)).join(', ')}`).join(' · ')}. A regra do comércio pede ao menos 1 domingo de folga a cada 3 semanas.</div>` : '') + tabelaMes;
     }
 
     function renderSemana() {
@@ -510,17 +537,29 @@
           <td class="p-1.5"><input type="number" id="hM${d}" min="0" max="50" value="${h.minimo ?? 1}" ${dis} class="inp mini font-mono text-center"></td></tr>`; }).join('')}</tbody></table>`;
       const lista = funcs.filter(f => f.loja_id === lojaSel);
       $('tabPadroes').innerHTML = lista.length ? `<table class="text-xs w-full"><thead><tr class="text-[10px] uppercase text-slate-500 text-left">
-          <th class="p-1.5">Funcionário</th><th class="p-1.5">Entrada</th><th class="p-1.5">Saída</th><th class="p-1.5">Intervalo</th><th class="p-1.5">Folga fixa</th><th class="p-1.5">Domingo</th><th class="p-1.5">Sábado diferente</th><th class="p-1.5">Domingo diferente</th><th></th></tr></thead><tbody>
+          <th class="p-1.5">Funcionário</th><th class="p-1.5">Entrada</th><th class="p-1.5">Saída</th><th class="p-1.5">Intervalo</th><th class="p-1.5">Folgas</th><th class="p-1.5">Sábado diferente</th><th class="p-1.5">Domingo diferente</th><th></th></tr></thead><tbody>
         ${lista.map(f => { const p = padroes[f.id] || {}; const fol = (p.folgas || []).map(Number);
           return `<tr class="border-t border-slate-100 align-top ${padroes[f.id] ? '' : 'bg-amber-50/60'}">
             <td class="p-1.5 min-w-[170px]"><div class="font-bold">${esc(f.nome_registro)}</div><div class="text-[9px] text-slate-400">${esc(f.cargo || '')}${f.periodo_trabalho ? ' · ' + esc(f.periodo_trabalho) : ''}${padroes[f.id] ? '' : ' · <b class="text-amber-700">sem padrão</b>'}</div></td>
             <td class="p-1.5"><input type="time" id="pE_${f.id}" value="${hm(p.entrada)}" ${dis} class="inp mini font-mono"></td>
             <td class="p-1.5"><input type="time" id="pS_${f.id}" value="${hm(p.saida)}" ${dis} class="inp mini font-mono"></td>
             <td class="p-1.5"><select id="pI_${f.id}" ${dis} class="inp mini">${[0, 15, 30, 60, 90, 120].map(m => `<option value="${m}" ${(p.intervalo_min ?? 60) === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></td>
-            <td class="p-1.5 whitespace-nowrap">${[1, 2, 3, 4, 5, 6].map(d => `<label class="inline-flex flex-col items-center mr-1 text-[9px] font-bold text-slate-500">${DSEM[d][0]}<input type="checkbox" class="pF_${f.id} accent-slate-700" value="${d}" ${fol.includes(d) ? 'checked' : ''} ${dis}></label>`).join('')}</td>
-            <td class="p-1.5"><select id="pD_${f.id}" ${dis} onchange="$('pR_${f.id}').classList.toggle('hidden', this.value !== 'ALTERNADO')" class="inp mini w-[110px]">
-                ${[['FOLGA', 'Folga'], ['TRABALHA', 'Trabalha'], ['ALTERNADO', 'Alternado']].map(([k, t]) => `<option value="${k}" ${(p.domingo || 'FOLGA') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
-              <input type="date" id="pR_${f.id}" value="${p.domingo_ref || ''}" ${dis} title="um domingo em que trabalha" class="inp mini font-mono mt-1 w-[120px] ${p.domingo === 'ALTERNADO' ? '' : 'hidden'}"></td>
+            <td class="p-1.5 min-w-[260px]">
+              <select id="pG_${f.id}" ${dis} onchange="mudarRegime('${f.id}')" class="inp mini w-full mb-1">
+                <option value="SEMANAL" ${p.regime !== 'CICLO' ? 'selected' : ''}>Folga fixa na semana (6x1)</option>
+                <option value="CICLO" ${p.regime === 'CICLO' ? 'selected' : ''}>Ciclo corrido (5x1, 4x2, 12x36...)</option></select>
+              <div id="bxS_${f.id}" class="${p.regime === 'CICLO' ? 'hidden' : ''} space-y-1">
+                <div>${[1, 2, 3, 4, 5, 6].map(d => `<label class="inline-flex flex-col items-center mr-1 text-[9px] font-bold text-slate-500">${DSEM[d][0]}<input type="checkbox" class="pF_${f.id} accent-slate-700" value="${d}" ${fol.includes(d) ? 'checked' : ''} ${dis}></label>`).join('')}</div>
+                <div class="flex items-center gap-1"><span class="text-[9px] font-bold text-rose-700">DOM</span>
+                  <select id="pD_${f.id}" ${dis} onchange="mudarRegime('${f.id}')" class="inp mini flex-1">
+                  ${[['FOLGA', 'Folga todo domingo'], ['TRABALHA', 'Trabalha todo domingo'], ['ALTERNADO', 'Alternado (1 sim, 1 não)'], ['DOIS_UM', 'Trabalha 2, folga 1']].map(([k, t]) => `<option value="${k}" ${(p.domingo || 'FOLGA') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+                <label id="bxR_${f.id}" class="${['ALTERNADO', 'DOIS_UM'].includes(p.domingo) ? 'flex' : 'hidden'} items-center gap-1 text-[9px] font-bold text-slate-500">um domingo de FOLGA <input type="date" id="pR_${f.id}" value="${p.domingo_ref || ''}" ${dis} class="inp mini font-mono flex-1"></label>
+              </div>
+              <div id="bxC_${f.id}" class="${p.regime === 'CICLO' ? '' : 'hidden'} space-y-1">
+                <div class="flex items-center gap-1 text-[10px] font-bold text-slate-600">trabalha <input type="number" min="1" max="13" id="pCT_${f.id}" value="${p.ciclo_trabalho || 5}" ${dis} class="inp mini w-12 text-center"> folga <input type="number" min="1" max="6" id="pCF_${f.id}" value="${p.ciclo_folga || 1}" ${dis} class="inp mini w-12 text-center"></div>
+                <label class="flex items-center gap-1 text-[9px] font-bold text-slate-500">um dia de FOLGA <input type="date" id="pCR_${f.id}" value="${p.ciclo_ref || ''}" ${dis} class="inp mini font-mono flex-1"></label>
+                <p class="text-[9px] text-slate-400">A folga anda pela semana e cai no domingo de tempos em tempos.</p>
+              </div></td>
             <td class="p-1.5 whitespace-nowrap"><input type="time" id="pSE_${f.id}" value="${hm(p.sab_entrada)}" ${dis} class="inp mini font-mono"> <input type="time" id="pSS_${f.id}" value="${hm(p.sab_saida)}" ${dis} class="inp mini font-mono"></td>
             <td class="p-1.5 whitespace-nowrap"><input type="time" id="pDE_${f.id}" value="${hm(p.dom_entrada)}" ${dis} class="inp mini font-mono"> <input type="time" id="pDS_${f.id}" value="${hm(p.dom_saida)}" ${dis} class="inp mini font-mono"></td>
             <td class="p-1.5 whitespace-nowrap">${podeEditar ? `<button onclick="salvarPadrao('${f.id}')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">Salvar</button>
@@ -543,17 +582,31 @@
       const v = id => $(id + '_' + fid).value;
       const dados = { entrada: v('pE'), saida: v('pS'), intervalo_min: parseInt(v('pI'), 10),
         folgas: [...document.querySelectorAll('.pF_' + fid)].filter(c => c.checked).map(c => parseInt(c.value, 10)),
-        domingo: v('pD'), domingo_ref: v('pD') === 'ALTERNADO' ? v('pR') : null,
+        regime: v('pG'), ciclo_trabalho: parseInt(v('pCT'), 10) || null, ciclo_folga: parseInt(v('pCF'), 10) || null, ciclo_ref: v('pCR') || null,
+        domingo: v('pD'), domingo_ref: ['ALTERNADO', 'DOIS_UM'].includes(v('pD')) ? v('pR') : null,
         sab_entrada: v('pSE'), sab_saida: v('pSS'), dom_entrada: v('pDE'), dom_saida: v('pDS') };
       if (!dados.entrada || !dados.saida) return alert('Informe entrada e saída.');
       if (!!dados.sab_entrada !== !!dados.sab_saida || !!dados.dom_entrada !== !!dados.dom_saida) return alert('No horário diferente de sábado/domingo, informe entrada e saída (ou deixe os dois em branco).');
-      if (dados.domingo === 'ALTERNADO' && (!dados.domingo_ref || dow(dados.domingo_ref) !== 0)) return alert('Domingos alternados: informe um DOMINGO em que a pessoa trabalha.');
+      if (dados.regime === 'CICLO') {
+        if (!dados.ciclo_trabalho || !dados.ciclo_folga) return alert('Ciclo: informe quantos dias trabalha e quantos folga (ex.: 5 e 1).');
+        if (!dados.ciclo_ref) return alert('Ciclo: informe um dia em que a pessoa FOLGA, para o sistema contar o ciclo a partir dele.');
+      } else if (['ALTERNADO', 'DOIS_UM'].includes(dados.domingo) && (!dados.domingo_ref || dow(dados.domingo_ref) !== 0)) {
+        return alert('Informe um DOMINGO em que a pessoa FOLGA, como referência.');
+      }
       const { error } = await _supabase.rpc('fn_escala_padrao', { p_funcionario: fid, p_dados: dados });
       if (error) return alert('Erro: ' + error.message);
       const { data } = await _supabase.from('escala_funcionario').select('*').eq('funcionario_id', fid);
       if (data && data[0]) padroes[fid] = data[0];
       renderizar();
     }
+    function mudarRegime(fid) {
+      const ciclo = $('pG_' + fid).value === 'CICLO';
+      $('bxS_' + fid).classList.toggle('hidden', ciclo);
+      $('bxC_' + fid).classList.toggle('hidden', !ciclo);
+      const ref = ['ALTERNADO', 'DOIS_UM'].includes($('pD_' + fid).value);
+      $('bxR_' + fid).classList.toggle('hidden', !ref); $('bxR_' + fid).classList.toggle('flex', ref);
+    }
+
     async function removerPadrao(fid) {
       if (!confirm('Remover o horário padrão de ' + func(fid).nome_registro + '? As alterações de dias específicos continuam.')) return;
       const { error } = await _supabase.rpc('fn_escala_padrao', { p_funcionario: fid, p_dados: null });
