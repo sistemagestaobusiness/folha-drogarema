@@ -6,6 +6,7 @@
   <title>Solicitações da Loja - Freelance e Hora Extra</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -57,7 +58,7 @@
           <h2 class="tituloSecao font-bold text-sm border-b border-slate-100 pb-2">1. LOJA E MOTIVO</h2>
           <div>
             <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Loja solicitante *</label>
-            <select id="selectLoja" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase"></select>
+            <select id="selectLoja" onchange="atualizarEscala()" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs font-bold uppercase"></select>
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Motivo da solicitação *</label>
@@ -110,15 +111,15 @@
           <div class="grid grid-cols-3 gap-2">
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data *</label>
-              <input type="date" id="inputData" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono">
+              <input type="date" id="inputData" onchange="atualizarEscala()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono">
             </div>
             <div>
               <label id="lblInicio" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Início</label>
-              <input type="time" id="inputHoraInicio" step="1800" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
+              <input type="time" id="inputHoraInicio" step="1800" onchange="calcularHoras(); atualizarEscala()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
             </div>
             <div>
               <label id="lblFim" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fim</label>
-              <input type="time" id="inputHoraFim" step="1800" onchange="calcularHoras()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
+              <input type="time" id="inputHoraFim" step="1800" onchange="calcularHoras(); atualizarEscala()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono text-center">
             </div>
           </div>
           <div class="grid grid-cols-12 gap-2 items-end">
@@ -141,6 +142,7 @@
             </div>
           </div>
           <p id="lblCalculo" class="text-[10px] text-slate-500 font-mono"></p>
+          <div id="boxEscala" class="hidden text-[11px] bg-white border border-slate-200 rounded-lg p-2.5 leading-snug space-y-1.5"></div>
         </div>
 
         <!-- 4. LISTA A ENVIAR -->
@@ -241,7 +243,7 @@
           lista.classList.remove('hidden');
         };
         input.addEventListener('focus', desenhar);
-        input.addEventListener('input', () => { hidden.value = ''; input.classList.remove('border-emerald-500'); desenhar(); });
+        input.addEventListener('input', () => { const tinha = hidden.value; hidden.value = ''; input.classList.remove('border-emerald-500'); desenhar(); if (tinha) atualizarEscala(); });
         input.addEventListener('keydown', e => {
           if (e.key === 'Enter') { e.preventDefault(); const p = lista.querySelector('.opcao'); if (p) p.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); }
           if (e.key === 'Escape') lista.classList.add('hidden');
@@ -253,6 +255,7 @@
           input.value = nomeFunc(op.dataset.id);
           input.classList.add('border-emerald-500');
           lista.classList.add('hidden');
+          atualizarEscala();
         });
         input.addEventListener('blur', () => setTimeout(() => {
           lista.classList.add('hidden');
@@ -292,6 +295,7 @@
       btn.className = `w-full text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer ${fl ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-orange-500 hover:bg-orange-600'}`;
       if (carrinho.length) { carrinho = []; atualizarTabelaCarrinho(); }
       calcularHoras();
+      atualizarEscala();
     }
 
     // ------------------------------------------------------------------
@@ -330,6 +334,7 @@
       if (q.get('fim')) document.getElementById('inputHoraFim').value = q.get('fim');
       if (q.get('motivo')) { document.getElementById('selectMotivo').value = q.get('motivo'); aoMudarMotivo(); }
       calcularHoras();
+      atualizarEscala();
     }
 
     async function carregarLojas() {
@@ -353,6 +358,7 @@
       const exige = MOTIVOS_COM_AUSENTE.includes(document.getElementById('selectMotivo').value);
       document.getElementById('boxAusente').classList.toggle('hidden', !exige);
       if (!exige) limparCombo('selectAusente');
+      atualizarEscala();
     }
 
     // ------------------------------------------------------------------
@@ -397,10 +403,96 @@
       const calc = calcularHoras();
       if (!data || !calc) { alert('Preencha a data e os horários (de 30 em 30 minutos).'); return; }
       if (carrinho.some(c => c.data_servico === data)) { alert('Esta data já está na lista. A mesma pessoa não pode ter duas solicitações no mesmo dia.'); return; }
+      if (alertaEscalaAtual && !confirm('Atenção (escala):\n\n' + alertaEscalaAtual + '\n\nIncluir esta data mesmo assim?')) return;
       carrinho.push({ id_temp: Date.now(), data_servico: data, hora_inicio: calc.ini, hora_fim: calc.fim, horas: calc.horas, intervalo: calc.intervalo, funcao: document.getElementById('selectFuncao').value });
       carrinho.sort((a, b) => a.data_servico.localeCompare(b.data_servico));
       document.getElementById('inputData').value = '';
       atualizarTabelaCarrinho();
+      atualizarEscala();
+    }
+
+    // ------------------------------------------------------------------
+    // ESCALA: cobertura do dia, turno de quem faltou e conferência da hora extra
+    // ------------------------------------------------------------------
+    const EC = window.EscalaCore ? EscalaCore.criar(_supabase) : null;
+    let escalaSeq = 0, alertaEscalaAtual = '';
+    function usarHorario(ini, fim) {
+      const chk = document.getElementById('checkDiaria');
+      if (chk.checked) { chk.checked = false; toggleDiaria(); }
+      document.getElementById('inputHoraInicio').value = ini;
+      document.getElementById('inputHoraFim').value = fim;
+      calcularHoras(); atualizarEscala();
+    }
+    async function atualizarEscala() {
+      const box = document.getElementById('boxEscala');
+      alertaEscalaAtual = '';
+      if (!box) return;
+      const loja = document.getElementById('selectLoja').value, data = document.getElementById('inputData').value;
+      if (!EC || !loja || !data) { box.classList.add('hidden'); return; }
+      const seq = ++escalaSeq;
+      try { await EC.garantir(data, data); } catch (e) { box.classList.add('hidden'); return; }
+      if (seq !== escalaSeq) return;
+      const U = EC.util, avisos = [], partes = [];
+      const ini = document.getElementById('inputHoraInicio').value, fim = document.getElementById('inputHoraFim').value;
+      const funcId = document.getElementById('selectFuncionario').value, ausId = document.getElementById('selectAusente').value;
+      const motivo = document.getElementById('selectMotivo').value;
+      const btn = (txt, a, b) => `<button type="button" onclick="usarHorario('${a}','${b}')" class="ml-1 px-2 py-0.5 bg-slate-800 hover:bg-slate-900 text-white rounded text-[10px] font-bold cursor-pointer">${txt}</button>`;
+
+      // quem faltou: turno que a pessoa faria
+      if (ausId) {
+        const prev = EC.dia(ausId, data, { previsto: true });
+        if (prev.tipo === 'TRABALHO') {
+          partes.push(`<div class="bg-rose-50 border border-rose-200 rounded p-2">🙋 <b>${esc(nomeFunc(ausId))}</b> faria <b>${prev.entrada}–${prev.saida}</b> neste dia.${(ini !== prev.entrada || fim !== prev.saida) ? btn('usar este horário', prev.entrada, prev.saida) : ' <span class="text-emerald-700 font-bold">✓ mesmo horário</span>'}</div>`);
+        } else if (prev.tipo !== 'SEM') {
+          const t = `Pela escala, ${nomeFunc(ausId)} não trabalharia neste dia (${U.NOMES[prev.tipo] || prev.tipo}). Confira a data ou quem faltou.`;
+          avisos.push(t); partes.push(`<div class="bg-amber-50 border border-amber-300 text-amber-900 rounded p-2 font-bold">⚠ ${esc(t)}</div>`);
+        }
+      }
+
+      // hora extra: a pessoa está trabalhando? a HE fica fora do turno?
+      if (tipoAtual === 'HORA_EXTRA' && funcId) {
+        const r = EC.dia(funcId, data), nm = esc(nomeFunc(funcId));
+        if (['FERIAS', 'FERIAS_PEDIDA', 'FALTA', 'ATESTADO', 'AFASTADO'].includes(r.tipo)) {
+          const t = `${nomeFunc(funcId)} está de ${U.NOMES[r.tipo]} neste dia pela escala: não deveria fazer hora extra.`;
+          avisos.push(t); partes.push(`<div class="bg-rose-50 border-2 border-rose-400 text-rose-800 rounded p-2 font-bold">⛔ ${esc(t)}</div>`);
+        } else if (r.tipo === 'FOLGA') {
+          const t = `${nomeFunc(funcId)} está de FOLGA neste dia: seria trabalho no dia de folga (confira com o RH se é hora extra ou troca de folga).`;
+          avisos.push(t); partes.push(`<div class="bg-amber-50 border border-amber-300 text-amber-900 rounded p-2 font-bold">⚠ ${esc(t)}</div>`);
+        } else if (r.tipo === 'TRABALHO') {
+          const turno = U.faixa(r.entrada, r.saida), he = ini && fim ? U.faixa(ini, fim) : null;
+          if (he && U.sobrepoe(turno, he)) {
+            const t = `O horário da hora extra (${ini}–${fim}) coincide com o turno normal de ${nomeFunc(funcId)} (${r.entrada}–${r.saida}). A HE é só o tempo ALÉM do turno.`;
+            avisos.push(t);
+            partes.push(`<div class="bg-rose-50 border-2 border-rose-400 text-rose-800 rounded p-2 font-bold">⛔ ${esc(t)}<div class="font-normal mt-1">Sugestão:${btn('depois da saída (' + r.saida + ')', r.saida, U.minHm(U.toMin(r.saida) + 120))}${btn('antes da entrada', U.minHm(U.toMin(r.entrada) - 60), r.entrada)}</div></div>`);
+          } else {
+            partes.push(`<div class="bg-orange-50 border border-orange-200 rounded p-2">⏰ Turno normal de <b>${nm}</b>: <b>${r.entrada}–${r.saida}</b>${he ? ' · <span class="text-emerald-700 font-bold">✓ HE fora do turno</span>' : `<span class="ml-1">·</span>${btn('começar na saída (' + r.saida + ')', r.saida, U.minHm(U.toMin(r.saida) + 120))}`}</div>`);
+          }
+        } else if (r.tipo === 'SEM') {
+          partes.push(`<div class="text-slate-500">⏰ ${nm} não tem escala cadastrada: confira o turno dele antes de pedir a hora extra.</div>`);
+        }
+      }
+
+      // cobertura do dia (e o efeito deste pedido)
+      const cob0 = EC.cobertura(loja, data);
+      partes.push(`<div class="border-t border-slate-100 pt-1.5">${EC.htmlDia(loja, data)}</div>`);
+      if (ini && fim && cob0.minimo && !cob0.semEscala) {
+        const m0 = EC.menorNoHorario(cob0, ini, fim);
+        const cob1 = EC.cobertura(loja, data, { extras: [{ funcionario_id: funcId || null, entrada: ini, saida: fim }] });
+        const resto = EC.buracos(cob1);
+        if (!m0 || m0.foraDoHorario) partes.push(`<div class="text-slate-600">ℹ O horário ${ini}–${fim} fica fora do funcionamento da loja.</div>`);
+        else if (!m0.abaixo) {
+          const t = `Das ${ini} às ${fim} a loja já tem pelo menos ${m0.menor} pessoa(s) (mínimo ${cob0.minimo}) contando a escala${cob0.extras.length ? ' e os pedidos já enviados' : ''}, mesmo sem este pedido.`;
+          if (!['ALTA_DEMANDA', 'COMPENSAR'].includes(motivo)) avisos.push(t + ' Explique o motivo na observação.');
+          partes.push(`<div class="${['ALTA_DEMANDA', 'COMPENSAR'].includes(motivo) ? 'text-slate-600' : 'bg-amber-50 border border-amber-300 text-amber-900 rounded p-2 font-bold'}">ℹ ${esc(t)}</div>`);
+        } else if (!EC.cobertura(loja, data, { extras: [{ funcionario_id: funcId || null, entrada: ini, saida: fim }] }).slots.some((s, i) => s.qtd > cob0.slots[i].qtd)) {
+          partes.push(`<div class="text-slate-600">ℹ Este pedido não aumenta a cobertura: a pessoa já está na escala nesse horário.${resto.length ? ` Continua faltando: ${EC.txtBuracos(resto)}.` : ''}</div>`);
+        } else {
+          partes.push(`<div class="text-emerald-700 font-bold">✓ Este pedido cobre horário abaixo do mínimo (${m0.menor} de ${cob0.minimo}).${resto.length ? ` <span class="text-rose-700">Mesmo com ele, ainda falta: ${EC.txtBuracos(resto)}.</span>` : ' Com ele, o dia fica coberto.'}</div>`);
+        }
+      }
+      alertaEscalaAtual = avisos.join('\n\n');
+      box.innerHTML = partes.join('');
+      box.classList.remove('hidden');
     }
 
     function removerDoCarrinho(idTemp) { carrinho = carrinho.filter(c => c.id_temp !== idTemp); atualizarTabelaCarrinho(); }

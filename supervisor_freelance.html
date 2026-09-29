@@ -6,6 +6,7 @@
   <title>Aprovação do Supervisor - Freelance</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -154,6 +155,7 @@
       const box = document.getElementById('lista');
       if (error) { box.innerHTML = `<div class="text-rose-600 text-xs">${esc(error.message)}</div>`; return; }
       dadosCarregados = data || [];
+      await prepararEscala(dadosCarregados);
       renderizar();
     }
 
@@ -202,12 +204,23 @@
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? `<span class="ml-1 text-[11px]">faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b></span>` : ''}</div>
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">"${esc(r.observacao_lider)}"</div>` : ''}
+              ${escalaInfo(r)}
               ${aba === 'hist' && r.supervisor_obs ? `<div class="text-[11px] bg-slate-50 border-l-2 border-slate-300 pl-2">Obs.: ${esc(r.supervisor_obs)}</div>` : ''}
             </div>
             ${acoes}
           </div>
         </div>`;
     }
+
+    // escala: o dia estava mesmo abaixo do mínimo? (mesmas regras da tela Escala)
+    const EC = window.EscalaCore ? EscalaCore.criar(_supabase) : null;
+    async function prepararEscala(lista) {
+      if (!EC || !lista.length) return;
+      const datas = lista.map(r => r.data_servico).filter(Boolean).sort();
+      if (!datas.length || EC.util.difDias(datas[datas.length - 1], datas[0]) > 120) return;   // período grande demais: não confere
+      try { await EC.garantir(datas[0], datas[datas.length - 1]); } catch (e) { console.warn('escala:', e); }
+    }
+    function escalaInfo(r) { try { return EC ? EC.htmlPedido(r, nome) : ''; } catch (e) { return ''; } }
 
     function abrirDecisao(id, aprovar) {
       decisao = { id, aprovar };

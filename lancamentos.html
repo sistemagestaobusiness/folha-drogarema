@@ -6,6 +6,7 @@
   <title>Lançamentos e Histórico - Sistema Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -51,6 +52,7 @@
 
         <!-- ABA 1: NOVO LANÇAMENTO -->
         <div id="abaNovo" class="space-y-4">
+          <div id="bannerEscala" class="hidden bg-amber-50 border border-amber-300 text-amber-900 p-3 rounded-lg text-[11px] leading-snug"></div>
           <div id="alertaLiberacao" class="hidden bg-amber-50 border border-amber-400 text-amber-900 p-3 rounded-lg text-xs font-bold"></div>
           <div id="alertaCompetenciaFechada" class="hidden bg-rose-50 border border-rose-300 text-rose-800 p-3 rounded-lg text-xs font-bold flex flex-col items-center gap-2">
             <span>⚠️ O PERÍODO ATIVO ESTÁ FECHADO. LANÇAMENTOS BLOQUEADOS.</span>
@@ -75,6 +77,7 @@
                 <option value="">-- SELECIONE PRIMEIRO A EMPRESA --</option>
               </select>
               <div id="alerta13" class="hidden mt-2 bg-rose-50 border-2 border-rose-400 text-rose-800 rounded-lg p-2.5 text-[11px] leading-snug"></div>
+              <div id="alertaEscala" class="hidden mt-2 bg-amber-50 border-2 border-amber-300 text-amber-900 rounded-lg p-2.5 text-[11px] leading-snug space-y-1.5"></div>
             </div>
 
             <div class="relative">
@@ -468,6 +471,7 @@
         
         const selComp = document.getElementById('selectCompetenciaConsulta');
         if (selComp) selComp.value = competenciaRegraLancamento;
+        carregarOcorrenciasEscala();
       } catch (err) {
         console.error('Erro na inicialização:', err);
       }
@@ -764,6 +768,119 @@
       if (error) alert('Erro ao lançar o desconto da antecipação: ' + error.message);
     }
 
+    // ---------------------------------------------------------------------
+    // ESCALA: faltas e atestados do mês que ainda não viraram desconto / banco de horas
+    // ---------------------------------------------------------------------
+    const ECL = window.EscalaCore ? EscalaCore.criar(_supabase) : null;
+    const TRAT_ESCALA = { DESCONTO: 'desconto lançado', BANCO_HORAS: 'banco de horas', ABONADO: 'abonado' };
+    const TRAT_FREELA = { DESCONTO: 'desconto', BANCO_HORAS: 'banco de horas', ATESTADO: 'atestado', NENHUM: 'sem desconto' };
+    let ocorrEscala = [], escalaSemTratamento = false;
+    const dmEscala = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+    const nomeFuncEscala = id => (listaGlobalFuncionarios.find(f => String(f.id) === String(id)) || {}).nome_registro || '?';
+    function situacaoOcorr(o) {
+      if (o.trat) return 'OK';
+      if (o.freela && o.freela.tratamento_ausencia) return 'OK_FREELA';
+      if (o.freela && o.freela.status !== 'APROVADA') return 'AGUARDA_FREELA';
+      return 'PENDENTE';
+    }
+    async function carregarOcorrenciasEscala() {
+      const [m, a] = competenciaRegraLancamento.split('/');
+      const ini = `${a}-${m}-01`, fim = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);
+      const [re, rf] = await Promise.all([
+        _supabase.from('escala_dias').select('*').in('tipo', ['FALTA', 'ATESTADO']).gte('data', ini).lte('data', fim),
+        _supabase.from('freelance_solicitacoes').select('id, funcionario_ausente_id, data_servico, motivo, status, tratamento_ausencia, loja_solicitante')
+          .not('funcionario_ausente_id', 'is', null).gte('data_servico', ini).lte('data_servico', fim)
+      ]);
+      ocorrEscala = [];
+      if (re.error) { renderBannerEscala(); return; }
+      const mapa = {};
+      (re.data || []).forEach(d => {
+        if (!('tratamento' in d)) escalaSemTratamento = true;
+        mapa[d.funcionario_id + '|' + d.data] = { fid: d.funcionario_id, data: d.data, tipo: d.tipo, origem: 'ESCALA', trat: d.tratamento, horas: d.tratado_horas, por: d.tratado_por, obs: d.observacao };
+      });
+      (rf.data || []).filter(s => !['REJEITADA', 'CANCELADA'].includes(s.status)).forEach(s => {
+        const k = s.funcionario_ausente_id + '|' + s.data_servico;
+        const o = mapa[k] || (mapa[k] = { fid: s.funcionario_ausente_id, data: s.data_servico, tipo: s.motivo === 'ATESTADO' ? 'ATESTADO' : s.motivo === 'FALTA_PARCIAL' ? 'FALTA PARCIAL' : 'FALTA', origem: 'FREELA' });
+        o.freela = s;
+      });
+      ocorrEscala = Object.values(mapa).sort((x, y) => x.data.localeCompare(y.data));
+      renderBannerEscala();
+    }
+    function renderBannerEscala() {
+      const box = document.getElementById('bannerEscala');
+      const pend = ocorrEscala.filter(o => situacaoOcorr(o) === 'PENDENTE');
+      const aguard = ocorrEscala.filter(o => situacaoOcorr(o) === 'AGUARDA_FREELA');
+      if (!pend.length && !aguard.length) { box.classList.add('hidden'); return; }
+      const item = o => `<a href="#" onclick="abrirFuncionarioEscala('${o.fid}');return false;" class="inline-block bg-white border border-amber-300 rounded px-1.5 py-0.5 mr-1 mb-1 hover:bg-amber-100">${escaparHtml(nomeFuncEscala(o.fid))} · ${dmEscala(o.data)} · ${escaparHtml(o.tipo.toLowerCase())}</a>`;
+      box.innerHTML = `<div class="font-black uppercase">📅 Escala de ${competenciaRegraLancamento}: ${pend.length ? pend.length + ' falta(s)/atestado(s) sem tratamento' : 'faltas aguardando o freelance'}</div>`
+        + (pend.length ? `<div class="mt-1">${pend.map(item).join('')}</div><div class="text-[10px]">Clique no nome para abrir o funcionário e definir: desconto, banco de horas ou abono.</div>` : '')
+        + (aguard.length ? `<div class="mt-1 text-[10px]">⏳ ${aguard.length} aguardando a aprovação do freelance (o RH decide o tratamento lá): ${aguard.map(o => escaparHtml(nomeFuncEscala(o.fid)) + ' ' + dmEscala(o.data)).join(', ')}</div>` : '')
+        + (escalaSemTratamento ? '<div class="mt-1 font-bold text-rose-700">Rode o SQL AC_escala_tratamento_faltas para poder marcar o tratamento.</div>' : '');
+      box.classList.remove('hidden');
+    }
+    function abrirFuncionarioEscala(fid) {
+      const f = listaGlobalFuncionarios.find(x => String(x.id) === String(fid));
+      if (!f) return alert('Funcionário não encontrado na lista.');
+      const cnpj = String(f.cnpj || '').replace(/\D/g, '');
+      const sel = document.getElementById('selectEmpresaNovo');
+      const opt = [...sel.options].find(o => cnpj && (o.getAttribute('data-cnpj') || '').replace(/\D/g, '') === cnpj);
+      if (!opt) return alert('Empresa de registro de ' + f.nome_registro + ' não encontrada. Confira o cadastro.');
+      sel.value = opt.value;
+      carregarFuncionariosPorEmpresa('Novo');
+      document.getElementById('selectFuncionarioNovo').value = f.id;
+      carregarLancamentosNovo();
+      document.getElementById('selectFuncionarioNovo').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function renderAlertaEscala(fid) {
+      const box = document.getElementById('alertaEscala');
+      const lista = ocorrEscala.filter(o => String(o.fid) === String(fid));
+      if (!lista.length) { box.classList.add('hidden'); return; }
+      const bt = (txt, fn, cls) => `<button type="button" onclick="${fn}" class="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${cls}">${txt}</button>`;
+      box.innerHTML = `<div class="font-black uppercase">📅 Faltas / atestados na escala de ${competenciaRegraLancamento}</div>` + lista.map(o => {
+        const s = situacaoOcorr(o), cab = `<b>${dmEscala(o.data)}</b> · ${escaparHtml(o.tipo.toLowerCase())}${o.obs ? ' · <i>' + escaparHtml(o.obs) + '</i>' : ''}`;
+        if (s === 'OK') return `<div class="text-emerald-800">✓ ${cab} → <b>${TRAT_ESCALA[o.trat] || o.trat}${o.horas ? ' (' + String(o.horas).replace('.', ',') + 'h)' : ''}</b> <span class="text-[10px] text-slate-500">${escaparHtml(o.por || '')}</span> ${bt('↩ desfazer', `tratarEscala('${o.fid}','${o.data}',null)`, 'bg-white border border-slate-300 text-slate-600')}</div>`;
+        if (s === 'OK_FREELA') return `<div class="text-emerald-800">✓ ${cab} → tratado na aprovação do freelance: <b>${TRAT_FREELA[o.freela.tratamento_ausencia] || o.freela.tratamento_ausencia}</b></div>`;
+        if (s === 'AGUARDA_FREELA') return `<div>⏳ ${cab} → freelance pedido para cobrir; o tratamento é definido na <a href="rh_aprovacao_freelance.html" class="underline font-bold">aprovação do freelance</a>.</div>`;
+        return `<div class="bg-white border border-amber-300 rounded p-1.5">⚠ ${cab} <b>sem tratamento</b><div class="mt-1 flex flex-wrap gap-1">`
+          + bt('💸 Desconto', `tratarEscala('${o.fid}','${o.data}','DESCONTO')`, 'bg-rose-600 text-white')
+          + bt('⏱ Banco de horas', `tratarEscala('${o.fid}','${o.data}','BANCO_HORAS')`, 'bg-sky-600 text-white')
+          + bt('✓ Abonar' + (o.tipo === 'ATESTADO' ? ' (atestado ok)' : ''), `tratarEscala('${o.fid}','${o.data}','ABONADO')`, 'bg-emerald-600 text-white')
+          + '</div></div>';
+      }).join('');
+      box.classList.remove('hidden');
+    }
+    async function tratarEscala(fid, data, trat) {
+      if (escalaSemTratamento) return alert('Rode antes o SQL AC_escala_tratamento_faltas no Supabase.');
+      let horas = null;
+      if (trat === 'DESCONTO') {
+        const { data: itens } = await _supabase.from('folha_itens').select('rubrica, tipo').eq('funcionario_id', fid).eq('competencia', competenciaRegraLancamento);
+        const temDesc = (itens || []).some(i => i.tipo === 'DESCONTO' && /FALTA|DSR/i.test(i.rubrica || ''));
+        if (!temDesc) {
+          const ev = listaGlobalEventos.find(e => e.tipo_evento === 'DESCONTO' && /FALTA/i.test(e.descricao_do_evento || ''));
+          if (confirm('Ainda não há desconto de falta lançado para este funcionário em ' + competenciaRegraLancamento + '.\n\nOK = preencher o evento de falta no formulário agora (informe o valor e salve; depois clique de novo em "Desconto").\nCancelar = marcar como descontado mesmo assim.')) {
+            if (ev) { selecionarEvento(ev.codigo_evento, ev.descricao_do_evento, 'DESCONTO'); document.getElementById('inputRubrica').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+            else alert('Não achei evento de desconto com "FALTA" no nome. Escolha o evento manualmente.');
+            return;
+          }
+        }
+      }
+      if (trat === 'BANCO_HORAS') {
+        let sug = 8;
+        if (ECL) { try { await ECL.garantir(data, data); const r = ECL.dia(fid, data, { previsto: true }); if (r.tipo === 'TRABALHO') sug = ECL.horasTurno(r, fid); } catch (e) { } }
+        const txt = prompt(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\nPela escala o turno era de ${String(sug).replace('.', ',')}h:`, String(sug).replace('.', ','));
+        if (txt === null) return;
+        horas = parseFloat(String(txt).replace(',', '.'));
+        if (!(horas > 0)) return alert('Horas inválidas.');
+      }
+      if (trat === 'ABONADO' && !confirm('Abonar este dia (sem desconto e sem banco de horas)?')) return;
+      if (trat === null && !confirm('Desfazer o tratamento deste dia? (o débito no banco de horas, se houver, é apagado; um desconto lançado continua na lista e deve ser excluído à mão)')) return;
+      const { error } = await _supabase.rpc('fn_escala_tratar', { p_funcionario: fid, p_data: data, p_tratamento: trat, p_horas: horas, p_obs: null });
+      if (error) return alert('Não foi possível: ' + error.message);
+      await carregarOcorrenciasEscala();
+      renderAlertaEscala(fid);
+      if (trat === 'BANCO_HORAS' || trat === null) carregarExtrasFreelance(fid, competenciaRegraLancamento);
+    }
+
     // 13º: o que já foi lançado / pago no ano para este funcionário (evita pagar duas vezes)
     async function mostrarInfo13() {
       const box = document.getElementById('info13');
@@ -955,6 +1072,7 @@
 
       const funcNome = document.getElementById('selectFuncionarioNovo').selectedOptions[0]?.text || '';
       carregarAlerta13(funcionarioId);
+      renderAlertaEscala(funcionarioId);
       document.getElementById('subtituloContexto').innerText = `Competência Ativa: ${competenciaRegraLancamento} | Colaborador: ${funcNome}`;
 
       // Puxa o salário base mapeado
@@ -1074,6 +1192,7 @@
 
     function limparTabelasDireita() {
       document.getElementById('alerta13').classList.add('hidden');
+      document.getElementById('alertaEscala').classList.add('hidden');
       document.getElementById('secForaLanc').classList.add('hidden');
       document.getElementById('secForaFreela').classList.add('hidden');
       document.getElementById('blocoForaFolha').classList.add('hidden');

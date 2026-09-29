@@ -6,6 +6,7 @@
   <title>Férias - Sistema Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -98,6 +99,7 @@
       <div><label class="lbl">Vender dias (abono pecuniário)</label>
         <select id="sAbono" onchange="atualizarPrevia()" class="inp"><option value="0">Não vender</option><option value="10">Vender 10 dias</option><option value="5">Vender 5 dias</option></select></div>
       <div id="sPrevia" class="rounded-lg p-3 bg-sky-50 border border-sky-200 text-[11px]"></div>
+      <div id="sEscala" class="hidden rounded-lg p-3 bg-white border border-slate-200 text-[11px] leading-snug space-y-1"></div>
       <div><label class="lbl">Observação</label><textarea id="sObs" rows="2" class="inp"></textarea></div>
       <p class="text-[10px] text-slate-400">Regras CLT: até 3 períodos · um deles com pelo menos 14 dias · os demais com pelo menos 5 dias.</p>
       <button onclick="enviarSolicitacao()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">ENVIAR SOLICITAÇÃO</button>
@@ -427,6 +429,43 @@
       if (ini && [5, 6].includes(new Date(ini + 'T12:00:00').getDay())) avisos.push('⚠ A CLT não permite iniciar férias 2 dias antes de feriado ou do descanso semanal (evite sexta/sábado).');
       $('sPrevia').innerHTML = ini ? `<b>${dbr(ini)} → ${dbr(addDias(ini, dias - 1))}</b> · ${dias} dia(s)${abono ? ` + ${abono} vendidos` : ''} · retorna em <b>${dbr(addDias(ini, dias))}</b><br>Saldo após: ${p.saldo - dias - abono} dia(s)` : 'Informe o início.';
       if (avisos.length) $('sPrevia').innerHTML += `<div class="mt-1 text-amber-800 font-bold">${avisos.join('<br>')}</div>`;
+      impactoLoja();
+    }
+
+    // impacto na loja: quem mais está de férias no período e como fica a escala
+    const EC = window.EscalaCore ? EscalaCore.criar(_supabase) : null;
+    let impactoSeq = 0;
+    async function impactoLoja() {
+      const box = $('sEscala');
+      const f = func($('sFunc').value), ini = $('sInicio').value, dias = parseInt($('sDias').value, 10) || 0;
+      if (!f.id || !ini || dias < 1) { box.classList.add('hidden'); return; }
+      const fim = addDias(ini, dias - 1), seq = ++impactoSeq, partes = [];
+      const colegas = solic.filter(s => ativa(s) && s.funcionario_id !== f.id && func(s.funcionario_id).loja_id === f.loja_id && s.data_inicio <= fim && s.data_fim >= ini);
+      partes.push(colegas.length
+        ? `<div class="text-amber-800 font-bold">⚠ ${colegas.length} colega(s) da ${esc(nomeLoja(f.loja_id))} já de férias no período: ${colegas.map(s => `${esc(func(s.funcionario_id).nome_registro)} (${dbr(s.data_inicio)}–${dbr(s.data_fim)}${s.status === 'SOLICITADA' ? ', pedida' : ''})`).join(', ')}</div>`
+        : `<div class="text-emerald-700">✓ Nenhum colega da ${esc(nomeLoja(f.loja_id))} de férias no período.</div>`);
+      if (EC) {
+        try { await EC.garantir(ini, fim); } catch (e) { }
+        if (seq !== impactoSeq) return;
+        if (!EC.temEscala(f.loja_id)) partes.push('<div class="text-slate-500">📅 A escala desta loja ainda não foi cadastrada: sem conferência de cobertura.</div>');
+        else {
+          const sim = { ausentes: [{ funcionario_id: f.id, ini, fim }] };
+          let menor = null, maior = null; const abaixo = [], piora = [];
+          for (let d = ini; d <= fim; d = addDias(d, 1)) {
+            const c = EC.cobertura(f.loja_id, d, sim);
+            if (!c.h || c.fechada) continue;
+            menor = menor === null ? c.n : Math.min(menor, c.n); maior = maior === null ? c.n : Math.max(maior, c.n);
+            if (c.minimo && c.falta) { abaixo.push(d); if (!EC.cobertura(f.loja_id, d).falta) piora.push(d); }
+          }
+          const lista = ds => ds.slice(0, 10).map(d => `${EC.util.DIAS[EC.util.dow(d)]} ${dbr(d).slice(0, 5)}`).join(', ') + (ds.length > 10 ? ` e mais ${ds.length - 10}` : '');
+          if (menor !== null) partes.push(`<div>📅 Durante as férias ficam <b>${menor === maior ? menor : menor + ' a ' + maior}</b> pessoa(s) por dia na escala da loja.</div>`);
+          if (piora.length) partes.push(`<div class="text-rose-700 font-bold">⛔ Com estas férias, ${piora.length} dia(s) ficam abaixo do mínimo: ${lista(piora)}. Vai precisar de freelance/remanejamento.</div>`);
+          if (abaixo.length > piora.length) partes.push(`<div class="text-amber-800">ℹ ${abaixo.length - piora.length} dia(s) do período já estavam abaixo do mínimo antes destas férias.</div>`);
+          if (!abaixo.length && menor !== null) partes.push('<div class="text-emerald-700 font-bold">✓ A loja mantém o mínimo em todos os dias.</div>');
+        }
+      }
+      box.innerHTML = partes.join('');
+      box.classList.remove('hidden');
     }
     async function enviarSolicitacao() {
       if (!$('sPeriodo').value) return alert('Sem saldo disponível.');

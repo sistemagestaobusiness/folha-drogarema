@@ -6,6 +6,7 @@
   <title>Aprovação de Freelance (RH) - Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -62,6 +63,7 @@
         <div>
           <h3 class="font-bold text-emerald-700 text-sm">APROVAÇÃO FINAL (RH)</h3>
           <p id="apResumo" class="text-[11px] text-slate-500"></p>
+          <div id="apEscala"></div>
         </div>
         <button onclick="fechar('modalAprovar')" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
@@ -244,6 +246,7 @@
         document.getElementById('resumoHist').innerText = `${lista.length} solicitação(ões) · ${aprov.length} aprovada(s) · ${fmtH(aprov.reduce((a, r) => a + parseFloat(r.horas_trabalhadas || 0), 0))} · ${fmtR(aprov.reduce((a, r) => a + parseFloat(r.valor_pago || 0), 0))} pagos`;
       }
       if (lista.length === 0) { box.innerHTML = '<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">Nada por aqui.</div>'; return; }
+      await prepararEscala(lista);
       box.innerHTML = lista.map(card).join('');
     }
 
@@ -306,6 +309,7 @@
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? ` faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b> <span class="text-[10px]">${txtSaldo(r.funcionario_ausente_id)}</span>` : ''}</div>
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">Líder: "${esc(r.observacao_lider)}"</div>` : ''}
+              ${escalaInfo(r)}
               ${sup}${rh}${fin}
             </div>
             ${acoes}
@@ -313,12 +317,24 @@
         </div>`;
     }
 
+    // escala: o dia estava mesmo abaixo do mínimo? (mesmas regras da tela Escala)
+    const EC = window.EscalaCore ? EscalaCore.criar(_supabase) : null;
+    async function prepararEscala(lista) {
+      if (!EC || !lista.length) return;
+      const datas = lista.map(r => r.data_servico).filter(Boolean).sort();
+      if (!datas.length || EC.util.difDias(datas[datas.length - 1], datas[0]) > 120) return;   // período grande demais: não confere
+      try { await EC.garantir(datas[0], datas[datas.length - 1]); } catch (e) { console.warn('escala:', e); }
+    }
+    function escalaInfo(r) { try { return EC ? EC.htmlPedido(r, nome) : ''; } catch (e) { return ''; } }
+
     // ---------- Aprovação final ----------
     async function abrirAprovacao(id) {
       const { data: r } = await _supabase.from('freelance_solicitacoes').select('*').eq('id', id).single();
       if (!r) return;
       atual = r;
       document.getElementById('apResumo').innerText = `${r.loja_solicitante || ''} · ${dataBR(r.data_servico)} · ${NOMES_MOTIVO[r.motivo] || r.motivo || ''} · lança na competência ${compAberta}`;
+      await prepararEscala([r]);
+      document.getElementById('apEscala').innerHTML = escalaInfo(r);
       document.getElementById('apFreela').innerText = nome(r.funcionario_id);
       const he = r.tipo_solicitacao === 'HORA_EXTRA';
       document.getElementById('apTipoTxt').innerText = he ? '1. ⏰ HORA EXTRA de' : '1. 🧑‍🤝‍🧑 FREELANCE feito por';
