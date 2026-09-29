@@ -707,7 +707,7 @@
         let resumoEmpresas = {};
         emps.forEach(e => {
           const nomeFantasia = e.nome_fantasia || e.razao_social;
-          resumoEmpresas[e.id] = { nome: nomeFantasia, contabil: 0, naoContabil: 0, ativosCount: 0, cnpj: e.cnpj };
+          resumoEmpresas[e.id] = { nome: nomeFantasia, contabil: 0, naoContabil: 0, descontos: 0, ativosCount: 0, cnpj: e.cnpj };
         });
 
         ativos.forEach(f => {
@@ -766,6 +766,11 @@
               const matchEmp = emps.find(e => e.cnpj === funcObj.cnpj);
               if (matchEmp) empIdDestino = matchEmp.id;
             }
+            // lançamento de quem está sem empresa no cadastro: linha própria, para o total bater com o topo
+            if (!empIdDestino || !resumoEmpresas[empIdDestino]) {
+              empIdDestino = '_sem';
+              if (!resumoEmpresas._sem) resumoEmpresas._sem = { nome: '⚠ SEM EMPRESA NO CADASTRO', contabil: 0, naoContabil: 0, descontos: 0, ativosCount: 0 };
+            }
             if (empIdDestino && resumoEmpresas[empIdDestino]) {
               if (tipo === 'PROVENTO') {
                 if (natureza === 'NAO_CONTABIL' || rubricaStr.includes('FORA')) {
@@ -773,6 +778,8 @@
                 } else {
                   resumoEmpresas[empIdDestino].contabil += val;
                 }
+              } else {
+                resumoEmpresas[empIdDestino].descontos += val;   // descontos também por empresa (bate com o líquido do topo)
               }
             }
           }
@@ -781,6 +788,7 @@
         const liquidoEst = totalProventos - totalDescontos;
 
         document.getElementById('valLiquidoConsolidado').innerText = 'R$ ' + liquidoEst.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('valLiquidoConsolidado').classList.toggle('!text-rose-600', liquidoEst < 0);
         document.getElementById('valTotalDescontos').innerText = 'R$ ' + totalDescontos.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('valTotalFolha').innerText = 'R$ ' + totalGeralFolha.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('valContabil').innerText = 'R$ ' + totalContabil.toLocaleString('pt-BR', {minimumFractionDigits: 2});
@@ -797,28 +805,33 @@
         if (listaEmpArr.length === 0) {
           containerEmp.innerHTML = `<div class="text-slate-400 text-center py-2 text-xs">Nenhuma empresa encontrada.</div>`;
         } else {
-          let totalAtivosEmp = 0, totalContabilEmp = 0, totalNaoContabilEmp = 0, totalGeralEmp = 0;
+          let totalAtivosEmp = 0, totalContabilEmp = 0, totalNaoContabilEmp = 0, totalGeralEmp = 0, totalDescEmp = 0;
 
           listaEmpArr.forEach(e => {
             totalAtivosEmp += e.ativosCount;
             totalContabilEmp += e.contabil;
             totalNaoContabilEmp += e.naoContabil;
             totalGeralEmp += (e.contabil + e.naoContabil);
+            totalDescEmp += e.descontos;
           });
 
           // Ordem: LOJA 01, LOJA 02... (subtotal lojas) > demais empresas em ordem alfabética (subtotal) > total geral
           const numLoja = n => { const m = String(n || '').match(/^\s*LOJA\s*0*(\d+)/i); return m ? parseInt(m[1], 10) : null; };
           const grpLojas = listaEmpArr.filter(e => numLoja(e.nome) !== null).sort((a, b) => numLoja(a.nome) - numLoja(b.nome) || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
           const grpOutras = listaEmpArr.filter(e => numLoja(e.nome) === null).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
-          const somar = arr => arr.reduce((t, e) => ({ ativos: t.ativos + e.ativosCount, contabil: t.contabil + e.contabil, naoContabil: t.naoContabil + e.naoContabil }), { ativos: 0, contabil: 0, naoContabil: 0 });
+          const somar = arr => arr.reduce((t, e) => ({ ativos: t.ativos + e.ativosCount, contabil: t.contabil + e.contabil, naoContabil: t.naoContabil + e.naoContabil, descontos: t.descontos + e.descontos }), { ativos: 0, contabil: 0, naoContabil: 0, descontos: 0 });
           const moedaEmp = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+          const liq = e => e.contabil + e.naoContabil - e.descontos;
+          const corLiq = v => v < 0 ? 'text-rose-600' : 'text-emerald-700';
           const linhaEmp = e => `
                     <tr class="hover:bg-slate-50 transition text-xs">
                       <td class="py-2 px-2 font-bold text-slate-800 truncate max-w-[180px]">${e.nome}</td>
                       <td class="py-2 px-2 text-center text-slate-600 font-mono">${e.ativosCount}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-700">${moedaEmp(e.contabil)}</td>
                       <td class="py-2 px-2 text-right font-mono text-slate-600">${moedaEmp(e.naoContabil)}</td>
-                      <td class="py-2 px-2 text-right font-mono font-bold text-emerald-700">${moedaEmp(e.contabil + e.naoContabil)}</td>
+                      <td class="py-2 px-2 text-right font-mono text-slate-700">${moedaEmp(e.contabil + e.naoContabil)}</td>
+                      <td class="py-2 px-2 text-right font-mono text-rose-600">${e.descontos ? '− ' + moedaEmp(e.descontos) : moedaEmp(0)}</td>
+                      <td class="py-2 px-2 text-right font-mono font-bold ${corLiq(liq(e))}">${moedaEmp(liq(e))}</td>
                     </tr>`;
           const linhaSub = (rot, s) => `
                     <tr class="bg-slate-100 text-xs font-bold">
@@ -826,7 +839,9 @@
                       <td class="py-1.5 px-2 text-center font-mono text-slate-700">${s.ativos}</td>
                       <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.contabil)}</td>
                       <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.naoContabil)}</td>
-                      <td class="py-1.5 px-2 text-right font-mono text-emerald-800">${moedaEmp(s.contabil + s.naoContabil)}</td>
+                      <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.contabil + s.naoContabil)}</td>
+                      <td class="py-1.5 px-2 text-right font-mono text-rose-700">${s.descontos ? '− ' + moedaEmp(s.descontos) : moedaEmp(0)}</td>
+                      <td class="py-1.5 px-2 text-right font-mono ${corLiq(liq(s))}">${moedaEmp(liq(s))}</td>
                     </tr>`;
           const subLojas = somar(grpLojas), subOutras = somar(grpOutras);
           const corpoEmp = (grpLojas.length ? grpLojas.map(linhaEmp).join('') + linhaSub('Subtotal lojas', subLojas) : '')
@@ -840,7 +855,9 @@
                   <th class="py-1.5 px-2 font-semibold text-center w-24">Funcionários Ativos</th>
                   <th class="py-1.5 px-2 font-semibold text-right w-28">Contábil</th>
                   <th class="py-1.5 px-2 font-semibold text-right w-28">Não Contábil</th>
-                  <th class="py-1.5 px-2 font-semibold text-right w-32">Total</th>
+                  <th class="py-1.5 px-2 font-semibold text-right w-28">Total bruto</th>
+                  <th class="py-1.5 px-2 font-semibold text-right w-28">Descontos</th>
+                  <th class="py-1.5 px-2 font-semibold text-right w-32">Líquido</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
@@ -852,7 +869,9 @@
                   <td class="py-2.5 px-2 text-center font-mono text-slate-800">${totalAtivosEmp}</td>
                   <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                   <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalNaoContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2.5 px-2 text-right font-mono text-emerald-800">R$ ${totalGeralEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalGeralEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2.5 px-2 text-right font-mono text-rose-700">${totalDescEmp ? '− ' : ''}R$ ${totalDescEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2.5 px-2 text-right font-mono ${corLiq(totalGeralEmp - totalDescEmp)}">R$ ${(totalGeralEmp - totalDescEmp).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                 </tr>
               </tfoot>
             </table>
