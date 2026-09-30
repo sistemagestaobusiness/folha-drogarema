@@ -83,8 +83,17 @@
         : d === 6 ? { tipo: 'TRABALHO', entrada: hm(p.sab_entrada || p.entrada), saida: hm(p.sab_saida || p.saida), loja: f.loja_id }
         : { tipo: 'TRABALHO', entrada: hm(p.entrada), saida: hm(p.saida), loja: f.loja_id };
       if (p.regime === 'CICLO' && p.ciclo_ref && p.ciclo_trabalho && p.ciclo_folga) {
-        const n = p.ciclo_trabalho + p.ciclo_folga, k = ((difDias(iso, p.ciclo_ref) % n) + n) % n;
-        return k < p.ciclo_folga ? { tipo: 'FOLGA' } : trab();
+        const n = p.ciclo_trabalho + p.ciclo_folga;
+        const folgaCiclo = x => { const k = ((difDias(x, p.ciclo_ref) % n) + n) % n; return k < p.ciclo_folga; };
+        if (folgaCiclo(iso)) return { tipo: 'FOLGA' };
+        // 5x1: quando a folga cai na QUINTA, o DOMINGO seguinte também é folga
+        if (d === 0 && p.ciclo_trabalho === 5 && p.ciclo_folga === 1 && folgaCiclo(addDias(iso, -3))) return { tipo: 'FOLGA' };
+        return trab();
+      }
+      // folga fixa que muda por semana (ex.: semana 1 sábado, semana 2 domingo)
+      if (p.regime === 'ROTATIVO' && Array.isArray(p.semanas) && p.semanas.length && p.semanas_ref) {
+        const n = p.semanas.length, w = Math.floor(difDias(addDias(iso, -d), p.semanas_ref) / 7);
+        return (p.semanas[((w % n) + n) % n] || []).map(Number).includes(d) ? { tipo: 'FOLGA' } : trab();
       }
       if (d === 0) {
         if (p.domingo === 'FOLGA') return { tipo: 'FOLGA' };

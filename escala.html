@@ -266,8 +266,16 @@
       // ciclo (5x1, 6x1, 4x2...): conta a partir de um dia de folga de referência; a folga "anda" pela semana
       if (p.regime === 'CICLO' && p.ciclo_ref && p.ciclo_trabalho && p.ciclo_folga) {
         const n = p.ciclo_trabalho + p.ciclo_folga;
-        const k = ((difDias(iso, p.ciclo_ref) % n) + n) % n;
-        return k < p.ciclo_folga ? { tipo: 'FOLGA' } : trabalhoDoDia();
+        const folgaCiclo = x => { const k = ((difDias(x, p.ciclo_ref) % n) + n) % n; return k < p.ciclo_folga; };
+        if (folgaCiclo(iso)) return { tipo: 'FOLGA' };
+        // 5x1: quando a folga cai na QUINTA, o DOMINGO seguinte também é folga
+        if (d === 0 && p.ciclo_trabalho === 5 && p.ciclo_folga === 1 && folgaCiclo(addDias(iso, -3))) return { tipo: 'FOLGA', obs: 'domingo extra do 5x1 (folga caiu na quinta)' };
+        return trabalhoDoDia();
+      }
+      // folga fixa que muda por semana (ex.: semana 1 sábado, semana 2 domingo)
+      if (p.regime === 'ROTATIVO' && Array.isArray(p.semanas) && p.semanas.length && p.semanas_ref) {
+        const n = p.semanas.length, w = Math.floor(difDias(inicioSemana(iso), p.semanas_ref) / 7);
+        return (p.semanas[((w % n) + n) % n] || []).map(Number).includes(d) ? { tipo: 'FOLGA' } : trabalhoDoDia();
       }
       if (d === 0) {
         if (p.domingo === 'FOLGA') return { tipo: 'FOLGA' };
@@ -550,8 +558,10 @@
             <td class="p-1.5 min-w-[260px]">
               <select id="pG_${f.id}" ${dis} onchange="mudarRegime('${f.id}')" class="inp mini w-full mb-1">
                 <option value="SEMANAL" ${p.regime !== 'CICLO' ? 'selected' : ''}>Folga fixa na semana (6x1)</option>
+                <option value="ROTATIVO" ${p.regime === 'ROTATIVO' ? 'selected' : ''}>Folga fixa que muda por semana (ex.: sáb / dom)</option>
                 <option value="CICLO" ${p.regime === 'CICLO' ? 'selected' : ''}>Ciclo corrido (5x1, 4x2, 12x36...)</option></select>
-              <div id="bxS_${f.id}" class="${p.regime === 'CICLO' ? 'hidden' : ''} space-y-1">
+              <div id="bxW_${f.id}" class="${p.regime === 'ROTATIVO' ? '' : 'hidden'} space-y-1">${blocoSemanas(f.id, p, dis)}</div>
+              <div id="bxS_${f.id}" class="${!p.regime || p.regime === 'SEMANAL' ? '' : 'hidden'} space-y-1">
                 <div>${[1, 2, 3, 4, 5, 6].map(d => `<label class="inline-flex flex-col items-center mr-1 text-[9px] font-bold text-slate-500">${DSEM[d][0]}<input type="checkbox" class="pF_${f.id} accent-slate-700" value="${d}" ${fol.includes(d) ? 'checked' : ''} ${dis}></label>`).join('')}</div>
                 <div class="flex items-center gap-1"><span class="text-[9px] font-bold text-rose-700">DOM</span>
                   <select id="pD_${f.id}" ${dis} onchange="mudarRegime('${f.id}')" class="inp mini flex-1">
@@ -561,13 +571,34 @@
               <div id="bxC_${f.id}" class="${p.regime === 'CICLO' ? '' : 'hidden'} space-y-1">
                 <div class="flex items-center gap-1 text-[10px] font-bold text-slate-600">trabalha <input type="number" min="1" max="13" id="pCT_${f.id}" value="${p.ciclo_trabalho || 5}" ${dis} class="inp mini w-12 text-center"> folga <input type="number" min="1" max="6" id="pCF_${f.id}" value="${p.ciclo_folga || 1}" ${dis} class="inp mini w-12 text-center"></div>
                 <label class="flex items-center gap-1 text-[9px] font-bold text-slate-500">um dia de FOLGA <input type="date" id="pCR_${f.id}" value="${p.ciclo_ref || ''}" ${dis} class="inp mini font-mono flex-1"></label>
-                <p class="text-[9px] text-slate-400">A folga anda pela semana e cai no domingo de tempos em tempos.</p>
+                <p class="text-[9px] text-slate-400">A folga anda pela semana e cai no domingo de tempos em tempos. No 5x1, quando a folga cai na quinta, o domingo seguinte também é folga.</p>
               </div></td>
             <td class="p-1.5 whitespace-nowrap"><input type="time" id="pSE_${f.id}" value="${hm(p.sab_entrada)}" ${dis} class="inp mini font-mono"> <input type="time" id="pSS_${f.id}" value="${hm(p.sab_saida)}" ${dis} class="inp mini font-mono"></td>
             <td class="p-1.5 whitespace-nowrap"><input type="time" id="pDE_${f.id}" value="${hm(p.dom_entrada)}" ${dis} class="inp mini font-mono"> <input type="time" id="pDS_${f.id}" value="${hm(p.dom_saida)}" ${dis} class="inp mini font-mono"></td>
             <td class="p-1.5 whitespace-nowrap">${podeEditar ? `<button onclick="salvarPadrao('${f.id}')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">Salvar</button>
               ${padroes[f.id] ? `<button onclick="removerPadrao('${f.id}')" title="remover padrão" class="ml-1 px-2 py-1.5 bg-slate-100 hover:bg-rose-100 rounded-lg font-bold cursor-pointer">✕</button>` : ''}` : ''}</td></tr>`; }).join('')}</tbody></table>`
         : '<p class="text-slate-400 text-xs">Nenhum funcionário ativo nesta loja. A loja de cada funcionário é informada no cadastro (aba Lotação).</p>';
+    }
+
+    // regime ROTATIVO: uma linha de dias por semana (2 a 4 semanas) + domingo em que começa a semana 1
+    function blocoSemanas(fid, p, dis) {
+      const sem = Array.isArray(p.semanas) && p.semanas.length >= 2 ? p.semanas : [[6], [0]];
+      const ordem = [0, 1, 2, 3, 4, 5, 6];
+      const linha = (s, i) => `<div class="flex items-center gap-1"><span class="text-[9px] font-black text-slate-600 w-12">Sem. ${i + 1}</span>${ordem.map(d => `<label class="inline-flex flex-col items-center text-[9px] font-bold ${d === 0 ? 'text-rose-700' : 'text-slate-500'}">${DSEM[d][0]}<input type="checkbox" class="pW_${fid}_${i} accent-slate-700" value="${d}" ${(s || []).map(Number).includes(d) ? 'checked' : ''} ${dis}></label>`).join('')}</div>`;
+      const ref = p.semanas_ref || inicioSemana(hoje());
+      return `<div class="flex items-center gap-1 text-[9px] font-bold text-slate-500">repete a cada <select id="pWN_${fid}" ${dis} onchange="mudarSemanas('${fid}')" class="inp mini w-14">${[2, 3, 4].map(k => `<option value="${k}" ${sem.length === k ? 'selected' : ''}>${k}</option>`).join('')}</select> semanas</div>
+        <div id="pWL_${fid}" class="space-y-0.5">${sem.map(linha).join('')}</div>
+        <label class="flex items-center gap-1 text-[9px] font-bold text-slate-500">semana 1 começa no domingo <input type="date" id="pWR_${fid}" value="${ref}" ${dis} class="inp mini font-mono flex-1"></label>
+        <p class="text-[9px] text-slate-400">Marque a(s) folga(s) de cada semana. Ex.: semana 1 folga no sábado, semana 2 folga no domingo.</p>`;
+    }
+    function lerSemanas(fid) {
+      const n = parseInt($('pWN_' + fid).value, 10) || 2;
+      return Array.from({ length: n }, (_, i) => [...document.querySelectorAll(`.pW_${fid}_${i}`)].filter(c => c.checked).map(c => parseInt(c.value, 10)));
+    }
+    function mudarSemanas(fid) {
+      const sem = lerSemanas(fid);      // semanas novas entram vazias
+      const tmp = document.createElement('div'); tmp.innerHTML = blocoSemanas(fid, { semanas: sem, semanas_ref: $('pWR_' + fid).value }, '');
+      $('pWL_' + fid).innerHTML = tmp.querySelector('#pWL_' + fid).innerHTML;
     }
 
     function copiarSegunda() {
@@ -585,7 +616,7 @@
       const v = id => $(id + '_' + fid).value;
       const dados = { entrada: v('pE'), saida: v('pS'), intervalo_min: parseInt(v('pI'), 10),
         folgas: [...document.querySelectorAll('.pF_' + fid)].filter(c => c.checked).map(c => parseInt(c.value, 10)),
-        regime: v('pG'), ciclo_trabalho: parseInt(v('pCT'), 10) || null, ciclo_folga: parseInt(v('pCF'), 10) || null, ciclo_ref: v('pCR') || null,
+        regime: v('pG'), semanas: v('pG') === 'ROTATIVO' ? lerSemanas(fid) : null, semanas_ref: v('pG') === 'ROTATIVO' ? v('pWR') : null, ciclo_trabalho: parseInt(v('pCT'), 10) || null, ciclo_folga: parseInt(v('pCF'), 10) || null, ciclo_ref: v('pCR') || null,
         domingo: v('pD'), domingo_ref: ['ALTERNADO', 'DOIS_UM'].includes(v('pD')) ? v('pR') : null,
         sab_entrada: v('pSE'), sab_saida: v('pSS'), dom_entrada: v('pDE'), dom_saida: v('pDS') };
       if (!dados.entrada || !dados.saida) return alert('Informe entrada e saída.');
@@ -593,6 +624,9 @@
       if (dados.regime === 'CICLO') {
         if (!dados.ciclo_trabalho || !dados.ciclo_folga) return alert('Ciclo: informe quantos dias trabalha e quantos folga (ex.: 5 e 1).');
         if (!dados.ciclo_ref) return alert('Ciclo: informe um dia em que a pessoa FOLGA, para o sistema contar o ciclo a partir dele.');
+      } else if (dados.regime === 'ROTATIVO') {
+        if (dados.semanas.some(s => !s.length)) return alert('Marque pelo menos uma folga em cada semana.');
+        if (!dados.semanas_ref || dow(dados.semanas_ref) !== 0) return alert('Informe o DOMINGO em que começa a "semana 1".');
       } else if (['ALTERNADO', 'DOIS_UM'].includes(dados.domingo) && (!dados.domingo_ref || dow(dados.domingo_ref) !== 0)) {
         return alert('Informe um DOMINGO em que a pessoa FOLGA, como referência.');
       }
@@ -603,9 +637,10 @@
       renderizar();
     }
     function mudarRegime(fid) {
-      const ciclo = $('pG_' + fid).value === 'CICLO';
-      $('bxS_' + fid).classList.toggle('hidden', ciclo);
-      $('bxC_' + fid).classList.toggle('hidden', !ciclo);
+      const rg = $('pG_' + fid).value;
+      $('bxS_' + fid).classList.toggle('hidden', rg !== 'SEMANAL');
+      $('bxC_' + fid).classList.toggle('hidden', rg !== 'CICLO');
+      $('bxW_' + fid).classList.toggle('hidden', rg !== 'ROTATIVO');
       const ref = ['ALTERNADO', 'DOIS_UM'].includes($('pD_' + fid).value);
       $('bxR_' + fid).classList.toggle('hidden', !ref); $('bxR_' + fid).classList.toggle('flex', ref);
     }
