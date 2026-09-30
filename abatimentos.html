@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abatimentos - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">💸 ABATIMENTOS</h1>
+        <p id="subtitulo" class="text-xs text-slate-500">Produto vencido · fechamento de caixa · outros — desconto em folha com aprovação do líder da loja</p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+        <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+        <a id="btnVoltar" href="#" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← Voltar</a>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div id="abas" class="flex gap-5 border-b border-slate-300 px-1"></div>
+
+      <!-- NOVO ABATIMENTO -->
+      <div data-painel="novo" class="painel hidden grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+          <h2 class="font-black text-sm text-slate-800">➕ NOVO ABATIMENTO</h2>
+          <div>
+            <label class="lbl">Tipo *</label>
+            <div class="grid grid-cols-3 gap-2" id="boxTipos"></div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><label class="lbl">Loja / setor *</label><select id="nLoja" onchange="carregarFuncsNovo()" class="inp font-bold"></select></div>
+            <div><label class="lbl">Valor total (R$) *</label><input id="nValor" type="number" step="0.01" min="0.01" class="inp font-mono" oninput="resumoNovo()"></div>
+          </div>
+          <div>
+            <label class="lbl" id="lblFunc">Funcionário (se já souber — o líder confirma)</label>
+            <select id="nFunc" class="inp"></select>
+          </div>
+          <div id="boxJust">
+            <label class="lbl">Justificativa <span id="lblJustObrig"></span> <span class="normal-case font-normal text-slate-400">— aparece no holerite (até 30 caracteres)</span></label>
+            <input id="nJust" maxlength="30" class="inp uppercase" oninput="this.value=this.value.toUpperCase(); $('nJustCont').innerText=this.value.length+'/30'">
+            <div id="nJustCont" class="text-[10px] text-slate-400 text-right">0/30</div>
+          </div>
+          <div><label class="lbl">Observação interna (não aparece no holerite)</label><textarea id="nObs" rows="2" maxlength="500" class="inp" placeholder="Ex.: lista do inventário de 25/09, produtos X, Y..."></textarea></div>
+          <div id="boxAnexo">
+            <label class="lbl">Documento de conferência <span id="lblAnexoObrig"></span></label>
+            <input id="nAnexo" type="file" accept=".pdf,image/*,.xlsx,.xls,.csv" class="block w-full text-xs">
+          </div>
+          <div id="nResumo" class="text-[11px] bg-slate-50 border border-slate-200 rounded-lg p-2.5"></div>
+          <button id="btnEnviar" onclick="enviarNovo()" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer">ENVIAR PARA O LÍDER DA LOJA APROVAR</button>
+        </div>
+        <div class="lg:col-span-2 bg-white/70 border border-slate-200 rounded-xl p-5 text-[11px] text-slate-600 space-y-2 h-fit">
+          <div class="font-black text-slate-800 text-xs">Como funciona</div>
+          <div>1. Você registra o abatimento com a loja e o valor (produto vencido exige o documento de conferência; "outros" exige justificativa).</div>
+          <div>2. O <b>líder da loja</b> recebe um aviso, escolhe os funcionários e o número de parcelas (até 10x, parcela mínima de R$ 30,00).</div>
+          <div>3. Aprovado, a 1ª parcela entra na folha da competência aberta, no evento <b>não contábil</b>: 3037 medicamento vencido · 3038 fechamento de caixa · 3039 outros. As demais entram sozinhas nos meses seguintes.</div>
+          <div>4. Cada parcela de cada abatimento fica em uma <b>linha separada</b> no holerite.</div>
+          <div>5. Acompanhe tudo em "Minhas solicitações". Você vê só o que o seu perfil registrou.</div>
+        </div>
+      </div>
+
+      <!-- LISTA / CONTROLE -->
+      <div data-painel="lista" class="painel hidden space-y-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-2 text-xs">
+          <div><label class="lbl">Situação</label><select id="fStatus" onchange="renderLista()" class="inp !py-1.5">
+            <option value="">Todas</option><option value="PENDENTE_LIDER">Aguardando líder</option><option value="APROVADO">Em andamento (parcelas a lançar)</option>
+            <option value="CONCLUIDO">Concluído</option><option value="RECUSADO">Recusado</option><option value="CANCELADO">Cancelado</option></select></div>
+          <div><label class="lbl">Tipo</label><select id="fTipo" onchange="renderLista()" class="inp !py-1.5"><option value="">Todos</option><option value="VENCIDO">Produto vencido</option><option value="CAIXA">Fechamento de caixa</option><option value="OUTROS">Outros</option></select></div>
+          <div id="boxFLoja"><label class="lbl">Loja</label><select id="fLoja" onchange="renderLista()" class="inp !py-1.5"></select></div>
+          <div class="flex-1 min-w-[200px]"><label class="lbl">Busca</label><input id="fBusca" oninput="renderLista()" placeholder="nº, funcionário, justificativa..." class="inp !py-1.5"></div>
+          <div id="lblTotais" class="text-[11px] text-slate-500 ml-auto"></div>
+        </div>
+        <div id="lista" class="space-y-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL APROVAÇÃO (líder / RH no lugar do líder) -->
+  <div id="mAprovar" class="hidden fixed inset-0 z-50 bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl p-5 space-y-3 mt-8">
+      <div class="flex justify-between items-start"><h3 class="font-black text-sm text-emerald-700">✅ APROVAR ABATIMENTO</h3><button onclick="fechar('mAprovar')" class="text-slate-400 text-lg cursor-pointer">✕</button></div>
+      <div id="apResumo" class="text-[11px] bg-slate-50 border border-slate-200 rounded-lg p-2.5"></div>
+      <div>
+        <div class="flex justify-between items-end"><label class="lbl">Funcionários que vão pagar *</label>
+          <span class="text-[10px]"><a href="#" onclick="marcarTodos(true);return false;" class="underline">marcar todos</a> · <a href="#" onclick="marcarTodos(false);return false;" class="underline">limpar</a></span></div>
+        <input id="apBusca" oninput="renderFuncsAprovar()" placeholder="buscar nome..." class="inp !py-1.5 mb-1">
+        <div id="apFuncs" class="max-h-64 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3 items-end">
+        <div><label class="lbl">Parcelas * <span class="normal-case font-normal text-slate-400">(mínimo R$ 30,00 por parcela)</span></label><select id="apParcelas" onchange="previaAprovar()" class="inp font-bold"></select></div>
+        <div id="apInfoComp" class="text-[11px] text-slate-500"></div>
+      </div>
+      <div id="apPrevia" class="text-[11px]"></div>
+      <div id="boxApObs"><label class="lbl" id="lblApObs">Observação</label><input id="apObs" class="inp" maxlength="300"></div>
+      <div class="flex gap-2">
+        <button id="btnAprovar" onclick="confirmarAprovacao()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer">CONFIRMAR E LANÇAR NA FOLHA</button>
+        <button onclick="recusar()" class="px-4 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-lg text-xs cursor-pointer">RECUSAR</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+    .inp:focus { outline: none; border-color: #4f46e5; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dbr = v => v ? new Date(v).toLocaleDateString('pt-BR') : '-';
+    const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const fechar = id => $(id).classList.add('hidden');
+    const TIPOS = {
+      VENCIDO: { txt: 'Produto vencido', ic: '💊', ev: '3037 · desconto medicamento vencido', cor: 'bg-rose-100 text-rose-800' },
+      CAIXA:   { txt: 'Fechamento de caixa', ic: '💵', ev: '3038 · desconto fechamento de caixa', cor: 'bg-amber-100 text-amber-800' },
+      OUTROS:  { txt: 'Outros', ic: '📝', ev: '3039 · desconto outros', cor: 'bg-slate-200 text-slate-700' }
+    };
+    const SIT = {
+      PENDENTE_LIDER: { txt: '⏳ Aguardando líder', cls: 'bg-amber-100 text-amber-800' },
+      APROVADO:       { txt: '🔄 Em andamento', cls: 'bg-sky-100 text-sky-800' },
+      CONCLUIDO:      { txt: '✅ Concluído', cls: 'bg-emerald-100 text-emerald-800' },
+      RECUSADO:       { txt: '✕ Recusado', cls: 'bg-rose-100 text-rose-800' },
+      CANCELADO:      { txt: '⊘ Cancelado', cls: 'bg-slate-200 text-slate-600' }
+    };
+    const PARC = { PREVISTA: ['a lançar', 'bg-white border border-slate-300 text-slate-600'], LANCADA: ['lançada', 'bg-emerald-50 border border-emerald-300 text-emerald-800'], CANCELADA: ['cancelada', 'bg-slate-100 text-slate-400 line-through'] };
+
+    let perfil = null, minhaLoja = null, meuEmail = '', aba = null, compAberta = null;
+    let lojas = [], funcs = [], abats = [], parcelas = [], hist = [], tipoNovo = 'VENCIDO', atual = null, abertos = new Set();
+    const rh = () => ['RH', 'GESTOR'].includes(perfil);
+    const podeSolicitar = () => ['SUPERVISOR', 'FINANCEIRO', 'RH', 'GESTOR'].includes(perfil);
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+    const nomeF = id => (funcs.find(f => f.id === id) || {}).nome_registro || '(funcionário)';
+    const doSupervisor = l => l.estrutura_supervisor != null ? !!l.estrutura_supervisor : /^LOJA\s/i.test(l.nome_loja || '');
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null; meuEmail = (user.email || '').toLowerCase();
+      $('lblUsuario').innerText = meuEmail; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['LIDER', 'SUPERVISOR', 'FINANCEIRO', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (perfil === 'LIDER' && !minhaLoja) { $('aviso').innerText = 'Seu usuário de líder não está ligado a uma loja. Peça ao RH.'; $('aviso').classList.remove('hidden'); return; }
+      if (rh()) $('btnPainel').classList.remove('hidden');
+      else { const v = { LIDER: 'freelance_solicitacao.html', SUPERVISOR: 'supervisor_freelance.html', FINANCEIRO: 'financeiro.html' }[perfil]; $('btnVoltar').href = v; $('btnVoltar').classList.remove('hidden'); }
+      $('subtitulo').innerText = perfil === 'LIDER' ? 'Descontos a aprovar da sua loja: escolha quem paga e em quantas parcelas'
+        : perfil === 'SUPERVISOR' ? 'Abatimentos registrados pela supervisão (produto vencido, caixa, outros)'
+        : perfil === 'FINANCEIRO' ? 'Abatimentos registrados pelo financeiro (diferença de caixa e outros)'
+        : 'Controle de todos os abatimentos: solicitações, aprovações, parcelas e histórico';
+      const [rl, rf] = await Promise.all([
+        _supabase.from('lojas').select('*').order('nome_loja'),
+        _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, status').order('nome_registro')
+      ]);
+      lojas = (rl.data || []).filter(l => l.ativo !== false); funcs = rf.data || [];
+      await _supabase.rpc('fn_abatimentos_sincronizar');           // lança as parcelas do mês que ainda não entraram
+      const { data: comp } = await _supabase.rpc('fn_competencia_aberta'); compAberta = comp;
+      montarNovo();
+      $('boxFLoja').classList.toggle('hidden', perfil === 'LIDER');
+      $('fLoja').innerHTML = '<option value="">Todas</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+      const abas = perfil === 'LIDER' ? [['aprovar', '✅ Para aprovar'], ['lista', '📋 Histórico da loja']]
+        : rh() ? [['lista', '📋 Controle de abatimentos'], ['aprovar', '⏳ Aguardando líder'], ['novo', '➕ Novo abatimento']]
+        : [['novo', '➕ Novo abatimento'], ['lista', '📋 Minhas solicitações']];
+      $('abas').innerHTML = abas.map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t} <span id="q_${k}" class="hidden ml-1 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px]"></span></button>`).join('');
+      atualizarBadges();
+      const pend = abats.filter(a => a.status === 'PENDENTE_LIDER').length;
+      trocarAba(perfil === 'LIDER' && !pend ? 'lista' : abas[0][0]);
+    }
+
+    async function carregar() {
+      const [ra, rp, rhis] = await Promise.all([
+        _supabase.from('abatimentos').select('*').order('numero', { ascending: false }),
+        _supabase.from('abatimento_parcelas').select('*').order('parcela_num'),
+        _supabase.from('abatimento_historico').select('*').order('id')
+      ]);
+      if (ra.error) { $('aviso').innerText = 'Erro ao carregar (rode o SQL AF_abatimentos no Supabase): ' + ra.error.message; $('aviso').classList.remove('hidden'); }
+      abats = ra.data || []; parcelas = rp.data || []; hist = rhis.data || [];
+    }
+    function atualizarBadges() {
+      const pend = abats.filter(a => a.status === 'PENDENTE_LIDER').length;
+      const el = $('q_aprovar'); if (el) { el.innerText = pend; el.classList.toggle('hidden', !pend); }
+    }
+
+    function trocarAba(a) {
+      aba = a;
+      document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-400'}`);
+      document.querySelectorAll('.painel').forEach(p => p.classList.toggle('hidden', p.dataset.painel !== (a === 'aprovar' ? 'lista' : a)));
+      if (a === 'aprovar') $('fStatus').value = 'PENDENTE_LIDER'; else if (a === 'lista' && $('fStatus').value === 'PENDENTE_LIDER') $('fStatus').value = '';
+      if (a !== 'novo') renderLista();
+    }
+
+    // ---------------- NOVO ----------------
+    function montarNovo() {
+      if (!podeSolicitar()) return;
+      $('boxTipos').innerHTML = Object.entries(TIPOS).map(([k, t]) => `<button type="button" data-tipo="${k}" onclick="escolherTipo('${k}')" class="btTipo p-3 rounded-xl border-2 text-left cursor-pointer"><div class="text-lg">${t.ic}</div><div class="text-xs font-black">${t.txt}</div><div class="text-[9px] opacity-70">${t.ev}</div></button>`).join('');
+      const ls = perfil === 'SUPERVISOR' ? lojas.filter(doSupervisor) : lojas;
+      $('nLoja').innerHTML = '<option value="">-- selecione --</option>' + ls.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      escolherTipo(perfil === 'FINANCEIRO' ? 'CAIXA' : 'VENCIDO');
+    }
+    function escolherTipo(t) {
+      tipoNovo = t;
+      document.querySelectorAll('.btTipo').forEach(b => b.className = `btTipo p-3 rounded-xl border-2 text-left cursor-pointer ${b.dataset.tipo === t ? 'border-indigo-600 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white text-slate-600'}`);
+      $('lblJustObrig').innerText = t === 'OUTROS' ? '*' : '(opcional)';
+      $('lblAnexoObrig').innerText = t === 'VENCIDO' ? '* (obrigatório para produto vencido)' : '(opcional)';
+      const fObrig = perfil === 'FINANCEIRO' && t === 'CAIXA';
+      $('lblFunc').innerText = fObrig ? 'Funcionário da diferença de caixa *' : 'Funcionário (se já souber — o líder confirma)';
+      resumoNovo();
+    }
+    function carregarFuncsNovo() {
+      const loja = $('nLoja').value;
+      const lista = funcs.filter(f => String(f.status || 'ATIVO').toUpperCase() === 'ATIVO' && (!loja || f.loja_id === loja));
+      $('nFunc').innerHTML = '<option value="">-- o líder escolhe --</option>' + lista.map(f => `<option value="${f.id}">${esc(f.nome_registro)}</option>`).join('');
+      resumoNovo();
+    }
+    function resumoNovo() {
+      const v = parseFloat($('nValor').value) || 0;
+      $('nResumo').innerHTML = v > 0
+        ? `${TIPOS[tipoNovo].ic} <b>${TIPOS[tipoNovo].txt}</b> · ${esc(nomeLoja($('nLoja').value))} · <b>${fmtR(v)}</b> · evento ${TIPOS[tipoNovo].ev} (não contábil). Parcelamento: até ${Math.max(1, Math.min(10, Math.floor(v / 30)))}x se for uma pessoa só.`
+        : 'Preencha loja e valor.';
+    }
+    async function enviarNovo() {
+      const loja = $('nLoja').value, valor = parseFloat($('nValor').value), just = $('nJust').value.trim(), func = $('nFunc').value || null;
+      const arq = $('nAnexo').files[0];
+      if (!loja) return alert('Selecione a loja.');
+      if (!(valor > 0)) return alert('Informe o valor.');
+      if (tipoNovo === 'OUTROS' && just.length < 5) return alert('No tipo "outros" a justificativa é obrigatória (mínimo 5 letras).');
+      if (tipoNovo === 'VENCIDO' && !arq) return alert('Anexe o documento de conferência dos produtos vencidos.');
+      if (perfil === 'FINANCEIRO' && tipoNovo === 'CAIXA' && !func) return alert('Informe o funcionário da diferença de caixa.');
+      const btn = $('btnEnviar'); btn.disabled = true; btn.innerText = 'ENVIANDO...';
+      try {
+        let caminho = null;
+        if (arq) {
+          if (arq.size > 10 * 1024 * 1024) throw new Error('Arquivo maior que 10 MB.');
+          const nome = arq.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]/g, '_');
+          caminho = `${new Date().toISOString().slice(0, 7)}/${Date.now()}_${nome}`;
+          const up = await _supabase.storage.from('abatimentos').upload(caminho, arq);
+          if (up.error) throw new Error('Não foi possível anexar o arquivo: ' + up.error.message);
+        }
+        const { data, error } = await _supabase.rpc('fn_abatimento_solicitar', { p_tipo: tipoNovo, p_loja: loja, p_valor: valor, p_justificativa: just || null,
+          p_observacao: $('nObs').value.trim() || null, p_funcionario: func, p_anexo: caminho });
+        if (error) throw new Error(error.message);
+        alert(`Abatimento #${data} enviado. O líder da ${nomeLoja(loja)} vai receber o aviso para aprovar.`);
+        ['nValor', 'nJust', 'nObs', 'nAnexo'].forEach(id => $(id).value = ''); $('nJustCont').innerText = '0/30';
+        await carregar(); trocarAba('lista');
+      } catch (e) { alert(e.message); }
+      btn.disabled = false; btn.innerText = 'ENVIAR PARA O LÍDER DA LOJA APROVAR';
+    }
+
+    // ---------------- LISTA / CONTROLE ----------------
+    function renderLista() {
+      const st = $('fStatus').value, tp = $('fTipo').value, lj = $('fLoja').value, termo = norm($('fBusca').value.trim());
+      const lista = abats.filter(a => (!st || a.status === st) && (!tp || a.tipo === tp) && (!lj || a.loja_id === lj) && (!termo || termo.split(/\s+/).every(p =>
+        String(a.numero).includes(p) || norm(a.justificativa).includes(p) || norm(a.observacao).includes(p) || norm(nomeLoja(a.loja_id)).includes(p)
+        || parcelas.some(x => x.abatimento_id === a.id && norm(nomeF(x.funcionario_id)).includes(p)) || norm(nomeF(a.funcionario_sugerido_id)).includes(p))));
+      const tot = lista.reduce((s, a) => s + parseFloat(a.valor_total), 0);
+      const desc = parcelas.filter(p => p.status === 'LANCADA' && lista.some(a => a.id === p.abatimento_id)).reduce((s, p) => s + parseFloat(p.valor), 0);
+      $('lblTotais').innerHTML = `${lista.length} abatimento(s) · total ${fmtR(tot)} · já lançado em folha ${fmtR(desc)}${compAberta ? ` · competência aberta <b>${compAberta}</b>` : ''}`;
+      $('lista').innerHTML = lista.length ? lista.map(card).join('')
+        : `<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">${aba === 'aprovar' ? '🎉 Nenhum abatimento aguardando aprovação.' : 'Nenhum abatimento.'}</div>`;
+    }
+
+    function card(a) {
+      const t = TIPOS[a.tipo], s = SIT[a.status] || { txt: a.status, cls: '' };
+      const ps = parcelas.filter(p => p.abatimento_id === a.id);
+      const lanc = ps.filter(p => p.status === 'LANCADA'), vLanc = lanc.reduce((x, p) => x + parseFloat(p.valor), 0);
+      const vPrev = ps.filter(p => p.status === 'PREVISTA').reduce((x, p) => x + parseFloat(p.valor), 0);
+      const pct = a.valor_total > 0 ? Math.min(100, Math.round(vLanc / a.valor_total * 100)) : 0;
+      const pessoas = [...new Set(ps.map(p => p.funcionario_id))];
+      const aberto = abertos.has(a.id);
+      const acoes = [];
+      if (a.status === 'PENDENTE_LIDER' && (perfil === 'LIDER' || rh())) acoes.push(`<button onclick="abrirAprovar('${a.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">${perfil === 'LIDER' ? '✅ Aprovar / escolher funcionários' : 'Decidir no lugar do líder'}</button>`);
+      if (a.status === 'PENDENTE_LIDER' && (a.solicitante_email === meuEmail || rh())) acoes.push(`<button onclick="cancelar('${a.id}')" class="text-[10px] text-slate-500 hover:text-rose-600 underline cursor-pointer">cancelar pedido</button>`);
+      if (a.status === 'APROVADO' && rh()) acoes.push(`<button onclick="cancelar('${a.id}')" class="text-[10px] text-rose-700 underline cursor-pointer">cancelar parcelas futuras</button>`);
+      if (a.anexo_path) acoes.push(`<button onclick="abrirAnexo('${esc(a.anexo_path)}')" class="text-[10px] text-indigo-700 underline cursor-pointer">📎 documento</button>`);
+      return `<div class="bg-white border ${a.status === 'PENDENTE_LIDER' ? 'border-amber-300' : 'border-slate-200'} rounded-xl shadow-sm">
+        <div class="p-4 flex flex-col md:flex-row justify-between gap-3">
+          <div class="space-y-1 text-xs min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-mono font-black text-slate-500">#${a.numero}</span>
+              <span class="${t.cor} px-2 py-0.5 rounded text-[10px] font-black">${t.ic} ${t.txt.toUpperCase()}</span>
+              <span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(a.loja_id))}</span>
+              <span class="${s.cls} px-2 py-0.5 rounded text-[10px] font-bold">${s.txt}</span>
+            </div>
+            <div class="text-lg font-black text-slate-900">${fmtR(a.valor_total)}${a.qtd_parcelas ? ` <span class="text-xs font-bold text-slate-500">· ${pessoas.length} pessoa(s) · ${a.qtd_parcelas}x</span>` : ''}</div>
+            ${a.justificativa ? `<div class="text-[11px]">Justificativa: <b>${esc(a.justificativa)}</b></div>` : ''}
+            ${a.observacao ? `<div class="text-[11px] text-slate-500 italic">"${esc(a.observacao)}"</div>` : ''}
+            ${a.funcionario_sugerido_id ? `<div class="text-[11px]">Funcionário indicado: <b>${esc(nomeF(a.funcionario_sugerido_id))}</b></div>` : ''}
+            <div class="text-[10px] text-slate-500">📝 Registrado em ${dbr(a.solicitado_em)} por ${esc(a.solicitante_email)} (${esc(a.origem_perfil)})${a.decidido_em ? ` · ${a.status === 'RECUSADO' ? '✕ recusado' : a.status === 'CANCELADO' ? '⊘ cancelado' : '✅ aprovado'} em ${dbr(a.decidido_em)} por ${esc(a.decidido_por)}${a.decisao_forcada ? ' <b class="text-amber-700">(no lugar do líder)</b>' : ''}` : ''}</div>
+            ${a.decisao_obs ? `<div class="text-[11px] ${a.status === 'RECUSADO' ? 'text-rose-700 font-bold' : 'text-slate-600'}">Obs.: ${esc(a.decisao_obs)}</div>` : ''}
+            ${ps.length ? `<div class="pt-1"><div class="h-2 bg-slate-100 rounded-full overflow-hidden w-72 max-w-full"><div class="h-2 bg-emerald-500" style="width:${pct}%"></div></div>
+              <div class="text-[10px] text-slate-600 mt-0.5">Lançado em folha <b>${fmtR(vLanc)}</b> · a lançar <b>${fmtR(vPrev)}</b> · ${lanc.length} de ${ps.filter(p => p.status !== 'CANCELADA').length} parcela(s)</div></div>` : ''}
+          </div>
+          <div class="flex flex-col items-end gap-1.5 shrink-0">${acoes.join('')}
+            ${ps.length || hist.some(h => h.abatimento_id === a.id) ? `<button onclick="alternar('${a.id}')" class="text-[11px] font-bold text-indigo-700 hover:underline cursor-pointer">${aberto ? '▲ fechar detalhes' : '▼ parcelas e histórico'}</button>` : ''}</div>
+        </div>
+        ${aberto ? detalhe(a, ps, pessoas) : ''}
+      </div>`;
+    }
+
+    function detalhe(a, ps, pessoas) {
+      const linhas = pessoas.map(fid => {
+        const minhas = ps.filter(p => p.funcionario_id === fid).sort((x, y) => x.parcela_num - y.parcela_num);
+        const total = minhas.filter(p => p.status !== 'CANCELADA').reduce((s, p) => s + parseFloat(p.valor), 0);
+        const pago = minhas.filter(p => p.status === 'LANCADA').reduce((s, p) => s + parseFloat(p.valor), 0);
+        return `<tr class="align-top"><td class="p-2 font-bold whitespace-nowrap">${esc(nomeF(fid))}<div class="text-[10px] font-normal text-slate-500">${fmtR(pago)} de ${fmtR(total)}</div></td>
+          <td class="p-2"><div class="flex flex-wrap gap-1">${minhas.map(p => {
+            const [txt, cls] = PARC[p.status] || [p.status, ''];
+            const edita = rh() && ((p.status === 'PREVISTA') || (p.status === 'LANCADA' && p.competencia === compAberta));
+            return `<div class="${cls} rounded-lg px-2 py-1 text-[10px] leading-tight"><div class="font-mono font-bold">${String(p.parcela_num).padStart(2, '0')}/${String(p.total_parcelas).padStart(2, '0')} · ${esc(p.competencia)}</div>
+              <div>${fmtR(p.valor)} · ${txt}${edita ? ` <button onclick="reduzir('${p.id}')" title="Reduzir esta parcela (a diferença vai para as próximas)" class="ml-1 text-indigo-700 font-bold cursor-pointer">✎</button>` : ''}</div>
+              ${p.status === 'LANCADA' && !p.folha_item_id ? '<div class="text-rose-600">lançamento excluído</div>' : ''}</div>`; }).join('')}</div></td></tr>`;
+      }).join('');
+      const h = hist.filter(x => x.abatimento_id === a.id);
+      return `<div class="border-t border-slate-100 p-4 space-y-3 bg-slate-50/60 rounded-b-xl">
+        ${linhas ? `<table class="w-full text-xs"><thead><tr class="text-[10px] text-slate-500 uppercase text-left"><th class="p-2">Funcionário</th><th class="p-2">Parcelas (cada uma é uma linha separada no holerite)</th></tr></thead><tbody class="divide-y divide-slate-100">${linhas}</tbody></table>` : ''}
+        ${rh() && linhas ? '<div class="text-[10px] text-slate-500">✎ Reduzir parcela: use quando o holerite ficaria negativo. A diferença é redistribuída nas próximas parcelas (ou vira uma parcela nova no mês seguinte).</div>' : ''}
+        ${h.length ? `<div><div class="text-[10px] font-black uppercase text-slate-500 mb-1">Histórico</div>${h.map(x => `<div class="text-[11px]">• ${new Date(x.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} · <b>${esc(x.acao.replace(/_/g, ' ').toLowerCase())}</b> · ${esc(x.detalhe || '')} <span class="text-slate-400">${esc(x.por || '')}</span></div>`).join('')}</div>` : ''}
+      </div>`;
+    }
+    function alternar(id) { abertos.has(id) ? abertos.delete(id) : abertos.add(id); renderLista(); }
+
+    async function abrirAnexo(caminho) {
+      const { data, error } = await _supabase.storage.from('abatimentos').createSignedUrl(caminho, 300);
+      if (error) return alert('Não foi possível abrir o documento: ' + error.message);
+      window.open(data.signedUrl, '_blank');
+    }
+
+    async function cancelar(id) {
+      const a = abats.find(x => x.id === id);
+      const txt = a.status === 'APROVADO' ? 'Cancelar as parcelas FUTURAS deste abatimento? (as já lançadas continuam na folha)\n\nMotivo:' : 'Cancelar este pedido? Motivo:';
+      const motivo = prompt(txt); if (!motivo) return;
+      const { error } = await _supabase.rpc('fn_abatimento_cancelar', { p_id: id, p_motivo: motivo });
+      if (error) return alert(error.message);
+      await recarregar();
+    }
+
+    async function reduzir(pid) {
+      const p = parcelas.find(x => x.id === pid);
+      const v = prompt(`${nomeF(p.funcionario_id)} · parcela ${p.parcela_num}/${p.total_parcelas} (${p.competencia}) de ${fmtR(p.valor)}.\n\nNovo valor desta parcela (menor que o atual). A diferença vai para as próximas parcelas:`, '');
+      if (v === null) return;
+      const novo = parseFloat(String(v).replace(/\./g, '').replace(',', '.'));
+      if (!(novo >= 0) || novo >= parseFloat(p.valor)) return alert('Informe um valor menor que o atual.');
+      const motivo = prompt('Motivo (ex.: holerite ficaria negativo):', 'Holerite ficaria negativo'); if (!motivo) return;
+      const { error } = await _supabase.rpc('fn_abatimento_parcela_valor', { p_parcela: pid, p_valor: novo, p_motivo: motivo });
+      if (error) return alert(error.message);
+      await recarregar();
+    }
+    async function recarregar() { await carregar(); atualizarBadges(); renderLista(); }
+
+    // ---------------- APROVAÇÃO ----------------
+    function abrirAprovar(id) {
+      atual = abats.find(a => a.id === id);
+      const t = TIPOS[atual.tipo];
+      $('apResumo').innerHTML = `<b>#${atual.numero} · ${t.ic} ${t.txt}</b> · ${esc(nomeLoja(atual.loja_id))} · <b class="text-base">${fmtR(atual.valor_total)}</b>
+        ${atual.justificativa ? `<div>Justificativa: <b>${esc(atual.justificativa)}</b></div>` : ''}${atual.observacao ? `<div class="italic">"${esc(atual.observacao)}"</div>` : ''}
+        <div class="text-slate-500">Registrado por ${esc(atual.solicitante_email)} em ${dbr(atual.solicitado_em)} · evento ${t.ev} (não contábil)</div>
+        ${atual.anexo_path ? `<button onclick="abrirAnexo('${esc(atual.anexo_path)}')" class="text-indigo-700 underline font-bold cursor-pointer">📎 ver documento de conferência</button>` : ''}`;
+      $('apBusca').value = '';
+      renderFuncsAprovar();
+      if (atual.funcionario_sugerido_id) { const c = document.querySelector(`.chkAp[value="${atual.funcionario_sugerido_id}"]`); if (c) c.checked = true; }
+      const forcado = perfil !== 'LIDER';
+      $('lblApObs').innerText = forcado ? 'Motivo de decidir no lugar do líder *' : 'Observação (opcional)';
+      $('apObs').value = '';
+      $('apInfoComp').innerHTML = compAberta ? `1ª parcela na competência <b>${compAberta}</b>; as seguintes nos meses seguintes.` : '<b class="text-rose-700">Não há competência aberta.</b>';
+      previaAprovar();
+      $('mAprovar').classList.remove('hidden');
+    }
+    function funcsDaLoja() {
+      const lista = funcs.filter(f => String(f.status || 'ATIVO').toUpperCase() === 'ATIVO' && (f.loja_id === atual.loja_id || (rh() && f.id === atual.funcionario_sugerido_id)));
+      return lista;
+    }
+    function renderFuncsAprovar() {
+      const marcados = new Set([...document.querySelectorAll('.chkAp:checked')].map(c => c.value));
+      const termo = norm($('apBusca').value.trim());
+      const lista = funcsDaLoja();
+      $('apFuncs').innerHTML = lista.length ? lista.map(f => `<label class="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-emerald-50 ${termo && !norm(f.nome_registro).includes(termo) ? 'hidden' : ''}">
+          <input type="checkbox" class="chkAp accent-emerald-600 w-4 h-4" value="${f.id}" ${marcados.has(f.id) ? 'checked' : ''} onchange="previaAprovar()">
+          <span class="font-bold">${esc(f.nome_registro)}</span><span class="text-[10px] text-slate-400 ml-auto">${esc(f.cargo || '')}</span></label>`).join('')
+        : '<div class="p-3 text-xs text-slate-400">Nenhum funcionário ativo nesta loja.</div>';
+    }
+    function marcarTodos(v) { document.querySelectorAll('#apFuncs label:not(.hidden) .chkAp').forEach(c => c.checked = v); previaAprovar(); }
+    function divide(total, n) { const base = Math.floor(total * 100 / n) / 100; return Array.from({ length: n }, (_, i) => i === 0 ? Math.round((total - base * (n - 1)) * 100) / 100 : base); }
+    function previaAprovar() {
+      const sel = [...document.querySelectorAll('.chkAp:checked')].map(c => c.value);
+      const n = sel.length, total = parseFloat(atual.valor_total);
+      const parte = n ? Math.floor(total * 100 / n) / 100 : total;
+      const max = Math.max(1, Math.min(10, Math.floor(parte / 30)));
+      const atualSel = parseInt($('apParcelas').value, 10) || 1;
+      $('apParcelas').innerHTML = Array.from({ length: 10 }, (_, i) => i + 1).map(k => `<option value="${k}" ${k > max ? 'disabled' : ''} ${k === Math.min(atualSel, max) ? 'selected' : ''}>${k}x${k > 1 ? ' de ' + fmtR(Math.floor(parte * 100 / k) / 100) : ''}${k > max ? ' (abaixo de R$ 30)' : ''}</option>`).join('');
+      const p = parseInt($('apParcelas').value, 10) || 1;
+      if (!n) { $('apPrevia').innerHTML = '<div class="text-amber-700 font-bold">Marque quem vai pagar.</div>'; $('btnAprovar').disabled = true; return; }
+      $('btnAprovar').disabled = !compAberta;
+      const partes = divide(total, n);
+      $('apPrevia').innerHTML = `<div class="font-bold mb-1">Prévia: ${n} pessoa(s) · ${p}x</div><table class="w-full"><tbody class="divide-y divide-slate-100">${sel.map((fid, i) => {
+        const ps = divide(partes[i], p).reverse();           // centavos na última
+        return `<tr><td class="py-1 font-bold">${esc(nomeF(fid))}</td><td class="py-1 text-right font-mono">${fmtR(partes[i])}</td><td class="py-1 pl-3 font-mono text-slate-600">${p}x de ${fmtR(ps[0])}${ps[ps.length - 1] !== ps[0] ? ' (última ' + fmtR(ps[ps.length - 1]) + ')' : ''}</td></tr>`; }).join('')}</tbody></table>
+        ${max < 10 && n ? `<div class="text-[10px] text-slate-500 mt-1">Com ${n} pessoa(s), cada uma paga ${fmtR(parte)}: no máximo ${max}x (parcela mínima de R$ 30,00).</div>` : ''}`;
+    }
+    async function confirmarAprovacao() {
+      const sel = [...document.querySelectorAll('.chkAp:checked')].map(c => c.value), p = parseInt($('apParcelas').value, 10);
+      const obs = $('apObs').value.trim();
+      if (!sel.length) return alert('Marque quem vai pagar.');
+      if (perfil !== 'LIDER' && !obs) return alert('Informe o motivo de decidir no lugar do líder.');
+      if (!confirm(`Confirmar o desconto de ${fmtR(atual.valor_total)} para ${sel.length} funcionário(s) em ${p}x?\n\nA 1ª parcela já entra na folha de ${compAberta}.`)) return;
+      const btn = $('btnAprovar'); btn.disabled = true;
+      const { error } = await _supabase.rpc('fn_abatimento_aprovar', { p_id: atual.id, p_funcionarios: sel, p_parcelas: p, p_obs: obs || null });
+      btn.disabled = false;
+      if (error) return alert('Não aprovado: ' + error.message);
+      fechar('mAprovar'); abertos.add(atual.id);
+      await recarregar();
+      alert('Aprovado. As parcelas foram criadas e a 1ª já está na tela de lançamentos.');
+    }
+    async function recusar() {
+      const motivo = prompt('Motivo da recusa (volta para quem registrou):'); if (!motivo) return;
+      const { error } = await _supabase.rpc('fn_abatimento_recusar', { p_id: atual.id, p_obs: motivo });
+      if (error) return alert(error.message);
+      fechar('mAprovar'); await recarregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

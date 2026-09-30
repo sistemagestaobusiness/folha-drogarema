@@ -24,6 +24,7 @@
           <span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span>
           <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
         </div>
+        <a href="abatimentos.html" class="relative px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 rounded-lg font-bold text-xs border border-rose-300">💸 ABATIMENTOS<span id="qAbat" class="hidden absolute -top-2 -right-2 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px] font-black"></span></a>
         <a href="ferias.html" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs border border-emerald-300">🏖 FÉRIAS</a>
         <a href="escala.html" class="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-lg font-bold text-xs border border-sky-300">📅 ESCALA</a>
         <a href="organograma.html" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-lg font-bold text-xs border border-slate-300">🏛 ORGANOGRAMA</a>
@@ -31,6 +32,8 @@
         <button id="btnSair" onclick="sairSistema()" class="hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs cursor-pointer">SAIR</button>
       </div>
     </div>
+
+    <div id="faixaAbat" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-800 rounded-xl p-3 text-sm"></div>
 
     <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
 
@@ -301,6 +304,17 @@
     // ------------------------------------------------------------------
     // INICIALIZAÇÃO (login obrigatório)
     // ------------------------------------------------------------------
+
+    // abatimentos aguardando o líder (aviso no botão e na faixa)
+    async function avisoAbatimentos() {
+      try {
+        const { count, error } = await _supabase.from('abatimentos').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE_LIDER');
+        if (error || !count) return;
+        const b = document.getElementById('qAbat'); if (b) { b.innerText = count; b.classList.remove('hidden'); }
+        const f = document.getElementById('faixaAbat'); if (f) { f.innerHTML = `💸 <b>${count} abatimento(s)</b> aguardando a sua aprovação: escolha quem paga e em quantas parcelas. <a href="abatimentos.html" class="underline font-black">Abrir →</a>`; f.classList.remove('hidden'); }
+      } catch (e) { }
+    }
+
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
@@ -315,6 +329,7 @@
       // Gestor/RH voltam ao painel (o SAIR fica no index); demais perfis só têm SAIR
       document.getElementById(['GESTOR', 'RH'].includes(usuario.perfil) ? 'btnPainel' : 'btnSair').classList.remove('hidden');
 
+      if (usuario.perfil === 'LIDER') avisoAbatimentos();
       escolherTipo('FREELANCE');
       await Promise.all([carregarLojas(), carregarFuncionarios()]);
       iniciarCombos();

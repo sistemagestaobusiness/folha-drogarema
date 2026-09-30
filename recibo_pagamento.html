@@ -460,7 +460,8 @@
           // nome atual do evento (sem "PF"), mantendo a parcela "(01/10)" quando houver
           const evAtual = eventos.find(e => String(e.codigo_evento) === String(codigo));
           const sufixoParcela = (desc.match(/\(\d{2}\/\d{2}\)\s*$/) || [''])[0];
-          const descExibir = evAtual ? `${String(evAtual.descricao_do_evento).toUpperCase()}${sufixoParcela ? ' ' + sufixoParcela : ''}` : desc;
+          const compl = item.complemento ? ' - ' + String(item.complemento).toUpperCase().slice(0, 30) : '';
+          const descExibir = evAtual ? `${String(evAtual.descricao_do_evento).toUpperCase()}${compl}${sufixoParcela ? ' ' + sufixoParcela : ''}` : desc + compl;
 
           recibosMap[fId].itens.push({
             codigo: codigo,

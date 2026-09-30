@@ -465,6 +465,7 @@
         periodoForcadoDesbloqueado = false;
         await carregarPerfilUsuario();
         await verificarStatusCompetenciaNoBanco(competenciaRegraLancamento);
+        try { await _supabase.rpc('fn_abatimentos_sincronizar'); } catch (e) { }   // parcelas de abatimento do mês
         await carregarEmpresas();
         await carregarFuncionariosGeral();
         await carregarEventosGeral();
