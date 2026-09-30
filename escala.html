@@ -154,6 +154,8 @@
     const minHm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
     const curto = t => { const [h, m] = hm(t).split(':'); return parseInt(h, 10) + (m !== '00' ? ':' + m : 'h'); };
     const fechar = id => $(id).classList.add('hidden');
+    // lojas/setores do supervisor: marcação "estrutura do supervisor" (tela Lojas); sem o SQL, vale "LOJA ..."
+    const estruturaSupervisor = l => l.estrutura_supervisor != null ? !!l.estrutura_supervisor : /^LOJA\s/i.test(l.nome_loja || '');
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
     const func = id => funcs.find(f => f.id === id) || { nome_registro: '?' };
     const primeiroNome = n => { const p = String(n || '').split(' '); return p.length > 1 ? p[0] + ' ' + p[p.length - 1][0] + '.' : p[0]; };
@@ -181,13 +183,13 @@
       if (perfil === 'SUPERVISOR') $('lnkSup').classList.remove('hidden');
 
       const [rl, rf] = await Promise.all([
-        _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja'),
+        _supabase.from('lojas').select('*').order('nome_loja'),
         _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, data_contratacao, data_rescisao, periodo_trabalho, status').eq('status', 'ATIVO').order('nome_registro')
       ]);
       lojas = (rl.data || []).filter(l => l.ativo !== false);
       funcs = rf.data || [];
       const escopo = perfil === 'LIDER' ? lojas.filter(l => l.id === minhaLoja)
-        : perfil === 'SUPERVISOR' ? lojas.filter(l => /^LOJA\s/i.test(l.nome_loja)) : lojas;
+        : perfil === 'SUPERVISOR' ? lojas.filter(estruturaSupervisor) : lojas;
       $('selLoja').innerHTML = escopo.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
       if (perfil === 'LIDER') $('selLoja').disabled = true;
       let salva = null; try { salva = localStorage.getItem('escala_loja'); } catch (e) {}
@@ -202,7 +204,8 @@
     async function trocarLoja(inicial) {
       lojaSel = $('selLoja').value;
       try { localStorage.setItem('escala_loja', lojaSel); } catch (e) {}
-      podeEditar = ['RH', 'GESTOR'].includes(perfil) || (perfil === 'LIDER' && lojaSel === minhaLoja);
+      podeEditar = ['RH', 'GESTOR'].includes(perfil) || (perfil === 'LIDER' && lojaSel === minhaLoja)
+        || (perfil === 'SUPERVISOR' && estruturaSupervisor(lojas.find(l => l.id === lojaSel) || {}));
       $('lblSomenteLeitura').classList.toggle('hidden', podeEditar);
       const [rh, rp] = await Promise.all([
         _supabase.from('escala_loja_horario').select('*').eq('loja_id', lojaSel),

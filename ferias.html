@@ -166,6 +166,8 @@
     const fechar = id => $(id).classList.add('hidden');
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
     const ehLoja = id => /^LOJA\s/i.test(nomeLoja(id));
+    // lojas/setores do supervisor: marcação "estrutura do supervisor" (tela Lojas); sem o SQL, vale "LOJA ..."
+    const doSupervisor = id => { const l = lojas.find(x => x.id === id) || {}; return l.estrutura_supervisor != null ? !!l.estrutura_supervisor : /^LOJA\s/i.test(l.nome_loja || ''); };
     const func = id => funcs.find(f => f.id === id) || {};
     const ativa = s => !['RECUSADA', 'CANCELADA'].includes(s.status);
 
@@ -188,7 +190,7 @@
       $('conteudo').classList.remove('hidden');
       const abas = perfil === 'LIDER' ? [['equipe', '👥 Minha equipe'], ['solicitacoes', '📋 Minhas solicitações'], ['calendario', '📅 Calendário da loja']]
         : perfil === 'SUPERVISOR' ? [['solicitacoes', '👁 Para ciência'], ['calendario', '📅 Calendário das lojas'], ['equipe', '👥 Vencimentos das lojas']]
-        : [['rh', '🗂 Fluxo do RH'], ['calendario', '📅 Calendário geral'], ['vencimentos', '⏳ Vencimentos'], ['equipe', '👥 Por funcionário']];
+        : [['rh', '🗂 Fluxo do RH'], ['solicitacoes', '📋 Todas as solicitações'], ['calendario', '📅 Calendário geral'], ['vencimentos', '⏳ Vencimentos'], ['equipe', '👥 Por funcionário']];
       $('abas').innerHTML = abas.map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t} <span id="q_${k}" class="hidden ml-1 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px]"></span></button>`).join('');
       if (perfil === 'LIDER') { $('fLoja').classList.add('hidden'); }
       await carregar();
@@ -199,13 +201,13 @@
       await _supabase.rpc('fn_ferias_atualizar_periodos');
       const [rf, rl, rp, rs] = await Promise.all([
         _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, data_contratacao, status').eq('status', 'ATIVO').order('nome_registro'),
-        _supabase.from('lojas').select('id, nome_loja').order('nome_loja'),
+        _supabase.from('lojas').select('*').order('nome_loja'),
         _supabase.from('vw_ferias_periodos').select('*').order('limite_gozo'),
         _supabase.from('ferias_solicitacoes').select('*').order('data_inicio')
       ]);
       lojas = rl.data || [];
       // escopo: líder = só a loja dele; supervisor = só lojas (LOJA 01..07); RH/Gestor = todos
-      const noEscopo = f => perfil === 'LIDER' ? f.loja_id === minhaLoja : perfil === 'SUPERVISOR' ? ehLoja(f.loja_id) : true;
+      const noEscopo = f => perfil === 'LIDER' ? f.loja_id === minhaLoja : perfil === 'SUPERVISOR' ? doSupervisor(f.loja_id) : true;
       funcs = (rf.data || []).filter(noEscopo);
       const ids = new Set(funcs.map(f => f.id));
       periodos = (rp.data || []).filter(p => ids.has(p.funcionario_id));
@@ -282,10 +284,12 @@
     }
 
     function linhaTempo(s) {
-      const passo = (ok, txt) => `<span class="${ok ? 'text-emerald-700 font-bold' : 'text-slate-300'}">${ok ? '●' : '○'} ${txt}</span>`;
+      const dt = v => v ? ' ' + new Date(v).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+      const passo = (ok, txt, quando) => `<span class="${ok ? 'text-emerald-700 font-bold' : 'text-slate-300'}">${ok ? '●' : '○'} ${txt}${ok ? dt(quando) : ''}</span>`;
       const pago = s.folha_item_id && pagamentos[s.folha_item_id] && pagamentos[s.folha_item_id].status === 'PAGO';
-      return `<div class="flex flex-wrap gap-x-3 text-[10px]">${passo(true, 'Solicitada')}${passo(!!s.supervisor_ciente_em, 'Supervisor ciente')}
-        ${passo(!!s.pre_aprovado_em, 'RH pré-aprovou')}${passo(!!s.contabilidade_em, 'Contabilidade')}${passo(!!s.calculado_em, 'Calculada')}${passo(s.status === 'LANCADA', 'Lançada')}
+      return `<div class="flex flex-wrap gap-x-3 text-[10px]">${passo(true, 'Solicitada', s.solicitado_em)}${passo(!!s.supervisor_ciente_em, 'Supervisor ciente', s.supervisor_ciente_em)}
+        ${passo(!!s.pre_aprovado_em, 'RH aprovou', s.pre_aprovado_em)}${passo(!!s.contabilidade_em, 'Contabilidade', s.contabilidade_em)}${passo(!!s.calculado_em, 'Calculada', s.calculado_em)}${passo(s.status === 'LANCADA', 'Lançada', s.lancado_em)}
+        ${['RECUSADA', 'CANCELADA'].includes(s.status) ? `<span class="text-rose-700 font-bold">✕ ${s.status === 'RECUSADA' ? 'Recusada' : 'Cancelada'}${dt(s.recusado_em)}${s.recusado_por ? ' por ' + esc(s.recusado_por) : ''}</span>` : ''}
         ${['RH', 'GESTOR'].includes(perfil) ? passo(pago, 'Paga') : ''}</div>`;
     }
 
@@ -293,7 +297,7 @@
       const ids = new Set(filtrados().map(f => f.id));
       let lista = solic.filter(s => ids.has(s.funcionario_id));
       if (perfil === 'LIDER') lista = lista.filter(s => s.solicitado_por === meuEmail || true);
-      lista.sort((a, b) => (perfil === 'SUPERVISOR' ? (!!a.supervisor_ciente_em - !!b.supervisor_ciente_em) : 0) || b.solicitado_em.localeCompare(a.solicitado_em));
+      lista.sort((a, b) => (perfil === 'SUPERVISOR' ? (!!a.supervisor_ciente_em - !!b.supervisor_ciente_em) : 0) || String(b.solicitado_em || '').localeCompare(String(a.solicitado_em || '')));
       $('listaSolic').innerHTML = lista.length === 0 ? '<div class="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400">Nenhuma solicitação.</div>' : lista.map(s => {
         const f = func(s.funcionario_id), e = ETAPAS[s.status];
         const acoes = [];
@@ -301,6 +305,7 @@
         if (perfil === 'LIDER' && s.status === 'SOLICITADA' && s.solicitado_por === meuEmail) acoes.push(`<button onclick="cancelar('${s.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline cursor-pointer">cancelar</button>`);
         return `<div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col md:flex-row justify-between gap-2">
           <div class="space-y-1"><div class="font-bold text-slate-900">${esc(f.nome_registro)} <span class="text-[10px] font-normal text-slate-500">${esc(nomeLoja(f.loja_id))}</span></div>
+            <div class="text-[10px] text-slate-500">📝 Solicitada em <b>${new Date(s.solicitado_em).toLocaleDateString('pt-BR')}</b>${s.solicitado_por ? ' por ' + esc(s.solicitado_por) : ''}${s.pre_aprovado_em ? ` · ✅ aprovada pelo RH em <b>${new Date(s.pre_aprovado_em).toLocaleDateString('pt-BR')}</b>` : ['RECUSADA', 'CANCELADA'].includes(s.status) ? '' : ' · <span class="text-amber-700">aguardando aprovação do RH</span>'}</div>
             <div class="text-sm font-mono">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · <b>${s.dias} dias</b>${s.dias_abono ? ` + ${s.dias_abono} vendidos` : ''} · retorna ${dbr(addDias(s.data_fim, 1))}</div>
             ${linhaTempo(s)}
             ${s.status === 'RECUSADA' ? `<div class="text-[11px] text-rose-700 font-bold">Motivo: ${esc(s.recusado_motivo)}</div>` : ''}
@@ -337,7 +342,7 @@
       const perto = difDias(s.data_inicio, hoje());
       return `<div class="bg-white border ${perto <= 15 && s.status !== 'LANCADA' ? 'border-rose-400' : 'border-slate-200'} rounded-lg p-2 space-y-1 text-[11px]">
         <div class="font-bold text-slate-900 leading-tight">${esc(f.nome_registro)}</div>
-        <div class="text-[10px] text-slate-500">${esc(nomeLoja(f.loja_id))}${s.supervisor_ciente_em ? ' · 👁 supervisor ciente' : ehLoja(f.loja_id) ? ' · <span class="text-amber-700">aguardando ciência</span>' : ''}</div>
+        <div class="text-[10px] text-slate-500">${esc(nomeLoja(f.loja_id))}${s.supervisor_ciente_em ? ' · 👁 supervisor ciente' : doSupervisor(f.loja_id) ? ' · <span class="text-amber-700">aguardando ciência</span>' : ''}</div>
         <div class="font-mono">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · ${s.dias}d${s.dias_abono ? ' +' + s.dias_abono + ' vend.' : ''}</div>
         ${perto <= 15 && s.status !== 'LANCADA' ? `<div class="text-[10px] font-bold text-rose-700">⚠ começa em ${perto} dia(s)</div>` : ''}
         ${s.valor_liquido ? `<div class="text-[10px]">Líquido <b>${fmtR(s.valor_liquido)}</b> · pagar ${dbr(s.data_pagamento)}</div>` : ''}

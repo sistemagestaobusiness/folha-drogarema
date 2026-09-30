@@ -99,6 +99,8 @@
     };
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '';
     const ehLoja = id => /^LOJA\s/i.test(nomeLoja(id));
+    // lojas/setores do supervisor: marcação "estrutura do supervisor" (tela Lojas); sem o SQL, vale "LOJA ..."
+    const doSupervisor = id => { const l = lojas.find(x => x.id === id) || {}; return l.estrutura_supervisor != null ? !!l.estrutura_supervisor : /^LOJA\s/i.test(l.nome_loja || ''); };
     const funcao = f => (f.organograma_funcao || f.cargo || '').trim();
     const cargoDe = f => cargos.find(c => c.nome === funcao(f));
     const nivel = f => { const c = cargoDe(f); let n = c ? c.nivel : null; if (f.lider_loja && ehLoja(f.loja_id) && (n == null || n > 3)) n = 3; return n; };
@@ -173,12 +175,12 @@
       $('btnConfig').classList.toggle('hidden', !rh());
       const [rf, rl, rc] = await Promise.all([
         _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, status, lider_loja, organograma_funcao').eq('status', 'ATIVO').order('nome_registro'),
-        _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja'),
+        _supabase.from('lojas').select('*').order('nome_loja'),
         _supabase.from('cargos').select('*').order('ordem')
       ]);
       if (rf.error) { $('aviso').innerText = 'Erro ao carregar: ' + rf.error.message; $('aviso').classList.remove('hidden'); return; }
       funcs = rf.data || []; lojas = (rl.data || []).filter(l => l.ativo !== false); cargos = rc.data || [];
-      const opLojas = lojas.filter(l => perfil === 'LIDER' ? l.id === minhaLoja : perfil === 'SUPERVISOR' ? ehLoja(l.id) : true);
+      const opLojas = lojas.filter(l => perfil === 'LIDER' ? l.id === minhaLoja : perfil === 'SUPERVISOR' ? doSupervisor(l.id) : true);
       $('selVisao').innerHTML = (rh() ? '<option value="GERAL">🏢 Empresa (visão geral)</option>' : '') + opLojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
       if (perfil === 'LIDER') $('selVisao').disabled = true;
       if (!$('selVisao').options.length) { $('aviso').innerText = 'Seu usuário não está ligado a uma loja.'; $('aviso').classList.remove('hidden'); return; }
@@ -222,7 +224,7 @@
         : caixa('<div class="n">Sem líder definido</div><div class="c">marque "Líder da loja" no cadastro</div>', 'border-2 border-dashed border-rose-400 text-rose-700 bg-rose-50');
       const noLoja = li(caixa(`<div class="n">${esc(nomeLoja(lojaId))}</div><div class="c">${membros.length} pessoa(s)</div>${resumoDia(lojaId, membros)}`, 'bg-amber-100 text-amber-900 border border-amber-300'),
         [li(topoLider, equipeAgrupada(equipe))]);
-      const raiz = ehLoja(lojaId) && supervisores.length ? li(supervisores.map(f => pessoa(f, 'supervisão')).join(''), [noLoja]) : noLoja;
+      const raiz = doSupervisor(lojaId) && supervisores.length ? li(supervisores.map(f => pessoa(f, 'supervisão')).join(''), [noLoja]) : noLoja;
       $('lblResumo').innerText = `${membros.length} pessoa(s) · ${lideres.length} líder(es) · ${equipe.length} na equipe`;
       return `<ul>${raiz}</ul>`;
     }
@@ -245,7 +247,8 @@
         if (!m.length) return;
         const g = gestao.filter(f => f.loja_id === s.id && funcao(f) !== 'SUPERVISOR');
         const no = li(grupo(s.nome_loja, m, 'bg-slate-100 text-slate-800 border border-slate-300'));
-        if (g.length === 1) (doGestor[g[0].id] = doGestor[g[0].id] || []).push(no); else soltos.push(no);
+        if (doSupervisor(s.id)) filhosSup.push(no);                 // setor na estrutura do supervisor (ex.: LIMPEZA)
+        else if (g.length === 1) (doGestor[g[0].id] = doGestor[g[0].id] || []).push(no); else soltos.push(no);
       });
       const filhos = [];
       gestao.forEach(f => filhos.push(li(pessoa(f), funcao(f) === 'SUPERVISOR' && f === supervisores[0] ? filhosSup : (doGestor[f.id] || []))));
