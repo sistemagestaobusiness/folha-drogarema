@@ -255,7 +255,7 @@
       const completo = ps.find(p => p.aquisitivo_fim < hoje() && p.saldo > 0);
       const alvo = completo || ps[ps.length - 1];
       if (!alvo) return { cor: 'slate', texto: 'Sem período calculado (confira a admissão no cadastro).' };
-      if (!completo) return { p: alvo, cor: 'slate', texto: `Adquirindo até ${dbr(alvo.aquisitivo_fim)} · pode sair a partir de ${dbr(addDias(alvo.aquisitivo_fim, 1))}` };
+      if (!completo) return { p: alvo, cor: 'slate', texto: `Adquirindo até ${dbr(alvo.aquisitivo_fim)} · completa 12 meses em ${dbr(addDias(alvo.aquisitivo_fim, 1))} (férias antecipadas são permitidas)` };
       const sairAte = addDias(alvo.limite_gozo, -(alvo.saldo) + 1);
       const faltam = difDias(sairAte, hoje());
       return { p: alvo, sairAte, faltam, cor: faltam <= 60 ? 'rose' : faltam <= 120 ? 'amber' : 'emerald',
@@ -303,8 +303,12 @@
         const acoes = [];
         if (perfil === 'SUPERVISOR' && ativa(s) && !s.supervisor_ciente_em) acoes.push(`<button onclick="ciencia('${s.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">👁 Ciente</button>`);
         if (perfil === 'LIDER' && s.status === 'SOLICITADA' && s.solicitado_por === meuEmail) acoes.push(`<button onclick="cancelar('${s.id}')" class="text-[10px] text-slate-400 hover:text-rose-600 underline cursor-pointer">cancelar</button>`);
-        return `<div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col md:flex-row justify-between gap-2">
-          <div class="space-y-1"><div class="font-bold text-slate-900">${esc(f.nome_registro)} <span class="text-[10px] font-normal text-slate-500">${esc(nomeLoja(f.loja_id))}</span></div>
+        const faltam = difDias(s.data_inicio, hoje()), pend = ['SOLICITADA', 'PRE_APROVADA', 'CONTABILIDADE', 'CALCULADA'].includes(s.status);
+        const urg = !pend ? '' : faltam < 0 ? '<span class="ml-1 bg-rose-700 text-white px-1.5 py-0.5 rounded text-[10px] font-black">⛔ JÁ COMEÇOU</span>'
+          : faltam <= 15 ? `<span class="ml-1 bg-rose-600 text-white px-1.5 py-0.5 rounded text-[10px] font-black animate-pulse">🚨 começa em ${faltam} dia(s)</span>`
+          : faltam <= 30 ? `<span class="ml-1 bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded text-[10px] font-black">⚠ começa em ${faltam} dias</span>` : '';
+        return `<div class="bg-white border ${pend && faltam <= 15 ? 'border-rose-400 border-2' : 'border-slate-200'} rounded-xl p-3 flex flex-col md:flex-row justify-between gap-2">
+          <div class="space-y-1"><div class="font-bold text-slate-900">${esc(f.nome_registro)} <span class="text-[10px] font-normal text-slate-500">${esc(nomeLoja(f.loja_id))}</span>${urg}</div>
             <div class="text-[10px] text-slate-500">📝 Solicitada em <b>${new Date(s.solicitado_em).toLocaleDateString('pt-BR')}</b>${s.solicitado_por ? ' por ' + esc(s.solicitado_por) : ''}${s.pre_aprovado_em ? ` · ✅ aprovada pelo RH em <b>${new Date(s.pre_aprovado_em).toLocaleDateString('pt-BR')}</b>` : ['RECUSADA', 'CANCELADA'].includes(s.status) ? '' : ' · <span class="text-amber-700">aguardando aprovação do RH</span>'}</div>
             <div class="text-sm font-mono">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · <b>${s.dias} dias</b>${s.dias_abono ? ` + ${s.dias_abono} vendidos` : ''} · retorna ${dbr(addDias(s.data_fim, 1))}</div>
             ${linhaTempo(s)}
@@ -426,13 +430,14 @@
       const partes = solic.filter(s => s.periodo_id === p.id && ativa(s));
       $('sInfoPeriodo').innerText = partes.length ? `Já programado: ${partes.map(s => `${dbr(s.data_inicio)} (${s.dias}d)`).join(', ')}` : '';
       const avisos = [];
-      if (p.aquisitivo_fim >= (ini || hoje())) avisos.push(`⚠ O período aquisitivo termina em ${dbr(p.aquisitivo_fim)}: as férias só podem começar depois disso.`);
+      const antecipada = ini && p.aquisitivo_fim >= ini;   // costume da Drogarema: férias antes de completar os 12 meses
       if (dias + abono > p.saldo) avisos.push(`⚠ Saldo insuficiente: restam ${p.saldo} dia(s).`);
       if (dias < 5) avisos.push('⚠ Mínimo de 5 dias por período.');
       if (partes.length >= 2) avisos.push('⚠ Este seria o 3º (último) período permitido.');
       if (ini && addDias(ini, dias - 1) > p.limite_gozo) avisos.push(`⚠ Termina depois do vencimento (${dbr(p.limite_gozo)}): gera pagamento em dobro.`);
       if (ini && [5, 6].includes(new Date(ini + 'T12:00:00').getDay())) avisos.push('⚠ A CLT não permite iniciar férias 2 dias antes de feriado ou do descanso semanal (evite sexta/sábado).');
       $('sPrevia').innerHTML = ini ? `<b>${dbr(ini)} → ${dbr(addDias(ini, dias - 1))}</b> · ${dias} dia(s)${abono ? ` + ${abono} vendidos` : ''} · retorna em <b>${dbr(addDias(ini, dias))}</b><br>Saldo após: ${p.saldo - dias - abono} dia(s)` : 'Informe o início.';
+      if (antecipada) $('sPrevia').innerHTML += `<div class="mt-1 text-sky-800">ℹ <b>Férias antecipadas</b>: o período aquisitivo só completa 12 meses em ${dbr(p.aquisitivo_fim)}. É permitido (costume da Drogarema); os dias saem do saldo deste período.</div>`;
       if (avisos.length) $('sPrevia').innerHTML += `<div class="mt-1 text-amber-800 font-bold">${avisos.join('<br>')}</div>`;
       impactoLoja();
     }

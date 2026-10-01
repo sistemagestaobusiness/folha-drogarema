@@ -77,6 +77,8 @@
         </div>
       </div>
 
+      <div id="boxIgnorados" class="hidden bg-slate-900 border border-slate-700 rounded-lg p-3 text-[11px] space-y-0.5"></div>
+
       <!-- Tabela de Conferência -->
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse text-xs">
@@ -129,7 +131,41 @@
 
     async function carregarFuncionarios() {
       const { data } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7, nomes_alternativos').eq('status', 'ATIVO');
-      funcionariosSistema = data || [];
+      funcionariosSistema = (data || []).sort((a, b) => String(a.nome_registro).localeCompare(String(b.nome_registro), 'pt-BR'));
+      await carregarIgnorar();
+    }
+
+    // ---------- lista "não importar" (ex.: sócios não descontam consumo) ----------
+    let ignorarLista = [], ignorados = [];
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const nomeFunc = id => (funcionariosSistema.find(f => f.id === id) || {}).nome_registro || '(funcionário inativo)';
+    async function carregarIgnorar() {
+      const { data } = await _supabase.from('importacao_ignorar').select('*').eq('origem', 'CONSUMO');
+      ignorarLista = data || [];
+    }
+    const deveIgnorar = (cliente, fid) => ignorarLista.some(i => (i.texto && normNome(i.texto) === normNome(cliente)) || (fid && i.funcionario_id === fid));
+    async function naoImportarMais(id) {
+      const item = dadosProcessados.find(d => d.id === id); if (!item) return;
+      if (!confirm(`Não importar mais o consumo de "${item.cliente}"?\n\nVale para as próximas importações (ex.: sócios). Dá para desfazer no aviso acima da tabela.`)) return;
+      const linha = item.funcionario_id ? { origem: 'CONSUMO', funcionario_id: item.funcionario_id, observacao: 'marcado na importação' } : { origem: 'CONSUMO', texto: normNome(item.cliente), observacao: 'marcado na importação' };
+      const { error } = await _supabase.from('importacao_ignorar').insert([linha]);
+      if (error && !/duplicate/i.test(error.message)) return alert('Erro: ' + error.message);
+      await carregarIgnorar();
+      ignorados.push(item); dadosProcessados = dadosProcessados.filter(d => d.id !== id);
+      renderizarConferencia();
+    }
+    async function voltarImportar(id) {
+      const { error } = await _supabase.from('importacao_ignorar').delete().eq('id', id);
+      if (error) return alert('Erro: ' + error.message);
+      await carregarIgnorar(); alert('Pronto. Carregue a planilha de novo para ele voltar a aparecer.'); renderIgnorados();
+    }
+    function renderIgnorados() {
+      const box = document.getElementById('boxIgnorados'); if (!box) return;
+      const total = ignorados.reduce((a, d) => a + d.valor, 0);
+      box.innerHTML = `<div class="font-bold text-slate-300">🚫 Não importados (sócios / lista "não descontar"): ${ignorados.length ? ignorados.map(d => esc(d.cliente)).join(' · ') + ' · R$ ' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : 'nenhum nesta planilha'}</div>
+        <details class="mt-1"><summary class="cursor-pointer text-slate-400 underline">ver/editar a lista (${ignorarLista.length})</summary>
+          <div class="mt-1 space-y-0.5">${ignorarLista.map(i => `<div>• ${esc(i.texto || nomeFunc(i.funcionario_id))} <span class="text-slate-500">${esc(i.observacao || '')}</span> <a href="#" onclick="voltarImportar('${i.id}');return false;" class="text-amber-300 underline">voltar a importar</a></div>`).join('')}</div></details>`;
+      box.classList.remove('hidden');
     }
 
     carregarFuncionarios();
@@ -183,7 +219,7 @@
         return;
       }
 
-      dadosProcessados = [];
+      dadosProcessados = []; ignorados = [];
 
       for (let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
@@ -208,7 +244,7 @@
           funcEncontrado = funcionariosSistema.find(f => nomesDoFunc(f).some(n => n.includes(cn) || cn.includes(n)));
         }
 
-        dadosProcessados.push({
+        (deveIgnorar(cliente, funcEncontrado && funcEncontrado.id) ? ignorados : dadosProcessados).push({
           id: Math.random().toString(36).substr(2, 9),
           cliente: cliente,
           funcionario_id: funcEncontrado ? funcEncontrado.id : '',
@@ -229,6 +265,7 @@
       }
 
       document.getElementById('secaoConferencia').classList.remove('hidden');
+      renderIgnorados();
       document.getElementById('statTotal').innerText = dadosProcessados.length;
 
       const totalVal = dadosProcessados.reduce((acc, curr) => acc + curr.valor, 0);
@@ -251,7 +288,8 @@
           <td class="p-3 font-mono font-bold text-rose-400">${item.rubrica}</td>
           <td class="p-3 text-right font-mono font-bold text-rose-400">R$ ${item.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
           <td class="p-3 text-center">
-            <button onclick="removerItem(${idx})" class="text-slate-500 hover:text-rose-400 font-bold">✕</button>
+            <button onclick="removerItem(${idx})" title="tirar só desta importação" class="text-slate-500 hover:text-rose-400 font-bold">✕</button>
+            <button onclick="naoImportarMais('${item.id}')" title="não importar mais (ex.: sócio)" class="ml-1 text-slate-500 hover:text-amber-300 cursor-pointer">🚫</button>
           </td>
         </tr>
       `).join('');

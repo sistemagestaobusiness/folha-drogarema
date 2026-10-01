@@ -85,6 +85,8 @@
         </div>
       </div>
 
+      <div id="boxIgnorados" class="hidden bg-slate-900 border border-slate-700 rounded-lg p-3 text-[11px] space-y-0.5"></div>
+
       <!-- Tabela de Conferência -->
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse text-xs">
@@ -142,9 +144,73 @@
     const normNome = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
     const nomesDoFunc = f => [f.nome_registro, ...(f.nomes_alternativos || [])].map(normNome);
 
+
+    // ---------- vínculo automático: usuário memorizado, código do Alpha7 ou nome parecido ----------
+    const LIG = new Set(['DA', 'DE', 'DO', 'DAS', 'DOS', 'E']);
+    const tokens = t => normNome(t).split(' ').filter(x => x && !LIG.has(x));
+    const codigoA7 = u => (String(u || '').match(/-\s*([A-Za-z0-9]+)\s*$/) || [])[1] || '';
+    function lev(a, b) {
+      const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+      for (let j = 1; j <= n; j++) d[0][j] = j;
+      for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      return d[m][n];
+    }
+    const parecido = (a, b) => a === b || (a.length >= 5 && b.length >= 5 && lev(a, b) <= (Math.min(a.length, b.length) >= 7 ? 2 : 1));
+    const contem = (menor, maior) => menor.every(x => maior.some(y => parecido(x, y)));
+    function acharFuncionario(usuario) {
+      const nu = normNome(usuario), cod = codigoA7(usuario), primeiro = tokens(usuario)[0];
+      let f = funcionariosSistema.find(x => x.usuario_alpha7 && normNome(x.usuario_alpha7) === nu);
+      if (!f && cod) f = funcionariosSistema.find(x => x.usuario_alpha7 && codigoA7(x.usuario_alpha7) === cod && tokens(x.usuario_alpha7)[0] === primeiro);
+      if (f) return f;
+      const tu = tokens(String(usuario).replace(/-\s*[A-Za-z0-9]+\s*$/, ''));
+      if (!tu.length) return null;
+      const cands = funcionariosSistema.filter(x => nomesDoFunc(x).some(n => { const tn = tokens(n); return tn[0] === tu[0] && (contem(tu, tn) || contem(tn, tu)); }));
+      return cands.length === 1 ? cands[0] : null;
+    }
+
+    // ---------- lista "não importar" (sócios, supervisão, usuário sistema...) ----------
+    let ignorarLista = [], ignorados = [];
+    async function carregarIgnorar() {
+      const { data } = await _supabase.from('importacao_ignorar').select('*').eq('origem', 'ALPHA7');
+      ignorarLista = data || [];
+    }
+    const ignorarTexto = u => ignorarLista.some(i => i.texto && normNome(i.texto) === normNome(u));
+    const ignorarFunc = fid => ignorarLista.some(i => i.funcionario_id && i.funcionario_id === fid);
+    async function naoImportarMais(usuario) {
+      if (!confirm(`Não importar mais comissão do usuário "${usuario}"?\n\nVale para as próximas importações. Dá para desfazer no aviso "não importados" acima da tabela.`)) return;
+      const { error } = await _supabase.from('importacao_ignorar').insert([{ origem: 'ALPHA7', texto: normNome(usuario), observacao: 'marcado na importação' }]);
+      if (error && !/duplicate/i.test(error.message)) return alert('Erro: ' + error.message);
+      await carregarIgnorar();
+      const sai = dadosProcessados.filter(d => normNome(d.usuario_alpha7) === normNome(usuario));
+      ignorados.push(...sai);
+      dadosProcessados = dadosProcessados.filter(d => normNome(d.usuario_alpha7) !== normNome(usuario));
+      renderizarConferencia();
+    }
+    async function voltarImportar(id) {
+      const { error } = await _supabase.from('importacao_ignorar').delete().eq('id', id);
+      if (error) return alert('Erro: ' + error.message);
+      await carregarIgnorar();
+      alert('Pronto. Carregue a planilha de novo para ele voltar a aparecer.');
+      renderIgnorados();
+    }
+    function renderIgnorados() {
+      const box = document.getElementById('boxIgnorados'); if (!box) return;
+      const nomes = [...new Set(ignorados.map(d => d.usuario_alpha7))];
+      const total = ignorados.reduce((a, d) => a + d.valor, 0);
+      box.innerHTML = `<div class="font-bold text-slate-300">🚫 Não importados (lista "sem comissão"): ${nomes.length ? nomes.length + ' usuário(s) · ' + ignorados.length + ' linha(s) · R$ ' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : 'nenhum nesta planilha'}</div>
+        ${nomes.length ? `<div class="text-slate-400">${nomes.map(n => esc(n)).join(' · ')}</div>` : ''}
+        <details class="mt-1"><summary class="cursor-pointer text-slate-400 underline">ver/editar a lista (${ignorarLista.length})</summary>
+          <div class="mt-1 space-y-0.5">${ignorarLista.map(i => `<div>• ${esc(i.texto || nomeFunc(i.funcionario_id))} <span class="text-slate-500">${esc(i.observacao || '')}</span> <a href="#" onclick="voltarImportar('${i.id}');return false;" class="text-amber-300 underline">voltar a importar</a></div>`).join('')}</div></details>`;
+      box.classList.remove('hidden');
+    }
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const nomeFunc = id => (funcionariosSistema.find(f => f.id === id) || {}).nome_registro || '(funcionário inativo)';
+
     async function carregarBasesDados() {
       const { data: funcData } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7, nomes_alternativos').eq('status', 'ATIVO');
-      funcionariosSistema = funcData || [];
+      funcionariosSistema = (funcData || []).sort((a, b) => String(a.nome_registro).localeCompare(String(b.nome_registro), 'pt-BR'));
+      await carregarIgnorar();
 
       const { data: rubData } = await _supabase.from('rubricas').select('*');
       rubricasSistema = rubData || [];
@@ -202,7 +268,7 @@
         return;
       }
 
-      dadosProcessados = [];
+      dadosProcessados = []; ignorados = [];
       let ultimoUsuario = '';
 
       for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -226,21 +292,19 @@
 
         if (!planoRem || isNaN(valorRem) || valorRem <= 0 || planoRem === 'Plano de Remuneração') continue;
 
-        let funcEncontrado = funcionariosSistema.find(f => f.usuario_alpha7 && f.usuario_alpha7.toUpperCase() === usuario.toUpperCase());
-        if (!funcEncontrado) {
-          const un = normNome(usuario.split('-')[0]);
-          funcEncontrado = un ? funcionariosSistema.find(f => nomesDoFunc(f).some(n => n.includes(un))) : null;
-        }
+        const funcEncontrado = acharFuncionario(usuario);
+        const ignorar = ignorarTexto(usuario) || (funcEncontrado && ignorarFunc(funcEncontrado.id));
 
-        const planoRemUpper = planoRem.toUpperCase();
-        let rubEncontrada = rubricasSistema.find(r => String(r.rubrica_alpha7 || '').trim().toUpperCase() === planoRemUpper);
+        // de>para sem diferença de acento/maiúscula (ex.: "VALOR FIXO UNITÁRIO" = "VALOR FIXO UNITARIO")
+        const planoRemUpper = normNome(planoRem);
+        let rubEncontrada = rubricasSistema.find(r => normNome(r.rubrica_alpha7) === planoRemUpper);
         let resumoMapeado = rubEncontrada ? rubEncontrada.resumo_mapeado : planoRem;
 
-        const resumoUpper = resumoMapeado.toUpperCase();
+        const resumoUpper = normNome(resumoMapeado);
         // A7 é 100% NÃO CONTÁBIL: procura só nesses eventos (nome igual primeiro, depois parecido)
         const eventosA7 = tiposEventosSistema.filter(e => String(e.natureza_do_evento || '').toUpperCase().includes('NAO') && e.tipo_evento === 'PROVENTO');
-        let eventoEncontrado = eventosA7.find(e => String(e.descricao_do_evento || '').trim().toUpperCase() === resumoUpper) || eventosA7.find(e => {
-          const descEv = String(e.descricao_do_evento || '').trim().toUpperCase();
+        let eventoEncontrado = eventosA7.find(e => normNome(e.descricao_do_evento) === resumoUpper) || eventosA7.find(e => {
+          const descEv = normNome(e.descricao_do_evento);
           return descEv.includes(resumoUpper) || resumoUpper.includes(descEv) || 
                  (resumoUpper.includes('SIDNEY') && descEv.includes('SIDNEY')) ||
                  (resumoUpper.includes('SIMILAR') && descEv.includes('SM E GN')) ||
@@ -250,7 +314,7 @@
                  (resumoUpper.includes('PERFUMARIA') && descEv.includes('PERFUMARIA'));
         });
 
-        dadosProcessados.push({
+        (ignorar ? ignorados : dadosProcessados).push({
           id: Math.random().toString(36).substr(2, 9),
           usuario_alpha7: usuario,
           funcionario_id: funcEncontrado ? funcEncontrado.id : '',
@@ -274,6 +338,7 @@
       }
 
       document.getElementById('secaoConferencia').classList.remove('hidden');
+      renderIgnorados();
       document.getElementById('statTotal').innerText = dadosProcessados.length;
 
       const totalVal = dadosProcessados.reduce((acc, curr) => acc + curr.valor, 0);
@@ -310,7 +375,8 @@
           </td>
           <td class="p-3 text-right text-emerald-400 font-mono font-bold">R$ ${item.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
           <td class="p-3 text-center">
-            <button onclick="removerItem(${idx})" class="text-slate-500 hover:text-rose-400 font-bold">✕</button>
+            <button onclick="removerItem(${idx})" title="tirar só desta importação" class="text-slate-500 hover:text-rose-400 font-bold">✕</button>
+            <button data-u="${esc(item.usuario_alpha7)}" onclick="naoImportarMais(this.dataset.u)" title="não importar mais este usuário (sem comissão)" class="ml-1 text-slate-500 hover:text-amber-300 cursor-pointer">🚫</button>
           </td>
         </tr>
       `).join('');

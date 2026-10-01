@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>.tab-sem-quebra td, .tab-sem-quebra th { white-space: nowrap; } @keyframes pulsoLento { 0%,100% { opacity: 1 } 50% { opacity: .85 } } .animate-pulse-lento { animation: pulsoLento 2.5s ease-in-out infinite; }</style>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
 
@@ -17,7 +18,7 @@
     }
   </script>
 
-  <div class="max-w-[1400px] mx-auto space-y-5">
+  <div class="max-w-[1720px] mx-auto space-y-5">
     
     <!-- TOPO / HEADER EXECUTIVO -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm gap-4">
@@ -40,6 +41,9 @@
         </button>
       </div>
     </div>
+
+    <!-- APROVAÇÕES URGENTES (freelance / hora extra / férias perto da data) -->
+    <div id="boxUrgentes" class="hidden"></div>
 
     <!-- PAINEL DE COMANDO CENTRAL (Layout em 3 Colunas) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -232,7 +236,8 @@
 
           <!-- Radiografia de Comissões -->
           <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
-            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Detalhamento de Comissões</span>
+            <div class="flex justify-between items-baseline"><span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Detalhamento de Comissões</span>
+              <span class="text-[10px] text-slate-400">total <b id="comTotal" class="font-mono text-slate-700">R$ 0,00</b></span></div>
             <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
               <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
                 <span class="text-[10px] text-slate-500 block">Perfumaria</span>
@@ -617,6 +622,55 @@
       // Chamada da nova função de inteligência para Freelancers!
       await carregarPendenciasFreelance();
       await carregarAlertaPagamentos();
+      carregarUrgentes();
+    }
+
+    // ---------------------------------------------------------------------
+    // APROVAÇÕES URGENTES: o que vence primeiro aparece em vermelho no topo
+    //   freelance / HE: crítico até 2 dias (ou data já passou) · atenção 3 a 7 dias · futuro > 7 dias
+    //   férias: crítico até 15 dias para começar · atenção até 30 dias
+    // ---------------------------------------------------------------------
+    async function carregarUrgentes() {
+      if (!perfilIndex) { try { const { data } = await _supabase.rpc('fn_meu_usuario'); perfilIndex = data ? data.perfil : null; } catch (e) { } }
+      if (!['RH', 'GESTOR'].includes(perfilIndex)) return;
+      try {
+        const hojeIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        const dias = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(hojeIso + 'T12:00:00')) / 86400000);
+        const [rf, rv, ra] = await Promise.all([
+          _supabase.from('freelance_solicitacoes').select('id, funcionario_id, data_servico, hora_inicio, hora_fim, status, tipo_solicitacao, loja_solicitante')
+            .in('status', ['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH']).order('data_servico'),
+          _supabase.from('ferias_solicitacoes').select('id, funcionario_id, data_inicio, dias, status').in('status', ['SOLICITADA', 'PRE_APROVADA', 'CONTABILIDADE', 'CALCULADA']).order('data_inicio'),
+          _supabase.from('abatimentos').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE_LIDER')
+        ]);
+        const fl = rf.data || [], fe = rv.data || [];
+        const ids = [...new Set([...fl, ...fe].map(x => x.funcionario_id))];
+        const nomes = {};
+        if (ids.length) { const { data: fs } = await _supabase.from('funcionarios').select('id, nome_registro').in('id', ids); (fs || []).forEach(x => nomes[x.id] = x.nome_registro); }
+        const curto = n => { const p = String(n || '').split(' '); return p.length > 1 ? p[0] + ' ' + p[p.length - 1] : p[0]; };
+        const etapa = s => s === 'PENDENTE_SUPERVISOR' ? 'supervisor' : 'RH';
+        const flCrit = fl.filter(x => dias(x.data_servico) <= 2), flAten = fl.filter(x => dias(x.data_servico) >= 3 && dias(x.data_servico) <= 7), flFut = fl.filter(x => dias(x.data_servico) > 7);
+        const feCrit = fe.filter(x => dias(x.data_inicio) <= 15), feAten = fe.filter(x => dias(x.data_inicio) > 15 && dias(x.data_inicio) <= 30);
+        const box = document.getElementById('boxUrgentes');
+        if (!flCrit.length && !flAten.length && !feCrit.length && !feAten.length && !flFut.length && !ra.count) { box.classList.add('hidden'); return; }
+        const quando = d => { const n = dias(d); return n < 0 ? `<b class="text-white bg-rose-700 px-1 rounded">JÁ PASSOU (${-n}d)</b>` : n === 0 ? '<b>HOJE</b>' : n === 1 ? '<b>AMANHÃ</b>' : `em ${n} dias`; };
+        const dbr = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+        const itemFl = x => `<li>• ${x.tipo_solicitacao === 'HORA_EXTRA' ? '⏰ HE' : '🧑‍🤝‍🧑 Freela'} <b>${curto(nomes[x.funcionario_id])}</b> · ${x.loja_solicitante || ''} · ${dbr(x.data_servico)} (${quando(x.data_servico)}) · aguardando ${etapa(x.status)}</li>`;
+        const itemFe = x => `<li>• 🏖 <b>${curto(nomes[x.funcionario_id])}</b> · começa ${dbr(x.data_inicio)} (${quando(x.data_inicio)}) · ${x.dias}d · ${x.status.replace('_', ' ').toLowerCase()}</li>`;
+        const crit = [...flCrit.map(itemFl), ...feCrit.map(itemFe)], aten = [...flAten.map(itemFl), ...feAten.map(itemFe)];
+        box.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
+        box.innerHTML = `
+          <div class="${crit.length ? 'bg-rose-600 text-white border-rose-700 animate-pulse-lento' : 'bg-emerald-50 text-emerald-800 border-emerald-200'} border-2 rounded-xl p-3 text-xs">
+            <div class="font-black uppercase tracking-wide">🚨 Crítico: decidir agora (${crit.length})</div>
+            ${crit.length ? `<ul class="mt-1 space-y-0.5 max-h-40 overflow-y-auto">${crit.join('')}</ul>` : '<div class="mt-1">Nada perto da data aguardando aprovação.</div>'}
+            <div class="mt-2 flex gap-2 flex-wrap"><a href="rh_aprovacao_freelance.html" class="bg-white/90 text-rose-800 font-bold px-2 py-1 rounded">Aprovar freelance / HE →</a><a href="ferias.html" class="bg-white/90 text-rose-800 font-bold px-2 py-1 rounded">Férias →</a></div>
+          </div>
+          <div class="bg-amber-50 border-2 border-amber-300 text-amber-900 rounded-xl p-3 text-xs">
+            <div class="font-black uppercase tracking-wide">⚠ Atenção: próximos dias (${aten.length})</div>
+            ${aten.length ? `<ul class="mt-1 space-y-0.5 max-h-40 overflow-y-auto">${aten.join('')}</ul>` : '<div class="mt-1">Nada para os próximos 7 dias (freelance/HE) ou 30 dias (férias).</div>'}
+            ${flFut.length ? `<div class="mt-2 text-[11px]">⏳ ${flFut.length} freelance/HE para daqui a mais de 7 dias: <b>aprove mais perto da data</b> (se a pessoa não vier, a aprovação precisa ser estornada).</div>` : ''}
+            ${ra.count ? `<div class="mt-1 text-[11px]">💸 ${ra.count} abatimento(s) aguardando o líder da loja. <a href="abatimentos.html" class="underline font-bold">ver</a></div>` : ''}
+          </div>`;
+      } catch (err) { console.error('Urgentes:', err); }
     }
 
     async function carregarAlertaPagamentos() {
@@ -799,6 +853,7 @@
         document.getElementById('comVit').innerText = 'R$ ' + cVit.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('comFix').innerText = 'R$ ' + cFix.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('comSid').innerText = 'R$ ' + cSid.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        document.getElementById('comTotal').innerText = 'R$ ' + (cPerf + cSim + cVit + cFix + cSid).toLocaleString('pt-BR', {minimumFractionDigits: 2});
 
         const containerEmp = document.getElementById('listaEmpresasResumo');
         const listaEmpArr = Object.values(resumoEmpresas);
@@ -848,7 +903,7 @@
                          + (grpOutras.length ? grpOutras.map(linhaEmp).join('') + linhaSub('Subtotal demais empresas', subOutras) : '');
 
           containerEmp.innerHTML = `
-            <table class="w-full text-left border-collapse">
+            <table class="w-full text-left border-collapse tab-sem-quebra">
               <thead>
                 <tr class="text-[10px] text-slate-400 uppercase border-b border-slate-200">
                   <th class="py-1.5 px-2 font-semibold w-44">Unidade / Loja</th>

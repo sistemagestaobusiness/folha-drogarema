@@ -177,7 +177,7 @@
         box.innerHTML = `<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">${filtrando ? 'Nenhuma solicitação com esse filtro.' : aba === 'pend' ? '🎉 Nenhuma solicitação aguardando.' : 'Nenhuma decisão no período.'}</div>`;
         return;
       }
-      box.innerHTML = lista.map(r => card(r)).join('');
+      box.innerHTML = (aba === 'pend' ? faixaUrgencia(lista) : '') + lista.map(r => card(r)).join('');
     }
 
     function card(r) {
@@ -199,12 +199,14 @@
               <div class="flex items-center gap-2">
                 <span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(r.loja_solicitante || 'SEM LOJA')}</span>
                 <span class="text-[10px] text-slate-400">por ${esc(r.solicitante_email || '—')}</span>
+                ${seloUrgencia(r)}
               </div>
               <div class="text-sm font-bold text-slate-900">${r.tipo_solicitacao === 'HORA_EXTRA' ? '<span class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">⏰ HORA EXTRA</span>' : '<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">🧑‍🤝‍🧑 FREELANCE</span>'}${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span></div>
               <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtHoras(r.horas_trabalhadas)}</b> · pagamento ${esc(r.forma_pagamento)}</div>
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? `<span class="ml-1 text-[11px]">faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b></span>` : ''}</div>
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">"${esc(r.observacao_lider)}"</div>` : ''}
+              ${blocoContestacao(r)}
               ${escalaInfo(r)}
               ${aba === 'hist' && r.supervisor_obs ? `<div class="text-[11px] bg-slate-50 border-l-2 border-slate-300 pl-2">Obs.: ${esc(r.supervisor_obs)}</div>` : ''}
             </div>
@@ -223,7 +225,36 @@
     }
     function escalaInfo(r) { try { return EC ? EC.htmlPedido(r, nome) : ''; } catch (e) { return ''; } }
 
+    // urgência pela data do serviço: crítico até 2 dias (ou já passou) · atenção 3 a 7 · futuro > 7
+    const DIAS_CRITICO = 2, DIAS_ATENCAO = 7;
+    const hojeIsoU = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const diasAte = iso => Math.round((new Date(String(iso).slice(0, 10) + 'T12:00:00') - new Date(hojeIsoU() + 'T12:00:00')) / 86400000);
+    function seloUrgencia(r) {
+      if (!['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH'].includes(r.status)) return '';
+      const n = diasAte(r.data_servico);
+      if (n < 0) return `<span class="bg-rose-700 text-white px-2 py-0.5 rounded text-[10px] font-black">⛔ DATA JÁ PASSOU (${-n}d)</span>`;
+      if (n <= DIAS_CRITICO) return `<span class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-black animate-pulse">🚨 CRÍTICO · ${n === 0 ? 'HOJE' : n === 1 ? 'AMANHÃ' : 'em ' + n + ' dias'}</span>`;
+      if (n <= DIAS_ATENCAO) return `<span class="bg-amber-400 text-amber-950 px-2 py-0.5 rounded text-[10px] font-black">⚠ em ${n} dias</span>`;
+      return `<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">⏳ em ${n} dias · aprove mais perto da data</span>`;
+    }
+    function faixaUrgencia(lista) {
+      const pend = lista.filter(r => ['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH'].includes(r.status));
+      const crit = pend.filter(r => diasAte(r.data_servico) <= DIAS_CRITICO).length, aten = pend.filter(r => { const n = diasAte(r.data_servico); return n > DIAS_CRITICO && n <= DIAS_ATENCAO; }).length;
+      const fut = pend.length - crit - aten;
+      if (!pend.length) return '';
+      return `<div class="${crit ? 'bg-rose-600 text-white border-rose-700' : 'bg-amber-50 text-amber-900 border-amber-300'} border-2 rounded-xl p-3 text-xs font-bold flex flex-wrap gap-x-4 gap-y-1">
+        <span>🚨 Crítico (até ${DIAS_CRITICO} dias ou atrasado): ${crit}</span><span>⚠ Próximos ${DIAS_ATENCAO} dias: ${aten}</span><span class="${crit ? 'text-rose-100' : 'text-slate-500'}">⏳ Mais de ${DIAS_ATENCAO} dias: ${fut} — aprove mais perto da data; se a pessoa não vier, o RH precisa estornar.</span></div>`;
+    }
+    function confirmaAntecedencia(r) {
+      const n = diasAte(r.data_servico);
+      if (n <= DIAS_ATENCAO) return true;
+      return confirm(`Este ${r.tipo_solicitacao === 'HORA_EXTRA' ? 'pedido de hora extra' : 'freelance'} é para daqui a ${n} dias (${String(r.data_servico).split('-').reverse().join('/')}).\n\nRecomendação: aprovar até ${DIAS_ATENCAO} dias antes, para evitar estorno se a pessoa não vier.\n\nAprovar mesmo assim?`);
+    }
+    const blocoContestacao = r => r.contestacao ? `<div class="text-[11px] bg-amber-50 border-l-2 border-amber-400 pl-2 py-1 text-amber-900"><b>📣 Contestação do líder${r.contestacoes > 1 ? ' (' + r.contestacoes + 'ª)' : ''}:</b> ${esc(r.contestacao)}${Array.isArray(r.historico) ? (r.historico.filter(h => h.acao === 'RECUSADA').slice(-1).map(h => `<div class="text-[10px] text-slate-500">recusa anterior (${esc((h.etapa || '').toLowerCase())}): ${esc(h.motivo || '')}</div>`)[0] || '') : ''}</div>` : '';
+
     function abrirDecisao(id, aprovar) {
+      const reg = dadosCarregados.find(x => x.id === id);
+      if (aprovar && reg && !confirmaAntecedencia(reg)) return;
       decisao = { id, aprovar };
       const forcado = perfil !== 'SUPERVISOR';
       document.getElementById('modalTitulo').innerText = aprovar ? 'APROVAR E ENVIAR AO RH' : 'RECUSAR SOLICITAÇÃO';
