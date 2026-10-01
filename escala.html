@@ -401,6 +401,9 @@
       const borda = r.origem === 'DIA' ? 'ring-2 ring-slate-700 ring-inset' : '';
       let txt = t.cod, cls = t.cls;
       if (r.tipo === 'TRABALHO') { txt = curto(r.entrada); cls = corTurno(r.entrada); if (r.veioDe) txt = '↘' + txt; }
+      // feriado: dispensado pela loja (FD) e folga compensatória (FC) aparecem diferentes da folga comum
+      if (r.tipo === 'FOLGA' && /^DISPENSADO NO FERIADO/i.test(r.obs || '')) { txt = 'FD'; cls = 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-300'; }
+      else if (r.tipo === 'FOLGA' && /^Folga compensat/i.test(r.obs || '')) { txt = 'FC'; cls = 'bg-fuchsia-50 text-fuchsia-700 border border-dashed border-fuchsia-300'; }
       const dica = `${p.f.nome_registro} · ${DSEM[dow(iso)]} ${dbr(iso)}\n${r.tipo === 'TRABALHO' ? r.entrada + ' às ' + r.saida : t.txt}${r.veioDe ? '\nveio da ' + nomeLoja(r.veioDe) : ''}${r.obs ? '\n' + r.obs : ''}`;
       const clic = p.extra ? '' : `onclick="abrirEdicao('${p.f.id}','${iso}')"`;
       return `<div class="cel ${cls} ${borda} ${clic ? 'cursor-pointer hover:opacity-80' : ''}" title="${esc(dica)}" ${clic}>${esc(txt)}</div>`;
@@ -458,6 +461,7 @@
         <span class="inline-flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#fae8ff;border:2px solid #c026d3"></span><b>Feriado</b></span>
         <span class="inline-flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#f0f9ff;border:1px solid #7dd3fc"></span>Sábado</span>
         <span class="inline-flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="background:#fff1f2;border:1px solid #fb7185"></span>Domingo</span>
+        <span><b class="text-fuchsia-800">FD</b> dispensado no feriado · <b class="text-fuchsia-700">FC</b> folga compensatória</span>
         ${ferMes.length ? `<span class="font-bold text-fuchsia-800">🎉 ${ferMes.map(d => dbr(d).slice(0, 5) + ' ' + esc(feriadoDe(d))).join(' · ')} — quem trabalhar: folga compensatória ou hora extra 100% (clique no dia)</span>` : ''}</div>`;
       $('gradeMes').innerHTML = legenda + (av.length ? `<div class="noprint m-2 bg-amber-50 border border-amber-300 text-amber-900 rounded-lg p-2 text-[11px]"><b>⚠ Domingos seguidos:</b> ${av.map(a => `${esc(primeiroNome(a.f.nome_registro))} trabalha ${a.dias.map(d => dbr(d).slice(0, 5)).join(', ')}`).join(' · ')}. A regra do comércio pede ao menos 1 domingo de folga a cada 3 semanas.</div>` : '') + tabelaMes;
     }
@@ -549,11 +553,18 @@
         bx.innerHTML = `<div class="bg-fuchsia-50 border border-fuchsia-300 rounded-lg p-2.5 space-y-2">
           <div class="font-black text-fuchsia-900">🎉 FERIADO: ${esc(fer)}</div>
           ${farma ? '<div class="text-[11px] text-slate-600">Farmacêutico: recebe adicional fixo mensal, não gera folga compensatória nem hora extra.</div>'
-          : r.tipo !== 'TRABALHO' ? '<div class="text-[11px] text-slate-600">Pela escala, a pessoa não trabalha neste feriado.</div>'
+          : r.tipo !== 'TRABALHO' ? (/^DISPENSADO NO FERIADO/i.test(r.obs || '')
+              ? `<div class="text-[11px] text-fuchsia-900"><b>🏠 Dispensado pela loja</b> (sem hora extra e sem folga compensatória).<div class="text-slate-600">${esc(String(r.obs).replace(/^DISPENSADO NO FERIADO:\s*/i, ''))}</div><div class="text-[10px] text-slate-500 mt-1">Para desfazer: escolha "Padrão" e salve.</div></div>`
+              : '<div class="text-[11px] text-slate-600">Pela escala, a pessoa não trabalha neste feriado.</div>')
           : `<div class="text-[11px] text-slate-700">Trabalha ${r.entrada}–${r.saida}. Escolha a compensação:</div>
              <div class="flex items-end gap-1.5"><div class="flex-1"><label class="lbl">Folga compensatória em</label><input type="date" id="fComp" min="${addDias(iso, 1)}" class="inp font-mono"></div>
                <button onclick="folgaCompensatoria()" class="px-2.5 py-2 bg-slate-800 text-white rounded-lg font-bold cursor-pointer">📅 Dar folga</button></div>
              <button onclick="pedirPagamentoFeriado()" class="w-full px-2.5 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white rounded-lg font-bold cursor-pointer">💰 Pagar hora extra 100% (vai para supervisor e RH)</button>
+             <div class="border-t border-fuchsia-200 pt-2 space-y-1">
+               <label class="lbl">Ou: a loja dispensou (não vem trabalhar no feriado)</label>
+               <div class="flex items-end gap-1.5"><input id="fDisp" class="inp flex-1" placeholder="justificativa (obrigatória) ex.: movimento baixo, combinado com o líder">
+               <button onclick="dispensarFeriado()" class="px-2.5 py-2 bg-white border border-fuchsia-400 text-fuchsia-800 hover:bg-fuchsia-50 rounded-lg font-bold cursor-pointer whitespace-nowrap">🏠 Não vai trabalhar</button></div>
+               <div class="text-[10px] text-slate-500">Fica como folga do feriado (FD) na escala: não gera hora extra nem folga compensatória.</div></div>
              <div class="text-[10px] text-slate-500">${/^LOJA\s*0?7\b/i.test(nomeLoja(f.loja_id)) ? 'LOJA 07: evento HORA EXTRA 100% contábil.' : 'Evento 2029 HORA EXTRA 100% (não contábil), na folha do 5º dia útil.'}</div>`}</div>`;
       }
       escolherTipoDia(tipoDia);
@@ -587,6 +598,16 @@
       if (error) return alert('Erro: ' + error.message);
       fechar('mDia'); await garantirPeriodo(true); renderizar();
       alert('Folga compensatória marcada em ' + dbr(d) + '.');
+    }
+    // a loja dispensou a pessoa no feriado: vira folga do dia, com justificativa (sem HE e sem folga compensatória)
+    async function dispensarFeriado() {
+      const { f, iso } = editando, just = ($('fDisp').value || '').trim();
+      if (just.length < 5) { $('fDisp').focus(); return alert('Escreva a justificativa (mínimo 5 letras).'); }
+      if (!confirm(`${f.nome_registro} NÃO vai trabalhar no feriado ${dbr(iso)} (${feriadoDe(iso)}).\n\nJustificativa: ${just}\n\nNão gera hora extra nem folga compensatória. Confirmar?`)) return;
+      const { error } = await _supabase.rpc('fn_escala_dia', { p_funcionario: f.id, p_datas: [iso], p_tipo: 'FOLGA', p_entrada: null, p_saida: null, p_loja: null,
+        p_obs: `DISPENSADO NO FERIADO: ${just}` });
+      if (error) return alert('Erro: ' + error.message);
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
     }
     async function pedirPagamentoFeriado() {
       const { f, iso, r } = editando;
