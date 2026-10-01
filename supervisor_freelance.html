@@ -210,6 +210,7 @@
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">"${esc(r.observacao_lider)}"</div>` : ''}
               ${blocoContestacao(r)}
               ${escalaInfo(r)}
+              ${r.status === 'CANCELADA' ? `<div class="text-[11px] bg-rose-50 border-l-2 border-rose-400 pl-2 text-rose-800"><b>🚫 Cancelada${r.cancelado_por ? ' por ' + esc(r.cancelado_por) : ''}${r.cancelado_em ? ' em ' + new Date(r.cancelado_em).toLocaleString('pt-BR') : ''}:</b> ${esc(r.cancelado_motivo || 'sem motivo informado')}</div>` : ''}
               ${aba === 'hist' && r.supervisor_obs ? `<div class="text-[11px] bg-slate-50 border-l-2 border-slate-300 pl-2">Obs.: ${esc(r.supervisor_obs)}</div>` : ''}
             </div>
             ${acoes}

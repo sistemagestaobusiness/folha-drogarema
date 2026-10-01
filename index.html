@@ -81,7 +81,7 @@
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-sky-50 text-sky-800">💵 Financeiro</h3>
           <div class="flex flex-col p-1.5 text-[11px] font-medium">
-            <a href="financeiro.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">💳</span> <span>Pagamentos fora da folha</span></a>
+            <a href="financeiro.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">💳</span> <span>Pagamentos (Financeiro)</span></a>
           </div>
         </div>
 
@@ -152,7 +152,7 @@
               <span class="text-lg">📊</span>
               <div class="text-left">
                 <div class="tracking-wide">RESUMO DA COMPETÊNCIA</div>
-                <div class="text-[10px] sm:text-[11px] text-blue-100 font-normal">Visualizar relatório da folha</div>
+                <div id="subResumoComp" class="text-[10px] sm:text-[11px] text-blue-100 font-normal">Conferência final · enviar ao Financeiro</div>
               </div>
             </a>
           </div>
@@ -634,6 +634,7 @@
     async function carregarUrgentes() {
       if (!perfilIndex) { try { const { data } = await _supabase.rpc('fn_meu_usuario'); perfilIndex = data ? data.perfil : null; } catch (e) { } }
       if (!['RH', 'GESTOR'].includes(perfilIndex)) return;
+      carregarStatusEnvio();
       try {
         const hojeIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
         const dias = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(hojeIso + 'T12:00:00')) / 86400000);
@@ -674,6 +675,21 @@
             ${rc.count ? `<div class="mt-1 text-[11px] font-bold">👤 ${rc.count} pedido(s) de cadastro de pessoa nova aguardando o RH. <a href="cadastro_solicitacoes.html" class="underline">cadastrar</a></div>` : ''}
           </div>`;
       } catch (err) { console.error('Urgentes:', err); }
+    }
+
+    // status do envio do 5º dia útil no botão "Resumo da competência"
+    async function carregarStatusEnvio() {
+      try {
+        const MESES = { JANEIRO: '01', FEVEREIRO: '02', 'MARÇO': '03', MARCO: '03', ABRIL: '04', MAIO: '05', JUNHO: '06', JULHO: '07', AGOSTO: '08', SETEMBRO: '09', OUTUBRO: '10', NOVEMBRO: '11', DEZEMBRO: '12' };
+        const [m, a] = String(localStorage.getItem('competencia_ativa') || '').split('/').map(s => s.trim().toUpperCase());
+        if (!MESES[m] || !a) return;
+        const comp = MESES[m] + '/' + a;
+        const { data, error } = await _supabase.from('folha_envios').select('versao, data_pagamento').eq('competencia', comp).order('versao', { ascending: false }).limit(1);
+        if (error) return;
+        const e = (data || [])[0], el = document.getElementById('subResumoComp');
+        el.innerHTML = e ? `✅ ${comp} enviada ao Financeiro · pagar ${String(e.data_pagamento).split('-').reverse().join('/').slice(0, 5)}`
+                         : `<b class="bg-amber-300 text-amber-950 px-1 rounded">⏳ ${comp} não enviada ao Financeiro</b>`;
+      } catch (e) { }
     }
 
     async function carregarAlertaPagamentos() {

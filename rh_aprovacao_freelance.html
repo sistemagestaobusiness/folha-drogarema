@@ -297,6 +297,7 @@
         </div>`;
       const sup = r.supervisor_em ? `<div class="text-[11px]">Supervisor: <b>${r.status === 'REJEITADA' && !r.rh_em ? 'recusou' : 'aprovou'}</b> — ${esc(r.supervisor_por || '')}${r.supervisor_forcado ? ' <b class="text-amber-700">(no lugar do supervisor)</b>' : ''} em ${new Date(r.supervisor_em).toLocaleString('pt-BR')}${r.supervisor_obs ? ' · "' + esc(r.supervisor_obs) + '"' : ''}</div>` : '';
       const rh = r.rh_em ? `<div class="text-[11px]">RH: ${esc(r.rh_por || '')} em ${new Date(r.rh_em).toLocaleString('pt-BR')}${r.observacao_rh ? ' · "' + esc(r.observacao_rh) + '"' : ''}</div>` : '';
+      const canc = r.status === 'CANCELADA' ? `<div class="text-[11px] bg-rose-50 border-l-2 border-rose-400 pl-2 text-rose-800"><b>🚫 Cancelada${r.cancelado_por ? ' por ' + esc(r.cancelado_por) : ''}${r.cancelado_em ? ' em ' + new Date(r.cancelado_em).toLocaleString('pt-BR') : ''}:</b> ${esc(r.cancelado_motivo || 'sem motivo informado')}</div>` : '';
       const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
       return `
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
@@ -317,7 +318,7 @@
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">Líder: "${esc(r.observacao_lider)}"</div>` : ''}
               ${blocoContestacao(r)}
               ${escalaInfo(r)}
-              ${sup}${rh}${fin}
+              ${sup}${rh}${canc}${fin}
             </div>
             ${acoes}
           </div>

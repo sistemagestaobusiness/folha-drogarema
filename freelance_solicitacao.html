@@ -624,8 +624,10 @@
 
     const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
     async function cancelarSolicitacao(id) {
-      if (!confirm('Cancelar esta solicitação?')) return;
-      const { error } = await _supabase.rpc('fn_freelance_cancelar', { p_id: id });
+      const motivo = (prompt('Motivo do cancelamento (obrigatório):\nEx.: funcionário conseguiu cobrir, pessoa não pode vir, lançado errado...') || '').trim();
+      if (!motivo) return;
+      if (motivo.length < 5) return alert('Escreva o motivo com pelo menos 5 letras.');
+      const { error } = await _supabase.rpc('fn_freelance_cancelar', { p_id: id, p_motivo: motivo });
       if (error) alert(error.message); else carregarHistorico();
     }
 
@@ -657,6 +659,7 @@
         const st = STATUS[r.status] || { txt: r.status, cls: 'bg-slate-100' };
         const tp = TIPOS[r.tipo_solicitacao] || TIPOS.FREELANCE;
         const retorno = [
+          r.status === 'CANCELADA' ? `<div class="text-rose-800"><b>🚫 Cancelada${r.cancelado_por ? ' por ' + esc(r.cancelado_por) : ''}${r.cancelado_em ? ' em ' + dataHora(r.cancelado_em) : ''}:</b> ${esc(r.cancelado_motivo || 'sem motivo informado')}</div>` : '',
           r.supervisor_obs ? `<div><b>Supervisor${r.supervisor_forcado ? ' (decidido pelo RH)' : ''}:</b> ${esc(r.supervisor_obs)}</div>` : '',
           r.observacao_rh ? `<div><b>RH:</b> ${esc(r.observacao_rh)}</div>` : ''
         ].join('');

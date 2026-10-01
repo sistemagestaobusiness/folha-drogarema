@@ -13,8 +13,8 @@
 
     <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-        <h1 class="text-xl font-bold text-slate-900 tracking-wide">PAGAMENTOS FORA DA FOLHA</h1>
-        <p id="subtitulo" class="text-xs text-slate-500">Tudo o que é pago fora do 5º dia útil · origem: tela de lançamentos (eventos marcados) ou aprovação de freelance / hora extra</p>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">PAGAMENTOS A FUNCIONÁRIOS</h1>
+        <p id="subtitulo" class="text-xs text-slate-500">Pagamentos de funcionários · origem: salário do 5º dia útil (enviado pelo RH após a conferência final), tela de lançamentos (eventos marcados) ou aprovação de freelance / hora extra</p>
       </div>
       <div class="flex items-center gap-3">
         <div class="text-right">
@@ -135,7 +135,7 @@
         <div id="rsBoxValor"><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor (corrigir)</label><input type="number" step="0.01" id="rsValor" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
         <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Nova data de pagamento</label><input type="date" id="rsVenc" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
       </div>
-      <p id="rsDica" class="hidden text-[11px] bg-sky-50 border border-sky-200 text-sky-800 rounded p-2">Este pagamento veio da <b>tela de lançamentos</b>. Valor errado ou cancelamento: corrija ou exclua o lançamento lá (a fila se atualiza sozinha). Aqui só é possível reenviar ao Financeiro, com nova data se precisar.</p>
+      <p id="rsDica" class="hidden text-[11px] bg-sky-50 border border-sky-200 text-sky-800 rounded p-2">Este pagamento veio da <b>tela de lançamentos</b>. Valor errado ou cancelamento: corrija ou exclua o lançamento lá (a fila se atualiza sozinha). Aqui só é possível reenviar ao Financeiro, com nova data se precisar. <b>Salário do 5º dia útil:</b> corrija em Lançamentos e use "Reenviar ajustes" no Resumo da folha.</p>
       <textarea id="rsObs" rows="2" placeholder="O que foi feito / motivo (obrigatório)" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea>
       <div id="rsBotoes" class="flex gap-2"></div>
     </div>
@@ -162,7 +162,8 @@
       DECIMO_TERCEIRO: { txt: '13º salário', icone: '🎄', cls: 'bg-purple-100 text-purple-800' },
       RESCISAO: { txt: 'Rescisão', icone: '📄', cls: 'bg-rose-100 text-rose-800' },
       REEMBOLSO: { txt: 'Reembolso', icone: '↩', cls: 'bg-lime-100 text-lime-800' },
-      OUTROS: { txt: 'Outros', icone: '•', cls: 'bg-slate-200 text-slate-700' }
+      OUTROS: { txt: 'Outros', icone: '•', cls: 'bg-slate-200 text-slate-700' },
+      QUINTO_DIA: { txt: 'Salário 5º dia útil', icone: '🗓', cls: 'bg-emerald-600 text-white' }
     };
     let contasEmpresas = [];
     let perfil = null, aba = 'PENDENTE', itens = [], funcs = {}, empresas = [], filtroTipo = '', selecionados = new Set(), itemProblema = null, atual = null;
@@ -200,6 +201,7 @@
       return (partes.length ? partes.join('<br>') : '<span class="text-amber-700 font-bold">⚠ sem dados no cadastro</span>') + cpf;
     }
     function origemHtml(i) {
+      if (i.origem === 'FOLHA') return `🗓 Folha ${esc(i.competencia || '')} conferida e enviada pelo RH${i.descricao ? ' · ' + esc(i.descricao) : ''}`;
       return i.origem === 'LANCAMENTO'
         ? `📋 Lançamento RH ${esc(i.competencia || '')} · ${esc(i.rubrica || '')}${i.descricao ? ' · ' + esc(i.descricao) : ''}`
         : `🧑‍🤝‍🧑 ${esc(i.descricao || '')}`;
@@ -339,7 +341,8 @@
     function celulaTipo(i) {
       const tp = TIPOS[i.tipo] || { txt: i.tipo, cls: 'bg-slate-100' };
       return `<td class="p-3"><span class="${tp.cls} px-2 py-1 rounded text-[11px] font-black uppercase whitespace-nowrap">${tp.icone || ''} ${tp.txt}</span>
-        <div class="text-[9px] text-slate-500 mt-1">${i.origem === 'LANCAMENTO' ? 'via lançamento do RH' : 'via solicitação aprovada'}</div></td>`;
+        ${i.tipo === 'QUINTO_DIA' ? `<div class="mt-1"><span class="${i.meio === 'DINHEIRO' ? 'bg-amber-100 text-amber-900' : 'bg-indigo-100 text-indigo-800'} px-1.5 py-0.5 rounded text-[9px] font-black">${i.meio === 'DINHEIRO' ? '💵 EM DINHEIRO' : '🏦 BANCO / PIX'}</span></div>` : ''}
+        <div class="text-[9px] text-slate-500 mt-1">${i.origem === 'FOLHA' ? 'via conferência final do RH' : i.origem === 'LANCAMENTO' ? 'via lançamento do RH' : 'via solicitação aprovada'}</div></td>`;
     }
     function celulaFuncionario(i) {
       const f = funcs[i.funcionario_id] || {};
@@ -354,14 +357,14 @@
       const corV = i.vencimento < h ? 'text-rose-700 font-black' : i.vencimento <= lim ? 'text-amber-700 font-bold' : 'text-slate-700';
       const acoes = [
         podePagar() ? `<button onclick="abrirProblema('${i.id}')" class="text-[10px] px-2 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded font-bold cursor-pointer whitespace-nowrap">⚠ Problema</button>` : '',
-        podeResolver() ? `<button onclick="abrirResolver('${i.id}')" class="text-[10px] text-slate-500 hover:text-slate-800 underline cursor-pointer whitespace-nowrap">${i.origem === 'LANCAMENTO' ? 'mudar data' : 'corrigir / cancelar'}</button>` : ''
+        podeResolver() ? `<button onclick="abrirResolver('${i.id}')" class="text-[10px] text-slate-500 hover:text-slate-800 underline cursor-pointer whitespace-nowrap">${i.origem !== 'SOLICITACAO' ? 'mudar data' : 'corrigir / cancelar'}</button>` : ''
       ].filter(Boolean).join('<br>');
       return `<tr class="hover:bg-slate-50 ${selecionados.has(i.id) ? 'bg-emerald-50' : ''}">
         ${comSelecao ? `<td class="p-3"><input type="checkbox" ${selecionados.has(i.id) ? 'checked' : ''} onchange="marcar('${i.id}', this.checked)"></td>` : ''}
         <td class="p-3 font-mono text-sm ${corV}">${dbr(i.vencimento)}${i.vencimento < h ? '<div class="text-[9px]">VENCIDO</div>' : ''}<div class="text-[9px] text-slate-400 font-normal">solicitado ${dbr(i.criado_em)}</div></td>
         ${celulaTipo(i)}${celulaFuncionario(i)}
         <td class="p-3 text-[11px]">${empresaDe(f)}</td>
-        <td class="p-3 text-[11px]">${dadosBancarios(f)}</td>
+        <td class="p-3 text-[11px]">${i.meio === 'DINHEIRO' ? '<b class="text-amber-800">💵 Pagar em dinheiro (espécie)</b>' : dadosBancarios(f)}</td>
         <td class="p-3 text-right font-mono font-bold">${fmtR(i.valor)}</td>
         <td class="p-3 text-right space-y-1">${acoes}</td>
       </tr>`;
@@ -487,7 +490,7 @@
       const { data: p } = await _supabase.from('pagamentos_extras').select('*').eq('id', id).single();
       if (!p) return;
       atual = p;
-      const doLanc = p.origem === 'LANCAMENTO';
+      const doLanc = p.origem !== 'SOLICITACAO';   // lançamento e 5º dia útil: valor se corrige em Lançamentos (e reenvio da folha)
       document.getElementById('rsTitulo').innerText = p.status === 'PROBLEMA' ? 'RESOLVER PROBLEMA' : doLanc ? 'MUDAR DATA DE PAGAMENTO' : 'CORRIGIR / CANCELAR';
       document.getElementById('rsInfo').innerHTML = `<b>${esc(nome(p.funcionario_id))}</b> · ${(TIPOS[p.tipo] || {}).txt || p.tipo} · ${fmtR(p.valor)}${p.problema_desc && p.status === 'PROBLEMA' ? `<div class="text-rose-700 mt-1">Financeiro: ${esc(p.problema_desc)}</div>` : ''}`;
       document.getElementById('rsCampos').classList.remove('hidden');
@@ -504,7 +507,7 @@
     async function resolver(acao) {
       const { error } = await _supabase.rpc('fn_pagamento_resolver', {
         p_id: atual.id, p_acao: acao, p_obs: document.getElementById('rsObs').value.trim() || null,
-        p_valor: atual.origem === 'LANCAMENTO' ? null : (parseFloat(document.getElementById('rsValor').value) || null),
+        p_valor: atual.origem !== 'SOLICITACAO' ? null : (parseFloat(document.getElementById('rsValor').value) || null),
         p_vencimento: document.getElementById('rsVenc').value || null
       });
       if (error) return alert(error.message);

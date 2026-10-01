@@ -60,6 +60,8 @@
   </div>
 
   <div class="p-4 sm:p-6">
+    <!-- CONFERÊNCIA FINAL -> FINANCEIRO (5º dia útil) -->
+    <div id="barraEnvio" class="mb-3"></div>
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
       <div class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
         <table class="w-full text-left text-xs border-collapse">
@@ -101,6 +103,29 @@
       </div>
       <div class="p-4 bg-white border-t border-slate-200">
         <button onclick="copiarTexto('txtRelatorioDinheiro')" class="w-full py-3 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold text-sm rounded-lg border border-amber-300 transition cursor-pointer">Copiar Lista de Dinheiro Físico</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalEnvio" class="hidden fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div class="bg-emerald-700 p-4 flex justify-between items-center">
+        <h2 id="envTitulo" class="text-white font-bold text-lg">ENVIAR AO FINANCEIRO</h2>
+        <button onclick="fecharModal('modalEnvio')" class="text-emerald-100 hover:text-white font-bold text-xl cursor-pointer">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-3 text-xs">
+        <div id="envResumo"></div>
+        <label class="block"><span class="font-bold text-slate-600 uppercase text-[10px]">Data de pagamento (5º dia útil)</span>
+          <input type="date" id="envData" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono"></label>
+        <label id="envBoxMotivo" class="block"><span class="font-bold text-slate-600 uppercase text-[10px]">Motivo do reenvio (obrigatório)</span>
+          <textarea id="envMotivo" rows="2" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Ex.: ajuste de hora extra da Loja 03 após o envio"></textarea></label>
+        <label class="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 cursor-pointer">
+          <input type="checkbox" id="envCiente" class="mt-0.5">
+          <span>Conferi funcionários, valores, ajustes e a separação banco/dinheiro. <b>Pode pagar.</b></span></label>
+      </div>
+      <div class="p-4 border-t border-slate-200 flex gap-2">
+        <button onclick="fecharModal('modalEnvio')" class="px-4 py-2.5 bg-slate-100 rounded-lg font-bold text-xs cursor-pointer">Voltar</button>
+        <button id="envBtn" onclick="confirmarEnvio()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-sm cursor-pointer">ENVIAR</button>
       </div>
     </div>
   </div>
@@ -295,6 +320,7 @@
 
         renderizarCabecalho();
         renderizarTabelaCorpo();
+        carregarEnvio();
 
       } catch (err) {
         console.error(err);
@@ -533,6 +559,7 @@
       document.getElementById(`banco-${fId}`).innerHTML = formatarMoeda(valorBanco);
       inputElement.setAttribute('data-original', valorDigitado); // Atualiza o novo original na tela
       recalcularTotaisInterface();
+      if (meuPerfil !== null) renderEnvio();   // dinheiro mudou depois do envio? avisa no topo
 
       // 2. Gravação Crítica (Banco de Dados)
       try {
@@ -702,6 +729,137 @@
       }).catch(err => {
         alert("Erro ao copiar. Tente selecionar o texto e usar Ctrl+C.");
       });
+    }
+
+    // =================================================================
+    // CONFERÊNCIA FINAL -> FINANCEIRO (salário do 5º dia útil)
+    // Enquanto o RH não envia, o Financeiro não vê o pagamento. Depois do envio,
+    // ajustes são feitos em Lançamentos e reenviados aqui (com motivo): o que não
+    // foi pago é substituído; o que já foi pago vira complemento ou alerta.
+    // =================================================================
+    let meuPerfil = null, ultimoEnvio = null, pagosQuinto = [], difsEnvio = [];
+    const r2 = v => Math.round((parseFloat(v) || 0) * 100) / 100;
+    const escH = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbrH = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const podeEnviar = () => ['RH', 'GESTOR'].includes(meuPerfil);
+
+    function fotoAtual() {
+      return glob_dadosFunc.map(f => ({ funcionario_id: f.id, nome: f.nome,
+        liquido: r2((f.tot_cc - f.tot_cd) + (f.tot_ncc - f.tot_ncd)), dinheiro: r2(valoresDinheiro[f.id] || 0) }))
+        .filter(x => x.liquido !== 0 || x.dinheiro !== 0);
+    }
+    function compararComEnvio() {
+      if (!ultimoEnvio) return [];
+      const antes = new Map((ultimoEnvio.itens || []).map(i => [i.funcionario_id, i]));
+      const agora = new Map(fotoAtual().map(i => [i.funcionario_id, i]));
+      const ids = new Set([...antes.keys(), ...agora.keys()]);
+      const difs = [];
+      ids.forEach(id => {
+        const a = antes.get(id) || { liquido: 0, dinheiro: 0 }, n = agora.get(id) || { liquido: 0, dinheiro: 0 };
+        if (Math.abs(r2(a.liquido) - n.liquido) >= 0.01 || Math.abs(r2(a.dinheiro) - n.dinheiro) >= 0.01)
+          difs.push({ nome: n.nome || a.nome || (glob_dadosFunc.find(f => f.id === id) || {}).nome || '?', antes: r2(a.liquido), agora: n.liquido, dinA: r2(a.dinheiro), dinN: n.dinheiro });
+      });
+      return difs.sort((x, y) => x.nome.localeCompare(y.nome));
+    }
+
+    async function carregarEnvio() {
+      try {
+        if (meuPerfil === null) { const { data: u } = await _supabase.rpc('fn_meu_usuario'); meuPerfil = (Array.isArray(u) ? u[0] : u)?.perfil || ''; }
+        const [rE, rP] = await Promise.all([
+          _supabase.from('folha_envios').select('*').eq('competencia', competenciaRegra).order('versao', { ascending: false }).limit(1),
+          _supabase.from('pagamentos_extras').select('id, status, valor, funcionario_id').eq('tipo', 'QUINTO_DIA').eq('competencia', competenciaRegra)
+        ]);
+        if (rE.error) { document.getElementById('barraEnvio').innerHTML = `<div class="bg-slate-100 border border-slate-300 rounded-xl p-3 text-xs text-slate-600">Envio ao Financeiro ainda não instalado no banco (rode o SQL AN). ${escH(rE.error.message)}</div>`; return; }
+        ultimoEnvio = (rE.data || [])[0] || null;
+        pagosQuinto = (rP.data || []);
+      } catch (e) { return; }
+      renderEnvio();
+    }
+
+    function renderEnvio() {
+      const box = document.getElementById('barraEnvio');
+      const foto = fotoAtual();
+      const tot = foto.reduce((a, i) => a + i.liquido, 0);
+      if (!ultimoEnvio) {
+        box.innerHTML = `<div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div class="text-xs text-amber-900"><div class="font-black text-sm">⏳ Folha ${escH(competenciaRegra)} ainda NÃO foi enviada ao Financeiro</div>
+            Faça a conferência final aqui (funcionários, valores, ajustes e dinheiro/banco). Enquanto não enviar, <b>o Financeiro não vê o pagamento do 5º dia útil</b>.
+            <div class="mt-1 font-mono">${foto.length} funcionário(s) · líquido ${formatarMoeda(tot)}</div></div>
+          ${podeEnviar() ? `<button onclick="abrirEnvio()" class="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs cursor-pointer whitespace-nowrap shadow">✅ CONFERÊNCIA FINALIZADA · ENVIAR AO FINANCEIRO</button>` : '<span class="text-[11px] text-amber-800">Somente RH ou Gestão enviam.</span>'}
+        </div>`;
+        return;
+      }
+      difsEnvio = compararComEnvio();
+      const abertos = pagosQuinto.filter(p => ['PENDENTE', 'PROBLEMA'].includes(p.status)).length;
+      const pagos = pagosQuinto.filter(p => p.status === 'PAGO').length;
+      const probs = pagosQuinto.filter(p => p.status === 'PROBLEMA').length;
+      const alertas = (ultimoEnvio.alertas || []);
+      const cab = `✅ Enviada ao Financeiro${ultimoEnvio.versao > 1 ? ` (${ultimoEnvio.versao}º envio)` : ''} em <b>${new Date(ultimoEnvio.enviado_em).toLocaleString('pt-BR')}</b> por ${escH(ultimoEnvio.enviado_por || '')} · pagar em <b>${dbrH(ultimoEnvio.data_pagamento)}</b>`;
+      const sit = `<div class="mt-1 font-mono">${ultimoEnvio.qtd} funcionário(s) · líquido ${formatarMoeda(ultimoEnvio.total_liquido)} (banco ${formatarMoeda(ultimoEnvio.total_banco)} · dinheiro ${formatarMoeda(ultimoEnvio.total_dinheiro)}) · Financeiro: <b>${pagos}</b> pago(s), <b>${abertos}</b> a pagar${probs ? ` · <b class="text-rose-700">${probs} com problema</b>` : ''}</div>
+        ${ultimoEnvio.motivo ? `<div class="text-[11px] mt-0.5">Último ajuste: ${escH(ultimoEnvio.motivo)}</div>` : ''}`;
+      const alertHtml = alertas.length ? `<div class="mt-2 bg-rose-50 border border-rose-300 rounded-lg p-2 text-[11px] text-rose-900"><b>⚠ Atenção:</b> ${alertas.map(a => a.tipo === 'PAGO_A_MAIOR'
+          ? `${escH(a.nome)} já recebeu ${formatarMoedaSimples(a.pago)} (${a.meio === 'DINHEIRO' ? 'dinheiro' : 'banco'}), o correto é ${formatarMoedaSimples(a.correto)} — <b>pago a maior R$ ${formatarMoedaSimples(a.valor)}</b> (descontar na próxima competência)`
+          : `${escH(a.nome)} com líquido negativo (R$ ${formatarMoedaSimples(a.valor)}) — não foi enviado`).join(' · ')}</div>` : '';
+      if (!difsEnvio.length) {
+        box.innerHTML = `<div class="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-4 text-xs text-emerald-900"><div class="text-sm">${cab}</div>${sit}
+          <div class="text-[11px] text-emerald-700 mt-1">Nenhuma alteração desde o envio. Se precisar ajustar: corrija em Lançamentos e volte aqui para reenviar.</div>${alertHtml}</div>`;
+        return;
+      }
+      const dif = difsEnvio.reduce((a, d) => a + (d.agora - d.antes), 0);
+      box.innerHTML = `<div class="bg-rose-50 border-2 border-rose-400 rounded-xl p-4 text-xs text-rose-900">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div><div class="text-sm text-slate-700">${cab}</div>${sit}
+            <div class="font-black text-sm mt-2">⚠ ${difsEnvio.length} funcionário(s) mudaram DEPOIS do envio (diferença ${dif >= 0 ? '+' : '−'} R$ ${formatarMoedaSimples(Math.abs(dif))}). O Financeiro ainda está com os valores antigos.</div></div>
+          ${podeEnviar() ? `<button onclick="abrirEnvio()" class="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-black text-xs cursor-pointer whitespace-nowrap shadow">🔁 REENVIAR AJUSTES AO FINANCEIRO</button>` : ''}
+        </div>
+        <details class="mt-2"><summary class="cursor-pointer font-bold">ver o que mudou</summary>${tabelaDifs(difsEnvio)}</details>${alertHtml}</div>`;
+    }
+
+    function tabelaDifs(difs) {
+      return `<table class="mt-2 w-full text-[11px] bg-white rounded"><tr class="text-slate-500 text-left"><th class="p-1">Funcionário</th><th class="p-1 text-right">Enviado</th><th class="p-1 text-right">Agora</th><th class="p-1 text-right">Diferença</th></tr>
+        ${difs.map(d => `<tr class="border-t"><td class="p-1">${escH(d.nome)}${Math.abs(d.dinA - d.dinN) >= 0.01 ? ` <span class="text-amber-700">(dinheiro ${formatarMoedaSimples(d.dinA)} → ${formatarMoedaSimples(d.dinN)})</span>` : ''}</td>
+          <td class="p-1 text-right font-mono">${formatarMoedaSimples(d.antes)}</td><td class="p-1 text-right font-mono">${formatarMoedaSimples(d.agora)}</td>
+          <td class="p-1 text-right font-mono font-bold ${d.agora - d.antes < 0 ? 'text-rose-700' : 'text-emerald-700'}">${d.agora - d.antes >= 0 ? '+' : '−'}${formatarMoedaSimples(Math.abs(d.agora - d.antes))}</td></tr>`).join('')}</table>`;
+    }
+
+    async function abrirEnvio() {
+      const foto = fotoAtual();
+      const neg = foto.filter(i => i.liquido < 0), dinMaior = foto.filter(i => i.dinheiro > i.liquido && i.liquido >= 0);
+      if (dinMaior.length) return alert('Dinheiro maior que o líquido para: ' + dinMaior.map(i => i.nome).join(', ') + '. Corrija a coluna Dinheiro antes de enviar.');
+      const ok = foto.filter(i => i.liquido > 0);
+      const banco = ok.reduce((a, i) => a + i.liquido - i.dinheiro, 0), din = ok.reduce((a, i) => a + i.dinheiro, 0);
+      const reenvio = !!ultimoEnvio;
+      document.getElementById('envTitulo').innerText = reenvio ? 'REENVIAR AJUSTES AO FINANCEIRO' : 'CONFERÊNCIA FINALIZADA · ENVIAR AO FINANCEIRO';
+      document.getElementById('envBoxMotivo').classList.toggle('hidden', !reenvio);
+      document.getElementById('envMotivo').value = '';
+      document.getElementById('envCiente').checked = false;
+      document.getElementById('envResumo').innerHTML = `<div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-slate-50 border rounded-lg p-2"><div class="text-[10px] text-slate-500 font-bold">FUNCIONÁRIOS</div><div class="text-lg font-black">${ok.length}</div></div>
+          <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-2"><div class="text-[10px] text-indigo-700 font-bold">BANCO / PIX</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(banco)}</div></div>
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-2"><div class="text-[10px] text-amber-700 font-bold">DINHEIRO</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(din)}</div></div></div>
+        ${neg.length ? `<div class="mt-2 bg-rose-50 border border-rose-300 rounded p-2 text-rose-800">⚠ Líquido negativo (não será enviado): ${neg.map(i => escH(i.nome) + ' ' + formatarMoedaSimples(i.liquido)).join(' · ')}</div>` : ''}
+        ${reenvio ? (difsEnvio.length ? `<div class="mt-2 font-bold">Mudanças desde o envio anterior:</div>${tabelaDifs(difsEnvio)}
+          <div class="mt-2 text-[11px] text-slate-600">O que o Financeiro ainda não pagou é substituído pelo valor novo. O que já foi pago vira <b>complemento</b> (se aumentou) ou <b>alerta de pago a maior</b> (se diminuiu).</div>`
+          : '<div class="mt-2 text-slate-600">Nenhuma diferença de valor — o reenvio só atualiza a data, se você mudar.</div>') : ''}`;
+      let data = ultimoEnvio?.data_pagamento || '';
+      if (!data) { try { const { data: d } = await _supabase.rpc('fn_quinto_dia_util', { p_competencia: competenciaRegra }); data = d || ''; } catch (e) {} }
+      document.getElementById('envData').value = data;
+      document.getElementById('modalEnvio').classList.remove('hidden');
+    }
+
+    async function confirmarEnvio() {
+      const data = document.getElementById('envData').value, motivo = document.getElementById('envMotivo').value.trim();
+      if (!data) return alert('Informe a data de pagamento.');
+      if (ultimoEnvio && motivo.length < 5) return alert('Informe o motivo do reenvio.');
+      if (!document.getElementById('envCiente').checked) return alert('Marque a confirmação de que a conferência foi finalizada.');
+      const btn = document.getElementById('envBtn'); btn.disabled = true; btn.innerText = 'ENVIANDO...';
+      const itens = fotoAtual().map(({ funcionario_id, nome, liquido, dinheiro }) => ({ funcionario_id, nome, liquido, dinheiro }));
+      const { data: r, error } = await _supabase.rpc('fn_folha_enviar_financeiro', { p_competencia: competenciaRegra, p_data: data, p_itens: itens, p_motivo: motivo || null });
+      btn.disabled = false; btn.innerText = 'ENVIAR';
+      if (error) return alert('Não foi possível enviar: ' + error.message);
+      fecharModal('modalEnvio');
+      alert(`Enviado ao Financeiro (${r.versao}º envio).\n${r.criados} pagamento(s) novo(s), ${r.cancelados} substituído(s), ${r.mantidos} sem mudança.` + ((r.alertas || []).length ? `\n\n⚠ ${(r.alertas || []).length} alerta(s) — veja no quadro do topo.` : ''));
+      carregarEnvio();
     }
 
     processarDadosBanco();

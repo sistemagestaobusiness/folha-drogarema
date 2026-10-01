@@ -52,6 +52,7 @@
 
         <!-- ABA 1: NOVO LANÇAMENTO -->
         <div id="abaNovo" class="space-y-4">
+          <div id="bannerEnvioFin" class="hidden bg-sky-50 border border-sky-300 text-sky-900 p-3 rounded-lg text-[11px] leading-snug"></div>
           <div id="bannerEscala" class="hidden bg-amber-50 border border-amber-300 text-amber-900 p-3 rounded-lg text-[11px] leading-snug"></div>
           <div id="alertaLiberacao" class="hidden bg-amber-50 border border-amber-400 text-amber-900 p-3 rounded-lg text-xs font-bold"></div>
           <div id="alertaCompetenciaFechada" class="hidden bg-rose-50 border border-rose-300 text-rose-800 p-3 rounded-lg text-xs font-bold flex flex-col items-center gap-2">
@@ -473,6 +474,7 @@
         const selComp = document.getElementById('selectCompetenciaConsulta');
         if (selComp) selComp.value = competenciaRegraLancamento;
         carregarOcorrenciasEscala();
+        carregarBannerEnvioFin();
       } catch (err) {
         console.error('Erro na inicialização:', err);
       }
@@ -784,6 +786,18 @@
       if (o.freela && o.freela.status !== 'APROVADA') return 'AGUARDA_FREELA';
       return 'PENDENTE';
     }
+    // a folha desta competência já foi enviada ao Financeiro? ajuste aqui precisa ser reenviado no Resumo
+    async function carregarBannerEnvioFin() {
+      try {
+        const { data } = await _supabase.from('folha_envios').select('versao, enviado_em, enviado_por, data_pagamento')
+          .eq('competencia', competenciaRegraLancamento).order('versao', { ascending: false }).limit(1);
+        const e = (data || [])[0], box = document.getElementById('bannerEnvioFin');
+        if (!e) { box.classList.add('hidden'); return; }
+        box.innerHTML = `🗓 <b>A folha ${competenciaRegraLancamento} já foi enviada ao Financeiro</b> (${e.versao}º envio em ${new Date(e.enviado_em).toLocaleString('pt-BR')}, pagar em ${String(e.data_pagamento).split('-').reverse().join('/')}). Qualquer ajuste feito aqui só chega ao Financeiro depois de <a href="resumo_folha.html" class="underline font-bold">🔁 Reenviar ajustes no Resumo da folha</a>.`;
+        box.classList.remove('hidden');
+      } catch (err) {}
+    }
+
     async function carregarOcorrenciasEscala() {
       const [m, a] = competenciaRegraLancamento.split('/');
       const ini = `${a}-${m}-01`, fim = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);
