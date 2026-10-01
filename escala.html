@@ -83,6 +83,11 @@
             <p class="text-[11px] text-slate-500">Vale para todas as semanas. Mudanças de um dia só (troca de folga, horário diferente, falta) são feitas clicando no dia na visão do mês. Domingos alternados: informe um domingo em que a pessoa TRABALHA.</p></div>
           <div id="tabPadroes" class="overflow-x-auto"></div>
         </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <div><h3 class="font-black text-sm">🎉 Feriados</h3>
+            <p class="text-[11px] text-slate-500">Aparecem destacados na escala. Quem trabalha no feriado recebe folga compensatória em outro dia ou hora extra 100% (clique no dia da pessoa). Farmacêuticos não entram (adicional fixo mensal). Cadastro: RH/Gestor.</p></div>
+          <div id="tabFeriados"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -98,7 +103,9 @@
         <div><label class="lbl">Saída</label><input type="time" id="dSaida" class="inp font-mono"></div>
         <div class="col-span-2"><label class="lbl">Trabalha na loja</label><select id="dLoja" class="inp"></select></div>
       </div>
-      <div><label class="lbl">Repetir até (opcional)</label><input type="date" id="dAte" class="inp font-mono"><p class="text-[10px] text-slate-400">Ex.: atestado de 5 dias. Aplica o mesmo em todos os dias do intervalo.</p></div>
+      <div id="dBoxFeriado" class="hidden"></div>
+      <div><label class="lbl">Repetir até (opcional)</label><input type="date" id="dAte" class="inp font-mono"><p class="text-[10px] text-slate-400">Ex.: atestado de 5 dias. Aplica o mesmo em todos os dias do intervalo.</p>
+        <label class="flex items-center gap-1 mt-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" id="dMesmoDia" class="accent-slate-700"> só neste dia da semana (ex.: todas as terças até a data)</label></div>
       <div><label class="lbl">Observação</label><input id="dObs" class="inp" placeholder="ex.: troca de folga com Fulana"></div>
       <button onclick="salvarDia()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg cursor-pointer">SALVAR</button>
     </div>
@@ -138,7 +145,10 @@
     };
     const AUSENCIAS_FREELA = { FALTA_DIA: 'FALTA', ATESTADO: 'ATESTADO', AUSENCIA: 'FALTA' };
 
-    let perfil = null, minhaLoja = null, lojas = [], lojaSel = null, podeEditar = false;
+    let perfil = null, minhaLoja = null, lojas = [], lojaSel = null, podeEditar = false, feriados = [];
+    // feriado do dia para a loja aberta (vazio = todas as lojas)
+    const feriadoDe = iso => (feriados.find(x => x.data === iso && (!x.loja_id || x.loja_id === lojaSel)) || {}).nome || '';
+    const ehFarmaceutico = f => /FARMAC[EÊ]UTIC/i.test(String(f.cargo || '') + ' ' + String(f.organograma_funcao || ''));
     let funcs = [], padroes = {}, horario = {}, excecoes = [], ferias = [], freelas = [];
     let visao = 'mes', dataRef = null, carregado = { ini: null, fim: null, loja: null }, editando = null, tipoDia = 'FOLGA';
 
@@ -184,7 +194,7 @@
 
       const [rl, rf] = await Promise.all([
         _supabase.from('lojas').select('*').order('nome_loja'),
-        _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, data_contratacao, data_rescisao, periodo_trabalho, status').eq('status', 'ATIVO').order('nome_registro')
+        _supabase.from('vw_funcionarios_basico').select('id, nome_registro, cargo, loja_id, data_contratacao, data_rescisao, periodo_trabalho, status, organograma_funcao').eq('status', 'ATIVO').order('nome_registro')
       ]);
       lojas = (rl.data || []).filter(l => l.ativo !== false);
       funcs = rf.data || [];
@@ -237,6 +247,7 @@
       ]);
       if (re.error) alert('Erro ao carregar a escala: ' + re.error.message);
       excecoes = re.data || [];
+      try { const { data: fe } = await _supabase.from('feriados').select('*').gte('data', ini).lte('data', fim); feriados = fe || []; } catch (e) { feriados = []; }
       ferias = (rf.data || []).filter(s => !['RECUSADA', 'CANCELADA'].includes(s.status));
       freelas = (rs.data || []).filter(s => !['REJEITADA', 'CANCELADA'].includes(s.status));
       carregado = { ini, fim };
@@ -413,7 +424,8 @@
       dias.forEach(d => porDia[d].extras.forEach(p => extrasNomes.set(p.extra.funcionario_id, p.f)));
       const linhas = [...ids.values()];
       const cab = dias.map(d => { const w = dow(d), hj = d === hoje();
-        return `<th class="p-1 text-center cursor-pointer hover:bg-slate-100 ${w === 0 ? 'bg-rose-50' : ''} ${hj ? 'bg-amber-100' : ''}" onclick="abrirDia('${d}')" title="abrir o dia"><div class="text-[9px] text-slate-400">${DSEM[w][0]}</div><div class="text-[11px] font-black">${parseInt(d.slice(8), 10)}</div></th>`; }).join('');
+        const fer = feriadoDe(d);
+        return `<th class="p-1 text-center cursor-pointer hover:bg-slate-100 ${fer ? 'bg-fuchsia-200 text-fuchsia-900' : w === 0 ? 'bg-rose-50' : ''} ${hj ? 'ring-2 ring-amber-400 ring-inset' : ''}" onclick="abrirDia('${d}')" title="${fer ? '🎉 FERIADO: ' + esc(fer) : 'abrir o dia'}"><div class="text-[9px] ${fer ? '' : 'text-slate-400'}">${fer ? '🎉' : DSEM[w][0]}</div><div class="text-[11px] font-black">${parseInt(d.slice(8), 10)}</div></th>`; }).join('');
       const corpo = linhas.map(f => {
         const outra = f.loja_id !== lojaSel;
         return `<tr class="border-t border-slate-100"><td class="sticky left-0 bg-white z-10 p-1.5 pr-3 min-w-[170px]"><div class="text-[11px] font-bold text-slate-800 truncate max-w-[190px]" title="${esc(f.nome_registro)}">${esc(f.nome_registro)}</div>
@@ -443,6 +455,7 @@
         const selo = !c.slots.length ? '<span class="text-slate-400">sem horário</span>' : c.falta ? `<span class="px-1.5 py-0.5 rounded bg-rose-500 text-white">⚠ abaixo de ${c.minimo}</span>` : `<span class="px-1.5 py-0.5 rounded bg-emerald-500 text-white">✓ ${c.minimo}+</span>`;
         return `<div class="bg-white rounded-xl border ${d === hoje() ? 'border-amber-400 ring-2 ring-amber-200' : 'border-slate-200'} p-2 space-y-1.5 min-h-[160px]">
           <button onclick="abrirDia('${d}')" class="w-full flex justify-between items-center text-left cursor-pointer"><span class="font-black text-xs ${dow(d) === 0 ? 'text-rose-700' : ''}">${DSEM[dow(d)]} ${dbr(d).slice(0, 5)}</span><span class="text-[9px] font-bold">${selo}</span></button>
+          ${feriadoDe(d) ? `<div class="text-[10px] font-black bg-fuchsia-200 text-fuchsia-900 rounded px-1.5 py-0.5">🎉 FERIADO · ${esc(feriadoDe(d))}</div>` : ''}
           ${c.h && c.h.aberta !== false && c.h.abre ? `<div class="text-[9px] text-slate-400">loja ${hm(c.h.abre)}–${hm(c.h.fecha)}</div>` : c.h && c.h.aberta === false ? '<div class="text-[9px] text-slate-400">loja fechada</div>' : ''}
           ${trab.map(p => `<div class="flex items-center gap-1 text-[10px] rounded px-1.5 py-1 ${p.extra ? 'bg-violet-100 text-violet-900' : corTurno(p.r.entrada)} ${p.r.origem === 'DIA' ? 'ring-1 ring-slate-700' : ''}" ${p.extra ? '' : `onclick="abrirEdicao('${p.f.id}','${d}')"`} style="cursor:${p.extra ? 'default' : 'pointer'}">
             <span class="font-mono font-bold">${p.r.entrada || '?'}–${p.r.saida || '?'}</span><span class="truncate font-bold">${p.extra ? '★ ' : ''}${esc(primeiroNome(p.f.nome_registro))}${p.r.veioDe ? ' ↘' : ''}</span></div>`).join('') || '<p class="text-[10px] text-slate-400">ninguém escalado</p>'}
@@ -473,7 +486,7 @@
       const barra = c.slots.length ? `<div class="flex items-center h-9 border-t-2 border-slate-300 mt-1">
           <div class="w-[180px] shrink-0 pr-2 text-[10px] font-black uppercase text-slate-600">Na loja<div class="text-[9px] font-normal normal-case text-slate-400">mínimo ${c.minimo}</div></div>
           <div class="relative flex-1 h-full">${c.slots.map(s => `<div class="absolute top-1 bottom-1 border-r border-white text-[9px] font-black text-white flex items-center justify-center ${s.qtd < c.minimo ? 'bg-rose-500' : 'bg-emerald-500'}" style="left:${pos(s.m)};width:calc(${pos(s.m + 30)} - ${pos(s.m)})" title="${minHm(s.m)}: ${s.qtd} pessoa(s)">${s.qtd}</div>`).join('')}</div></div>` : '';
-      $('gradeDia').innerHTML = `<div class="min-w-[720px]"><div class="flex justify-between items-center mb-2"><h3 class="font-black text-sm">${DSEM[dow(d)]} ${dbr(d)} · ${esc(nomeLoja(lojaSel))}</h3>
+      $('gradeDia').innerHTML = `<div class="min-w-[720px]">${feriadoDe(d) ? `<div class="mb-2 bg-fuchsia-100 border border-fuchsia-300 text-fuchsia-900 rounded-lg px-3 py-2 text-xs font-bold">🎉 FERIADO: ${esc(feriadoDe(d))} — clique em cada pessoa que trabalha para dar folga compensatória ou pedir hora extra 100%.</div>` : ''}<div class="flex justify-between items-center mb-2"><h3 class="font-black text-sm">${DSEM[dow(d)]} ${dbr(d)} · ${esc(nomeLoja(lojaSel))}</h3>
         <span class="text-[11px] text-slate-500">${c.h ? (c.h.aberta === false ? 'loja fechada' : 'funcionamento ' + hm(c.h.abre) + '–' + hm(c.h.fecha)) : 'sem horário de funcionamento'}</span></div>
         ${regua}${linhas || '<p class="text-slate-400 text-xs py-4">Ninguém escalado neste dia.</p>'}${barra}</div>`;
       // buracos + ausentes
@@ -496,7 +509,7 @@
     // ------------------------------------------------------------------
     function abrirEdicao(fid, iso) {
       const f = func(fid), r = diaFunc(f, iso);
-      const podeEste = ['RH', 'GESTOR'].includes(perfil) || (perfil === 'LIDER' && (f.loja_id === minhaLoja || lojaSel === minhaLoja));
+      const podeEste = ['RH', 'GESTOR'].includes(perfil) || (perfil === 'LIDER' && (f.loja_id === minhaLoja || lojaSel === minhaLoja)) || (perfil === 'SUPERVISOR' && podeEditar);
       if (!podeEste) return;
       if (r.tipo === 'FERIAS' || r.tipo === 'FERIAS_PEDIDA') return alert(`${f.nome_registro} está de férias em ${dbr(iso)}.\nAlterações de férias são feitas na tela de Férias.`);
       if (r.tipo === 'FORA') return;
@@ -511,7 +524,22 @@
       const lojasOp = ['RH', 'GESTOR'].includes(perfil) ? lojas : lojas.filter(l => l.id === minhaLoja || l.id === f.loja_id);
       $('dLoja').innerHTML = lojasOp.map(l => `<option value="${l.id}">${esc(l.nome_loja)}${l.id === f.loja_id ? ' (dele)' : ''}</option>`).join('');
       $('dLoja').value = r.loja || (f.loja_id === lojaSel ? f.loja_id : lojaSel);
-      $('dAte').value = ''; $('dAte').min = iso; $('dObs').value = r.origem === 'DIA' ? (r.obs || '') : '';
+      $('dAte').value = ''; $('dAte').min = iso; $('dObs').value = r.origem === 'DIA' ? (r.obs || '') : ''; $('dMesmoDia').checked = false;
+      // feriado: quem trabalha recebe folga compensatória ou hora extra 100%
+      const fer = feriadoDe(iso), bx = $('dBoxFeriado');
+      bx.classList.toggle('hidden', !fer);
+      if (fer) {
+        const farma = ehFarmaceutico(f);
+        bx.innerHTML = `<div class="bg-fuchsia-50 border border-fuchsia-300 rounded-lg p-2.5 space-y-2">
+          <div class="font-black text-fuchsia-900">🎉 FERIADO: ${esc(fer)}</div>
+          ${farma ? '<div class="text-[11px] text-slate-600">Farmacêutico: recebe adicional fixo mensal, não gera folga compensatória nem hora extra.</div>'
+          : r.tipo !== 'TRABALHO' ? '<div class="text-[11px] text-slate-600">Pela escala, a pessoa não trabalha neste feriado.</div>'
+          : `<div class="text-[11px] text-slate-700">Trabalha ${r.entrada}–${r.saida}. Escolha a compensação:</div>
+             <div class="flex items-end gap-1.5"><div class="flex-1"><label class="lbl">Folga compensatória em</label><input type="date" id="fComp" min="${addDias(iso, 1)}" class="inp font-mono"></div>
+               <button onclick="folgaCompensatoria()" class="px-2.5 py-2 bg-slate-800 text-white rounded-lg font-bold cursor-pointer">📅 Dar folga</button></div>
+             <button onclick="pedirPagamentoFeriado()" class="w-full px-2.5 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white rounded-lg font-bold cursor-pointer">💰 Pagar hora extra 100% (vai para supervisor e RH)</button>
+             <div class="text-[10px] text-slate-500">${/^LOJA\s*0?7\b/i.test(nomeLoja(f.loja_id)) ? 'LOJA 07: evento HORA EXTRA 100% contábil.' : 'Evento 2029 HORA EXTRA 100% (não contábil), na folha do 5º dia útil.'}</div>`}</div>`;
+      }
       escolherTipoDia(tipoDia);
       $('mDia').classList.remove('hidden');
     }
@@ -523,7 +551,7 @@
     async function salvarDia() {
       const { f, iso } = editando, ate = $('dAte').value;
       if (ate && ate < iso) return alert('"Repetir até" precisa ser depois do dia escolhido.');
-      const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) datas.push(d);
+      const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) if (!$('dMesmoDia').checked || dow(d) === dow(iso)) datas.push(d);
       if (datas.length > 62) return alert('No máximo 62 dias de uma vez.');
       if (tipoDia === 'TRABALHO' && (!$('dEntrada').value || !$('dSaida').value)) return alert('Informe entrada e saída.');
       const { error } = await _supabase.rpc('fn_escala_dia', { p_funcionario: f.id, p_datas: datas, p_tipo: tipoDia,
@@ -533,10 +561,60 @@
       fechar('mDia'); await garantirPeriodo(true); renderizar();
     }
 
+    // feriado: folga compensatória (direto na escala) ou pagamento (vira hora extra com motivo FERIADO)
+    async function folgaCompensatoria() {
+      const { f, iso } = editando, d = $('fComp').value;
+      if (!d) return alert('Escolha o dia da folga compensatória.');
+      if (!confirm(`Dar folga a ${f.nome_registro} em ${dbr(d)} para compensar o feriado de ${dbr(iso)}?`)) return;
+      const { error } = await _supabase.rpc('fn_escala_dia', { p_funcionario: f.id, p_datas: [d], p_tipo: 'FOLGA', p_entrada: null, p_saida: null, p_loja: null,
+        p_obs: `Folga compensatória do feriado ${dbr(iso).slice(0, 5)} (${feriadoDe(iso)})` });
+      if (error) return alert('Erro: ' + error.message);
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
+      alert('Folga compensatória marcada em ' + dbr(d) + '.');
+    }
+    async function pedirPagamentoFeriado() {
+      const { f, iso, r } = editando;
+      let min = toMin(r.saida) - toMin(r.entrada); if (min <= 0) min += 1440;
+      const p = padroes[f.id]; if (min > 360) min -= (p && p.intervalo_min != null ? p.intervalo_min : 60);
+      const horas = Math.round(min / 30) / 2;
+      if (!confirm(`Pedir pagamento de HORA EXTRA 100% para ${f.nome_registro}?\n\nFeriado ${dbr(iso)} · ${r.entrada}–${r.saida} · ${String(horas).replace('.', ',')}h\n\nVai para o supervisor e depois para o RH, que confirmam se trabalhou e definem o valor.`)) return;
+      const { error } = await _supabase.rpc('fn_feriado_pedir_pagamento', { p_funcionario: f.id, p_data: iso, p_inicio: r.entrada, p_fim: r.saida, p_horas: horas, p_obs: null });
+      if (error) return alert('Não foi possível: ' + error.message);
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
+      alert('Pedido enviado. Acompanhe em Solicitações (hora extra · motivo feriado).');
+    }
+
+    // cadastro de feriados (RH/Gestor)
+    async function renderFeriados() {
+      const ano = (dataRef || hoje()).slice(0, 4);
+      const { data } = await _supabase.from('feriados').select('*').gte('data', ano + '-01-01').lte('data', (+ano + 1) + '-12-31').order('data');
+      const pode = ['RH', 'GESTOR'].includes(perfil);
+      $('tabFeriados').innerHTML = `<table class="text-xs w-full max-w-2xl"><tbody>${(data || []).map(x => `<tr class="border-t border-slate-100"><td class="p-1.5 font-mono font-bold">${dbr(x.data)}</td><td class="p-1.5">${DSEM[dow(x.data)]}</td><td class="p-1.5 font-bold">${esc(x.nome)}</td><td class="p-1.5 text-slate-500">${x.loja_id ? esc(nomeLoja(x.loja_id)) : 'todas as lojas'}</td>
+        <td class="p-1.5 text-right">${pode ? `<button onclick="removerFeriado('${x.id}')" class="text-rose-600 font-bold cursor-pointer">✕</button>` : ''}</td></tr>`).join('') || '<tr><td class="p-2 text-slate-400">Nenhum feriado cadastrado.</td></tr>'}</tbody></table>
+        ${pode ? `<div class="flex flex-wrap items-end gap-2 pt-2"><div><label class="lbl">Data</label><input type="date" id="nfData" class="inp font-mono"></div>
+          <div class="flex-1 min-w-[180px]"><label class="lbl">Nome</label><input id="nfNome" class="inp" placeholder="ex.: Nossa Senhora Aparecida"></div>
+          <div><label class="lbl">Vale para</label><select id="nfLoja" class="inp"><option value="">Todas as lojas</option>${lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('')}</select></div>
+          <button onclick="incluirFeriado()" class="px-3 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white rounded-lg font-bold text-xs cursor-pointer">+ Incluir</button></div>` : ''}`;
+    }
+    async function incluirFeriado() {
+      const data = $('nfData').value, nome = $('nfNome').value.trim();
+      if (!data || !nome) return alert('Informe a data e o nome do feriado.');
+      const { error } = await _supabase.from('feriados').insert([{ data, nome: nome.toUpperCase(), loja_id: $('nfLoja').value || null }]);
+      if (error) return alert('Erro: ' + error.message);
+      await garantirPeriodo(true); renderFeriados();
+    }
+    async function removerFeriado(id) {
+      if (!confirm('Remover este feriado? (folgas compensatórias e pedidos de hora extra já feitos continuam)')) return;
+      const { error } = await _supabase.from('feriados').delete().eq('id', id);
+      if (error) return alert('Erro: ' + error.message);
+      await garantirPeriodo(true); renderFeriados();
+    }
+
     // ------------------------------------------------------------------
     // CONFIGURAR
     // ------------------------------------------------------------------
     function renderConfig() {
+      renderFeriados();
       const dis = podeEditar ? '' : 'disabled';
       const ordem = [1, 2, 3, 4, 5, 6, 0];
       $('tabHorarioLoja').innerHTML = `<table class="text-xs"><thead><tr class="text-[10px] uppercase text-slate-500"><th class="text-left p-1.5">Dia</th><th class="p-1.5">Abre?</th><th class="p-1.5">Abertura</th><th class="p-1.5">Fechamento</th><th class="p-1.5">Mínimo de pessoas</th></tr></thead><tbody>

@@ -25,6 +25,7 @@
         </div>
         <a href="ferias.html" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs border border-emerald-300">🏖 FÉRIAS</a>
         <a href="escala.html" class="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-lg font-bold text-xs border border-sky-300">📅 ESCALA</a>
+        <a href="cadastro_solicitacoes.html" class="relative px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 rounded-lg font-bold text-xs border border-indigo-300">👤 CADASTRO<span id="qCad" class="hidden absolute -top-2 -right-2 bg-indigo-600 text-white px-1.5 rounded-full text-[10px] font-black"></span></a>
         <a href="abatimentos.html" class="relative px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 rounded-lg font-bold text-xs border border-rose-300">💸 ABATIMENTOS<span id="qAbat" class="hidden absolute -top-2 -right-2 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px] font-black"></span></a>
         <a href="organograma.html" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-lg font-bold text-xs border border-slate-300">🏛 ORGANOGRAMA</a>
         <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
@@ -92,7 +93,7 @@
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda' };
+    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda', FERIADO: '🎉 Trabalho em feriado (HE 100%)' };
     const STATUS = {
       PENDENTE_RH: { txt: 'APROVADA → AGUARDANDO RH', cls: 'bg-sky-100 text-sky-800' },
       APROVADA:    { txt: 'APROVADA PELO RH',         cls: 'bg-emerald-100 text-emerald-800' },
@@ -203,6 +204,7 @@
               </div>
               <div class="text-sm font-bold text-slate-900">${r.tipo_solicitacao === 'HORA_EXTRA' ? '<span class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">⏰ HORA EXTRA</span>' : '<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">🧑‍🤝‍🧑 FREELANCE</span>'}${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span></div>
               <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtHoras(r.horas_trabalhadas)}</b> · pagamento ${esc(r.forma_pagamento)}</div>
+              <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(r.created_at)}</b>${r.contestado_em ? ` · 📣 contestado em <b>${dataHora(r.contestado_em)}</b>` : ''}${r.supervisor_em ? ` · decidido em ${dataHora(r.supervisor_em)}` : ''}</div>
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? `<span class="ml-1 text-[11px]">faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b></span>` : ''}</div>
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">"${esc(r.observacao_lider)}"</div>` : ''}
@@ -252,6 +254,7 @@
     }
     const blocoContestacao = r => r.contestacao ? `<div class="text-[11px] bg-amber-50 border-l-2 border-amber-400 pl-2 py-1 text-amber-900"><b>📣 Contestação do líder${r.contestacoes > 1 ? ' (' + r.contestacoes + 'ª)' : ''}:</b> ${esc(r.contestacao)}${Array.isArray(r.historico) ? (r.historico.filter(h => h.acao === 'RECUSADA').slice(-1).map(h => `<div class="text-[10px] text-slate-500">recusa anterior (${esc((h.etapa || '').toLowerCase())}): ${esc(h.motivo || '')}</div>`)[0] || '') : ''}</div>` : '';
 
+    const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
     function abrirDecisao(id, aprovar) {
       const reg = dadosCarregados.find(x => x.id === id);
       if (aprovar && reg && !confirmaAntecedencia(reg)) return;

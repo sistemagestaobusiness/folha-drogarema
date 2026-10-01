@@ -118,7 +118,7 @@
     const $ = id => document.getElementById(id);
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const dbr = v => v ? new Date(v).toLocaleDateString('pt-BR') : '-';
+    const dbr = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
     const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     const fechar = id => $(id).classList.add('hidden');
     const TIPOS = {
@@ -413,9 +413,18 @@
       if (!sel.length) return alert('Marque quem vai pagar.');
       if (perfil !== 'LIDER' && !obs) return alert('Informe o motivo de decidir no lugar do líder.');
       if (!confirm(`Confirmar o desconto de ${fmtR(atual.valor_total)} para ${sel.length} funcionário(s) em ${p}x?\n\nA 1ª parcela já entra na folha de ${compAberta}.`)) return;
-      const btn = $('btnAprovar'); btn.disabled = true;
-      const { error } = await _supabase.rpc('fn_abatimento_aprovar', { p_id: atual.id, p_funcionarios: sel, p_parcelas: p, p_obs: obs || null });
-      btn.disabled = false;
+      const btn = $('btnAprovar'); btn.disabled = true; btn.innerText = 'GRAVANDO...';
+      let error = null;
+      try { ({ error } = await _supabase.rpc('fn_abatimento_aprovar', { p_id: atual.id, p_funcionarios: sel, p_parcelas: p, p_obs: obs || null })); }
+      catch (e) { error = { message: String(e && e.message || e) }; }
+      btn.disabled = false; btn.innerText = 'CONFIRMAR E LANÇAR NA FOLHA';
+      if (error && /fetch|network|load failed/i.test(error.message)) {
+        // falha de conexão: confere no banco se a aprovação chegou a ser gravada
+        await carregar();
+        const agora = abats.find(a => a.id === atual.id);
+        if (agora && agora.status !== 'PENDENTE_LIDER') { error = null; }
+        else return alert('Falha de conexão com o servidor: a aprovação NÃO foi gravada.\n\nConfira a internet e clique em confirmar de novo. Se repetir, avise o RH.\n(detalhe: ' + error.message + ')');
+      }
       if (error) return alert('Não aprovado: ' + error.message);
       fechar('mAprovar'); abertos.add(atual.id);
       await recarregar();

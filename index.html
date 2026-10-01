@@ -98,6 +98,7 @@
           <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-slate-100 text-slate-700">🗃 Cadastros</h3>
           <div class="flex flex-col p-1.5 text-[11px] font-medium">
             <a href="funcionarios.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">👥</span> <span>Funcionários</span></a>
+            <a href="cadastro_solicitacoes.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">👤</span> <span>Pedidos de cadastro (líderes)</span></a>
             <a href="organograma.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏛</span> <span>Organograma</span></a>
             <a href="empresas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏢</span> <span>Empresas e contas bancárias</span></a>
             <a href="lojas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏪</span> <span>Lojas e setores</span></a>
@@ -636,11 +637,12 @@
       try {
         const hojeIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
         const dias = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(hojeIso + 'T12:00:00')) / 86400000);
-        const [rf, rv, ra] = await Promise.all([
+        const [rf, rv, ra, rc] = await Promise.all([
           _supabase.from('freelance_solicitacoes').select('id, funcionario_id, data_servico, hora_inicio, hora_fim, status, tipo_solicitacao, loja_solicitante')
             .in('status', ['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH']).order('data_servico'),
           _supabase.from('ferias_solicitacoes').select('id, funcionario_id, data_inicio, dias, status').in('status', ['SOLICITADA', 'PRE_APROVADA', 'CONTABILIDADE', 'CALCULADA']).order('data_inicio'),
-          _supabase.from('abatimentos').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE_LIDER')
+          _supabase.from('abatimentos').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE_LIDER'),
+          _supabase.from('cadastro_solicitacoes').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE')
         ]);
         const fl = rf.data || [], fe = rv.data || [];
         const ids = [...new Set([...fl, ...fe].map(x => x.funcionario_id))];
@@ -651,7 +653,7 @@
         const flCrit = fl.filter(x => dias(x.data_servico) <= 2), flAten = fl.filter(x => dias(x.data_servico) >= 3 && dias(x.data_servico) <= 7), flFut = fl.filter(x => dias(x.data_servico) > 7);
         const feCrit = fe.filter(x => dias(x.data_inicio) <= 15), feAten = fe.filter(x => dias(x.data_inicio) > 15 && dias(x.data_inicio) <= 30);
         const box = document.getElementById('boxUrgentes');
-        if (!flCrit.length && !flAten.length && !feCrit.length && !feAten.length && !flFut.length && !ra.count) { box.classList.add('hidden'); return; }
+        if (!flCrit.length && !flAten.length && !feCrit.length && !feAten.length && !flFut.length && !ra.count && !rc.count) { box.classList.add('hidden'); return; }
         const quando = d => { const n = dias(d); return n < 0 ? `<b class="text-white bg-rose-700 px-1 rounded">JÁ PASSOU (${-n}d)</b>` : n === 0 ? '<b>HOJE</b>' : n === 1 ? '<b>AMANHÃ</b>' : `em ${n} dias`; };
         const dbr = d => d.slice(8, 10) + '/' + d.slice(5, 7);
         const itemFl = x => `<li>• ${x.tipo_solicitacao === 'HORA_EXTRA' ? '⏰ HE' : '🧑‍🤝‍🧑 Freela'} <b>${curto(nomes[x.funcionario_id])}</b> · ${x.loja_solicitante || ''} · ${dbr(x.data_servico)} (${quando(x.data_servico)}) · aguardando ${etapa(x.status)}</li>`;
@@ -669,6 +671,7 @@
             ${aten.length ? `<ul class="mt-1 space-y-0.5 max-h-40 overflow-y-auto">${aten.join('')}</ul>` : '<div class="mt-1">Nada para os próximos 7 dias (freelance/HE) ou 30 dias (férias).</div>'}
             ${flFut.length ? `<div class="mt-2 text-[11px]">⏳ ${flFut.length} freelance/HE para daqui a mais de 7 dias: <b>aprove mais perto da data</b> (se a pessoa não vier, a aprovação precisa ser estornada).</div>` : ''}
             ${ra.count ? `<div class="mt-1 text-[11px]">💸 ${ra.count} abatimento(s) aguardando o líder da loja. <a href="abatimentos.html" class="underline font-bold">ver</a></div>` : ''}
+            ${rc.count ? `<div class="mt-1 text-[11px] font-bold">👤 ${rc.count} pedido(s) de cadastro de pessoa nova aguardando o RH. <a href="cadastro_solicitacoes.html" class="underline">cadastrar</a></div>` : ''}
           </div>`;
       } catch (err) { console.error('Urgentes:', err); }
     }

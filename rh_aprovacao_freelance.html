@@ -142,7 +142,7 @@
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda' };
+    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda', FERIADO: '🎉 Trabalho em feriado (HE 100%)' };
     const STATUS = {
       PENDENTE_SUPERVISOR: { txt: 'AGUARDANDO SUPERVISOR', cls: 'bg-amber-100 text-amber-800' },
       PENDENTE_RH: { txt: 'AGUARDANDO RH', cls: 'bg-sky-100 text-sky-800' },
@@ -310,6 +310,7 @@
               </div>
               <div class="text-sm font-bold text-slate-900">${r.tipo_solicitacao === 'HORA_EXTRA' ? '<span class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">⏰ HORA EXTRA</span>' : '<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">🧑‍🤝‍🧑 FREELANCE</span>'}${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span> <span class="text-[10px] font-normal">${txtSaldo(r.funcionario_id)}</span></div>
               <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtH(r.horas_trabalhadas)}</b></div>
+              <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(r.created_at)}</b>${r.contestado_em ? ` · 📣 contestado em <b>${dataHora(r.contestado_em)}</b>` : ''}${r.supervisor_em ? ` · supervisor em ${dataHora(r.supervisor_em)}` : ''}${r.rh_em ? ` · RH em ${dataHora(r.rh_em)}` : ''}</div>
               <div>${seloPagamento(r)}</div>
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? ` faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b> <span class="text-[10px]">${txtSaldo(r.funcionario_ausente_id)}</span>` : ''}</div>
@@ -360,6 +361,15 @@
     }
     const blocoContestacao = r => r.contestacao ? `<div class="text-[11px] bg-amber-50 border-l-2 border-amber-400 pl-2 py-1 text-amber-900"><b>📣 Contestação do líder${r.contestacoes > 1 ? ' (' + r.contestacoes + 'ª)' : ''}:</b> ${esc(r.contestacao)}${Array.isArray(r.historico) ? (r.historico.filter(h => h.acao === 'RECUSADA').slice(-1).map(h => `<div class="text-[10px] text-slate-500">recusa anterior (${esc((h.etapa || '').toLowerCase())}): ${esc(h.motivo || '')}</div>`)[0] || '') : ''}</div>` : '';
 
+    const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+    // trabalho em feriado: 2029 HORA EXTRA 100% (não contábil); LOJA 07 = HORA EXTRA 100% contábil
+    function eventoFeriado(r) {
+      const loja7 = /^LOJA\s*0?7\b/i.test(r.loja_solicitante || '');
+      const ev = eventosProv.find(e => loja7 ? (e.natureza_do_evento === 'CONTABIL' && /HORA EXTRA/i.test(e.descricao_do_evento) && /100/.test(e.descricao_do_evento))
+                                              : e.codigo_evento === 2029);
+      return ev ? ev.codigo_evento : null;
+    }
+
     // ---------- Aprovação final ----------
     async function abrirAprovacao(id) {
       const { data: r } = await _supabase.from('freelance_solicitacoes').select('*').eq('id', id).single();
@@ -375,7 +385,7 @@
       const chave = he ? 'HORA EXTRA' : 'FREELANCE';
       const evs = eventosProv.filter(e => String(e.descricao_do_evento).toUpperCase().includes(chave) && !e.pagamento_extra_tipo);
       document.getElementById('apEventoPag').innerHTML = (he ? '<option value="">-- escolha o evento de hora extra --</option>' : '') +
-        evs.map(e => `<option value="${e.codigo_evento}" ${!he && e.codigo_evento === 2014 ? 'selected' : ''}>${e.codigo_evento} - ${esc(e.descricao_do_evento)} (${e.natureza_do_evento === 'CONTABIL' ? 'contábil' : 'não contábil'})</option>`).join('');
+        evs.map(e => `<option value="${e.codigo_evento}" ${(!he && e.codigo_evento === 2014) || (r.motivo === 'FERIADO' && e.codigo_evento === eventoFeriado(r)) ? 'selected' : ''}>${e.codigo_evento} - ${esc(e.descricao_do_evento)} (${e.natureza_do_evento === 'CONTABIL' ? 'contábil' : 'não contábil'})</option>`).join('');
       document.getElementById('apSaldoFreela').innerHTML = txtSaldo(r.funcionario_id);
       document.getElementById('apHoras').value = r.horas_trabalhadas;
       document.getElementById('apForma').value = r.forma_pagamento || 'FOLHA';

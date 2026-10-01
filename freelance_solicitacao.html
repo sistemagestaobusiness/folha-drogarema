@@ -24,6 +24,7 @@
           <span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span>
           <span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span>
         </div>
+        <a href="cadastro_solicitacoes.html" class="relative px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 rounded-lg font-bold text-xs border border-indigo-300">👤 CADASTRO<span id="qCad" class="hidden absolute -top-2 -right-2 bg-indigo-600 text-white px-1.5 rounded-full text-[10px] font-black"></span></a>
         <a href="abatimentos.html" class="relative px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 rounded-lg font-bold text-xs border border-rose-300">💸 ABATIMENTOS<span id="qAbat" class="hidden absolute -top-2 -right-2 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px] font-black"></span></a>
         <a href="ferias.html" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs border border-emerald-300">🏖 FÉRIAS</a>
         <a href="escala.html" class="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-lg font-bold text-xs border border-sky-300">📅 ESCALA</a>
@@ -201,7 +202,7 @@
     const INTERVALO_MIN_HORAS = 6;    // acima de 6h de jornada, desconta intervalo
     const INTERVALO_HORAS = 1;        // 1h de descanso
     const MOTIVOS_COM_AUSENTE = ['FALTA_DIA', 'FALTA_PARCIAL', 'ATESTADO', 'AUSENCIA'];
-    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda' };
+    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda', FERIADO: '🎉 Trabalho em feriado (HE 100%)' };
     const STATUS = {
       PENDENTE_SUPERVISOR: { txt: 'AGUARDANDO SUPERVISOR', cls: 'bg-amber-100 text-amber-800' },
       PENDENTE_RH:         { txt: 'AGUARDANDO RH',         cls: 'bg-sky-100 text-sky-800' },
@@ -315,6 +316,14 @@
       } catch (e) { }
     }
 
+    // respostas do RH a pedidos de cadastro que o líder ainda não viu
+    async function avisoCadastro() {
+      try {
+        const { count } = await _supabase.from('cadastro_solicitacoes').select('id', { count: 'exact', head: true }).in('status', ['CADASTRADO', 'RECUSADO']).is('lider_ciente_em', null);
+        const b = document.getElementById('qCad'); if (b && count) { b.innerText = count; b.classList.remove('hidden'); b.title = 'respostas do RH'; }
+      } catch (e) { }
+    }
+
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
@@ -329,7 +338,7 @@
       // Gestor/RH voltam ao painel (o SAIR fica no index); demais perfis só têm SAIR
       document.getElementById(['GESTOR', 'RH'].includes(usuario.perfil) ? 'btnPainel' : 'btnSair').classList.remove('hidden');
 
-      if (usuario.perfil === 'LIDER') avisoAbatimentos();
+      if (usuario.perfil === 'LIDER') { avisoAbatimentos(); avisoCadastro(); }
       escolherTipo('FREELANCE');
       await Promise.all([carregarLojas(), carregarFuncionarios()]);
       iniciarCombos();
@@ -613,6 +622,7 @@
       carregarHistorico();
     }
 
+    const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
     async function cancelarSolicitacao(id) {
       if (!confirm('Cancelar esta solicitação?')) return;
       const { error } = await _supabase.rpc('fn_freelance_cancelar', { p_id: id });
@@ -658,6 +668,7 @@
               <div>
                 <div class="font-bold text-slate-800"><span class="${tp.badge} px-1.5 py-0.5 rounded text-[9px] font-black mr-1">${tp.icone} ${tp.rotulo}</span>${esc(nomeFunc(r.funcionario_id))} <span class="text-[10px] text-slate-400 font-normal">${esc(r.cargo_exercido)}</span></div>
                 <div class="font-mono text-[11px] text-slate-600 mt-0.5">${formatarDataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b>${fmtHoras(r.horas_trabalhadas)}</b> · ${esc(r.forma_pagamento)}</div>
+                <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(r.created_at)}</b>${r.contestado_em ? ` · 📣 contestado em <b>${dataHora(r.contestado_em)}</b>` : ''}${r.supervisor_em ? ` · supervisor em ${dataHora(r.supervisor_em)}` : ''}${r.rh_em ? ` · RH em ${dataHora(r.rh_em)}` : ''}</div>
                 <div class="text-[11px] text-slate-500">${esc(r.loja_solicitante || '')} · ${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'sem motivo')}${r.funcionario_ausente_id ? ' · faltou: <b>' + esc(nomeFunc(r.funcionario_ausente_id)) + '</b>' : ''}</div>
               </div>
               <div class="text-right shrink-0">

@@ -284,7 +284,7 @@
     }
 
     function linhaTempo(s) {
-      const dt = v => v ? ' ' + new Date(v).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+      const dt = v => v ? ' ' + new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
       const passo = (ok, txt, quando) => `<span class="${ok ? 'text-emerald-700 font-bold' : 'text-slate-300'}">${ok ? '●' : '○'} ${txt}${ok ? dt(quando) : ''}</span>`;
       const pago = s.folha_item_id && pagamentos[s.folha_item_id] && pagamentos[s.folha_item_id].status === 'PAGO';
       return `<div class="flex flex-wrap gap-x-3 text-[10px]">${passo(true, 'Solicitada', s.solicitado_em)}${passo(!!s.supervisor_ciente_em, 'Supervisor ciente', s.supervisor_ciente_em)}
@@ -309,7 +309,7 @@
           : faltam <= 30 ? `<span class="ml-1 bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded text-[10px] font-black">⚠ começa em ${faltam} dias</span>` : '';
         return `<div class="bg-white border ${pend && faltam <= 15 ? 'border-rose-400 border-2' : 'border-slate-200'} rounded-xl p-3 flex flex-col md:flex-row justify-between gap-2">
           <div class="space-y-1"><div class="font-bold text-slate-900">${esc(f.nome_registro)} <span class="text-[10px] font-normal text-slate-500">${esc(nomeLoja(f.loja_id))}</span>${urg}</div>
-            <div class="text-[10px] text-slate-500">📝 Solicitada em <b>${new Date(s.solicitado_em).toLocaleDateString('pt-BR')}</b>${s.solicitado_por ? ' por ' + esc(s.solicitado_por) : ''}${s.pre_aprovado_em ? ` · ✅ aprovada pelo RH em <b>${new Date(s.pre_aprovado_em).toLocaleDateString('pt-BR')}</b>` : ['RECUSADA', 'CANCELADA'].includes(s.status) ? '' : ' · <span class="text-amber-700">aguardando aprovação do RH</span>'}</div>
+            <div class="text-[10px] text-slate-500">📝 Solicitada em <b>${new Date(s.solicitado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</b>${s.solicitado_por ? ' por ' + esc(s.solicitado_por) : ''}${s.pre_aprovado_em ? ` · ✅ aprovada pelo RH em <b>${new Date(s.pre_aprovado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</b>` : ['RECUSADA', 'CANCELADA'].includes(s.status) ? '' : ' · <span class="text-amber-700">aguardando aprovação do RH</span>'}</div>
             <div class="text-sm font-mono">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · <b>${s.dias} dias</b>${s.dias_abono ? ` + ${s.dias_abono} vendidos` : ''} · retorna ${dbr(addDias(s.data_fim, 1))}</div>
             ${linhaTempo(s)}
             ${s.status === 'RECUSADA' ? `<div class="text-[11px] text-rose-700 font-bold">Motivo: ${esc(s.recusado_motivo)}</div>` : ''}
@@ -346,6 +346,7 @@
       const perto = difDias(s.data_inicio, hoje());
       return `<div class="bg-white border ${perto <= 15 && s.status !== 'LANCADA' ? 'border-rose-400' : 'border-slate-200'} rounded-lg p-2 space-y-1 text-[11px]">
         <div class="font-bold text-slate-900 leading-tight">${esc(f.nome_registro)}</div>
+        <div class="text-[9px] text-slate-400">📝 solicitada ${s.solicitado_em ? new Date(s.solicitado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'} por ${esc(s.solicitado_por || '')}</div>
         <div class="text-[10px] text-slate-500">${esc(nomeLoja(f.loja_id))}${s.supervisor_ciente_em ? ' · 👁 supervisor ciente' : doSupervisor(f.loja_id) ? ' · <span class="text-amber-700">aguardando ciência</span>' : ''}</div>
         <div class="font-mono">${dbr(s.data_inicio)} → ${dbr(s.data_fim)} · ${s.dias}d${s.dias_abono ? ' +' + s.dias_abono + ' vend.' : ''}</div>
         ${perto <= 15 && s.status !== 'LANCADA' ? `<div class="text-[10px] font-bold text-rose-700">⚠ começa em ${perto} dia(s)</div>` : ''}

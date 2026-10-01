@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitações de cadastro - Sistema Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1200px] mx-auto space-y-4">
+
+    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">👤 SOLICITAÇÕES DE CADASTRO</h1>
+        <p id="subtitulo" class="text-xs text-slate-500">Pessoa nova na loja: o líder pede, o RH cadastra e confirma. Tudo com data e hora.</p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+        <a id="lnkFuncionarios" href="funcionarios.html" class="hidden px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs border border-emerald-300">👥 Cadastro de funcionários</a>
+        <a id="btnPainel" href="index.html" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← PAINEL</a>
+        <a id="btnVoltar" href="#" class="hidden px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg font-bold text-xs border border-slate-300">← Voltar</a>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <!-- FORMULÁRIO (líder; RH/gestor/supervisor também podem) -->
+      <div id="boxForm" class="hidden lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm h-fit">
+        <h2 class="font-black text-sm text-slate-800">➕ PEDIR CADASTRO DE PESSOA NOVA</h2>
+        <div id="boxLoja" class="hidden"><label class="lbl">Loja *</label><select id="cLoja" class="inp font-bold"></select></div>
+        <div><label class="lbl">Nome completo *</label><input id="cNome" class="inp uppercase" maxlength="120" oninput="this.value=this.value.toUpperCase()"></div>
+        <div><label class="lbl">Telefone de contato (com DDD) *</label><input id="cTel" class="inp font-mono" maxlength="16" placeholder="(11) 99999-9999" oninput="mascaraTel(this)"></div>
+        <div><label class="lbl">Função prevista *</label>
+          <div class="grid grid-cols-2 gap-2" id="cFuncoes"></div></div>
+        <div><label class="lbl">Início previsto (opcional)</label><input id="cInicio" type="date" class="inp font-mono"></div>
+        <div><label class="lbl">Observação (opcional)</label><textarea id="cObs" rows="2" maxlength="500" class="inp" placeholder="Ex.: indicação, horário combinado, experiência..."></textarea></div>
+        <button id="btnEnviar" onclick="enviar()" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer">ENVIAR PARA O RH</button>
+        <p class="text-[10px] text-slate-400">O RH faz o cadastro e confirma aqui. Você recebe a resposta no histórico ao lado (cadastrado ou recusado, com data e hora).</p>
+      </div>
+
+      <!-- LISTA -->
+      <div id="boxLista" class="lg:col-span-3 space-y-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-2 text-xs">
+          <div><label class="lbl">Situação</label><select id="fStatus" onchange="render()" class="inp !py-1.5">
+            <option value="">Todas</option><option value="PENDENTE">Aguardando RH</option><option value="CADASTRADO">Cadastrado</option><option value="RECUSADO">Recusado</option><option value="CANCELADO">Cancelado</option></select></div>
+          <div class="flex-1 min-w-[180px]"><label class="lbl">Busca</label><input id="fBusca" oninput="render()" class="inp !py-1.5" placeholder="nome, loja, telefone..."></div>
+          <div id="lblTotais" class="text-[11px] text-slate-500 ml-auto"></div>
+        </div>
+        <div id="lista" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+    .inp:focus { outline: none; border-color: #4f46e5; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+    const FUNCOES = { CAIXA: '💵 Caixa', BALCONISTA: '🧴 Balconista', AUXILIAR: '📦 Auxiliar', FARMACEUTICO: '💊 Farmacêutico(a)' };
+    const SIT = {
+      PENDENTE:   { txt: '⏳ Aguardando RH', cls: 'bg-amber-100 text-amber-800' },
+      CADASTRADO: { txt: '✅ Cadastrado', cls: 'bg-emerald-100 text-emerald-800' },
+      RECUSADO:   { txt: '✕ Recusado', cls: 'bg-rose-100 text-rose-800' },
+      CANCELADO:  { txt: '⊘ Cancelado', cls: 'bg-slate-200 text-slate-600' }
+    };
+    const ACAO = { SOLICITADO: '📝 solicitado', CADASTRADO: '✅ cadastrado pelo RH', RECUSADO: '✕ recusado pelo RH', CANCELADO: '⊘ cancelado', LIDER_CIENTE: '👁 líder ciente' };
+    let perfil = null, minhaLoja = null, meuEmail = '', lojas = [], funcs = [], pedidos = [], funcaoSel = '';
+    const rh = () => ['RH', 'GESTOR'].includes(perfil);
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+
+    function mascaraTel(el) {
+      const d = el.value.replace(/\D/g, '').slice(0, 11);
+      el.value = d.length <= 2 ? d : d.length <= 6 ? `(${d.slice(0, 2)}) ${d.slice(2)}` : d.length <= 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    }
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null; meuEmail = (user.email || '').toLowerCase();
+      $('lblUsuario').innerText = meuEmail; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (perfil === 'LIDER' && !minhaLoja) { $('aviso').innerText = 'Seu usuário de líder não está ligado a uma loja. Peça ao RH.'; $('aviso').classList.remove('hidden'); return; }
+      if (rh()) { $('btnPainel').classList.remove('hidden'); $('lnkFuncionarios').classList.remove('hidden'); }
+      else { $('btnVoltar').href = perfil === 'LIDER' ? 'freelance_solicitacao.html' : 'supervisor_freelance.html'; $('btnVoltar').classList.remove('hidden'); }
+      $('subtitulo').innerText = perfil === 'LIDER' ? 'Peça o cadastro de uma pessoa nova da sua loja. O RH cadastra e a resposta aparece no seu histórico.'
+        : perfil === 'SUPERVISOR' ? 'Acompanhamento dos pedidos de cadastro das lojas (somente consulta).'
+        : 'Pedidos dos líderes: faça o cadastro na tela de Funcionários e confirme aqui (ou recuse com o motivo).';
+      const [rl, rf] = await Promise.all([
+        _supabase.from('lojas').select('*').order('nome_loja'),
+        rh() ? _supabase.from('funcionarios').select('id, nome_registro, loja_id, status').order('nome_registro') : Promise.resolve({ data: [] })
+      ]);
+      lojas = (rl.data || []).filter(l => l.ativo !== false); funcs = rf.data || [];
+      // formulário: líder (loja dele) · RH/Gestor (escolhem a loja). Supervisor só acompanha.
+      if (perfil === 'LIDER' || rh()) {
+        $('boxForm').classList.remove('hidden');
+        if (rh()) { $('boxLoja').classList.remove('hidden'); $('cLoja').innerHTML = '<option value="">-- selecione --</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join(''); }
+        $('cFuncoes').innerHTML = Object.entries(FUNCOES).map(([k, t]) => `<button type="button" data-f="${k}" onclick="escolherFuncao('${k}')" class="btF p-2.5 rounded-lg border-2 text-xs font-bold cursor-pointer">${t}</button>`).join('');
+        escolherFuncao('');
+      } else { $('boxLista').className = 'lg:col-span-5 space-y-3'; }
+      $('conteudo').classList.remove('hidden');
+      if (rh()) $('fStatus').value = 'PENDENTE';
+      await carregar();
+    }
+    function escolherFuncao(k) {
+      funcaoSel = k;
+      document.querySelectorAll('.btF').forEach(b => b.className = `btF p-2.5 rounded-lg border-2 text-xs font-bold cursor-pointer ${b.dataset.f === k ? 'border-indigo-600 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white text-slate-600'}`);
+    }
+
+    async function carregar() {
+      const { data, error } = await _supabase.from('cadastro_solicitacoes').select('*').order('solicitado_em', { ascending: false });
+      if (error) { $('aviso').innerText = 'Erro ao carregar (rode o SQL AM no Supabase): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      pedidos = data || [];
+      render();
+    }
+
+    function render() {
+      const st = $('fStatus').value, termo = norm($('fBusca').value.trim());
+      const lista = pedidos.filter(p => (!st || p.status === st) && (!termo || termo.split(/\s+/).every(t => norm(p.nome).includes(t) || norm(nomeLoja(p.loja_id)).includes(t) || String(p.telefone).replace(/\D/g, '').includes(t.replace(/\D/g, '') || '§'))));
+      const pend = pedidos.filter(p => p.status === 'PENDENTE').length;
+      $('lblTotais').innerText = `${lista.length} pedido(s) · ${pend} aguardando RH`;
+      $('lista').innerHTML = lista.length ? lista.map(card).join('') : '<div class="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm">Nenhum pedido.</div>';
+    }
+
+    function card(p) {
+      const s = SIT[p.status] || { txt: p.status, cls: '' };
+      const acoes = [];
+      if (rh() && p.status === 'PENDENTE') acoes.push(`<button onclick="confirmar('${p.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">✅ Cadastro realizado</button>`,
+        `<button onclick="recusar('${p.id}')" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-[11px] font-bold cursor-pointer">❌ Recusar</button>`);
+      if (p.status === 'PENDENTE' && (p.solicitante_email === meuEmail)) acoes.push(`<button onclick="cancelar('${p.id}')" class="text-[10px] text-slate-500 hover:text-rose-600 underline cursor-pointer">cancelar pedido</button>`);
+      if (perfil === 'LIDER' && ['CADASTRADO', 'RECUSADO'].includes(p.status) && !p.lider_ciente_em) acoes.push(`<button onclick="ciente('${p.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">👁 Ciente</button>`);
+      const hist = (p.historico || []).map(h => `<div>• ${dataHora(h.em)} · <b>${ACAO[h.acao] || esc(h.acao)}</b>${h.obs ? ' · ' + esc(h.obs) : ''} <span class="text-slate-400">${esc(h.por || '')}</span></div>`).join('');
+      return `<div class="bg-white border ${p.status === 'PENDENTE' ? 'border-amber-300' : 'border-slate-200'} rounded-xl p-4 shadow-sm">
+        <div class="flex flex-col md:flex-row justify-between gap-3">
+          <div class="space-y-1 text-xs min-w-0">
+            <div class="flex flex-wrap items-center gap-2"><span class="font-mono font-black text-slate-500">#${p.numero}</span>
+              <span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(p.loja_id))}</span>
+              <span class="${s.cls} px-2 py-0.5 rounded text-[10px] font-bold">${s.txt}</span>
+              ${perfil === 'LIDER' && ['CADASTRADO', 'RECUSADO'].includes(p.status) && !p.lider_ciente_em ? '<span class="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">NOVO</span>' : ''}</div>
+            <div class="text-base font-black text-slate-900">${esc(p.nome)}</div>
+            <div class="text-[11px]">${FUNCOES[p.funcao] || esc(p.funcao)} · 📞 <span class="font-mono">${esc(p.telefone)}</span>${p.inicio_previsto ? ' · início previsto ' + new Date(p.inicio_previsto + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</div>
+            ${p.observacao ? `<div class="text-[11px] text-slate-500 italic">"${esc(p.observacao)}"</div>` : ''}
+            <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(p.solicitado_em)}</b> por ${esc(p.solicitante_email)}${p.decidido_em ? ` · ${p.status === 'CADASTRADO' ? '✅ cadastrado' : p.status === 'RECUSADO' ? '✕ recusado' : '⊘ cancelado'} em <b>${dataHora(p.decidido_em)}</b> por ${esc(p.decidido_por)}` : ''}${p.lider_ciente_em ? ` · 👁 líder ciente em ${dataHora(p.lider_ciente_em)}` : ''}</div>
+            ${p.decisao_obs ? `<div class="text-[11px] ${p.status === 'RECUSADO' ? 'text-rose-700 font-bold' : 'text-slate-700'}">RH: ${esc(p.decisao_obs)}</div>` : ''}
+            ${hist ? `<details class="text-[10px] text-slate-500"><summary class="cursor-pointer">histórico (${(p.historico || []).length})</summary>${hist}</details>` : ''}
+          </div>
+          <div class="flex flex-col items-end gap-1.5 shrink-0">${acoes.join('')}</div>
+        </div></div>`;
+    }
+
+    async function enviar() {
+      const nome = $('cNome').value.trim(), tel = $('cTel').value.trim();
+      if (rh() && !$('cLoja').value) return alert('Selecione a loja.');
+      if (nome.length < 5 || !nome.includes(' ')) return alert('Informe o nome completo.');
+      if (tel.replace(/\D/g, '').length < 10) return alert('Informe o telefone com DDD.');
+      if (!funcaoSel) return alert('Escolha a função prevista.');
+      const btn = $('btnEnviar'); btn.disabled = true;
+      const { data, error } = await _supabase.rpc('fn_cadastro_solicitar', { p_nome: nome, p_telefone: tel, p_funcao: funcaoSel,
+        p_inicio: $('cInicio').value || null, p_obs: $('cObs').value.trim() || null, p_loja: rh() ? $('cLoja').value : null });
+      btn.disabled = false;
+      if (error) return alert('Não enviado: ' + error.message);
+      ['cNome', 'cTel', 'cInicio', 'cObs'].forEach(id => $(id).value = ''); escolherFuncao('');
+      alert(`Pedido #${data} enviado ao RH.`);
+      await carregar();
+    }
+    async function confirmar(id) {
+      const p = pedidos.find(x => x.id === id);
+      const candidatos = funcs.filter(f => norm(f.nome_registro) === norm(p.nome) || norm(f.nome_registro).split(' ')[0] === norm(p.nome).split(' ')[0] && f.loja_id === p.loja_id);
+      const sugerido = candidatos.find(f => norm(f.nome_registro) === norm(p.nome));
+      if (!confirm(`Confirmar que ${p.nome} já foi CADASTRADO(A) na tela de Funcionários?` + (sugerido ? `\n\nEncontrei no cadastro: ${sugerido.nome_registro} (será vinculado).` : '\n\n(Ainda não achei esse nome no cadastro — confira antes de confirmar.)'))) return;
+      const obs = prompt('Observação para o líder (opcional):', sugerido ? 'Cadastro feito. Matrícula liberada.' : '') ?? '';
+      const { error } = await _supabase.rpc('fn_cadastro_decidir', { p_id: id, p_cadastrado: true, p_obs: obs || null, p_funcionario: sugerido ? sugerido.id : null });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+    async function recusar(id) {
+      const motivo = prompt('Motivo da recusa (o líder vê no histórico):'); if (!motivo) return;
+      const { error } = await _supabase.rpc('fn_cadastro_decidir', { p_id: id, p_cadastrado: false, p_obs: motivo, p_funcionario: null });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+    async function cancelar(id) {
+      if (!confirm('Cancelar este pedido de cadastro?')) return;
+      const { error } = await _supabase.rpc('fn_cadastro_cancelar', { p_id: id });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+    async function ciente(id) {
+      const { error } = await _supabase.rpc('fn_cadastro_ciente', { p_id: id });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
