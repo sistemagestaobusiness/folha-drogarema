@@ -298,7 +298,7 @@
       const sup = r.supervisor_em ? `<div class="text-[11px]">Supervisor: <b>${r.status === 'REJEITADA' && !r.rh_em ? 'recusou' : 'aprovou'}</b> — ${esc(r.supervisor_por || '')}${r.supervisor_forcado ? ' <b class="text-amber-700">(no lugar do supervisor)</b>' : ''} em ${new Date(r.supervisor_em).toLocaleString('pt-BR')}${r.supervisor_obs ? ' · "' + esc(r.supervisor_obs) + '"' : ''}</div>` : '';
       const rh = r.rh_em ? `<div class="text-[11px]">RH: ${esc(r.rh_por || '')} em ${new Date(r.rh_em).toLocaleString('pt-BR')}${r.observacao_rh ? ' · "' + esc(r.observacao_rh) + '"' : ''}</div>` : '';
       const canc = r.status === 'CANCELADA' ? `<div class="text-[11px] bg-rose-50 border-l-2 border-rose-400 pl-2 text-rose-800"><b>🚫 Cancelada${r.cancelado_por ? ' por ' + esc(r.cancelado_por) : ''}${r.cancelado_em ? ' em ' + new Date(r.cancelado_em).toLocaleString('pt-BR') : ''}:</b> ${esc(r.cancelado_motivo || 'sem motivo informado')}</div>` : '';
-      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
+      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha + (compAberta && ordemComp(r.competencia_folha) > ordemComp(compAberta) ? ' <b class="text-sky-700">(aguardando abertura do mês)</b>' : '') : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
       return `
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           <div class="flex flex-col md:flex-row justify-between gap-3">
@@ -372,12 +372,21 @@
     }
 
     // ---------- Aprovação final ----------
+    // competência pela DATA DO SERVIÇO (mesma regra do banco: fn_competencia_do_fato)
+    const ordemComp = c => c ? c.slice(3) + c.slice(0, 2) : '';
+    function compDoFato(data) {
+      const fato = data ? String(data).slice(5, 7) + '/' + String(data).slice(0, 4) : compAberta;
+      if (!compAberta || ordemComp(fato) > ordemComp(compAberta)) return { comp: fato, txt: `${fato} (mês ainda não aberto: o lançamento fica guardado e aparece quando ${fato} abrir)`, futuro: true };
+      if (ordemComp(fato) < ordemComp(compAberta)) return { comp: compAberta, txt: `${compAberta} (atrasado de ${fato}, que está fechado)` };
+      return { comp: compAberta, txt: compAberta };
+    }
+
     async function abrirAprovacao(id) {
       const { data: r } = await _supabase.from('freelance_solicitacoes').select('*').eq('id', id).single();
       if (!r) return;
       if (!confirmaAntecedencia(r)) return;
       atual = r;
-      document.getElementById('apResumo').innerText = `${r.loja_solicitante || ''} · ${dataBR(r.data_servico)} · ${NOMES_MOTIVO[r.motivo] || r.motivo || ''} · lança na competência ${compAberta}`;
+      document.getElementById('apResumo').innerText = `${r.loja_solicitante || ''} · ${dataBR(r.data_servico)} · ${NOMES_MOTIVO[r.motivo] || r.motivo || ''} · lança na competência ${compDoFato(r.data_servico).txt}`;
       await prepararEscala([r]);
       document.getElementById('apEscala').innerHTML = escalaInfo(r);
       document.getElementById('apFreela').innerText = nome(r.funcionario_id);
@@ -391,7 +400,7 @@
       document.getElementById('apHoras').value = r.horas_trabalhadas;
       document.getElementById('apForma').value = r.forma_pagamento || 'FOLHA';
       document.getElementById('apDataPrevista').value = '';
-      document.getElementById('apCompFolha').innerText = compAberta || '-';
+      document.getElementById('apCompFolha').innerText = compDoFato(r.data_servico).comp || '-';
       document.getElementById('apLiderPediu').innerHTML = `Líder pediu: <b>${esc(r.forma_pagamento || '-')}</b> · confirme ou altere a forma acima.`;
       document.getElementById('apValor').value = '';
       document.querySelector('input[name="apModo"][value="PAGAR"]').checked = true;
@@ -430,7 +439,7 @@
       document.getElementById('boxEventoPag').classList.toggle('hidden', !(modo === 'PAGAR' && forma === 'FOLHA'));
       document.getElementById('apInfoFreela').innerText = modo === 'COMPENSAR'
         ? 'As horas entram como crédito no banco de horas dele. Nenhum valor é pago.'
-        : forma === 'FOLHA' ? `Gera o evento escolhido na folha, competência ${compAberta}.`
+        : forma === 'FOLHA' ? `Gera o evento escolhido na folha, competência ${compDoFato(atual && atual.data_servico).comp}.`
         : `Pagamento ${forma.toLowerCase()} fora da folha: vai para a fila do Financeiro (não entra no 5º dia útil).`;
       const t = (document.querySelector('input[name="apTrat"]:checked') || {}).value;
       document.getElementById('boxDesconto').classList.toggle('hidden', t !== 'DESCONTO');

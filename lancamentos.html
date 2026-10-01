@@ -52,6 +52,7 @@
 
         <!-- ABA 1: NOVO LANÇAMENTO -->
         <div id="abaNovo" class="space-y-4">
+          <div id="bannerProximo" class="hidden bg-slate-50 border border-slate-300 text-slate-700 p-3 rounded-lg text-[11px] leading-snug"></div>
           <div id="bannerEnvioFin" class="hidden bg-sky-50 border border-sky-300 text-sky-900 p-3 rounded-lg text-[11px] leading-snug"></div>
           <div id="bannerEscala" class="hidden bg-amber-50 border border-amber-300 text-amber-900 p-3 rounded-lg text-[11px] leading-snug"></div>
           <div id="alertaLiberacao" class="hidden bg-amber-50 border border-amber-400 text-amber-900 p-3 rounded-lg text-xs font-bold"></div>
@@ -475,6 +476,7 @@
         if (selComp) selComp.value = competenciaRegraLancamento;
         carregarOcorrenciasEscala();
         carregarBannerEnvioFin();
+        carregarBannerProximo();
       } catch (err) {
         console.error('Erro na inicialização:', err);
       }
@@ -794,6 +796,20 @@
         const e = (data || [])[0], box = document.getElementById('bannerEnvioFin');
         if (!e) { box.classList.add('hidden'); return; }
         box.innerHTML = `🗓 <b>A folha ${competenciaRegraLancamento} já foi enviada ao Financeiro</b> (${e.versao}º envio em ${new Date(e.enviado_em).toLocaleString('pt-BR')}, pagar em ${String(e.data_pagamento).split('-').reverse().join('/')}). Qualquer ajuste feito aqui só chega ao Financeiro depois de <a href="resumo_folha.html" class="underline font-bold">🔁 Reenviar ajustes no Resumo da folha</a>.`;
+        box.classList.remove('hidden');
+      } catch (err) {}
+    }
+
+    // freelance/HE com serviço no mês seguinte já ficam gravados nele (competência pela data do serviço)
+    async function carregarBannerProximo() {
+      try {
+        const [m, a] = competenciaRegraLancamento.split('/').map(Number);
+        const prox = m === 12 ? `01/${a + 1}` : `${String(m + 1).padStart(2, '0')}/${a}`;
+        const { data } = await _supabase.from('folha_itens').select('valor, tipo').eq('competencia', prox);
+        const box = document.getElementById('bannerProximo');
+        if (!data || !data.length) { box.classList.add('hidden'); return; }
+        const prov = data.filter(i => i.tipo === 'PROVENTO').length, desc = data.length - prov;
+        box.innerHTML = `📥 <b>${data.length} lançamento(s) já guardados para ${prox}</b> (${prov} provento(s), ${desc} desconto(s)): freelance, hora extra e faltas com data em ${prox}. Não entram em ${competenciaRegraLancamento}; aparecem quando ${prox} for aberto.`;
         box.classList.remove('hidden');
       } catch (err) {}
     }
