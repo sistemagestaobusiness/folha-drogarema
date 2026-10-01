@@ -167,6 +167,15 @@
           <div id="alertaPagamentoLista" class="text-xs text-rose-900 mt-2 space-y-1"></div>
         </a>
 
+        <!-- PAGAMENTOS AGUARDANDO O FINANCEIRO (some quando tudo foi pago) -->
+        <a id="alertaAPagar" href="financeiro.html" class="hidden block bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:bg-slate-50">
+          <div class="flex justify-between items-center gap-2">
+            <div class="text-sm font-bold text-slate-800">💳 Pagamentos aguardando o Financeiro</div>
+            <span class="text-[10px] text-slate-500 underline">ver →</span>
+          </div>
+          <div id="alertaAPagarTxt" class="text-xs text-slate-600 mt-1"></div>
+        </a>
+
         <!-- NOVO: ALERTA DE FREELANCE PENDENTE -->
         <div id="alertaFreelance" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm space-y-3">
           <div class="flex justify-between items-center border-b border-amber-200/50 pb-2">
@@ -693,6 +702,25 @@
     }
 
     async function carregarAlertaPagamentos() {
+      // pendentes com o Financeiro (inclui o salário do 5º dia útil): some quando é pago
+      try {
+        const { data: pend } = await _supabase.from('pagamentos_extras').select('valor, vencimento, tipo').eq('status', 'PENDENTE');
+        const box = document.getElementById('alertaAPagar');
+        if (!pend || !pend.length) box.classList.add('hidden');
+        else {
+          const h = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+          const fmt = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const soma = l => l.reduce((a, i) => a + parseFloat(i.valor), 0);
+          const venc = pend.filter(i => i.vencimento < h), hj = pend.filter(i => i.vencimento === h);
+          const NOMES = { QUINTO_DIA: '5º dia útil', ADIANTAMENTO: 'adiantamento', VALE_TRANSPORTE: 'VT', FERIAS: 'férias', DECIMO_TERCEIRO: '13º', RESCISAO: 'rescisão', FREELANCE: 'freelance', HORA_EXTRA: 'hora extra', REEMBOLSO: 'reembolso', OUTROS: 'outros' };
+          const porTipo = {}; pend.forEach(i => { porTipo[i.tipo] = porTipo[i.tipo] || { n: 0, v: 0, d: i.vencimento }; porTipo[i.tipo].n++; porTipo[i.tipo].v += parseFloat(i.valor); if (i.vencimento < porTipo[i.tipo].d) porTipo[i.tipo].d = i.vencimento; });
+          box.className = `block p-4 rounded-xl shadow-sm hover:opacity-95 ${venc.length ? 'bg-rose-50 border-2 border-rose-400' : 'bg-white border border-slate-200'}`;
+          document.getElementById('alertaAPagarTxt').innerHTML = `<b>${pend.length}</b> pagamento(s) · <b>${fmt(soma(pend))}</b>`
+            + (venc.length ? ` · <b class="text-rose-700">⚠ ${venc.length} vencido(s) ${fmt(soma(venc))}</b>` : '')
+            + (hj.length ? ` · <b class="text-amber-700">${hj.length} para hoje</b>` : '')
+            + `<div class="mt-1 text-[11px] text-slate-500">${Object.entries(porTipo).map(([t, x]) => `${NOMES[t] || t}: ${x.n} (${fmt(x.v)}, a partir de ${x.d.slice(8, 10)}/${x.d.slice(5, 7)})`).join(' · ')}</div>`;
+        }
+      } catch (err) { console.error('A pagar:', err); }
       try {
         const { data } = await _supabase.from('pagamentos_extras').select('valor, descricao, problema_desc, funcionario_id').eq('status', 'PROBLEMA');
         const box = document.getElementById('alertaPagamento');
