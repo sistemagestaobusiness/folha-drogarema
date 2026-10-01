@@ -264,7 +264,15 @@
     // ------------------------------------------------------------------
     // REGRA DO DIA: férias > exceção do dia > falta informada no freelance > padrão
     // ------------------------------------------------------------------
+    // regra por funcionário: trabalhou no SÁBADO => domingo e segunda seguintes são folga
     function diaFunc(f, iso) {
+      const r = diaBase(f, iso), p = padroes[f.id], d = dow(iso);
+      if (p && p.sab_folga_dom_seg && (d === 0 || d === 1) && r.tipo === 'TRABALHO' && !r.origem
+          && ['TRABALHO', 'FALTA', 'ATESTADO'].includes(diaBase(f, addDias(iso, d === 0 ? -1 : -2)).tipo))
+        return { tipo: 'FOLGA', obs: 'folga porque trabalha no sábado ' + dbr(addDias(iso, d === 0 ? -1 : -2)).slice(0, 5) };
+      return r;
+    }
+    function diaBase(f, iso) {
       if ((f.data_contratacao && iso < f.data_contratacao) || (f.data_rescisao && iso > f.data_rescisao)) return { tipo: 'FORA' };
       const fe = ferias.find(s => s.funcionario_id === f.id && s.data_inicio <= iso && s.data_fim >= iso);
       if (fe) return { tipo: fe.status === 'SOLICITADA' ? 'FERIAS_PEDIDA' : 'FERIAS', origem: 'FERIAS' };
@@ -683,6 +691,7 @@
                   ${[['FOLGA', 'Folga todo domingo'], ['TRABALHA', 'Trabalha todo domingo'], ['ALTERNADO', 'Alternado (1 sim, 1 não)'], ['DOIS_UM', 'Trabalha 2, folga 1']].map(([k, t]) => `<option value="${k}" ${(p.domingo || 'FOLGA') === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
                 <label id="bxR_${f.id}" class="${['ALTERNADO', 'DOIS_UM'].includes(p.domingo) ? 'flex' : 'hidden'} items-center gap-1 text-[9px] font-bold text-slate-500">um domingo de FOLGA <input type="date" id="pR_${f.id}" value="${p.domingo_ref || ''}" ${dis} class="inp mini font-mono flex-1"></label>
               </div>
+              <label class="flex items-center gap-1 text-[9px] font-bold text-slate-600 cursor-pointer" title="Quando o sábado for de trabalho, o domingo e a segunda seguintes viram folga automaticamente"><input type="checkbox" id="pSDS_${f.id}" ${p.sab_folga_dom_seg ? 'checked' : ''} ${dis} class="accent-slate-700"> trabalhou sábado → folga dom. e seg.</label>
               <div id="bxC_${f.id}" class="${p.regime === 'CICLO' ? '' : 'hidden'} space-y-1">
                 <div class="flex items-center gap-1 text-[10px] font-bold text-slate-600">trabalha <input type="number" min="1" max="13" id="pCT_${f.id}" value="${p.ciclo_trabalho || 5}" ${dis} class="inp mini w-12 text-center"> folga <input type="number" min="1" max="6" id="pCF_${f.id}" value="${p.ciclo_folga || 1}" ${dis} class="inp mini w-12 text-center"></div>
                 <label class="flex items-center gap-1 text-[9px] font-bold text-slate-500">um dia de FOLGA <input type="date" id="pCR_${f.id}" value="${p.ciclo_ref || ''}" ${dis} class="inp mini font-mono flex-1"></label>
@@ -733,7 +742,8 @@
         folgas: [...document.querySelectorAll('.pF_' + fid)].filter(c => c.checked).map(c => parseInt(c.value, 10)),
         regime: v('pG'), semanas: v('pG') === 'ROTATIVO' ? lerSemanas(fid) : null, semanas_ref: v('pG') === 'ROTATIVO' ? v('pWR') : null, ciclo_trabalho: parseInt(v('pCT'), 10) || null, ciclo_folga: parseInt(v('pCF'), 10) || null, ciclo_ref: v('pCR') || null,
         domingo: v('pD'), domingo_ref: ['ALTERNADO', 'DOIS_UM'].includes(v('pD')) ? v('pR') : null,
-        sab_entrada: v('pSE'), sab_saida: v('pSS'), dom_entrada: v('pDE'), dom_saida: v('pDS') };
+        sab_entrada: v('pSE'), sab_saida: v('pSS'), dom_entrada: v('pDE'), dom_saida: v('pDS'),
+        sab_folga_dom_seg: $('pSDS_' + fid).checked };
       if (!dados.entrada || !dados.saida) return alert('Informe entrada e saída.');
       if (!!dados.sab_entrada !== !!dados.sab_saida || !!dados.dom_entrada !== !!dados.dom_saida) return alert('No horário diferente de sábado/domingo, informe entrada e saída (ou deixe os dois em branco).');
       if (dados.regime === 'CICLO') {

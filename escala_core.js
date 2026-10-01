@@ -125,7 +125,12 @@
         const fl = (st.freelaAus[f.id + '|' + iso] || []).find(s => AUSENCIAS_FREELA[s.motivo]);
         if (fl) return { tipo: AUSENCIAS_FREELA[fl.motivo], origem: 'FREELA', solic: fl };
       }
-      return padraoDoDia(f, iso);
+      const r = padraoDoDia(f, iso), p = st.padroes[f.id], d = dow(iso);
+      // regra por funcionário: trabalhou no SÁBADO => domingo e segunda seguintes são folga
+      if (p && p.sab_folga_dom_seg && (d === 0 || d === 1) && r.tipo === 'TRABALHO' && !opts._semRegraSab
+          && ['TRABALHO', 'FALTA', 'ATESTADO'].includes(dia(f, addDias(iso, d === 0 ? -1 : -2), Object.assign({}, opts, { _semRegraSab: true })).tipo))
+        return { tipo: 'FOLGA' };
+      return r;
     }
 
     // pessoas da loja no dia (+ emprestadas) e extras (freelance / HE)
