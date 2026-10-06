@@ -361,7 +361,10 @@
       const nomeF = id => (funcs.find(f => f.id === id) || {}).nome_registro || '—';
       const linhas = regras.map(rg => {
         const col = R[String(rg.loja_num)]; if (!col) return '';
-        const fpv = col.fp_gensim || 0, b = FechamentoCore.bonus(rg, col.base_bonus != null ? col.base_bonus : col.gensim_sem_vit), ja = lancados2015[rg.funcionario_id] || [], vJa = ja.reduce((a, i) => a + parseFloat(i.valor || 0), 0);
+        // fechamento salvo em versão antiga não tem a base sem farmácia popular: refaz pelas transferências gravadas
+        let fpv = col.fp_gensim;
+        if (fpv == null) { fpv = 0; (calc.transferencias || []).forEach(x => { if (!/MEDICAMENTOS > (GENERICO|SIMILAR)$/.test(x.cls)) return; if (x.destino === rg.loja_num) fpv += x.v; if (rg.loja_num === 3) fpv -= x.v; }); }
+        const b = FechamentoCore.bonus(rg, col.gensim_sem_vit - fpv), ja = lancados2015[rg.funcionario_id] || [], vJa = ja.reduce((a, i) => a + parseFloat(i.valor || 0), 0);
         const faixaTxt = !b.faixa ? `abaixo da 1ª faixa (${fmt(b.piso || 0)})` : rg.tipo === 'PERCENTUAL' ? `${(b.faixa[1] * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% (faixa a partir de ${fmt(b.faixa[0])})` : `faixa a partir de ${fmt(b.faixa[0])}`;
         const sit = !ja.length ? '<span class="text-amber-700 font-semibold">não lançado</span>'
           : Math.abs(vJa - b.valor) < 0.005 ? `<span class="text-emerald-700 font-semibold">✓ lançado ${fmt(vJa)}</span>` : `<span class="text-rose-700 font-semibold">lançado ${fmt(vJa)} ≠ calculado</span>`;
