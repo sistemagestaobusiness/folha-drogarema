@@ -999,7 +999,7 @@
     }
 
     async function sincronizarSalarioBase(funcionarioId, competencia, salarioBase) {
-      if (!salarioBase || salarioBase <= 0) return; // Ignora se não houver salário cadastrado
+      if (!salarioBase || salarioBase < 1) return; // Ignora se não houver salário cadastrado (centavos = campo preenchido só para passar)
 
       // Confere se já existe um lançamento do tipo SALARIO (código 2000) neste mês
       const { data: lancamentosExistentes } = await _supabase

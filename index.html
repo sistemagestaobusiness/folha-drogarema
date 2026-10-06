@@ -389,6 +389,8 @@
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // sócios (cargo ou função SOCIO / SOCIO MAJORITARIO) não entram em relatórios nem na folha
+    const ehSocio = f => [f && f.cargo, f && f.organograma_funcao].some(v => /^S[OÓ]CIO/i.test(String(v || '').trim()));
     // O Supabase devolve no máximo 1000 linhas por consulta: busca em páginas até trazer tudo.
     async function buscarTudo(montar) {
       const tudo = [];
@@ -800,8 +802,9 @@
         const { data: eventos } = await _supabase.from('tipos_eventos').select('*');
 
         const emps = empresas || [];
-        const funcs = funcionarios || [];
-        const itens = itensFolha || [];
+        const funcs = (funcionarios || []).filter(f => !ehSocio(f));
+        const idsFolha = new Set(funcs.map(f => String(f.id)));
+        const itens = (itensFolha || []).filter(i => idsFolha.has(String(i.funcionario_id)));
         const evs = eventos || [];
 
         const ativos = funcs.filter(f => String(f.status || 'ATIVO').toUpperCase() === 'ATIVO');

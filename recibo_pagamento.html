@@ -199,6 +199,8 @@
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // sócios (cargo ou função SOCIO / SOCIO MAJORITARIO) não entram em relatórios nem na folha
+    const ehSocio = f => [f && f.cargo, f && f.organograma_funcao].some(v => /^S[OÓ]CIO/i.test(String(v || '').trim()));
     // O Supabase devolve no máximo 1000 linhas por consulta: busca em páginas até trazer tudo.
     async function buscarTudo(montar) {
       const tudo = [];
@@ -304,7 +306,7 @@
     async function carregarFuncionariosDoBanco() {
       const { data: funcionarios } = await _supabase.from('funcionarios').select('*').order('nome_registro');
       if (funcionarios) {
-        listaGlobalFuncionarios = funcionarios;
+        listaGlobalFuncionarios = funcionarios.filter(f => !ehSocio(f));
         atualizarSelectFuncionarios();
       }
     }
