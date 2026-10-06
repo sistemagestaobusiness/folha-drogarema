@@ -62,6 +62,7 @@
   <div class="p-4 sm:p-6">
     <!-- CONFERÊNCIA FINAL -> FINANCEIRO (5º dia útil) -->
     <div id="barraEnvio" class="mb-3"></div>
+    <div id="lembreteDinheiro"></div>
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
       <div class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
         <table class="w-full text-left text-xs border-collapse">
@@ -157,6 +158,7 @@
     
     // Agora o objeto valoresDinheiro espelhará os dados reais do banco
     let valoresDinheiro = {};
+    let historicoDinheiro = {};   // { funcionario_id: { vezes, comp, valor } } de meses anteriores
 
     function converterCompetenciaParaMMYYYY(texto) {
       const mesesMap = {
@@ -213,7 +215,7 @@
           _supabase.from('tipos_eventos').select('*'),
           _supabase.from('lojas').select('*'),
           _supabase.from('empresas').select('*'),
-          _supabase.from('pagamentos_dinheiro').select('*').eq('competencia', competenciaRegra)
+          _supabase.from('pagamentos_dinheiro').select('*')   // todos os meses: o histórico vira lembrete de quem costuma receber em dinheiro
         ]);
 
         const funcionarios = (resFunc.data || []).filter(f => !ehSocio(f));
@@ -221,7 +223,16 @@
         const eventos = resEventos.data || [];
         const lojas = resLojas.data || [];
         const empresas = resEmpresas.data || [];
-        const pagamentosDb = resPgtoDinheiro.data || [];
+        const todosDinheiro = resPgtoDinheiro.data || [];
+        const pagamentosDb = todosDinheiro.filter(pd => pd.competencia === competenciaRegra);
+        // histórico: último mês (antes deste) em que cada funcionário recebeu em dinheiro, e quantas vezes
+        const ordC = c => { const [m, a] = String(c || '').split('/'); return (parseInt(a, 10) || 0) * 12 + (parseInt(m, 10) || 0); };
+        historicoDinheiro = {};
+        todosDinheiro.filter(pd => parseFloat(pd.valor || 0) > 0 && ordC(pd.competencia) < ordC(competenciaRegra)).forEach(pd => {
+          const h = historicoDinheiro[pd.funcionario_id] || (historicoDinheiro[pd.funcionario_id] = { vezes: 0, comp: '', valor: 0 });
+          h.vezes++;
+          if (ordC(pd.competencia) > ordC(h.comp)) { h.comp = pd.competencia; h.valor = parseFloat(pd.valor); }
+        });
 
         // Inicializa o objeto com os dados permanentes vindos do banco
         valoresDinheiro = {};
@@ -334,6 +345,7 @@
         renderizarCabecalho();
         renderizarTabelaCorpo();
         carregarEnvio();
+        renderLembreteDinheiro();
 
       } catch (err) {
         console.error(err);
@@ -491,13 +503,18 @@
         tr += `<td class="py-2 px-3 text-right whitespace-nowrap font-bold text-sky-800 bg-sky-50/60 border-l-2 border-white">${formatarMoeda(difVal)}</td>`;
         
         // Novo Input com Memória de Estado (data-original) e bloqueio de falsos positivos
+        // lembrete: quem já recebeu em dinheiro em meses anteriores fica destacado até ter valor neste mês
+        const hd = historicoDinheiro[f.id];
+        const falta = hd && !(inputDinheiroVal > 0);
         tr += `
-          <td class="py-1 px-2 text-center whitespace-nowrap bg-amber-50/40 border-l border-slate-200">
-            <input type="number" step="0.01" value="${inputDinheiroVal > 0 ? inputDinheiroVal : ''}" placeholder="0.00"
-                   data-original="${inputDinheiroVal}"
-                   class="w-20 text-right font-mono font-bold text-xs p-1 border border-amber-300 bg-white rounded focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+          <td class="py-1 px-2 text-center whitespace-nowrap ${falta ? 'bg-amber-300/70' : 'bg-amber-50/40'} border-l border-slate-200" id="celDin-${f.id}">
+            <input type="number" step="0.01" value="${inputDinheiroVal > 0 ? inputDinheiroVal : ''}" placeholder="${hd ? formatarMoedaSimples(hd.valor) : '0.00'}"
+                   data-original="${inputDinheiroVal}" id="inpDin-${f.id}"
+                   class="w-20 text-right font-mono font-bold text-xs p-1 border ${falta ? 'border-amber-700 ring-2 ring-amber-500' : 'border-amber-300'} bg-white rounded focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
                    onblur="salvarFinanceiroBanco('${f.id}', this, ${liqGeral})"
                    onkeypress="if(event.key === 'Enter') this.blur();">
+            ${hd ? `<div class="text-[9px] leading-tight mt-0.5 ${falta ? 'text-amber-950 font-bold' : 'text-slate-400'}" title="Recebeu em dinheiro em ${hd.vezes} mês(es) anterior(es). Último: ${hd.comp}">
+              💵 ${hd.comp}: ${formatarMoedaSimples(hd.valor)}${falta ? ` <a href="#" onclick="usarDinheiroAnterior('${f.id}', ${hd.valor}); return false;" class="underline">usar</a>` : ''}</div>` : ''}
           </td>
         `;
         
@@ -559,6 +576,23 @@
     }
 
     // NOVA FUNÇÃO: Atualiza a interface, verifica alterações reais e envia para o banco
+    // copia para este mês o valor em dinheiro do último mês (o usuário ainda pode alterar)
+    function usarDinheiroAnterior(fId, valor) {
+      const inp = document.getElementById('inpDin-' + fId);
+      if (!inp) return;
+      inp.value = valor; inp.focus(); inp.blur();   // o blur salva e recalcula
+    }
+    // aviso no topo: quem costuma receber em dinheiro e ainda está sem valor neste mês
+    function renderLembreteDinheiro() {
+      const box = document.getElementById('lembreteDinheiro'); if (!box) return;
+      const falta = glob_dadosFunc.filter(f => historicoDinheiro[f.id] && !(valoresDinheiro[f.id] > 0));
+      if (!falta.length) { box.innerHTML = ''; return; }
+      box.innerHTML = `<div class="mb-3 bg-amber-100 border border-amber-400 text-amber-950 rounded-xl p-3 text-xs">
+        <b>💵 ${falta.length} funcionário(s) já receberam em dinheiro em meses anteriores e estão sem valor em ${competenciaRegra}:</b>
+        ${falta.map(f => `${f.nome} (${historicoDinheiro[f.id].comp}: ${formatarMoedaSimples(historicoDinheiro[f.id].valor)})`).join(' · ')}.
+        <span class="text-amber-800">Estão destacados na coluna "Pgto em dinheiro". Se neste mês não houver dinheiro para a pessoa, é só deixar em branco.</span></div>`;
+    }
+
     async function salvarFinanceiroBanco(fId, inputElement, liqGeral) {
       let valorDigitado = parseFloat(inputElement.value) || 0;
       let valorOriginal = parseFloat(inputElement.getAttribute('data-original')) || 0;
@@ -572,6 +606,9 @@
       document.getElementById(`banco-${fId}`).innerHTML = formatarMoeda(valorBanco);
       inputElement.setAttribute('data-original', valorDigitado); // Atualiza o novo original na tela
       recalcularTotaisInterface();
+      { const cel = document.getElementById('celDin-' + fId), hd = historicoDinheiro[fId];   // tira/recoloca o destaque do lembrete
+        if (cel && hd) { const f2 = !(valorDigitado > 0); cel.className = cel.className.replace(/bg-amber-\S+/, f2 ? 'bg-amber-300/70' : 'bg-amber-50/40'); }
+        renderLembreteDinheiro(); }
       if (meuPerfil !== null) renderEnvio();   // dinheiro mudou depois do envio? avisa no topo
 
       // 2. Gravação Crítica (Banco de Dados)
@@ -796,7 +833,7 @@
       if (!ultimoEnvio) {
         box.innerHTML = `<div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div class="text-xs text-amber-900"><div class="font-black text-sm">⏳ Folha ${escH(competenciaRegra)} ainda NÃO foi enviada ao Financeiro</div>
-            Faça a conferência final aqui (funcionários, valores, ajustes e dinheiro/banco). Enquanto não enviar, <b>o Financeiro não vê o pagamento do 5º dia útil</b>.
+            Faça a conferência final aqui (funcionários, valores, ajustes e pagamentos em dinheiro). O Financeiro recebe só o <b>líquido banco</b>; o que é pago em dinheiro não vai para ele. Enquanto não enviar, <b>o Financeiro não vê o pagamento do 5º dia útil</b>.
             <div class="mt-1 font-mono">${foto.length} funcionário(s) · líquido ${formatarMoeda(tot)}</div></div>
           ${podeEnviar() ? `<button onclick="abrirEnvio()" class="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-black text-xs cursor-pointer whitespace-nowrap shadow">✅ CONFERÊNCIA FINALIZADA · ENVIAR AO FINANCEIRO</button>` : '<span class="text-[11px] text-amber-800">Somente RH ou Gestão enviam.</span>'}
         </div>`;
@@ -808,7 +845,7 @@
       const probs = pagosQuinto.filter(p => p.status === 'PROBLEMA').length;
       const alertas = (ultimoEnvio.alertas || []);
       const cab = `✅ Enviada ao Financeiro${ultimoEnvio.versao > 1 ? ` (${ultimoEnvio.versao}º envio)` : ''} em <b>${new Date(ultimoEnvio.enviado_em).toLocaleString('pt-BR')}</b> por ${escH(ultimoEnvio.enviado_por || '')} · pagar em <b>${dbrH(ultimoEnvio.data_pagamento)}</b>`;
-      const sit = `<div class="mt-1 font-mono">${ultimoEnvio.qtd} funcionário(s) · líquido ${formatarMoeda(ultimoEnvio.total_liquido)} (banco ${formatarMoeda(ultimoEnvio.total_banco)} · dinheiro ${formatarMoeda(ultimoEnvio.total_dinheiro)}) · Financeiro: <b>${pagos}</b> pago(s), <b>${abertos}</b> a pagar${probs ? ` · <b class="text-rose-700">${probs} com problema</b>` : ''}</div>
+      const sit = `<div class="mt-1 font-mono">${ultimoEnvio.qtd} funcionário(s) · <b>Financeiro paga ${formatarMoeda(ultimoEnvio.total_banco)}</b> (líquido ${formatarMoeda(ultimoEnvio.total_liquido)} − dinheiro ${formatarMoeda(ultimoEnvio.total_dinheiro)}, pago por fora) · Financeiro: <b>${pagos}</b> pago(s), <b>${abertos}</b> a pagar${probs ? ` · <b class="text-rose-700">${probs} com problema</b>` : ''}</div>
         ${ultimoEnvio.motivo ? `<div class="text-[11px] mt-0.5">Último ajuste: ${escH(ultimoEnvio.motivo)}</div>` : ''}`;
       const alertHtml = alertas.length ? `<div class="mt-2 bg-rose-50 border border-rose-300 rounded-lg p-2 text-[11px] text-rose-900"><b>⚠ Atenção:</b> ${alertas.map(a => a.tipo === 'PAGO_A_MAIOR'
           ? `${escH(a.nome)} já recebeu ${formatarMoedaSimples(a.pago)} (${a.meio === 'DINHEIRO' ? 'dinheiro' : 'banco'}), o correto é ${formatarMoedaSimples(a.correto)} — <b>pago a maior R$ ${formatarMoedaSimples(a.valor)}</b> (descontar na próxima competência)`
@@ -848,8 +885,8 @@
       document.getElementById('envCiente').checked = false;
       document.getElementById('envResumo').innerHTML = `<div class="grid grid-cols-3 gap-2 text-center">
           <div class="bg-slate-50 border rounded-lg p-2"><div class="text-[10px] text-slate-500 font-bold">FUNCIONÁRIOS</div><div class="text-lg font-black">${ok.length}</div></div>
-          <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-2"><div class="text-[10px] text-indigo-700 font-bold">BANCO / PIX</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(banco)}</div></div>
-          <div class="bg-amber-50 border border-amber-200 rounded-lg p-2"><div class="text-[10px] text-amber-700 font-bold">DINHEIRO</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(din)}</div></div></div>
+          <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-2"><div class="text-[10px] text-indigo-700 font-bold">BANCO / PIX (vai ao Financeiro)</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(banco)}</div></div>
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-2"><div class="text-[10px] text-amber-700 font-bold">DINHEIRO (não vai ao Financeiro)</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(din)}</div></div></div>
         ${neg.length ? `<div class="mt-2 bg-rose-50 border border-rose-300 rounded p-2 text-rose-800">⚠ Líquido negativo (não será enviado): ${neg.map(i => escH(i.nome) + ' ' + formatarMoedaSimples(i.liquido)).join(' · ')}</div>` : ''}
         ${reenvio ? (difsEnvio.length ? `<div class="mt-2 font-bold">Mudanças desde o envio anterior:</div>${tabelaDifs(difsEnvio)}
           <div class="mt-2 text-[11px] text-slate-600">O que o Financeiro ainda não pagou é substituído pelo valor novo. O que já foi pago vira <b>complemento</b> (se aumentou) ou <b>alerta de pago a maior</b> (se diminuiu).</div>`
