@@ -485,7 +485,10 @@
           });
         });
 
-        dadosBrutosRecibos = Object.values(recibosMap).sort((a, b) => a.nome_funcionario.localeCompare(b.nome_funcionario));
+        // ordem: empresa (CNPJ) e, dentro dela, nome; assim a impressão já sai separada por empresa
+        const soDig = t => String(t || '').replace(/\D/g, '');
+        dadosBrutosRecibos = Object.values(recibosMap).sort((a, b) =>
+          soDig(a.cnpj).localeCompare(soDig(b.cnpj)) || a.nome_funcionario.localeCompare(b.nome_funcionario, 'pt-BR'));
         gerarHTMLRecibos();
 
       } catch (err) {
