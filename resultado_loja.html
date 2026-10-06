@@ -3,40 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Resultado da loja - Sistema Drogarema</title>
+  <title>Resultado da loja</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="metas_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .num { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .sec { background: #fef3c7; border: 1px solid #1e293b; font-weight: 700; text-align: center; padding: 3px 8px; font-size: 13px; letter-spacing: .02em; }
-    .sec.verde { background: #bbf7d0; }
-    .cx { border: 1px solid #cbd5e1; border-radius: 3px; padding: 1px 6px; display: inline-block; min-width: 64px; text-align: center; }
-    .up { color: #047857; } .down { color: #be123c; }
-    @media print { .noprint { display: none !important; } body { background: #fff !important; } .folha { box-shadow: none !important; border: 0 !important; } .bloco { break-inside: avoid; } }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+    .num { text-align: right; white-space: nowrap; }
+    .item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 8px; font-size: 13px; color: #475569; cursor: pointer; text-align: left; }
+    .item:hover { background: #f1f5f9; }
+    .item.on { background: #0f172a; color: #fff; font-weight: 600; }
+    .cartao { background: #fff; border-radius: 12px; padding: 18px 20px; }
+    .rot { font-size: 11px; color: #64748b; }
+    .barra { background: #2563eb; border-radius: 4px 4px 0 0; }
+    .barra.apagada { background: #93c5fd; }
+    .barraH { background: #2563eb; border-radius: 0 4px 4px 0; height: 10px; }
+    .dica { position: relative; }
+    .dica:hover::after { content: attr(data-dica); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); background: #0f172a; color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; z-index: 20; pointer-events: none; }
+    table.t th { font-weight: 600; font-size: 11px; color: #64748b; padding: 6px 8px; }
+    table.t td { padding: 7px 8px; border-top: 1px solid #f1f5f9; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
-  <div class="sticky top-0 z-40 bg-white border-b border-slate-200 noprint">
-    <div class="max-w-[1100px] mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
-      <div>
-        <h1 class="text-lg font-bold text-slate-900">Resultado da loja</h1>
-        <p class="text-[11px] text-slate-500">Indicadores de venda do mês e meta do mês seguinte</p>
+  <div class="flex min-h-screen">
+    <!-- menu lateral -->
+    <aside class="w-60 shrink-0 bg-white border-r border-slate-200 flex flex-col">
+      <div class="px-5 pt-5 pb-3">
+        <div class="text-[11px] uppercase tracking-wider text-slate-400">Resultado</div>
+        <div id="tLoja" class="text-xl font-bold text-slate-900 leading-tight">Loja</div>
+        <div id="tMes" class="text-sm text-slate-500"></div>
       </div>
-      <div class="flex items-center gap-2 text-xs">
-        <label class="text-slate-500">Loja <select id="selLoja" class="border border-slate-200 rounded px-2 py-1.5" onchange="trocar()"></select></label>
-        <label class="text-slate-500">Mês de resultado <select id="selMes" class="border border-slate-200 rounded px-2 py-1.5 font-mono" onchange="trocar()"></select></label>
-        <a id="lnkConsole" href="metas_console.html" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">Metas</a>
-        <a href="index.html" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">← Painel</a>
+      <div class="px-3 space-y-2 pb-3 border-b border-slate-100">
+        <select id="selLoja" class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" onchange="trocar()"></select>
+        <select id="selMes" class="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm" onchange="trocar()"></select>
       </div>
-    </div>
-  </div>
+      <nav id="menu" class="p-3 space-y-1 flex-1"></nav>
+      <div class="p-3 border-t border-slate-100 space-y-1 text-[12px]">
+        <a id="lnkConsole" href="metas_console.html" class="block px-3 py-1.5 rounded-lg hover:bg-slate-100 text-slate-500">Console de metas</a>
+        <a href="index.html" class="block px-3 py-1.5 rounded-lg hover:bg-slate-100 text-slate-500">← Painel</a>
+      </div>
+    </aside>
 
-  <div class="max-w-[1100px] mx-auto px-4 py-4">
-    <div id="aviso" class="text-sm"></div>
-    <div id="folha" class="folha hidden bg-white border border-slate-200 rounded-lg shadow-sm p-6 space-y-5 text-[13px]"></div>
+    <main class="flex-1 min-w-0 p-6">
+      <div id="aviso" class="text-sm"></div>
+      <div id="conteudo" class="max-w-[1100px] space-y-4"></div>
+    </main>
   </div>
 
   <script>
@@ -45,33 +57,36 @@
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // ---------------------------------------------------------------------
-    // RESULTADO DA LOJA (modelo "Apresentação de resultados").
-    // Lê loja_resultados (publicado quando o Gestor salva o fechamento) e loja_metas.
-    // Líder vê só a loja dele (a regra está no banco); Supervisor e Gestor escolhem a loja.
-    // Só indicadores de venda e metas.
+    // RESULTADO DA LOJA (base: modelo "Apresentação de resultados").
+    // Lê loja_resultados (publicado quando a gestão fecha o mês) e loja_metas.
+    // Líder vê só a loja dele (regra no banco); Supervisor e Gestor escolhem a loja.
+    // Só indicadores de venda e metas. Menu lateral, uma seção por vez.
     // ---------------------------------------------------------------------
     const $ = id => document.getElementById(id);
     const M = MetasCore;
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-    const rs = v => v == null || !isFinite(v) ? '-' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const n0 = v => v == null || !isFinite(v) ? '-' : Math.round(v).toLocaleString('pt-BR');
-    const n2 = v => v == null || !isFinite(v) ? '-' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const pc = v => v == null || !isFinite(v) ? '-' : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    const rs = v => v == null || !isFinite(v) ? '–' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const n0 = v => v == null || !isFinite(v) ? '–' : Math.round(v).toLocaleString('pt-BR');
+    const n2 = v => v == null || !isFinite(v) ? '–' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const pc = v => v == null || !isFinite(v) ? '–' : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
     const vr = (a, b) => a == null || b == null || !b ? null : a / b - 1;
-    const cor = v => v == null ? 'text-slate-400' : v >= 0 ? 'up' : 'down';
-    let dados = [], metas = [], perfil = '', lojaSel = null, mesSel = '';
+    // variação: seta + texto (não depende só da cor)
+    const selo = (v, pp) => v == null || !isFinite(v) ? '<span class="text-slate-300">–</span>'
+      : `<span class="mono text-[12px] ${v >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${v >= 0 ? '▲' : '▼'} ${pp ? Math.abs(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' pp' : pc(Math.abs(v))}</span>`;
+    const SECOES = [['geral', 'Visão geral', '◧'], ['categorias', 'Categorias', '▤'], ['precos', 'Desconto e ticket', '％'], ['delivery', 'Delivery', '➜'], ['equipe', 'Equipe', '◔'], ['metas', 'Metas', '◎']];
+    let dados = [], metas = [], perfil = '', lojaSel = null, mesSel = '', secao = 'geral';
 
     async function inicializar() {
       const { data: u } = await _supabase.rpc('fn_meu_usuario');
       perfil = u ? u.perfil : '';
       if (perfil !== 'GESTOR') $('lnkConsole').classList.add('hidden');
       const [rr, rm] = await Promise.all([_supabase.from('loja_resultados').select('competencia, loja_num, dados'), _supabase.from('loja_metas').select('*')]);
-      if (rr.error || rm.error) { $('aviso').innerHTML = `<div class="bg-rose-50 border border-rose-300 text-rose-800 rounded-lg p-4 font-bold">Tela ainda não configurada no banco (SQL AZ). ${esc((rr.error || rm.error).message)}</div>`; return; }
+      if (rr.error || rm.error) { $('aviso').innerHTML = `<div class="cartao text-rose-800 font-semibold">Tela ainda não configurada no banco (SQL AZ). ${esc((rr.error || rm.error).message)}</div>`; return; }
       dados = rr.data || []; metas = rm.data || [];
       const lojas = [...new Set(dados.map(d => d.loja_num))].sort((a, b) => a - b);
-      if (!lojas.length) { $('aviso').innerHTML = '<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-4">Ainda não há resultado publicado para a sua loja. Ele aparece aqui quando o mês é fechado pela gestão.</div>'; return; }
+      if (!lojas.length) { $('aviso').innerHTML = '<div class="cartao text-slate-600">Ainda não há resultado publicado para a sua loja. Ele aparece aqui quando o mês é fechado pela gestão.</div>'; return; }
       $('selLoja').innerHTML = lojas.map(l => `<option value="${l}">Loja ${l}</option>`).join('');
-      if (lojas.length === 1) $('selLoja').disabled = true;
+      if (lojas.length === 1) $('selLoja').classList.add('hidden');
       lojaSel = lojas[0];
       preencherMeses(); render();
     }
@@ -86,97 +101,119 @@
       if (l !== lojaSel) { lojaSel = l; preencherMeses(); } else mesSel = $('selMes').value;
       render();
     }
+    function irPara(s) { secao = s; render(); }
 
     function render() {
       const hist = {}; dados.filter(d => d.loja_num === lojaSel).forEach(d => { hist[d.competencia] = d.dados; });
-      // até 5 meses terminando no mês escolhido (só os que têm resultado)
       const meses = Object.keys(hist).filter(c => M.ordem(c) <= M.ordem(mesSel)).sort((a, b) => M.ordem(a) - M.ordem(b)).slice(-5);
-      const atual = hist[mesSel], antC = meses.length > 1 ? meses[meses.length - 2] : null, ant = antC ? hist[antC] : null;
-      const nm = M.nomeMes, colunas = meses.length, grade = `grid-template-columns: 150px repeat(${colunas}, minmax(0, 1fr))`;
-      const cab = `<div class="grid text-center text-slate-600 text-[12px]" style="${grade}"><div></div>${meses.map(c => `<div class="${c === mesSel ? 'font-bold text-slate-900' : ''}">${nm(c)}</div>`).join('')}</div>`;
-      const linha = (rot, celulas, cls) => `<div class="grid items-center text-center ${cls || ''}" style="${grade}"><div class="text-left text-[11px] text-slate-500">${rot}</div>${celulas.map(x => `<div>${x}</div>`).join('')}</div>`;
-      const serie = k => meses.map(c => hist[c][k]);
-      const variacoes = k => meses.map((c, i) => i === 0 ? null : vr(hist[c][k], hist[meses[i - 1]][k]));
-      const partes = k => meses.map(c => hist[c].fat ? (hist[c][k] ?? null) == null ? null : hist[c][k] / hist[c].fat : null);
-      const cxVar = v => v == null ? '' : `<span class="cx mono ${cor(v)}">${pc(v)}</span>`;
-      const cxPct = v => v == null ? '' : `<span class="cx mono">${pc(v)}</span>`;
-      const maiorMenor = v => v == null ? '' : v >= 0 ? 'maior' : 'menor';
-      const frase = t => `<p class="mt-2 leading-relaxed">${t}</p>`;
-      const b = t => `<b class="mono">${t}</b>`;
+      const A = hist[mesSel], antC = meses.length > 1 ? meses[meses.length - 2] : null, B = antC ? hist[antC] : null, nm = M.nomeMes;
+      $('tLoja').innerText = 'Loja ' + lojaSel; $('tMes').innerText = nm(mesSel);
+      $('menu').innerHTML = SECOES.map(([k, t, i]) => `<button class="item ${k === secao ? 'on' : ''}" onclick="irPara('${k}')"><span class="w-4 text-center opacity-70">${i}</span>${t}</button>`).join('');
+      const parte = (d, k) => d && d.fat && d[k] != null ? d[k] / d.fat : null;
+      const titulo = (t, sub) => `<div><h2 class="text-lg font-bold text-slate-900">${t}</h2>${sub ? `<p class="text-[12px] text-slate-500">${sub}</p>` : ''}</div>`;
+      const vsAnt = antC ? `comparado com ${nm(antC)}` : 'sem mês anterior para comparar';
+      const maiorMenor = v => v >= 0 ? 'maior' : 'menor';
 
-      // bloco padrão: valores, variação mensal, % sobre a venda e a frase
-      const bloco = (titulo, k, textoFn, opcoes = {}) => {
-        const vals = serie(k); if (vals.every(v => v == null)) return '';
-        const vv = variacoes(k), pp = partes(k), ult = vv[vv.length - 1], part = pp[pp.length - 1];
-        return `<div class="bloco"><div class="sec">${titulo}</div><div class="mt-2 space-y-1">${cab}
-          ${opcoes.semValor ? '' : linha('', vals.map(v => `<span class="mono font-semibold">${opcoes.inteiro ? n0(v) : rs(v)}</span>`))}
-          ${linha('Variação mensal', vv.map(cxVar))}
-          ${opcoes.semParte ? '' : linha('% sobre a venda', pp.map(cxPct))}</div>
-          ${ant && ult != null ? frase(textoFn({ v: atual[k], var: ult, parte: part })) : ''}</div>`;
-      };
+      // barras: uma série (o indicador), mês escolhido em destaque; valor em cima e dica ao passar o mouse
+      const barras = (k, fmtV) => { const vs = meses.map(c => hist[c][k]), mx = Math.max(...vs.filter(v => v != null), 1);
+        return `<div class="flex items-end gap-[2px] h-40 mt-3">${meses.map((c, i) => { const v = vs[i];
+          return `<div class="flex-1 flex flex-col items-center justify-end h-full dica" data-dica="${nm(c)}: ${fmtV(v)}">
+            <div class="mono text-[11px] text-slate-600 mb-1">${v == null ? '–' : n0(v)}</div>
+            <div class="barra ${c === mesSel ? '' : 'apagada'} w-3/5 max-w-[56px]" style="height:${v == null ? 0 : Math.max(2, v / mx * 112)}px"></div></div>`; }).join('')}</div>
+          <div class="flex gap-[2px] border-t border-slate-200 pt-1">${meses.map(c => `<div class="flex-1 text-center text-[11px] ${c === mesSel ? 'text-slate-900 font-semibold' : 'text-slate-500'}">${nm(c)}</div>`).join('')}</div>`; };
+      // tabela mês a mês de um indicador: valor, variação, % da venda
+      const tabelaMeses = (linhas) => `<div class="overflow-x-auto"><table class="t w-full text-[13px]"><thead><tr><th class="text-left">Indicador</th>${meses.map(c => `<th class="num">${nm(c)}</th>`).join('')}<th class="num">Variação</th></tr></thead><tbody>
+        ${linhas.map(([rot, fn, fmtV, pp]) => { const vs = meses.map(c => fn(hist[c])); const u = vs[vs.length - 1], p = vs.length > 1 ? vs[vs.length - 2] : null;
+          return `<tr><td>${rot}</td>${vs.map((v, i) => `<td class="num mono ${i === vs.length - 1 ? 'font-semibold text-slate-900' : 'text-slate-600'}">${fmtV(v)}</td>`).join('')}<td class="num">${selo(pp ? (u != null && p != null ? u - p : null) : vr(u, p), pp)}</td></tr>`; }).join('')}</tbody></table></div>`;
+      const cartaoKpi = (rot, valor, variacao, extra, pp) => `<div class="cartao"><div class="rot">${rot}</div><div class="mono text-[20px] font-bold text-slate-900 mt-1">${valor}</div><div class="mt-1 flex items-center gap-2">${selo(variacao, pp)}<span class="text-[11px] text-slate-400">${extra || ''}</span></div></div>`;
+      const texto = t => `<p class="text-[13px] text-slate-600 leading-relaxed mt-3">${t}</p>`;
+      const b = t => `<b class="text-slate-900">${t}</b>`;
+      let h = '';
 
-      // gráfico de barras do faturamento (uma série, altura proporcional ao valor)
-      const fats = serie('fat'), maxF = Math.max(...fats.filter(v => v != null), 1);
-      const grafico = `<div class="grid items-end mt-3" style="${grade}; height: 120px"><div></div>${fats.map((v, i) => `<div class="flex flex-col items-center justify-end h-full">
-          <div class="mono text-[11px] text-slate-700 mb-1">${n0(v)}</div>
-          <div class="w-10 rounded-t ${meses[i] === mesSel ? 'bg-blue-700' : 'bg-blue-400'}" style="height: ${Math.max(2, (v || 0) / maxF * 78)}px"></div></div>`).join('')}</div>
-        <div class="grid text-center text-[11px] text-slate-500 border-t border-slate-300 pt-1" style="${grade}"><div></div>${meses.map(c => `<div>${nm(c)}</div>`).join('')}</div>`;
-      const varFat = vr(atual.fat, ant && ant.fat);
-
-      // lucro: variação e % sobre a venda (sem o valor, como no modelo)
-      const tabela3 = (titulo, campo, formato, verde) => {
-        const ks = [['etico', 'ÉTICO'], ['similar', 'SIMILAR'], ['generico', 'GENÉRICO']];
-        if (!meses.some(c => hist[c][campo])) return '';
-        return `<div class="bloco"><div class="sec ${verde ? 'verde' : ''}">${titulo}</div><div class="mt-2 space-y-1">${cab}
-          ${ks.map(([k, r]) => linha(`<span class="text-slate-700 font-semibold">${r}</span>`, meses.map(c => `<span class="mono">${formato((hist[c][campo] || {})[k])}</span>`))).join('')}</div></div>`;
-      };
-      const historicoPct = `<div class="bloco"><div class="sec verde">PARTICIPAÇÃO NO FATURAMENTO DA LOJA EM %</div><div class="mt-2 space-y-1">${cab}
-        ${[['etico', 'ÉTICO'], ['simgen', 'SIM / GEN'], ['perf', 'PERFUMARIA']].map(([k, r]) => linha(`<span class="text-slate-700 font-semibold">${r}</span>`, partes(k).map(v => `<span class="mono">${pc(v)}</span>`))).join('')}</div></div>`;
-
-      // metas: alcance do mês escolhido e meta do mês seguinte
-      const mMes = metas.find(m => m.competencia === mesSel && m.loja_num === lojaSel);
-      const prox = M.somaMes(mesSel, 1), mProx = metas.find(m => m.competencia === prox && m.loja_num === lojaSel);
-      const alc = (real, meta) => { if (real == null || !meta) return '-'; const a = real / meta; return `<span class="mono font-semibold ${a >= 1 ? 'up' : 'down'}">${pc(a)}</span>`; };
-      const quadroAlcance = !mMes ? '' : `<div class="bloco"><div class="sec">ALCANCE DA META DE ${nm(mesSel).toUpperCase()}</div>
-        <table class="w-full mt-2 text-[12px]"><thead class="text-slate-500"><tr><th class="text-left font-semibold py-1"></th><th class="num font-semibold">Meta</th><th class="num font-semibold">Realizado</th><th class="num font-semibold">Alcance</th></tr></thead><tbody>
-        ${[['Faturamento total', mMes.fat, atual.fat], ['Similar e genérico', mMes.simgen, atual.simgen], ['Perfumaria + fitoterápico', mMes.perf, atual.perf], ['Linha Sidney', mMes.sidney, atual.sidney]]
-          .map(([r, me, re]) => `<tr class="border-t border-slate-100"><td class="py-1">${r}</td><td class="num">${rs(Number(me))}</td><td class="num">${rs(re)}</td><td class="num">${alc(re, Number(me))}</td></tr>`).join('')}
-        <tr class="border-t border-slate-100"><td class="py-1">Similar e genérico em % do faturamento</td><td class="num">${pc(Number(mMes.pct_simgen))}</td><td class="num">${pc(atual.fat ? atual.simgen / atual.fat : null)}</td><td class="num"></td></tr>
-        </tbody></table></div>`;
-      const quadroMeta = !mProx ? `<div class="bloco"><div class="sec">META DO MÊS</div><p class="mt-2 text-slate-500">A meta de ${nm(prox)} ainda não foi definida.</p></div>`
-        : `<div class="bloco"><div class="sec">META PARA ${nm(prox).toUpperCase()}</div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-          ${[['Faturamento total', rs(Number(mProx.fat)), `média diária de ${rs(Number(mProx.fat) / mProx.dias)} em ${mProx.dias} dias`],
-             ['Similar e genérico', rs(Number(mProx.simgen)), `${pc(Number(mProx.pct_simgen))} do faturamento · ${rs(Number(mProx.simgen) / mProx.dias)} por dia`],
-             ['Perfumaria + fitoterápico', rs(Number(mProx.perf)), `${rs(Number(mProx.perf) / mProx.dias)} por dia`],
-             ['Linha Sidney', rs(Number(mProx.sidney)), `${rs(Number(mProx.sidney) / mProx.dias)} por dia`]]
-            .map(([t, v, d]) => `<div class="border border-slate-200 rounded-lg p-3"><div class="text-[11px] text-slate-500">${t}</div><div class="mono font-bold text-[15px] mt-0.5">${v}</div><div class="text-[10px] text-slate-500 mt-0.5">${d}</div></div>`).join('')}
+      if (secao === 'geral') {
+        const vf = vr(A.fat, B && B.fat);
+        h = titulo('Visão geral', `${nm(mesSel)} · ${vsAnt}`) + `
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          ${cartaoKpi('Faturamento total', rs(A.fat), vf)}
+          ${cartaoKpi('Lucro sobre a venda', pc(parte(A, 'lucro')), B ? parte(A, 'lucro') - parte(B, 'lucro') : null, `lucro ${selo(vr(A.lucro, B && B.lucro))}`, true)}
+          ${cartaoKpi('Similar e genérico', rs(A.simgen), vr(A.simgen, B && B.simgen), pc(parte(A, 'simgen')) + ' da venda')}
+          ${cartaoKpi('Perfumaria + fito', rs(A.perf), vr(A.perf, B && B.perf), pc(parte(A, 'perf')) + ' da venda')}
         </div>
-        <p class="mt-3 text-center font-semibold">Toda a equipe de vendas deve acompanhar diariamente as metas para alcançar este objetivo.</p></div>`;
+        <div class="cartao"><div class="font-semibold text-slate-900">Faturamento total por mês</div>${barras('fat', rs)}
+          ${B ? texto(`O faturamento de ${b(nm(mesSel))} foi ${b(maiorMenor(vf))} em ${b(pc(Math.abs(vf)))} comparando com o mês anterior.`) : ''}</div>
+        <div class="cartao"><div class="font-semibold text-slate-900 mb-2">Participação no faturamento da loja</div>
+          ${tabelaMeses([['Ético', d => parte(d, 'etico'), pc, true], ['Similar e genérico', d => parte(d, 'simgen'), pc, true], ['Perfumaria + fito', d => parte(d, 'perf'), pc, true], ['Lucro sobre a venda', d => parte(d, 'lucro'), pc, true]])}</div>`;
+      }
 
-      $('folha').innerHTML = `
-        <div class="bloco"><div class="sec" style="background:#fde047;font-size:15px">APRESENTAÇÃO DE RESULTADOS</div>
-          <div class="flex justify-between mt-2"><div>Loja: <b>${lojaSel}</b></div><div>Mês de resultado: <b>${nm(mesSel)}</b></div></div></div>
-        <div class="bloco"><div class="sec">FATURAMENTO TOTAL</div>${grafico}
-          <div class="mt-2 space-y-1">${linha('Variação mensal', variacoes('fat').map(cxVar))}</div>
-          ${ant ? frase(`O faturamento do mês de ${b(nm(mesSel))} foi ${b(maiorMenor(varFat))} em ${b(pc(varFat))} comparando com o mês anterior.`) : ''}</div>
-        <div class="bloco"><div class="sec">LUCRO DO MÊS</div><div class="mt-2 space-y-1">${cab}
-          ${linha('Variação mensal', variacoes('lucro').map(cxVar))}${linha('% sobre a venda', partes('lucro').map(cxPct))}</div></div>
-        ${bloco('SIMILAR E GENÉRICO', 'simgen', x => `A venda de SIMILAR e GENÉRICO no mês de ${b(nm(mesSel))} foi ${b(maiorMenor(x.var))} em ${b(pc(x.var))} comparado com o mês de ${b(nm(antC))} e representou ${b(pc(x.parte))} do faturamento total.` + (mProx || mMes ? ` O ideal para a loja ${lojaSel} é chegar em ${b(pc(Number((mProx || mMes).pct_simgen)))} do faturamento total.` : ''))}
-        ${bloco('PERFUMARIA + FITOTERÁPICO', 'perf', x => `A venda de PERFUMARIA + FITO foi de ${b(rs(x.v))} no mês de ${b(nm(mesSel))}; o resultado foi ${b(maiorMenor(x.var))} em ${b(pc(x.var))} em comparação com o mês anterior e representou ${b(pc(x.parte))} do total vendido.`)}
-        ${bloco('SIDNEY OLIVEIRA + RAHDA', 'sidney', x => `A venda da linha SIDNEY OLIVEIRA + RAHDA foi ${b(maiorMenor(x.var))} em ${b(pc(x.var))} comparado com o mês anterior.`)}
-        ${bloco('ÉTICO', 'etico', x => `Para os produtos na categoria ÉTICO o valor da venda foi de ${b(rs(x.v))}, com variação ${b(maiorMenor(x.var))} em comparação com o mês anterior, representando ${b(pc(x.parte))} do faturamento total da loja.`)}
-        ${bloco('DERMO + OUTROS', 'dermo_outros', x => `Na categoria DERMO e outros, o faturamento chegou em ${b(rs(x.v))}, com variação ${b(maiorMenor(x.var))} de ${b(pc(x.var))} comparando com o mês anterior, e alcançou ${b(pc(x.parte))} do faturamento total.`)}
-        ${bloco('DELIVERY', 'delivery', x => `A venda por DELIVERY está ${b(x.var >= 0 ? 'mais alta' : 'mais baixa')} em ${b(pc(x.var))} comparando com o mês anterior e representou ${b(pc(x.parte))} do faturamento total.`)}
-        ${bloco('QUANTIDADE DE ENTREGAS', 'entregas', x => `A quantidade de entregas ${b(x.var >= 0 ? 'aumentou' : 'reduziu')} em ${b(pc(x.var))} no mês de ${b(nm(mesSel))} comparando com o mês anterior.`, { inteiro: true, semParte: true })}
-        ${tabela3('% DE DESCONTO DA LOJA', 'descp', pc)}
-        ${tabela3('TICKET MÉDIO', 'ticket', n2)}
-        ${historicoPct}
-        ${quadroAlcance}
-        ${quadroMeta}
-        <div class="bloco"><div class="font-semibold">ANOTAÇÕES GERAIS:</div><div class="h-24 border-b border-slate-300"></div>
-          <div class="grid grid-cols-2 gap-16 mt-12 text-center text-[12px]"><div class="border-t border-slate-500 pt-1">Líder da loja</div><div class="border-t border-slate-500 pt-1">Supervisão</div></div></div>`;
-      $('folha').classList.remove('hidden');
+      if (secao === 'categorias') {
+        const cats = [['simgen', 'Similar e genérico'], ['perf', 'Perfumaria + fitoterápico'], ['sidney', 'Sidney Oliveira + Rahda'], ['etico', 'Ético'], ['dermo_outros', 'Dermo + outros']];
+        const meta = metas.find(m => m.loja_num === lojaSel && (m.competencia === M.somaMes(mesSel, 1) || m.competencia === mesSel));
+        const frases = { simgen: v => `A venda de similar e genérico foi ${b(maiorMenor(v))} em ${b(pc(Math.abs(v)))} e representou ${b(pc(parte(A, 'simgen')))} do faturamento.` + (meta ? ` O ideal para a loja é chegar em ${b(pc(Number(meta.pct_simgen)))}.` : ''),
+          perf: v => `Perfumaria + fito somou ${b(rs(A.perf))}, ${b(maiorMenor(v))} em ${b(pc(Math.abs(v)))}, e representou ${b(pc(parte(A, 'perf')))} do total vendido.`,
+          sidney: v => `A linha Sidney Oliveira + Rahda foi ${b(maiorMenor(v))} em ${b(pc(Math.abs(v)))}.`,
+          etico: v => `Ético vendeu ${b(rs(A.etico))}, variação ${b(maiorMenor(v))} de ${b(pc(Math.abs(v)))}, com ${b(pc(parte(A, 'etico')))} do faturamento.`,
+          dermo_outros: v => `Dermo e outros chegou em ${b(rs(A.dermo_outros))}, ${b(maiorMenor(v))} em ${b(pc(Math.abs(v)))}, com ${b(pc(parte(A, 'dermo_outros')))} do faturamento.` };
+        h = titulo('Categorias', `venda por categoria · ${vsAnt}`) + cats.map(([k, t]) => { const v = vr(A[k], B && B[k]);
+          return `<div class="cartao"><div class="flex justify-between items-baseline"><div class="font-semibold text-slate-900">${t}</div><div class="flex items-center gap-3"><span class="mono font-bold">${rs(A[k])}</span>${selo(v)}</div></div>
+            ${tabelaMeses([['Venda', d => d[k], rs], ['% sobre a venda', d => parte(d, k), pc, true]])}${v != null ? texto(frases[k](v)) : ''}</div>`; }).join('');
+      }
+
+      if (secao === 'precos') {
+        const ks = [['etico', 'Ético'], ['similar', 'Similar'], ['generico', 'Genérico']];
+        const tem = campo => meses.some(c => hist[c][campo]);
+        h = titulo('Desconto e ticket', 'por classificação · ' + vsAnt) +
+          (tem('descp') ? `<div class="cartao"><div class="font-semibold text-slate-900 mb-2">% de desconto da loja</div>${tabelaMeses(ks.map(([k, t]) => [t, d => (d.descp || {})[k], pc, true]))}
+            <p class="rot mt-2">Desconto concedido sobre o preço cheio. Subir significa vender com mais desconto.</p></div>` : '') +
+          (tem('ticket') ? `<div class="cartao"><div class="font-semibold text-slate-900 mb-2">Ticket médio (R$ por item)</div>${tabelaMeses(ks.map(([k, t]) => [t, d => (d.ticket || {})[k], n2]))}</div>` : '') +
+          (!tem('descp') && !tem('ticket') ? '<div class="cartao text-slate-500">Sem dados de desconto e ticket para os meses desta loja.</div>' : '');
+      }
+
+      if (secao === 'delivery') {
+        const tem = meses.some(c => hist[c].delivery != null);
+        h = titulo('Delivery', vsAnt) + (!tem ? '<div class="cartao text-slate-500">O relatório de entregas ainda não foi incluído no fechamento destes meses.</div>' : `
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            ${cartaoKpi('Venda por delivery', rs(A.delivery), vr(A.delivery, B && B.delivery), pc(parte(A, 'delivery')) + ' da venda')}
+            ${cartaoKpi('Entregas', n0(A.entregas), vr(A.entregas, B && B.entregas))}
+            ${cartaoKpi('Valor médio por entrega', rs(A.entregas ? A.delivery / A.entregas : null), B && B.entregas ? vr(A.delivery / A.entregas, B.delivery / B.entregas) : null)}
+          </div>
+          <div class="cartao"><div class="font-semibold text-slate-900">Venda por delivery por mês</div>${barras('delivery', rs)}</div>
+          <div class="cartao">${tabelaMeses([['Venda por delivery', d => d.delivery, rs], ['% sobre a venda', d => parte(d, 'delivery'), pc, true], ['Quantidade de entregas', d => d.entregas, n0]])}</div>`);
+      }
+
+      if (secao === 'equipe') {
+        const eq = A.equipe || [], eqB = (B && B.equipe) || [];
+        const cols = [['simgen', 'Similar e genérico'], ['perf', 'Perfumaria'], ['sidney', 'Linha Sidney'], ['vit', 'Vitaminas']];
+        const ord = window._ordEq || 'simgen';
+        const lista = eq.slice().sort((x, y) => (y[ord] || 0) - (x[ord] || 0)), mx = Math.max(...lista.map(p => p[ord] || 0), 1), tot = lista.reduce((a, p) => a + (p[ord] || 0), 0);
+        h = titulo('Equipe', 'venda de cada atendente no mês · ' + vsAnt) + (!eq.length ? '<div class="cartao text-slate-500">As vendas por atendente aparecem a partir dos meses fechados com os relatórios por usuário do Alpha7.</div>' : `
+          <div class="cartao"><div class="flex flex-wrap items-center justify-between gap-2"><div class="font-semibold text-slate-900">${cols.find(c => c[0] === ord)[1]} por atendente</div>
+            <div class="flex gap-1 text-[12px]">${cols.map(([k, t]) => `<button onclick="window._ordEq='${k}';render()" class="px-2.5 py-1 rounded-lg ${k === ord ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} cursor-pointer">${t}</button>`).join('')}</div></div>
+            <div class="mt-3 space-y-2">${lista.filter(p => p[ord] > 0).map(p => { const ant = eqB.find(x => x.nome === p.nome);
+              return `<div class="grid items-center gap-3 dica" style="grid-template-columns: 210px 1fr 110px 70px 80px" data-dica="${esc(p.nome)}: ${rs(p[ord])}${ant ? ' · mês anterior ' + rs(ant[ord]) : ''}">
+                <div class="truncate text-[13px] text-slate-700">${esc(p.nome)}</div><div><div class="barraH" style="width:${Math.max(1, p[ord] / mx * 100)}%"></div></div>
+                <div class="num mono text-[13px] font-semibold">${rs(p[ord])}</div><div class="num mono text-[12px] text-slate-500">${pc(tot ? p[ord] / tot : null)}</div><div class="num">${selo(ant ? vr(p[ord], ant[ord]) : null)}</div></div>`; }).join('')}</div>
+            <p class="rot mt-3">Barra = venda do atendente · % = participação na soma da equipe · variação sobre o mês anterior. Venda feita pelo atendente em qualquer loja.</p></div>
+          <div class="cartao"><div class="font-semibold text-slate-900 mb-2">Todos os indicadores</div><div class="overflow-x-auto"><table class="t w-full text-[13px]"><thead><tr><th class="text-left">Atendente</th>${cols.map(c => `<th class="num">${c[1]}</th>`).join('')}</tr></thead><tbody>
+            ${eq.map(p => `<tr><td>${esc(p.nome)}</td>${cols.map(([k]) => `<td class="num mono">${p[k] ? rs(p[k]) : '<span class="text-slate-300">–</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`);
+      }
+
+      if (secao === 'metas') {
+        const mMes = metas.find(m => m.competencia === mesSel && m.loja_num === lojaSel), prox = M.somaMes(mesSel, 1), mProx = metas.find(m => m.competencia === prox && m.loja_num === lojaSel);
+        const linhaAlc = (rot, me, re) => { const a = me ? re / me : null;
+          return `<div class="grid items-center gap-3 py-2 border-t border-slate-100" style="grid-template-columns: 200px 1fr 120px 120px 80px"><div class="text-[13px]">${rot}</div>
+            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden dica" data-dica="${pc(a)} da meta"><div class="h-full ${a >= 1 ? 'bg-emerald-600' : 'bg-blue-600'}" style="width:${Math.min(100, (a || 0) * 100)}%"></div></div>
+            <div class="num mono text-[12px] text-slate-500">${rs(me)}</div><div class="num mono text-[13px] font-semibold">${rs(re)}</div><div class="num mono text-[13px] ${a >= 1 ? 'text-emerald-700' : 'text-slate-700'}">${a >= 1 ? '✓ ' : ''}${pc(a)}</div></div>`; };
+        h = titulo('Metas', `alcance de ${nm(mesSel)} e meta de ${nm(prox)}`) +
+          (mMes ? `<div class="cartao"><div class="font-semibold text-slate-900">Alcance da meta de ${nm(mesSel)}</div>
+            <div class="grid gap-3 mt-2 rot" style="grid-template-columns: 200px 1fr 120px 120px 80px"><div></div><div></div><div class="num">Meta</div><div class="num">Realizado</div><div class="num">Alcance</div></div>
+            ${linhaAlc('Faturamento total', Number(mMes.fat), A.fat)}${linhaAlc('Similar e genérico', Number(mMes.simgen), A.simgen)}${linhaAlc('Perfumaria + fito', Number(mMes.perf), A.perf)}${linhaAlc('Linha Sidney', Number(mMes.sidney), A.sidney)}
+            <p class="rot mt-2">Similar e genérico: meta de ${pc(Number(mMes.pct_simgen))} do faturamento, realizado ${pc(parte(A, 'simgen'))}.</p></div>` : `<div class="cartao text-slate-500">Não havia meta registrada para ${nm(mesSel)}.</div>`) +
+          (mProx ? `<div class="cartao"><div class="font-semibold text-slate-900">Meta para ${nm(prox)} <span class="rot font-normal">· ${mProx.dias} dias</span></div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">${[['Faturamento total', mProx.fat, ''], ['Similar e genérico', mProx.simgen, pc(Number(mProx.pct_simgen)) + ' do faturamento'], ['Perfumaria + fito', mProx.perf, ''], ['Linha Sidney', mProx.sidney, '']]
+              .map(([t, v, d]) => `<div class="bg-slate-50 rounded-lg p-3"><div class="rot">${t}</div><div class="mono font-bold text-[16px] text-slate-900 mt-0.5">${rs(Number(v))}</div><div class="rot mt-0.5">${rs(Number(v) / mProx.dias)} por dia${d ? ' · ' + d : ''}</div></div>`).join('')}</div>
+            <p class="text-[13px] text-slate-600 mt-3">Toda a equipe de vendas deve acompanhar diariamente as metas para alcançar este objetivo.</p></div>` : `<div class="cartao text-slate-500">A meta de ${nm(prox)} ainda não foi definida.</div>`);
+      }
+      $('conteudo').innerHTML = h;
     }
 
     inicializar();
