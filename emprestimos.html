@@ -6,6 +6,7 @@
   <title>Controle de Empréstimos - Sistema Drogarema</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="emprestimo_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -370,60 +371,51 @@
 
       document.getElementById('modalSubtitulo').innerText = `${nomeFunc} — Total: R$ ${parseFloat(emp.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2})} (${emp.qtd_parcelas}x de R$ ${parseFloat(emp.valor_parcela).toLocaleString('pt-BR', {minimumFractionDigits: 2})})`;
 
-      const partesComp = emp.competencia_inicio.split('/');
-      let mesAtual = parseInt(partesComp[0], 10);
-      let anoAtual = parseInt(partesComp[1], 10);
-
       const dataHoje = new Date();
-      const mesReal = dataHoje.getMonth() + 1;
-      const anoReal = dataHoje.getFullYear();
-      const numCompAtual = anoReal * 12 + mesReal;
+      const numCompAtual = dataHoje.getFullYear() * 12 + dataHoje.getMonth() + 1;
+      const fmtV = v => 'R$ ' + (parseFloat(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      const fim = emp.status === 'FINALIZADO';
 
-      const excecoes = emp.excecoes || {};
-
+      // cronograma: uma linha por mês (mês pulado pelo governo não consome parcela; desconto a menor leva o saldo para o mês seguinte)
       let htmlLinhas = '';
-      for (let i = 1; i <= emp.qtd_parcelas; i++) {
-        const compStr = `${String(mesAtual).padStart(2, '0')}/${anoAtual}`;
-        const numCompParcela = anoAtual * 12 + mesAtual;
-
-        const exc = excecoes[i] || {};
-        const isCancelada = exc.status === 'cancelada';
-        const valorReal = exc.valor !== undefined ? parseFloat(exc.valor) : parseFloat(emp.valor_parcela);
-        
+      EmprestimoCore.plano(emp).forEach(l => {
+        const numCompParcela = EmprestimoCore.numComp(l.competencia), c = l.competencia;
         let badgeStatus = '<span class="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">PREVISTA</span>';
-        if (isCancelada) {
-          badgeStatus = '<span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded text-[9px] font-bold">CANCELADA / PULADA</span>';
-        } else if (numCompParcela < numCompAtual) {
-          badgeStatus = '<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold">PAGA</span>';
-        } else if (numCompParcela === numCompAtual) {
-          badgeStatus = '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">MÊS ATUAL</span>';
-        }
+        if (l.status === 'PULADO') badgeStatus = '<span class="px-1.5 py-0.5 bg-violet-100 text-violet-800 rounded text-[9px] font-bold">GOVERNO NÃO COBROU</span>';
+        else if (l.status === 'CANCELADA') badgeStatus = '<span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded text-[9px] font-bold">CANCELADA</span>';
+        else if (l.status === 'PARCIAL') badgeStatus = '<span class="px-1.5 py-0.5 bg-orange-100 text-orange-800 rounded text-[9px] font-bold">DESCONTO A MENOR</span>';
+        else if (numCompParcela < numCompAtual) badgeStatus = '<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold">PAGA</span>';
+        else if (numCompParcela === numCompAtual) badgeStatus = '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">MÊS ATUAL</span>';
 
-        const btnAcoes = isCancelada 
-          ? `<button onclick="restaurarParcela('${emp.id}', ${i})" class="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold underline cursor-pointer" title="Restaurar parcela normal">Restaurar</button>`
-          : `
-            <button onclick="editarParcela('${emp.id}', ${i}, ${valorReal})" class="text-sky-600 hover:text-sky-800 text-[10px] font-bold cursor-pointer" title="Alterar Valor">Editar</button>
-            <button onclick="cancelarParcela('${emp.id}', ${i})" class="text-rose-500 hover:text-rose-700 text-[10px] font-bold ml-2 cursor-pointer" title="Pular/Cancelar Cobrança">Pular ✕</button>
-          `;
+        const obs = [];
+        if (l.residualAnterior > 0.004 && l.status !== 'PULADO' && l.status !== 'CANCELADA') obs.push(l.status === 'RESIDUAL' ? 'saldo residual' : `parcela ${fmtV(l.base)} + ${fmtV(l.residualAnterior)} de saldo do mês anterior`);
+        if (l.status === 'PARCIAL') obs.push(`era ${fmtV(l.devido)}; ficam ${fmtV(l.residual)} para o mês seguinte`);
+        if (l.status === 'PULADO') obs.push('parcela passa para o mês seguinte');
+        if (l.editado && l.status !== 'CANCELADA') obs.push('valor da parcela editado');
 
-        const classeCancelada = isCancelada ? 'opacity-50 line-through text-slate-400' : 'text-slate-700';
-        const avisoEditado = exc.valor !== undefined && !isCancelada ? `<span class="ml-1 text-[9px] text-sky-600 font-bold" title="Valor alterado manualmente">*Editado</span>` : '';
+        let btnAcoes;
+        if (l.status === 'PULADO' || l.status === 'PARCIAL') btnAcoes = `<button onclick="excecaoMes('${emp.id}', '${c}', null)" class="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold underline cursor-pointer">Desfazer</button>`;
+        else if (l.status === 'CANCELADA') btnAcoes = `<button onclick="restaurarParcela('${emp.id}', ${l.parcela})" class="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold underline cursor-pointer" title="Restaurar parcela normal">Restaurar</button>`;
+        else btnAcoes = `
+            <button onclick="descontoMenor('${emp.id}', '${c}', ${l.devido})" class="text-orange-600 hover:text-orange-800 text-[10px] font-bold cursor-pointer" title="O governo descontou menos que a parcela: o saldo vai para o mês seguinte">Descontou a menor</button>
+            <button onclick="mesPulado('${emp.id}', '${c}')" class="text-violet-600 hover:text-violet-800 text-[10px] font-bold ml-2 cursor-pointer" title="O governo não cobrou neste mês: a parcela passa para o mês seguinte">Não cobrou</button>
+            ${l.parcela ? `<button onclick="editarParcela('${emp.id}', ${l.parcela}, ${l.base})" class="text-sky-600 hover:text-sky-800 text-[10px] font-bold ml-2 cursor-pointer" title="Alterar o valor desta parcela">Editar</button>
+            <button onclick="cancelarParcela('${emp.id}', ${l.parcela})" class="text-rose-500 hover:text-rose-700 text-[10px] font-bold ml-2 cursor-pointer" title="Cancelar a parcela: ela NÃO será cobrada depois">Cancelar ✕</button>` : ''}`;
 
+        const apagada = l.status === 'PULADO' || l.status === 'CANCELADA';
         htmlLinhas += `
           <tr class="hover:bg-slate-50 border-b border-slate-50">
-            <td class="py-1.5 px-2 text-center font-bold text-slate-700">${i}/${emp.qtd_parcelas}</td>
-            <td class="py-1.5 px-2 text-center font-bold text-slate-800">${compStr}</td>
-            <td class="py-1.5 px-2 text-right font-bold ${classeCancelada}">
-              R$ ${valorReal.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${avisoEditado}
+            <td class="py-1.5 px-2 text-center font-bold text-slate-700">${l.parcela ? l.parcela + '/' + emp.qtd_parcelas : '—'}</td>
+            <td class="py-1.5 px-2 text-center font-bold text-slate-800">${c}</td>
+            <td class="py-1.5 px-2 text-right font-bold ${apagada ? 'opacity-50 text-slate-400' : 'text-slate-700'}">
+              ${apagada ? '—' : fmtV(l.valor)}
+              ${obs.length ? `<div class="text-[9px] font-normal text-slate-500">${obs.join(' · ')}</div>` : ''}
             </td>
             <td class="py-1.5 px-2 text-center">${badgeStatus}</td>
-            <td class="py-1.5 px-2 text-center select-none">${emp.status === 'FINALIZADO' ? '-' : btnAcoes}</td>
+            <td class="py-1.5 px-2 text-center select-none whitespace-nowrap">${fim ? '-' : btnAcoes}</td>
           </tr>
         `;
-
-        mesAtual++;
-        if (mesAtual > 12) { mesAtual = 1; anoAtual++; }
-      }
+      });
 
       document.getElementById('tabelaCronograma').innerHTML = htmlLinhas;
       document.getElementById('modalDetalhes').classList.remove('hidden');
@@ -454,6 +446,48 @@
       }
     }
 
+    // exceção por MÊS (governo não cobrou / descontou a menor). dados = null desfaz.
+    async function excecaoMes(id, comp, dados) {
+      const emp = listaEmprestimos.find(e => String(e.id) === String(id));
+      if (!emp) return;
+      const nov = emp.excecoes ? JSON.parse(JSON.stringify(emp.excecoes)) : {};
+      nov.meses = nov.meses || {};
+      if (dados === null) delete nov.meses[comp]; else nov.meses[comp] = dados;
+      const { error } = await _supabase.from('emprestimos').update({ excecoes: nov }).eq('id', id);
+      if (error) return alert('Erro ao aplicar alteração: ' + error.message);
+      emp.excecoes = nov;
+      // se o desconto deste contrato já está lançado na folha daquele mês, acerta o lançamento
+      const linha = EmprestimoCore.doMes(emp, comp);
+      const { data: itens } = await _supabase.from('folha_itens').select('id, valor').eq('funcionario_id', emp.funcionario_id).eq('competencia', comp).eq('motivo_ajuste', `Automação Empréstimo #${emp.id}`);
+      let aviso = '';
+      for (const it of (itens || [])) {
+        if (linha && linha.valor > 0.004 && linha.status !== 'PULADO') {
+          if (Math.abs(parseFloat(it.valor) - linha.valor) > 0.004) {
+            const r = await _supabase.from('folha_itens').update({ valor: linha.valor, valor_bruto: linha.valor }).eq('id', it.id);
+            aviso = r.error ? `\n\nNÃO consegui corrigir o lançamento de ${comp} na folha (${r.error.message}). Corrija o valor para ${linha.valor.toFixed(2)} na tela de lançamentos.` : `\n\nO lançamento de ${comp} na folha foi corrigido para R$ ${linha.valor.toFixed(2).replace('.', ',')}.`;
+          }
+        } else {
+          const r = await _supabase.from('folha_itens').delete().eq('id', it.id);
+          aviso = r.error ? `\n\nNÃO consegui tirar o lançamento de ${comp} da folha (${r.error.message}). Exclua pela tela de lançamentos.` : `\n\nO lançamento de ${comp} foi retirado da folha.`;
+        }
+      }
+      await carregarEmprestimos();
+      if (emprestimoAtualNoModal) abrirCronograma(id);
+      if (aviso) alert('Alteração aplicada.' + aviso);
+    }
+    function descontoMenor(id, comp, devido) {
+      const t = prompt(`Competência ${comp}: o desconto previsto era R$ ${devido.toFixed(2).replace('.', ',')}.\n\nQuanto o governo descontou de fato? (o saldo passa para o mês seguinte)`, '');
+      if (t === null || t.trim() === '') return;
+      const v = parseFloat(t.replace(/\./g, '').replace(',', '.'));
+      if (isNaN(v) || v < 0) return alert('Valor inválido.');
+      if (v >= devido - 0.004) return alert('O valor informado não é menor que o previsto. Nada foi alterado.');
+      if (v === 0) return mesPulado(id, comp);
+      excecaoMes(id, comp, { tipo: 'PARCIAL', valor: v });
+    }
+    function mesPulado(id, comp) {
+      if (confirm(`O governo NÃO cobrou a parcela em ${comp}?\n\nNada será descontado nesse mês e a parcela passa para o mês seguinte (o contrato termina um mês depois).`)) excecaoMes(id, comp, { tipo: 'PULADO' });
+    }
+
     function editarParcela(id, parcela, valorAtual) {
       const novoValor = prompt(`Digite o novo valor para a parcela ${parcela}:`, valorAtual);
       if (novoValor !== null && novoValor.trim() !== '') {
@@ -467,7 +501,7 @@
     }
 
     function cancelarParcela(id, parcela) {
-      if (confirm(`Deseja pular/cancelar a cobrança desta parcela ${parcela}?`)) {
+      if (confirm(`Cancelar a parcela ${parcela}? Ela NÃO será cobrada depois.\n\n(Se o governo só não cobrou neste mês, use "Não cobrou": a parcela passa para o mês seguinte.)`)) {
         salvarExcecao(id, parcela, { status: 'cancelada' });
       }
     }

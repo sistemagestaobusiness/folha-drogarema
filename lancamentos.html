@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="escala_core.js"></script>
+  <script src="emprestimo_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
@@ -1050,33 +1051,19 @@
         .eq('competencia', competencia)
         .ilike('motivo_ajuste', 'Automação Empréstimo #%'); // qualquer código de empréstimo (3004, 3007 a 3011)
 
-      const partesComp = competencia.split('/');
-      const numCompAtual = parseInt(partesComp[1]) * 12 + parseInt(partesComp[0]);
-
       for (const emp of emprestimos) {
-        const partesInicio = emp.competencia_inicio.split('/');
-        const numCompInicio = parseInt(partesInicio[1]) * 12 + parseInt(partesInicio[0]);
-
-        const deltaMeses = numCompAtual - numCompInicio;
-        
-        if (deltaMeses >= 0 && deltaMeses < emp.qtd_parcelas) {
-          const parcelaAtual = deltaMeses + 1;
-          
-          const excecoes = emp.excecoes || {};
-          const excParcela = excecoes[parcelaAtual] || {};
-
-          if (excParcela.status === 'cancelada') {
-            continue; 
-          }
-
-          const valorReal = excParcela.valor !== undefined ? parseFloat(excParcela.valor) : parseFloat(emp.valor_parcela);
+        // cronograma do contrato (considera mês pulado pelo governo e desconto a menor com saldo residual)
+        const linha = EmprestimoCore.doMes(emp, competencia);
+        if (linha && linha.valor > 0.004 && linha.status !== 'PULADO' && linha.status !== 'CANCELADA') {
+          const parcelaAtual = linha.parcela || emp.qtd_parcelas;
+          const valorReal = linha.valor;
 
           // Pega dinamicamente o código do evento escolhido no contrato (padrão 3007 se não houver)
           const codigoEvento = String(emp.codigo_evento || '3007');
           const eventoDinamico = listaGlobalEventos.find(ev => String(ev.codigo_evento) === codigoEvento);
           const descEvento = eventoDinamico ? eventoDinamico.descricao_do_evento : (codigoEvento === '3004' ? 'DESC. EMP. CRED. TRAB' : 'EMPRESTIMO EMPRESA 1');
 
-          const tagParcela = `(${String(parcelaAtual).padStart(2, '0')}/${String(emp.qtd_parcelas).padStart(2, '0')})`;
+          const tagParcela = linha.parcela ? `(${String(parcelaAtual).padStart(2, '0')}/${String(emp.qtd_parcelas).padStart(2, '0')})` : '(SALDO RESIDUAL)';
           const rubricaExata = `${codigoEvento} - ${descEvento} ${tagParcela}`;
           const motivoIdentificador = `Automação Empréstimo #${emp.id}`;
 
@@ -1556,6 +1543,12 @@
       }
 
       const eventoSel = eventoDaRubrica(rubrica);
+      // só aceita evento que existe no cadastro de eventos (escolhido na lista)
+      if (!eventoSel) {
+        alert(`O evento "${rubrica}" não existe no cadastro de eventos.\n\nEscolha um evento da lista (digite o código ou parte do nome e clique na sugestão). Se o evento for novo, cadastre primeiro na tela de Eventos.`);
+        document.getElementById('inputRubrica').focus();
+        return;
+      }
       const ehPagExtra = !!(eventoSel && eventoSel.pagamento_extra_tipo);
 
       // Lançamento já PAGO pelo Financeiro: grava somente a troca do evento
