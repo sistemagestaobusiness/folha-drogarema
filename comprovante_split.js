@@ -80,6 +80,19 @@
     let cabAtual = null;
     paginas.forEach(p => { if (p.cabecalho) cabAtual = p.cabecalho; if (p.modo === 'TITULO') cabAtual = null; p.marcos.forEach(l => marcos.push({ p, l, cab: cabAtual })); });
 
+    // Outro banco / layout desconhecido (nenhum marcador encontrado): trata cada página com texto como um comprovante
+    if (!marcos.length) {
+      const blocosPag = paginas.filter(p => p.linhas.length >= 3).map((p, i) => {
+        const texto = p.linhas.map(l => l.texto).join('\n');
+        const campo = re => { const x = texto.match(re); return x ? x[1].trim() : ''; };
+        return { indice: i + 1, partes: [{ pagina: p.n, topo: Math.min(p.altura - 2, p.topo + 60), base: Math.max(2, p.base), texto: p.linhas.map(l => l.texto) }], cabecalho: null, texto, porPagina: true,
+          nome: campo(/(?:Nome(?: do)?(?: (?:destinat[aá]rio|favorecido|benefici[aá]rio|recebedor))?|Favorecido|Recebedor|Para)\s*:?\s+([A-ZÀ-Ú][A-ZÀ-Ú .']{5,})/i),
+          cpf: campo(/CPF(?:\/CNPJ)?[^\d*\n]{0,25}([\d*.\-\/ ]{9,})/i).replace(/\s/g, ''),
+          valor: numBR(campo(/Valor[^\d\n]{0,25}([\d.]+,\d{2})/i)), data: campo(/(\d{2}\/\d{2}\/\d{4})/), situacao: '' };
+      });
+      return { nomeArquivo: arquivo.name || 'comprovante.pdf', bytes, paginas: paginas.length, blocos: blocosPag };
+    }
+
     const blocos = marcos.map((m, i) => {
       const prox = marcos[i + 1];
       const partes = [];
@@ -135,6 +148,13 @@
         }
       }
       if (bloco.valor != null && c.valor != null && Math.abs(bloco.valor - c.valor) < 0.01) p += 10;
+      // reforço pelo texto inteiro do comprovante (ajuda em layouts de outros bancos, onde o campo não foi lido)
+      if (p < 25 && bloco.texto) {
+        const txt = semAcento(bloco.texto), dig = bloco.texto.replace(/\D/g, '');
+        if (cpfC.length === 11 && dig.includes(cpfC)) p += 100;
+        if (nomeC && nomeC.split(' ').length >= 2 && txt.includes(nomeC)) p += 50;
+        if (p > 0 && c.valor != null && bloco.texto.includes(c.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))) p += 10;
+      }
       if (p > pontos) { pontos = p; melhor = c; }
     });
     return pontos >= 25 ? { candidato: melhor, pontos } : null;
@@ -167,5 +187,26 @@
     return new Blob([saida], { type: 'application/pdf' });
   }
 
-  global.ComprovanteSplit = { analisar, identificar, recortar, semAcento };
+  // junta vários comprovantes (PDF ou imagem) num PDF só, para imprimir de uma vez. itens: [{ bytes, tipo, titulo }]
+  async function juntar(itens) {
+    const { PDFLib } = await libs();
+    const novo = await PDFLib.PDFDocument.create(); const falhas = [];
+    for (const it of itens) {
+      try {
+        const b = new Uint8Array(it.bytes), ehPdf = b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+        if (ehPdf) {
+          const src = await PDFLib.PDFDocument.load(b, { ignoreEncryption: true });
+          (await novo.copyPages(src, src.getPageIndices())).forEach(p => novo.addPage(p));
+        } else {
+          const ehPng = b[0] === 0x89 && b[1] === 0x50, img = ehPng ? await novo.embedPng(b) : await novo.embedJpg(b);
+          const W = 595, H = 842, m = 30, esc = Math.min((W - 2 * m) / img.width, (H - 2 * m) / img.height, 1);
+          novo.addPage([W, H]).drawImage(img, { x: (W - img.width * esc) / 2, y: H - m - img.height * esc, width: img.width * esc, height: img.height * esc });
+        }
+      } catch (e) { falhas.push(it.titulo || '?'); }
+    }
+    if (!novo.getPageCount()) throw new Error('Nenhum comprovante pôde ser lido.');
+    return { blob: new Blob([await novo.save()], { type: 'application/pdf' }), falhas, paginas: novo.getPageCount() };
+  }
+
+  global.ComprovanteSplit = { analisar, identificar, recortar, semAcento, juntar };
 })(typeof window !== 'undefined' ? window : globalThis);

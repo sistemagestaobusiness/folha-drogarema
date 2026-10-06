@@ -171,7 +171,7 @@
       HORA_EXTRA: 'Hora extra', REEMBOLSO: 'Reembolso', OUTROS: 'Outros'
     };
     const ABA_ROTULO = { PENDENTE: 'a pagar', PAGO: 'pagos', PROBLEMA: 'devolvidos ao RH', CANCELADO: 'cancelados' };
-    let contasEmpresas = [], perfil = null, aba = 'PENDENTE', itens = [], funcs = {}, empresas = [], selecionados = new Set(), itemProblema = null, atual = null;
+    let contasEmpresas = [], perfil = null, aba = 'PENDENTE', itens = [], funcs = {}, empresas = [], selecionados = new Set(), selPagos = new Set(), lote = [], itemProblema = null, atual = null;
     let separacao = [];   // recortes do PDF do banco: { bloco, analise, id (pagamento), blob }
 
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -332,7 +332,7 @@
       const box = document.getElementById('lista');
       if (!lista.length) { box.innerHTML = `<div class="bg-white border border-slate-200 rounded-lg p-10 text-center text-slate-400 text-sm">${aba === 'PENDENTE' ? 'Nenhum pagamento pendente.' : 'Nada por aqui.'}</div>`; atualizarSel(); return; }
       const comSelecao = aba === 'PENDENTE' && podePagar();
-      box.innerHTML = grupos.map(g => {
+      box.innerHTML = barraPagos(lista) + grupos.map(g => {
         const sub = g.itens.reduce((a, i) => a + parseFloat(i.valor), 0);
         const todos = g.itens.every(i => selecionados.has(i.id));
         const linhas = g.itens.map(i => aba === 'PENDENTE' ? linhaAPagar(i, h, comSelecao) : linhaHistorico(i)).join('');
@@ -408,7 +408,7 @@
       const acao = i.status === 'PAGO' && perfil === 'GESTOR' ? `<span class="lnk" onclick="abrirDesfazer('${i.id}')">desfazer</span>`
                  : i.status === 'PROBLEMA' && podeResolver() ? `<button onclick="abrirResolver('${i.id}')" class="px-2 py-1 bg-rose-600 text-white rounded text-[11px] cursor-pointer">Resolver</button>` : '';
       return `<tr class="hover:bg-slate-50">
-        <td class="w-2"></td>
+        <td class="pl-3 w-6">${i.status === 'PAGO' && i.comprovante_path ? `<input type="checkbox" ${selPagos.has(i.id) ? 'checked' : ''} onchange="this.checked ? selPagos.add('${i.id}') : selPagos.delete('${i.id}'); render()" title="Selecionar para imprimir o comprovante">` : ''}</td>
         <td class="px-2 py-2"><div class="font-semibold text-slate-900">${esc(nome(i.funcionario_id))}</div>
           <div class="text-[10px] text-slate-500">${TIPOS[i.tipo] || i.tipo}${i.meio === 'DINHEIRO' ? ' · em dinheiro' : ''} · ${origemTxt(i)}</div></td>
         <td class="px-2 py-2 whitespace-nowrap"><div class="text-[10px] text-slate-400">previsto</div><div class="font-mono">${dbr(i.vencimento)}</div></td>
@@ -568,6 +568,113 @@
         + (semComp > 0 ? `\n${semComp} ficaram sem comprovante (dá para anexar depois na aba Pagos).` : '')
         + (falhas.length ? '\nFalha ao vincular: ' + falhas.join(' | ') : ''));
       selecionados.clear(); fechar('modalPagar'); carregar();
+    }
+
+    // ---------- aba Pagos: imprimir vários comprovantes de uma vez e anexar em lote ----------
+    function barraPagos(lista) {
+      if (aba !== 'PAGO') return '';
+      const com = lista.filter(i => i.status === 'PAGO' && i.comprovante_path), sem = lista.filter(i => i.status === 'PAGO' && !i.comprovante_path);
+      const nSel = com.filter(i => selPagos.has(i.id)).length;
+      return `<div class="bg-white border border-slate-200 rounded-lg p-3 text-xs space-y-2">
+        <div class="flex flex-wrap items-center gap-3">
+          <b>🖨️ Imprimir comprovantes</b>
+          <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" ${com.length && nSel === com.length ? 'checked' : ''} onchange="marcarPagos(this.checked)"> todos da lista (${com.length})</label>
+          <button id="btnImpComp" onclick="imprimirComprovantes()" ${nSel ? '' : 'disabled'} class="px-3 py-1.5 rounded-lg font-bold ${nSel ? 'bg-slate-800 hover:bg-slate-900 text-white cursor-pointer' : 'bg-slate-100 text-slate-400'}">Abrir ${nSel || ''} comprovante(s) em um PDF só</button>
+          <span class="text-[10px] text-slate-400">use os filtros acima (período, empresa, nome) para montar a lista · sai na ordem da tela</span>
+        </div>
+        ${podePagar() && sem.length ? `<div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
+          <b>📎 Anexar em lote</b><span class="text-amber-700">${sem.length} pago(s) sem comprovante nesta lista</span>
+          <input type="file" multiple accept=".pdf" onchange="lerLote(this)" class="text-[11px]">
+          <span class="text-[10px] text-slate-400">envie os PDFs do banco (vários arquivos, vários comprovantes por arquivo): o sistema acha de quem é cada um</span>
+        </div><div id="loteBox">${htmlLote()}</div>` : ''}
+      </div>`;
+    }
+    function marcarPagos(on) { listaFiltrada().filter(i => i.status === 'PAGO' && i.comprovante_path).forEach(i => on ? selPagos.add(i.id) : selPagos.delete(i.id)); render(); }
+    async function imprimirComprovantes() {
+      const sel = listaFiltrada().filter(i => i.status === 'PAGO' && i.comprovante_path && selPagos.has(i.id));
+      if (!sel.length) return;
+      const btn = document.getElementById('btnImpComp'); btn.disabled = true;
+      const aba2 = window.open('', '_blank');   // abre já, para o navegador não bloquear
+      if (aba2) aba2.document.write('<p style="font-family:sans-serif">Juntando os comprovantes...</p>');
+      try {
+        const partes = [], erros = [];
+        for (let k = 0; k < sel.length; k++) {
+          btn.innerText = `Baixando ${k + 1} de ${sel.length}...`;
+          const i = sel[k];
+          const { data, error } = await _supabase.storage.from('comprovantes').download(i.comprovante_path);
+          if (error) { erros.push(nome(i.funcionario_id)); continue; }
+          partes.push({ bytes: await data.arrayBuffer(), titulo: nome(i.funcionario_id) });
+        }
+        btn.innerText = 'Montando o PDF...';
+        const r = await ComprovanteSplit.juntar(partes);
+        const url = URL.createObjectURL(r.blob);
+        if (aba2) aba2.location.href = url; else window.open(url, '_blank');
+        const falhou = [...erros, ...r.falhas];
+        if (falhou.length) alert(`PDF montado com ${r.paginas} página(s).\n\nNão foi possível incluir: ${falhou.join(', ')}. Abra esses pelo "ver comprovante".`);
+      } catch (e) { if (aba2) aba2.close(); alert('Não foi possível montar o PDF: ' + e.message); }
+      render();
+    }
+    // anexar em lote: lê os PDFs, separa e casa com os pagos SEM comprovante da lista
+    async function lerLote(input) {
+      const arquivos = [...input.files]; lote = [];
+      if (!arquivos.length) { render(); return; }
+      document.getElementById('loteBox').innerHTML = '<div class="text-slate-500">Lendo os PDFs e procurando de quem é cada comprovante...</div>';
+      const sem = listaFiltrada().filter(i => i.status === 'PAGO' && !i.comprovante_path);
+      const candidatos = sem.map(i => ({ id: i.id, nome: nome(i.funcionario_id), cpf: (funcs[i.funcionario_id] || {}).cpf, valor: parseFloat(i.valor) }));
+      for (const arq of arquivos) {
+        try {
+          const a = await ComprovanteSplit.analisar(arq);
+          if (!a.blocos.length) { lote.push({ erro: `${arq.name}: nenhum comprovante reconhecido (pode ser imagem escaneada).` }); continue; }
+          for (const b of a.blocos) {
+            const ja = new Set(lote.map(s => s.id).filter(Boolean));
+            const achou = ComprovanteSplit.identificar(b, candidatos.filter(c => !ja.has(c.id)));
+            lote.push({ analise: a, bloco: b, id: achou ? achou.candidato.id : '' });
+          }
+        } catch (e) { lote.push({ erro: `${arq.name}: não foi possível ler (${e.message}).` }); }
+      }
+      render();
+    }
+    function htmlLote() {
+      if (!lote.length) return '';
+      const sem = listaFiltrada().filter(i => i.status === 'PAGO' && !i.comprovante_path);
+      const n = lote.filter(s => s.id).length;
+      return `<table class="w-full text-[11px] mt-1"><thead class="text-[10px] text-slate-400 text-left"><tr><th class="py-1">No PDF do banco</th><th>Anexar em</th><th></th></tr></thead><tbody>
+        ${lote.map((s, k) => {
+          if (!s.bloco) return `<tr><td colspan="3" class="py-1 text-rose-600">${esc(s.erro)}</td></tr>`;
+          const b = s.bloco, p = sem.find(i => i.id === s.id);
+          const valorOk = p && b.valor != null && Math.abs(b.valor - parseFloat(p.valor)) < 0.01;
+          const st = !p ? '<span class="chip bg-slate-100 text-slate-500">não é de ninguém desta lista</span>' : valorOk ? '<span class="chip bg-emerald-50 text-emerald-700">✓ confere</span>'
+            : `<span class="chip bg-amber-50 text-amber-800">valor no banco ${b.valor != null ? fmtR(b.valor) : 'não lido'} · pagamento ${fmtR(p.valor)}</span>`;
+          return `<tr class="border-t border-slate-100 align-top"><td class="py-1 pr-2"><div class="font-semibold">${esc(b.nome || '(nome não lido)')}</div><div class="text-[10px] text-slate-400">${esc(b.cpf || '')} · ${b.valor != null ? fmtR(b.valor) : ''} · ${esc(b.data || '')} · ${esc(s.analise.nomeArquivo)} pág. ${b.partes.map(x => x.pagina).join(',')}</div></td>
+            <td class="py-1 pr-2"><select onchange="lote[${k}].id = this.value; render()" class="border border-slate-200 rounded px-1 py-0.5 max-w-[240px]"><option value="">— não anexar —</option>${sem.map(i => `<option value="${i.id}" ${i.id === s.id ? 'selected' : ''}>${esc(nome(i.funcionario_id))} · ${fmtR(i.valor)} · ${dbr(i.pago_em)}</option>`).join('')}</select> ${st}</td>
+            <td class="py-1 text-right"><span class="lnk" onclick="verLote(${k})">ver recorte</span></td></tr>`; }).join('')}</tbody></table>
+        <div class="flex items-center gap-3 mt-2"><button id="btnLote" onclick="anexarLote()" ${n ? '' : 'disabled'} class="px-3 py-1.5 rounded-lg font-bold ${n ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' : 'bg-slate-100 text-slate-400'}">Anexar ${n} comprovante(s)</button>
+          <span class="lnk" onclick="lote = []; render()">cancelar</span></div>`;
+    }
+    async function verLote(k) {
+      const s = lote[k];
+      try { s.blob = s.blob || await ComprovanteSplit.recortar(s.analise, s.bloco); window.open(URL.createObjectURL(s.blob), '_blank'); } catch (e) { alert('Não foi possível gerar o recorte: ' + e.message); }
+    }
+    async function anexarLote() {
+      const aptos = lote.filter(s => s.id && s.bloco);
+      const rep = aptos.map(s => s.id).filter((v, i, a) => a.indexOf(v) !== i);
+      if (rep.length) return alert('O mesmo pagamento foi escolhido para dois comprovantes. Ajuste a coluna "Anexar em".');
+      const btn = document.getElementById('btnLote'); btn.disabled = true;
+      let ok = 0; const falhas = [];
+      for (const s of aptos) {
+        btn.innerText = `Anexando ${ok + falhas.length + 1} de ${aptos.length}...`;
+        const it = itens.find(i => i.id === s.id), quem = nome((it || {}).funcionario_id);
+        try {
+          s.blob = s.blob || await ComprovanteSplit.recortar(s.analise, s.bloco);
+          const caminho = await enviarArquivo(s.blob, s.id, `comprovante_${ComprovanteSplit.semAcento(quem)}.pdf`);
+          const { error } = await _supabase.rpc('fn_pagamento_anexar', { p_id: s.id, p_path: caminho });
+          if (error) throw error;
+          ok++;
+        } catch (e) { falhas.push(`${quem}: ${e.message}`); }
+      }
+      lote = [];
+      alert(`${ok} comprovante(s) anexado(s).` + (falhas.length ? `\n\nFalharam:\n${falhas.join('\n')}` : ''));
+      carregar();
     }
 
     async function anexarDepois(id, input) {
