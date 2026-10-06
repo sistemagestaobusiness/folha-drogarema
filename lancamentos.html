@@ -369,6 +369,17 @@
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // O Supabase devolve no máximo 1000 linhas por consulta: busca em páginas até trazer tudo.
+    async function buscarTudo(montar) {
+      const tudo = [];
+      for (let de = 0; ; de += 1000) {
+        const { data, error } = await montar().order('id').range(de, de + 999);
+        if (error) return { data: null, error };
+        tudo.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return { data: tudo, error: null };
+    }
 
     let listaGlobalEmpresas = [];
     let listaGlobalFuncionarios = [];
@@ -805,7 +816,7 @@
       try {
         const [m, a] = competenciaRegraLancamento.split('/').map(Number);
         const prox = m === 12 ? `01/${a + 1}` : `${String(m + 1).padStart(2, '0')}/${a}`;
-        const { data } = await _supabase.from('folha_itens').select('valor, tipo').eq('competencia', prox);
+        const { data } = await buscarTudo(() => _supabase.from('folha_itens').select('id, valor, tipo').eq('competencia', prox));
         const box = document.getElementById('bannerProximo');
         if (!data || !data.length) { box.classList.add('hidden'); return; }
         const prov = data.filter(i => i.tipo === 'PROVENTO').length, desc = data.length - prov;

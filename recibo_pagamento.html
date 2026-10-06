@@ -199,6 +199,17 @@
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // O Supabase devolve no máximo 1000 linhas por consulta: busca em páginas até trazer tudo.
+    async function buscarTudo(montar) {
+      const tudo = [];
+      for (let de = 0; ; de += 1000) {
+        const { data, error } = await montar().order('id').range(de, de + 999);
+        if (error) return { data: null, error };
+        tudo.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return { data: tudo, error: null };
+    }
 
     let competenciaAtivaTexto = localStorage.getItem('competencia_ativa') || 'AGOSTO / 2026';
     let dadosBrutosRecibos = [];
@@ -247,7 +258,7 @@
       if (data && data.length > 0) {
         periodosList = data.map(p => `${String(p.mes).padStart(2, '0')}/${p.ano}`);
       } else {
-        const { data: itens } = await _supabase.from('folha_itens').select('competencia');
+        const { data: itens } = await buscarTudo(() => _supabase.from('folha_itens').select('id, competencia'));
         if (itens) {
           const setComp = new Set(itens.map(i => i.competencia).filter(Boolean));
           periodosList = Array.from(setComp).sort().reverse();
@@ -348,7 +359,7 @@
 
       try {
         const [resFolha, resEventos] = await Promise.all([
-          _supabase.from('folha_itens').select('*').eq('competencia', periodo),
+          buscarTudo(() => _supabase.from('folha_itens').select('*').eq('competencia', periodo)),
           _supabase.from('tipos_eventos').select('*')
         ]);
 
