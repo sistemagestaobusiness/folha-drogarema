@@ -275,7 +275,7 @@
           <!-- Consolidado por Empresa -->
           <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
             <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Consolidado por Empresa / Filial</span>
-            <div id="listaEmpresasResumo" class="overflow-x-auto text-xs">
+            <div id="listaEmpresasResumo" class="text-xs">
               <div class="text-slate-400 text-center py-2">Carregando dados das empresas...</div>
             </div>
           </div>
@@ -936,58 +936,58 @@
           const grpLojas = listaEmpArr.filter(e => numLoja(e.nome) !== null).sort((a, b) => numLoja(a.nome) - numLoja(b.nome) || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
           const grpOutras = listaEmpArr.filter(e => numLoja(e.nome) === null).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
           const somar = arr => arr.reduce((t, e) => ({ ativos: t.ativos + e.ativosCount, contabil: t.contabil + e.contabil, naoContabil: t.naoContabil + e.naoContabil, descontos: t.descontos + e.descontos }), { ativos: 0, contabil: 0, naoContabil: 0, descontos: 0 });
-          const moedaEmp = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+          const moedaEmp = v => v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});   // sem 'R$' para caber sem rolagem
           const liq = e => e.contabil + e.naoContabil - e.descontos;
           const corLiq = v => v < 0 ? 'text-rose-600' : 'text-emerald-700';
           const linhaEmp = e => `
-                    <tr class="hover:bg-slate-50 transition text-xs">
-                      <td class="py-2 px-2 font-bold text-slate-800 truncate max-w-[180px]">${e.nome}</td>
-                      <td class="py-2 px-2 text-center text-slate-600 font-mono">${e.ativosCount}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-700">${moedaEmp(e.contabil)}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-600">${moedaEmp(e.naoContabil)}</td>
-                      <td class="py-2 px-2 text-right font-mono text-slate-700">${moedaEmp(e.contabil + e.naoContabil)}</td>
-                      <td class="py-2 px-2 text-right font-mono text-rose-600">${e.descontos ? '− ' + moedaEmp(e.descontos) : moedaEmp(0)}</td>
-                      <td class="py-2 px-2 text-right font-mono font-bold ${corLiq(liq(e))}">${moedaEmp(liq(e))}</td>
+                    <tr class="hover:bg-slate-50 transition text-[11px]">
+                      <td class="py-1.5 px-1.5 font-bold text-slate-800 truncate max-w-[130px]">${e.nome}</td>
+                      <td class="py-1.5 px-1.5 text-center text-slate-600 font-mono">${e.ativosCount}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-700">${moedaEmp(e.contabil)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-600">${moedaEmp(e.naoContabil)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-700">${moedaEmp(e.contabil + e.naoContabil)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-rose-600">${e.descontos ? '− ' + moedaEmp(e.descontos) : moedaEmp(0)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono font-bold ${corLiq(liq(e))}">${moedaEmp(liq(e))}</td>
                     </tr>`;
           const linhaSub = (rot, s) => `
-                    <tr class="bg-slate-100 text-xs font-bold">
-                      <td class="py-1.5 px-2 text-slate-700 uppercase text-[10px] tracking-wide">${rot}</td>
-                      <td class="py-1.5 px-2 text-center font-mono text-slate-700">${s.ativos}</td>
-                      <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.contabil)}</td>
-                      <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.naoContabil)}</td>
-                      <td class="py-1.5 px-2 text-right font-mono text-slate-800">${moedaEmp(s.contabil + s.naoContabil)}</td>
-                      <td class="py-1.5 px-2 text-right font-mono text-rose-700">${s.descontos ? '− ' + moedaEmp(s.descontos) : moedaEmp(0)}</td>
-                      <td class="py-1.5 px-2 text-right font-mono ${corLiq(liq(s))}">${moedaEmp(liq(s))}</td>
+                    <tr class="bg-slate-100 text-[11px] font-bold">
+                      <td class="py-1.5 px-1.5 text-slate-700 uppercase text-[10px] tracking-wide">${rot}</td>
+                      <td class="py-1.5 px-1.5 text-center font-mono text-slate-700">${s.ativos}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-800">${moedaEmp(s.contabil)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-800">${moedaEmp(s.naoContabil)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-800">${moedaEmp(s.contabil + s.naoContabil)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono text-rose-700">${s.descontos ? '− ' + moedaEmp(s.descontos) : moedaEmp(0)}</td>
+                      <td class="py-1.5 px-1.5 text-right font-mono ${corLiq(liq(s))}">${moedaEmp(liq(s))}</td>
                     </tr>`;
           const subLojas = somar(grpLojas), subOutras = somar(grpOutras);
           const corpoEmp = (grpLojas.length ? grpLojas.map(linhaEmp).join('') + linhaSub('Subtotal lojas', subLojas) : '')
-                         + (grpOutras.length ? grpOutras.map(linhaEmp).join('') + linhaSub('Subtotal demais empresas', subOutras) : '');
+                         + (grpOutras.length ? grpOutras.map(linhaEmp).join('') + linhaSub('Subtotal empresas', subOutras) : '');
 
           containerEmp.innerHTML = `
             <table class="w-full text-left border-collapse tab-sem-quebra">
               <thead>
                 <tr class="text-[10px] text-slate-400 uppercase border-b border-slate-200">
-                  <th class="py-1.5 px-2 font-semibold w-44">Unidade / Loja</th>
-                  <th class="py-1.5 px-2 font-semibold text-center w-24">Funcionários Ativos</th>
-                  <th class="py-1.5 px-2 font-semibold text-right w-28">Contábil</th>
-                  <th class="py-1.5 px-2 font-semibold text-right w-28">Não Contábil</th>
-                  <th class="py-1.5 px-2 font-semibold text-right w-28">Total bruto</th>
-                  <th class="py-1.5 px-2 font-semibold text-right w-28">Descontos</th>
-                  <th class="py-1.5 px-2 font-semibold text-right w-32">Líquido</th>
+                  <th class="py-1.5 px-1.5 font-semibold">Unidade (valores em R$)</th>
+                  <th class="py-1.5 px-1.5 font-semibold text-center" title="Funcionários ativos">Ativos</th>
+                  <th class="py-1.5 px-1.5 font-semibold text-right">Contábil</th>
+                  <th class="py-1.5 px-1.5 font-semibold text-right">Não Contábil</th>
+                  <th class="py-1.5 px-1.5 font-semibold text-right">Total bruto</th>
+                  <th class="py-1.5 px-1.5 font-semibold text-right">Descontos</th>
+                  <th class="py-1.5 px-1.5 font-semibold text-right">Líquido</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
                 ${corpoEmp}
               </tbody>
-              <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-bold text-xs">
+              <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-bold text-[11px]">
                 <tr>
-                  <td class="py-2.5 px-2 text-slate-900 uppercase">Total Geral (lojas + empresas)</td>
-                  <td class="py-2.5 px-2 text-center font-mono text-slate-800">${totalAtivosEmp}</td>
-                  <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalNaoContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2.5 px-2 text-right font-mono text-slate-900">R$ ${totalGeralEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2.5 px-2 text-right font-mono text-rose-700">${totalDescEmp ? '− ' : ''}R$ ${totalDescEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2.5 px-2 text-right font-mono ${corLiq(totalGeralEmp - totalDescEmp)}">R$ ${(totalGeralEmp - totalDescEmp).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2 px-1.5 text-slate-900 uppercase">Total geral</td>
+                  <td class="py-2 px-1.5 text-center font-mono text-slate-800">${totalAtivosEmp}</td>
+                  <td class="py-2 px-1.5 text-right font-mono text-slate-900">${totalContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2 px-1.5 text-right font-mono text-slate-900">${totalNaoContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2 px-1.5 text-right font-mono text-slate-900">${totalGeralEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2 px-1.5 text-right font-mono text-rose-700">${totalDescEmp ? '− ' : ''}${totalDescEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                  <td class="py-2 px-1.5 text-right font-mono ${corLiq(totalGeralEmp - totalDescEmp)}">${(totalGeralEmp - totalDescEmp).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                 </tr>
               </tfoot>
             </table>

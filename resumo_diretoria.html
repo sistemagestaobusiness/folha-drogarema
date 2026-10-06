@@ -59,6 +59,19 @@
     </div>
   </div>
 
+  <!-- Comparativo detalhado do colaborador (clique no nome) -->
+  <div id="modalComparativo" class="hidden fixed inset-0 z-[100] bg-slate-900/50 flex justify-center items-center p-4" onclick="if(event.target===this) fecharComparativo()">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 flex justify-between items-start">
+        <div><div class="text-[10px] font-bold text-slate-500 uppercase">O que mudou entre os dois meses</div>
+          <h2 id="cmpTitulo" class="font-black text-slate-900 text-sm"></h2><p id="cmpSub" class="text-[11px] text-slate-500"></p></div>
+        <div class="flex gap-2"><button onclick="window.print()" class="px-3 py-1.5 border border-slate-300 rounded-lg text-[11px] font-bold cursor-pointer">Imprimir</button>
+          <button onclick="fecharComparativo()" class="text-slate-400 hover:text-slate-700 font-bold text-lg cursor-pointer">✕</button></div>
+      </div>
+      <div id="cmpCorpo" class="p-5 overflow-y-auto space-y-3"></div>
+    </div>
+  </div>
+
   <!-- Script de Inteligência da Tabela -->
   <script>
     const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
@@ -88,6 +101,8 @@
     // Mapeamento de Colunas Estratégicas da Diretoria
     const metricas = [
       { key: 'bruto', label: 'TOTAL BRUTO', colorH: 'bg-emerald-100/70', colorB: 'bg-emerald-50/20', colorD: 'bg-emerald-100/50' },
+      { key: 'bruto_contabil', label: 'TOTAL CONTÁBIL', colorH: 'bg-slate-800 text-white', colorB: 'bg-slate-50', colorD: 'bg-slate-300/70' },
+      { key: 'bruto_nao_contabil', label: 'TOTAL NÃO CONTÁBIL', colorH: 'bg-amber-200/80', colorB: 'bg-amber-50/30', colorD: 'bg-amber-100/60' },
       { key: 'descontos', label: 'TOTAL DESCONTOS', colorH: 'bg-rose-100/70', colorB: 'bg-rose-50/20', colorD: 'bg-rose-100/50' },
       { key: 'liquido', label: 'LÍQUIDO RECEBIDO', colorH: 'bg-slate-200/80', colorB: 'bg-slate-50', colorD: 'bg-slate-200/60' },
       { key: 'custo_empresa', label: 'CUSTO EMPRESA', colorH: 'bg-teal-100/70', colorB: 'bg-teal-50/20', colorD: 'bg-teal-100/50' },
@@ -229,6 +244,7 @@
               registroDrogarema: empresaMatch && typeof empresaMatch.inss_patronal === 'boolean' ? empresaMatch.inss_patronal
                 : String((empresaMatch && empresaMatch.razao_social) || f.empresa_registro || '').toUpperCase().includes('DROGAREMA'),
               freelance: String(f.cargo || '').toUpperCase().includes('FREELANCE'),
+              itens: [],                       // lançamentos dos dois meses (para o comparativo detalhado)
               atual: initMetrics(),
               anterior: initMetrics()
             };
@@ -251,6 +267,8 @@
             }
           }
           if (natureza === 'NAO_CONTABIL' || rubrica.includes('FORA')) natureza = 'NAO_CONTABIL';
+
+          dadosFuncMap[fId].itens.push({ atual: isAtual, rubrica: String(item.rubrica || ''), tipo, natureza, val, motivo: String(item.motivo_ajuste || '') });
 
           // Consolidação Base
           if (tipo === 'PROVENTO') {
@@ -378,7 +396,7 @@
         accumulate(groupTotals, f);
 
         let tr = `<tr class="hover:bg-slate-50 text-[11px] text-slate-700 font-mono transition">`;
-        tr += `<td class="py-2 px-3 whitespace-nowrap font-sans font-bold text-slate-800 truncate ${styLeft1}" style="${wC1}" title="${f.nome}">${f.nome}</td>`;
+        tr += `<td class="py-2 px-3 whitespace-nowrap font-sans font-bold text-slate-800 truncate cursor-pointer hover:text-indigo-700 hover:underline ${styLeft1}" style="${wC1}" title="${f.nome} — clique para ver o que mudou entre os dois meses" onclick="abrirComparativo('${f.id}')">${f.nome}</td>`;
         tr += `<td class="py-2 px-3 whitespace-nowrap font-sans text-slate-500 truncate ${styLeft2}" style="${wC2}" title="${f.empresa}">${f.empresa}</td>`;
 
         metricas.forEach(m => {
@@ -387,7 +405,7 @@
           let dif = atu - ant;
           tr += `<td class="py-2 px-2 text-right whitespace-nowrap ${m.colorB} border-l border-white opacity-80">${formatarMoeda(ant)}</td>`;
           tr += `<td class="py-2 px-2 text-right whitespace-nowrap font-bold ${m.colorB}">${formatarMoeda(atu)}</td>`;
-          tr += `<td class="py-2 px-2 text-right whitespace-nowrap font-bold ${m.colorB} border-r border-white">${formatarDiferenca(dif)}</td>`;
+          tr += `<td class="py-2 px-2 text-right whitespace-nowrap font-bold ${m.colorB} border-r border-white ${Math.abs(dif) >= 0.01 ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400 hover:ring-inset' : ''}" ${Math.abs(dif) >= 0.01 ? `onclick="abrirComparativo('${f.id}')" title="Clique para ver o que justifica esta diferença"` : ''}>${formatarDiferenca(dif)}</td>`;
         });
 
         tr += `</tr>`;
@@ -418,6 +436,66 @@
       html += `</tr>`;
       return html;
     }
+
+    // ------------------------------------------------------------------
+    // COMPARATIVO DETALHADO: o que explica a diferença do colaborador entre os dois meses
+    // ------------------------------------------------------------------
+    const escC = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const numC = v => Math.abs(v) < 0.005 ? '<span class="text-slate-300">-</span>' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function abrirComparativo(id) {
+      const f = glob_dadosFunc.find(x => String(x.id) === String(id));
+      if (!f) return;
+      const txtAnt = formatarMesCurto(compAnterior), txtAtu = formatarMesCurto(compAtual);
+      // agrupa por evento (sem o "(03/10)" das parcelas, para a parcela de um mês casar com a do outro)
+      const grupos = {};
+      f.itens.forEach(i => {
+        const nomeEv = i.rubrica.replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s+/g, ' ').trim().toUpperCase();
+        const k = i.tipo + '|' + nomeEv;
+        const g = grupos[k] || (grupos[k] = { tipo: i.tipo, nome: nomeEv, natureza: i.natureza, ant: 0, atu: 0, nAnt: 0, nAtu: 0, det: [] });
+        if (i.atual) { g.atu += i.val; g.nAtu++; } else { g.ant += i.val; g.nAnt++; }
+        g.det.push(i);
+      });
+      const lista = Object.values(grupos).map(g => ({ ...g, dif: g.atu - g.ant }));
+      const linhas = tipo => lista.filter(g => g.tipo === tipo).sort((a, b) => a.nome.localeCompare(b.nome)).map(g => {
+        const mudou = Math.abs(g.dif) >= 0.01;
+        const selo = !mudou ? '' : g.nAnt === 0 ? `<span class="ml-1 text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full font-bold">só em ${txtAtu}</span>`
+          : g.nAtu === 0 ? `<span class="ml-1 text-[9px] bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded-full font-bold">só em ${txtAnt}</span>`
+          : `<span class="ml-1 text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">valor mudou</span>`;
+        // rastreabilidade: cada lançamento que forma o valor, nos dois meses
+        const item = i => `<div class="flex justify-between gap-2"><span>${i.atual ? txtAtu : txtAnt} · ${escC(i.rubrica)}${i.motivo ? ' · <span class="text-slate-500">' + escC(i.motivo) + '</span>' : ''}</span><span class="font-mono">${numC(i.val)}</span></div>`;
+        const obs = mudou ? `<details class="font-sans text-[10px] text-slate-600 mt-0.5"><summary class="cursor-pointer text-indigo-700">ver os ${g.det.length} lançamento(s)</summary>
+          <div class="mt-1 pl-2 border-l-2 border-slate-200 space-y-0.5">${g.det.filter(i => !i.atual).map(item).join('')}${g.det.filter(i => i.atual).map(item).join('')}</div></details>` : '';
+        return `<tr class="border-t border-slate-100 ${mudou ? '' : 'text-slate-400'}">
+          <td class="py-1.5 px-2 font-sans"><span class="${mudou ? 'font-bold text-slate-800' : ''}">${escC(g.nome)}</span>
+            <span class="text-[9px] ${g.natureza === 'NAO_CONTABIL' ? 'text-amber-700' : 'text-slate-400'}">${g.natureza === 'NAO_CONTABIL' ? 'não contábil' : 'contábil'}</span>${selo}${obs}</td>
+          <td class="py-1.5 px-2 text-right">${numC(g.ant)}</td><td class="py-1.5 px-2 text-right">${numC(g.atu)}</td>
+          <td class="py-1.5 px-2 text-right font-bold">${formatarDiferenca(g.dif)}</td></tr>`;
+      }).join('') || '<tr><td colspan="4" class="py-2 px-2 text-slate-400 font-sans">Nenhum lançamento.</td></tr>';
+      const tot = (campo) => `<td class="py-1.5 px-2 text-right">${numC(f.anterior[campo])}</td><td class="py-1.5 px-2 text-right">${numC(f.atual[campo])}</td><td class="py-1.5 px-2 text-right">${formatarDiferenca(f.atual[campo] - f.anterior[campo])}</td>`;
+      const cab = (titulo, cor) => `<tr class="${cor} text-[10px] uppercase"><th class="py-1.5 px-2 text-left">${titulo}</th><th class="py-1.5 px-2 text-right w-24">${txtAnt}</th><th class="py-1.5 px-2 text-right w-24">${txtAtu}</th><th class="py-1.5 px-2 text-right w-24">Diferença</th></tr>`;
+      // frase-resumo: os eventos que mais explicam a diferença do líquido (desconto maior reduz o líquido)
+      const efeito = g => g.tipo === 'DESCONTO' ? -g.dif : g.dif;
+      const principais = lista.filter(g => Math.abs(g.dif) >= 0.01).sort((a, b) => Math.abs(efeito(b)) - Math.abs(efeito(a))).slice(0, 4);
+      const difLiq = f.atual.liquido - f.anterior.liquido;
+      const frase = principais.length ? principais.map(g => `<b>${escC(g.nome.replace(/^\d+\s*-\s*/, ''))}</b> ${efeito(g) >= 0 ? '+' : '−'}${Math.abs(efeito(g)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join(' · ') : 'Nenhuma diferença entre os dois meses.';
+      document.getElementById('cmpTitulo').innerText = f.nome;
+      document.getElementById('cmpSub').innerText = `${f.empresa} · ${txtAnt} × ${txtAtu}`;
+      document.getElementById('cmpCorpo').innerHTML = `
+        <div class="rounded-lg border ${difLiq >= 0 ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'} p-3 text-xs font-sans">
+          <div>Líquido de ${txtAtu} ficou <b>${Math.abs(difLiq) < 0.01 ? 'igual' : (difLiq > 0 ? 'R$ ' + numC(difLiq) + ' MAIOR' : 'R$ ' + numC(-difLiq) + ' MENOR')}</b> que ${txtAnt}.</div>
+          <div class="mt-1 text-[11px] text-slate-700">O que explica (efeito no líquido): ${frase}</div></div>
+        <table class="w-full text-[11px] font-mono border-collapse">
+          ${cab('Proventos (+)', 'bg-emerald-100 text-emerald-900')}${linhas('PROVENTO')}
+          <tr class="border-t-2 border-slate-300 font-bold bg-slate-50"><td class="py-1.5 px-2 font-sans">Total bruto</td>${tot('bruto')}</tr>
+          ${cab('Descontos (−)', 'bg-rose-100 text-rose-900')}${linhas('DESCONTO')}
+          <tr class="border-t-2 border-slate-300 font-bold bg-slate-50"><td class="py-1.5 px-2 font-sans">Total descontos</td>${tot('descontos')}</tr>
+          <tr class="border-t-2 border-slate-800 font-black bg-slate-200 text-[12px]"><td class="py-2 px-2 font-sans">LÍQUIDO</td>${tot('liquido')}</tr>
+        </table>
+        <div class="text-[10px] text-slate-400 font-sans">Cinza = igual nos dois meses. Vale-transporte, férias, 13º e rescisão (pagos fora do holerite) não entram nesta conta.</div>`;
+      document.getElementById('modalComparativo').classList.remove('hidden');
+    }
+    function fecharComparativo() { document.getElementById('modalComparativo').classList.add('hidden'); }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharComparativo(); });
 
     processarDadosBanco();
   </script>
