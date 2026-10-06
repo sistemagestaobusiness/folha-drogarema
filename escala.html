@@ -158,6 +158,10 @@
     const feriadoDe = iso => (feriados.find(x => x.data === iso && (!x.loja_id || x.loja_id === lojaSel)) || {}).nome || '';
     const ehFarmaceutico = f => /FARMAC[EÊ]UTIC/i.test(String(f.cargo || '') + ' ' + String(f.organograma_funcao || ''));
     let funcs = [], padroes = {}, horario = {}, excecoes = [], ferias = [], freelas = [];
+    // equipe fixa da loja: quem é só FREELANCE (cargo do cadastro) e não tem horário padrão não entra na lista de cima;
+    // aparece só na parte de baixo (★), nos dias em que tiver freelance aprovado/solicitado
+    const soFreelance = f => /FREELANCE/i.test(String(f.cargo || '')) && !padroes[f.id];
+    const daEquipe = f => f.loja_id === lojaSel && !soFreelance(f);
     let visao = 'mes', dataRef = null, carregado = { ini: null, fim: null, loja: null }, editando = null, tipoDia = 'FOLGA';
 
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -320,6 +324,7 @@
     function pessoasDia(iso) {
       const lista = [];
       funcs.forEach(f => {
+        if (soFreelance(f)) return;   // só freelance: entra apenas como extra (★), mais abaixo
         const r = diaFunc(f, iso);
         if (f.loja_id === lojaSel) {
           if (r.tipo === 'TRABALHO' && r.loja !== lojaSel) lista.push({ f, r: { ...r, tipo: 'EMPRESTADO', obs: 'trabalhando na ' + nomeLoja(r.loja) } });
@@ -390,7 +395,7 @@
       const mesTxt = iso => MESES[parseInt(iso.slice(5, 7), 10) - 1] + ' / ' + iso.slice(0, 4);
       $('lblPeriodo').innerText = visao === 'mes' ? mesTxt(dataRef) : visao === 'semana' ? `${dbr(a).slice(0, 5)} a ${dbr(b)}` : `${DSEM[dow(dataRef)]} ${dbr(dataRef)}`;
       $('tituloImpressao').innerText = `Escala ${nomeLoja(lojaSel)} · ${$('lblPeriodo').innerText}`;
-      const semPadrao = funcs.filter(f => f.loja_id === lojaSel && !padroes[f.id]);
+      const semPadrao = funcs.filter(f => daEquipe(f) && !padroes[f.id]);
       const semHorario = !Object.keys(horario).length;
       const avisos = [];
       if (semHorario) avisos.push('A loja ainda não tem horário de funcionamento e mínimo de pessoas.');
@@ -437,7 +442,7 @@
       const porDia = {}; dias.forEach(d => porDia[d] = pessoasDia(d));
       // linhas: funcionários da loja + quem veio emprestado em algum dia do mês
       const ids = new Map();
-      funcs.filter(f => f.loja_id === lojaSel).forEach(f => ids.set(f.id, f));
+      funcs.filter(daEquipe).forEach(f => ids.set(f.id, f));
       dias.forEach(d => porDia[d].lista.forEach(p => { if (!ids.has(p.f.id)) ids.set(p.f.id, p.f); }));
       const extrasNomes = new Map();
       dias.forEach(d => porDia[d].extras.forEach(p => extrasNomes.set(p.extra.funcionario_id, p.f)));
