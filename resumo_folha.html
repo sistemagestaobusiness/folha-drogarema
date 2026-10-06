@@ -8,10 +8,10 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .no-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
-    .no-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .no-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .no-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .no-scrollbar::-webkit-scrollbar { height: 14px; width: 12px; }
+    .no-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .no-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+    .no-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
     .shadow-fixa { box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.05); }
     .z-canto { z-index: 60 !important; }
     input[type="number"]::-webkit-inner-spin-button, 
@@ -64,7 +64,7 @@
     <div id="barraEnvio" class="mb-3"></div>
     <div id="lembreteDinheiro"></div>
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
-      <div class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
+      <div id="areaTabela" class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
         <table class="w-full text-left text-xs border-collapse">
           <thead id="tabelaCabecalho" class="sticky top-0 z-50 bg-slate-50 shadow-sm">
           </thead>
@@ -913,6 +913,19 @@
     }
 
     processarDadosBanco();
+  
+    // A área da tabela vai exatamente até o fim da janela: a barra de rolagem horizontal fica sempre à vista
+    function ajustarAlturaTabela() {
+      const el = document.getElementById('areaTabela'); if (!el) return;
+      const cab = document.querySelector('.sticky.top-0'), hCab = cab ? cab.offsetHeight : 0;
+      const topoDoc = el.getBoundingClientRect().top + window.scrollY;
+      let alt = window.innerHeight - topoDoc - 14;
+      if (alt < 320) alt = window.innerHeight - hCab - 14;   // avisos altos acima: a tabela ocupa a janela abaixo do cabeçalho
+      el.style.maxHeight = Math.max(240, alt) + 'px';
+    }
+    window.addEventListener('resize', ajustarAlturaTabela);
+    window.addEventListener('load', ajustarAlturaTabela);
+    new MutationObserver(ajustarAlturaTabela).observe(document.body, { childList: true, subtree: true });
   </script>
 </body>
 </html>

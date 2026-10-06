@@ -8,10 +8,10 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .no-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
-    .no-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .no-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .no-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .no-scrollbar::-webkit-scrollbar { height: 14px; width: 12px; }
+    .no-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .no-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+    .no-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
     .shadow-fixa { box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.05); }
     .z-canto { z-index: 60 !important; }
   </style>
@@ -46,7 +46,7 @@
   <!-- Container da Tabela Executiva -->
   <div class="p-4 sm:p-6">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
-      <div class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
+      <div id="areaTabela" class="overflow-x-auto overflow-y-auto w-full no-scrollbar" style="max-height: calc(100vh - 120px);">
         <table class="w-full text-left text-xs border-collapse">
           <thead id="tabelaCabecalho" class="sticky top-0 z-50 bg-slate-50 shadow-sm">
             <!-- Cabeçalho Fixo Gerado via JS -->
@@ -268,7 +268,7 @@
           }
           if (natureza === 'NAO_CONTABIL' || rubrica.includes('FORA')) natureza = 'NAO_CONTABIL';
 
-          dadosFuncMap[fId].itens.push({ atual: isAtual, rubrica: String(item.rubrica || ''), tipo, natureza, val, motivo: String(item.motivo_ajuste || '') });
+          dadosFuncMap[fId].itens.push({ atual: isAtual, rubrica: String(item.rubrica || ''), tipo, natureza, val, motivo: String(item.motivo_ajuste || ''), venda: item.venda_base != null ? parseFloat(item.venda_base) : null });
 
           // Consolidação Base
           if (tipo === 'PROVENTO') {
@@ -442,6 +442,8 @@
     // ------------------------------------------------------------------
     const escC = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const numC = v => Math.abs(v) < 0.005 ? '<span class="text-slate-300">-</span>' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // comissão: venda do relatório do Alpha7 que gerou o valor (e o % que a comissão representa)
+    const vendaC = (v, com) => v == null ? '' : `<div class="text-[9px] font-sans text-sky-700 font-normal" title="Venda no relatório de comissão do Alpha7">venda ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${v > 0 ? ' · ' + (com / v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : ''}</div>`;
     function abrirComparativo(id) {
       const f = glob_dadosFunc.find(x => String(x.id) === String(id));
       if (!f) return;
@@ -451,7 +453,8 @@
       f.itens.forEach(i => {
         const nomeEv = i.rubrica.replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s+/g, ' ').trim().toUpperCase();
         const k = i.tipo + '|' + nomeEv;
-        const g = grupos[k] || (grupos[k] = { tipo: i.tipo, nome: nomeEv, natureza: i.natureza, ant: 0, atu: 0, nAnt: 0, nAtu: 0, det: [] });
+        const g = grupos[k] || (grupos[k] = { tipo: i.tipo, nome: nomeEv, natureza: i.natureza, ant: 0, atu: 0, nAnt: 0, nAtu: 0, det: [], vAnt: null, vAtu: null });
+        if (i.venda != null) { if (i.atual) g.vAtu = (g.vAtu || 0) + i.venda; else g.vAnt = (g.vAnt || 0) + i.venda; }
         if (i.atual) { g.atu += i.val; g.nAtu++; } else { g.ant += i.val; g.nAnt++; }
         g.det.push(i);
       });
@@ -462,13 +465,13 @@
           : g.nAtu === 0 ? `<span class="ml-1 text-[9px] bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded-full font-bold">só em ${txtAnt}</span>`
           : `<span class="ml-1 text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">valor mudou</span>`;
         // rastreabilidade: cada lançamento que forma o valor, nos dois meses
-        const item = i => `<div class="flex justify-between gap-2"><span>${i.atual ? txtAtu : txtAnt} · ${escC(i.rubrica)}${i.motivo ? ' · <span class="text-slate-500">' + escC(i.motivo) + '</span>' : ''}</span><span class="font-mono">${numC(i.val)}</span></div>`;
+        const item = i => `<div class="flex justify-between gap-2"><span>${i.atual ? txtAtu : txtAnt} · ${escC(i.rubrica)}${i.motivo ? ' · <span class="text-slate-500">' + escC(i.motivo) + '</span>' : ''}</span><span class="font-mono">${i.venda != null ? `<span class="text-sky-700 mr-2">venda ${numC(i.venda)}</span>` : ''}${numC(i.val)}</span></div>`;
         const obs = mudou ? `<details class="font-sans text-[10px] text-slate-600 mt-0.5"><summary class="cursor-pointer text-indigo-700">ver os ${g.det.length} lançamento(s)</summary>
           <div class="mt-1 pl-2 border-l-2 border-slate-200 space-y-0.5">${g.det.filter(i => !i.atual).map(item).join('')}${g.det.filter(i => i.atual).map(item).join('')}</div></details>` : '';
         return `<tr class="border-t border-slate-100 ${mudou ? '' : 'text-slate-400'}">
           <td class="py-1.5 px-2 font-sans"><span class="${mudou ? 'font-bold text-slate-800' : ''}">${escC(g.nome)}</span>
             <span class="text-[9px] ${g.natureza === 'NAO_CONTABIL' ? 'text-amber-700' : 'text-slate-400'}">${g.natureza === 'NAO_CONTABIL' ? 'não contábil' : 'contábil'}</span>${selo}${obs}</td>
-          <td class="py-1.5 px-2 text-right">${numC(g.ant)}</td><td class="py-1.5 px-2 text-right">${numC(g.atu)}</td>
+          <td class="py-1.5 px-2 text-right">${numC(g.ant)}${vendaC(g.vAnt, g.ant)}</td><td class="py-1.5 px-2 text-right">${numC(g.atu)}${vendaC(g.vAtu, g.atu)}</td>
           <td class="py-1.5 px-2 text-right font-bold">${formatarDiferenca(g.dif)}</td></tr>`;
       }).join('') || '<tr><td colspan="4" class="py-2 px-2 text-slate-400 font-sans">Nenhum lançamento.</td></tr>';
       const tot = (campo) => `<td class="py-1.5 px-2 text-right">${numC(f.anterior[campo])}</td><td class="py-1.5 px-2 text-right">${numC(f.atual[campo])}</td><td class="py-1.5 px-2 text-right">${formatarDiferenca(f.atual[campo] - f.anterior[campo])}</td>`;
@@ -524,6 +527,19 @@
     window.onkeypress = resetarTemporizador;
     window.onclick = resetarTemporizador;
     window.onscroll = resetarTemporizador;
+  
+    // A área da tabela vai exatamente até o fim da janela: a barra de rolagem horizontal fica sempre à vista
+    function ajustarAlturaTabela() {
+      const el = document.getElementById('areaTabela'); if (!el) return;
+      const cab = document.querySelector('.sticky.top-0'), hCab = cab ? cab.offsetHeight : 0;
+      const topoDoc = el.getBoundingClientRect().top + window.scrollY;
+      let alt = window.innerHeight - topoDoc - 14;
+      if (alt < 320) alt = window.innerHeight - hCab - 14;   // avisos altos acima: a tabela ocupa a janela abaixo do cabeçalho
+      el.style.maxHeight = Math.max(240, alt) + 'px';
+    }
+    window.addEventListener('resize', ajustarAlturaTabela);
+    window.addEventListener('load', ajustarAlturaTabela);
+    new MutationObserver(ajustarAlturaTabela).observe(document.body, { childList: true, subtree: true });
   </script>
 </body>
 </html>

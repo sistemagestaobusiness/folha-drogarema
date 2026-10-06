@@ -37,3 +37,10 @@
     liberar();
   })();
 })();
+
+// Rolo do mouse em cima de um campo de valor: o navegador muda o número em vez de rolar a tela.
+// Aqui o campo perde o foco antes, então o rolo só rola a página (vale para todas as telas).
+document.addEventListener('wheel', function () {
+  var el = document.activeElement;
+  if (el && el.tagName === 'INPUT' && el.type === 'number') el.blur();
+}, { passive: true, capture: true });

@@ -248,6 +248,7 @@
       let colUsuario = -1;
       let colPlano = -1;
       let colRemuneracao = -1;
+      let colVenda = -1;   // coluna "Venda" do relatório (base da comissão)
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -256,6 +257,7 @@
           if (val === 'Usuário') colUsuario = j;
           if (val === 'Plano de Remuneração') colPlano = j;
           if (val === 'Remuneração') colRemuneracao = j;
+          if (val === 'Venda' && colVenda === -1) colVenda = j;
         }
         if (colUsuario !== -1 && colPlano !== -1 && colRemuneracao !== -1) {
           headerIdx = i;
@@ -324,6 +326,7 @@
           codigo_evento: eventoEncontrado ? eventoEncontrado.codigo_evento : '',
           descricao_evento: eventoEncontrado ? eventoEncontrado.descricao_do_evento : resumoMapeado,
           valor: valorRem,
+          venda: colVenda !== -1 && !isNaN(parseFloat(row[colVenda])) ? parseFloat(row[colVenda]) : null,
           pendente_rubrica: !eventoEncontrado
         });
       }
@@ -453,6 +456,7 @@
         tipo: 'PROVENTO',
         valor: d.valor,
         valor_bruto: d.valor,
+        venda_base: d.venda ?? null,
         competencia: competenciaRegraLancamento
       }));
 
