@@ -28,10 +28,13 @@
       if (!r) return;
       for (const c of r) { const m = /C[oó]d\.\s*Un\.\s*Neg\.\s*:\s*(\d+)/i.exec(String(c == null ? '' : c)); if (m) { loja = parseInt(m[1], 10); return; } }
       const b = r.findIndex(c => typeof c === 'string' && /^P\s*>/.test(c.trim()));
-      if (loja && b >= 0 && typeof r[b + 2] === 'number') {
+      // o valor pode vir como número ou como texto "166.95" (relatório colado na planilha)
+      const ehNum = v => typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()));
+      const n2 = v => typeof v === 'number' ? v : parseFloat(v) || 0;
+      if (loja && b >= 0 && ehNum(r[b + 2])) {
         const k = norm(r[b]); out[loja] = out[loja] || {};
-        const o = out[loja][k] || (out[loja][k] = vazio());
-        o.v += num(r[b + 2]); o.d += num(r[b + 4]); o.l += num(r[b + 8]);
+        const o = out[loja][k] || (out[loja][k] = { v: 0, d: 0, l: 0, q: 0 });
+        o.v += n2(r[b + 2]); o.d += n2(r[b + 4]); o.l += n2(r[b + 8]); o.q += ehNum(r[b + 1]) ? n2(r[b + 1]) : 0;
       }
     });
     return out;
@@ -86,6 +89,18 @@
     return out;
   }
 
+  // "Análise de Entrega": uma linha por unidade (valor do delivery e quantidade de entregas)
+  function lerEntregas(rows) {
+    const out = {}; let ix = null;
+    (rows || []).forEach(r => {
+      if (!r) return;
+      if (r.some(c => /^ENTREGAS$/.test(norm(c))) && r.some(c => /^UN\. NEG\.?$/.test(norm(c)))) { ix = colunas(r, { un: /^UN\. NEG\.?$/, v: /^VALOR$/, e: /^ENTREGAS$/ }); return; }
+      if (!ix || !/^\d+$/.test(String(r[ix.un] == null ? '' : r[ix.un]).trim())) return;
+      out[parseInt(r[ix.un], 10)] = { valor: num(r[ix.v]), entregas: num(r[ix.e]) };
+    });
+    return out;
+  }
+
   // abas: { nomeDaAba: [[celulas...], ...] } ; lojaDoUsuario(usuario) -> nº da loja (ou null = fica na loja 3)
   function calcular(abas, lojaDoUsuario) {
     const avisos = [];
@@ -108,9 +123,10 @@
       Object.keys(pref[i] || {}).forEach(k => { L[i][k] = L[i][k] || vazio(); soma(L[i][k], pref[i][k], -1); }); });
 
     // 2) farmácia popular: venda na loja 3 feita por usuário de outra loja vai para a loja dele
-    const transferencias = [], semVinculo = [], fpGS = {};   // fpGS: genérico + similar que entrou (+) ou saiu (−) da loja pela farmácia popular
+    const transferencias = [], semVinculo = [], fpGS = {}, fpV = {};   // fpV: venda de farmácia popular que ficou em cada loja   // fpGS: genérico + similar que entrou (+) ou saiu (−) da loja pela farmácia popular
     fp.forEach(x => {
       const dest = lojaDoUsuario ? lojaDoUsuario(x.usuario) : null;
+      { const fica = dest && dest !== 3 && LOJAS.includes(dest) ? dest : 3; fpV[fica] = (fpV[fica] || 0) + x.v; }
       if (dest === undefined) { if (!semVinculo.includes(x.usuario)) semVinculo.push(x.usuario); return; }
       if (!dest || dest === 3 || !LOJAS.includes(dest)) return;
       L[3][x.cls] = L[3][x.cls] || vazio(); L[dest][x.cls] = L[dest][x.cls] || vazio();
@@ -127,7 +143,14 @@
       if (x.fab === 'SIDNEY OLIVEIRA') { sidEco[i] = (sidEco[i] || 0) + x.v; eSid += x.v; }
     }));
 
-    const cols = [...LOJAS.map(i => ({ id: String(i), nome: 'LOJA ' + i, m: L[i], vit: det.vit[i] || 0, sid: (det.sid[i] || 0) - (sidEco[i] || 0) })),
+    // % de desconto e ticket médio por classificação: direto do nível 3 da loja (como na planilha de resultado)
+    const rEnt = achaAba(abas, 'ENTREGAS', 'ANALISE DE ENTREGA'); const ent = rEnt ? lerEntregas(rEnt) : null;
+    const porClasse = i => { const o = { descp: {}, ticket: {} };
+      [['etico', C.ETICO], ['similar', C.SIMILAR], ['generico', C.GENERICO]].forEach(([k, cls]) => { const x = (c3[i] || {})[norm(cls)];
+        o.descp[k] = x && x.v + x.d > 0 ? Math.round(x.d / (x.v + x.d) * 10000) / 10000 : null;
+        o.ticket[k] = x && x.q > 0 ? Math.round(x.v / x.q * 100) / 100 : null; });
+      return o; };
+    const cols = [...LOJAS.map(i => ({ id: String(i), loja: i, nome: 'LOJA ' + i, m: L[i], vit: det.vit[i] || 0, sid: (det.sid[i] || 0) - (sidEco[i] || 0) })),
                   { id: 'E', nome: 'E-COMMERCE', m: E, vit: 0, sid: eSid }];
     const g = (c, k, campo) => ((c.m[norm(k)] || {})[campo || 'v']) || 0;
     const tot = (c, campo) => Object.values(c.m).reduce((a, x) => a + x[campo], 0);
@@ -141,7 +164,8 @@
       R[c.id] = { nome: c.nome, bruto: liq + desc, desc, liq, lucro, gen, sim, gensim, vit: c.vit, gensim_sem_vit: gensim - c.vit,
         perf, ...perfItens, sidney: c.sid, perf_sem_sidney: perf - c.sid,
         // comissão/bônus não considera farmácia popular (sem margem): base = gen + sim − vitaminas, sem a transferência
-        fp_gensim: fpGS[c.id] || 0, base_bonus: gensim - c.vit - (fpGS[c.id] || 0),
+        ...(c.loja ? porClasse(c.loja) : {}), delivery: c.loja && ent ? ((ent[c.loja] || {}).valor || 0) : null, entregas: c.loja && ent ? ((ent[c.loja] || {}).entregas || 0) : null,
+        fp_venda: fpV[c.id] || 0, fp_gensim: fpGS[c.id] || 0, base_bonus: gensim - c.vit - (fpGS[c.id] || 0),
         dermo_total: dermo + rennova, dermo, rennova, efs: etico + formulas + servicos + covid, etico, formulas, servicos, covid };
     });
     // classificações que vieram no relatório e não estão no modelo (ficam só no total da loja)
@@ -192,7 +216,8 @@
       info.tipo = p ? p[0] : 'C?'; Object.assign(info, lerComissao(rows));
       return info;
     }
-    if (tem(/^USUARIO ORCAMENTO$/)) info.tipo = 'FP';
+    if (/^ANALISE DE ENTREGA/.test(titulo)) info.tipo = 'ENTREGAS';
+    else if (tem(/^USUARIO ORCAMENTO$/)) info.tipo = 'FP';
     else if (tem(/^FABRICANTE$/)) info.tipo = 'ECOMMERCE';
     else if (tem(/^CLASSIFICACAO 3. NIVEL$/) || tem(/^COD\. UN\. NEG\.\s*:/)) info.tipo = /PREFEIT/.test(nome) ? 'PREFEITURA' : /WAGNER/.test(nome) ? 'WAGNER' : 'NIVEL3';
     else if (tem(/^COD\. UN\. NEG\.?$/)) info.tipo = /VITAMINA/.test(nome) ? 'VIT' : /SIDNEY/.test(nome) ? 'SID' : 'RESUMO?';
@@ -203,5 +228,5 @@
     return info;
   }
 
-  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular, lerComissao, identificar };
+  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular, lerComissao, lerEntregas, identificar };
 })(typeof window !== 'undefined' ? window : globalThis);

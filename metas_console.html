@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metas das lojas - Drogarema</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="metas_core.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    th { font-weight: 600; }
+    .num { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+    .cmp { width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 6px; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .cmp:focus { outline: 2px solid #10b981; border-color: #10b981; }
+    .mudou { background: #fffbeb; border-color: #f59e0b; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans">
+  <div class="sticky top-0 z-40 bg-white border-b border-slate-200">
+    <div class="max-w-[1500px] mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+      <div>
+        <h1 class="text-lg font-bold text-slate-900">Metas das lojas · console</h1>
+        <p class="text-[11px] text-slate-500">Somente Gestão · a meta nasce da regra (média diária dos 3 últimos meses) e pode ser ajustada aqui</p>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <label class="text-slate-500">Mês da meta <select id="comp" class="border border-slate-200 rounded px-2 py-1.5 font-mono" onchange="trocar()"></select></label>
+        <a href="resultado_loja.html" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">Resultado da loja</a>
+        <a href="fechamento_financeiro.html" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">Fechamento</a>
+        <a href="index.html" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">← Painel</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-[1500px] mx-auto px-4 py-4 space-y-4">
+    <div id="semAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-lg p-4 text-sm font-bold"></div>
+    <div id="conteudo" class="hidden space-y-4">
+      <div id="aviso" class="text-xs"></div>
+
+      <div class="bg-white border border-slate-200 rounded-lg overflow-x-auto">
+        <div class="px-4 pt-3 flex flex-wrap justify-between items-center gap-2">
+          <div class="text-sm font-semibold">Meta de <span id="tituloComp" class="font-mono"></span> <span id="tituloDias" class="text-[11px] font-normal text-slate-500"></span></div>
+          <div class="flex items-center gap-2 text-xs">
+            <button onclick="recalcularTodas()" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer" title="Volta todas as lojas para o valor da regra">Recalcular todas pela regra</button>
+            <button id="btnSalvar" onclick="salvar()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">Salvar metas</button>
+          </div>
+        </div>
+        <table class="w-full text-xs mt-2">
+          <thead class="text-[10px] text-slate-500 border-b border-slate-200">
+            <tr>
+              <th class="text-left px-4 py-2">Loja</th>
+              <th class="num px-2 py-2" title="Média diária de faturamento dos meses da base">Média diária<br>faturamento</th>
+              <th class="num px-2 py-2 w-36">Meta de<br>faturamento</th>
+              <th class="num px-2 py-2 w-20">% similar<br>e genérico</th>
+              <th class="num px-2 py-2">Meta similar<br>e genérico</th>
+              <th class="num px-2 py-2" title="Média diária de perfumaria + fitoterápico dos meses da base">Média diária<br>perfumaria</th>
+              <th class="num px-2 py-2 w-36">Meta perfumaria<br>+ fito</th>
+              <th class="num px-2 py-2 w-32">Meta linha<br>Sidney</th>
+              <th class="text-left px-2 py-2">Situação</th>
+              <th class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="corpo"></tbody>
+          <tfoot id="rodape" class="border-t-2 border-slate-300 font-semibold"></tfoot>
+        </table>
+        <p class="px-4 py-2 text-[11px] text-slate-500">Regra: faturamento = média diária dos 3 últimos meses + 2% × dias do mês · perfumaria = média diária + 10% × dias · similar e genérico = meta de faturamento × % da loja · Sidney = 4% da meta de faturamento. Campo em amarelo = diferente da regra.</p>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-lg overflow-x-auto">
+        <div class="px-4 pt-3 text-sm font-semibold">Histórico: realizado × meta <span class="text-[11px] font-normal text-slate-500">(faturamento; % = alcance da meta do mês)</span></div>
+        <table class="w-full text-xs mt-2"><thead id="hCab" class="text-[10px] text-slate-500 border-b border-slate-200"></thead><tbody id="hCorpo"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ---------------------------------------------------------------------
+    // CONSOLE DE METAS (só GESTOR). Lê os resultados publicados pelo fechamento
+    // (loja_resultados), sugere a meta pela regra (metas_core.js) e grava em loja_metas.
+    // ---------------------------------------------------------------------
+    const $ = id => document.getElementById(id);
+    const M = MetasCore;
+    const fmt = v => v == null || !isFinite(v) ? '-' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const pct = v => v == null || !isFinite(v) ? '-' : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    const lerNum = t => { const s = String(t).trim().replace(/[R$\s]/g, ''); const n = parseFloat(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s); return isFinite(n) ? n : NaN; };
+    let resultados = [], metas = [], comp = '', linhas = {};   // linhas[loja] = { regra, atual, salvo }
+
+    async function inicializar() {
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      if (!u || u.perfil !== 'GESTOR') { $('semAcesso').innerText = 'Esta tela é exclusiva do perfil Gestor.'; $('semAcesso').classList.remove('hidden'); return; }
+      const [rr, rm] = await Promise.all([_supabase.from('loja_resultados').select('competencia, loja_num, dados'), _supabase.from('loja_metas').select('*')]);
+      $('conteudo').classList.remove('hidden');
+      if (rr.error || rm.error) { $('aviso').innerHTML = `<div class="text-rose-700 font-bold">Rode o SQL AZ (resultado da loja e metas) antes de usar esta tela. ${(rr.error || rm.error).message}</div>`; return; }
+      resultados = rr.data || []; metas = rm.data || [];
+      const comps = [...new Set(resultados.map(r => r.competencia))].sort((a, b) => M.ordem(a) - M.ordem(b));
+      if (!comps.length) { $('aviso').innerHTML = '<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3">Ainda não há resultado publicado. Salve o fechamento financeiro de pelo menos um mês: é ele que alimenta a meta.</div>'; return; }
+      // meses possíveis: do 2º mês com resultado até o mês seguinte ao último resultado
+      const ult = comps[comps.length - 1], opcoes = [];
+      for (let c = M.somaMes(comps[0], 1); M.ordem(c) <= M.ordem(ult) + 1; c = M.somaMes(c, 1)) opcoes.push(c);
+      $('comp').innerHTML = opcoes.reverse().map(c => `<option value="${c}">${c}</option>`).join('');
+      comp = opcoes[0];
+      montar();
+    }
+    function trocar() { comp = $('comp').value; montar(); }
+
+    const histDaLoja = l => { const h = {}; resultados.filter(r => r.loja_num === l).forEach(r => { h[r.competencia] = r.dados; }); return h; };
+    function montar() {
+      linhas = {};
+      M.LOJAS.forEach(l => {
+        const salvo = metas.find(m => m.competencia === comp && m.loja_num === l) || null;
+        const ant = metas.find(m => m.competencia === M.somaMes(comp, -1) && m.loja_num === l);
+        const pctBase = salvo ? Number(salvo.pct_simgen) : ant ? Number(ant.pct_simgen) : M.PCT_SIMGEN_PADRAO[l];
+        const regra = M.calcularMeta(comp, histDaLoja(l), pctBase);
+        const atual = salvo ? { fat: Number(salvo.fat), pct_simgen: Number(salvo.pct_simgen), perf: Number(salvo.perf), sidney: Number(salvo.sidney) }
+                    : regra ? { fat: regra.fat, pct_simgen: regra.pct_simgen, perf: regra.perf, sidney: regra.sidney } : null;
+        linhas[l] = { regra, atual, salvo };
+      });
+      render();
+    }
+
+    const difere = (a, b) => Math.abs((a || 0) - (b || 0)) > 0.005;
+    function render() {
+      $('tituloComp').innerText = comp; $('tituloDias').innerText = `· ${M.diasDoMes(comp)} dias`;
+      const tot = { fat: 0, simgen: 0, perf: 0, sidney: 0 }; let pendente = false;
+      $('corpo').innerHTML = M.LOJAS.map(l => {
+        const x = linhas[l], r = x.regra, a = x.atual;
+        if (!a) return `<tr class="border-t border-slate-100"><td class="px-4 py-2 font-semibold">Loja ${l}</td><td colspan="9" class="px-2 py-2 text-slate-400">Sem resultado publicado nos meses anteriores: não há base para a meta.</td></tr>`;
+        const simgen = M.r2(a.fat * a.pct_simgen);
+        tot.fat += a.fat; tot.simgen += simgen; tot.perf += a.perf; tot.sidney += a.sidney;
+        const sidRegra = M.r2(a.fat * M.REGRA.sidneyPct);
+        const manual = r ? (difere(a.fat, r.fat) || difere(a.perf, r.perf) || difere(a.sidney, sidRegra)) : true;
+        const s = x.salvo, naoSalvo = !s || difere(s.fat, a.fat) || difere(s.pct_simgen, a.pct_simgen) || difere(s.perf, a.perf) || difere(s.sidney, a.sidney);
+        if (naoSalvo) pendente = true;
+        const sit = naoSalvo ? '<span class="text-amber-700 font-semibold">não salva</span>' : `<span class="text-emerald-700">✓ salva</span>`;
+        const campo = (k, v, regraV, dec) => `<input class="cmp ${regraV != null && difere(v, regraV) ? 'mudou' : ''}" value="${dec ? (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : fmt(v)}" onchange="editar(${l}, '${k}', this.value)" ${regraV != null ? `title="Pela regra: ${dec ? pct(regraV) : fmt(regraV)}"` : ''}>`;
+        return `<tr class="border-t border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-2 font-semibold">Loja ${l}<div class="text-[10px] font-normal text-slate-400">${r ? 'base: ' + r.base.meses.join(', ') : 'sem base'}</div></td>
+          <td class="num px-2 py-2 text-slate-500">${r ? fmt(r.base.media_diaria_fat) : '-'}</td>
+          <td class="px-2 py-2">${campo('fat', a.fat, r ? r.fat : null)}</td>
+          <td class="px-2 py-2">${campo('pct_simgen', a.pct_simgen, null, true)}</td>
+          <td class="num px-2 py-2">${fmt(simgen)}</td>
+          <td class="num px-2 py-2 text-slate-500">${r ? fmt(r.base.media_diaria_perf) : '-'}</td>
+          <td class="px-2 py-2">${campo('perf', a.perf, r ? r.perf : null)}</td>
+          <td class="px-2 py-2">${campo('sidney', a.sidney, sidRegra)}</td>
+          <td class="px-2 py-2 text-[11px]">${sit}${manual ? ' <span class="text-amber-700">· ajustada</span>' : ''}</td>
+          <td class="px-4 py-2 text-right">${r ? `<span class="underline cursor-pointer text-slate-500 text-[11px]" onclick="pelaRegra(${l})">pela regra</span>` : ''}</td></tr>`;
+      }).join('');
+      $('rodape').innerHTML = `<tr><td class="px-4 py-2">Rede</td><td></td><td class="num px-2 py-2">${fmt(tot.fat)}</td><td class="num px-2 py-2">${tot.fat ? pct(tot.simgen / tot.fat) : '-'}</td><td class="num px-2 py-2">${fmt(tot.simgen)}</td><td></td><td class="num px-2 py-2">${fmt(tot.perf)}</td><td class="num px-2 py-2">${fmt(tot.sidney)}</td><td colspan="2"></td></tr>`;
+      $('btnSalvar').classList.toggle('opacity-40', !pendente);
+      renderHistorico();
+    }
+
+    function editar(l, k, txt) {
+      const a = linhas[l].atual; let v = lerNum(txt);
+      if (!isFinite(v) || v < 0) { alert('Valor inválido.'); return render(); }
+      if (k === 'pct_simgen') { v = v / 100; if (v > 0.9) { alert('Percentual acima de 90%? Escreva 43 para 43%.'); return render(); } a.pct_simgen = v; }
+      else { const antes = a[k]; a[k] = M.r2(v);
+        // Sidney acompanha o faturamento enquanto estiver na regra (4%)
+        if (k === 'fat' && !difere(a.sidney, M.r2(antes * M.REGRA.sidneyPct))) a.sidney = M.r2(a.fat * M.REGRA.sidneyPct); }
+      render();
+    }
+    function pelaRegra(l) { const x = linhas[l]; x.atual = { fat: x.regra.fat, pct_simgen: x.atual.pct_simgen, perf: x.regra.perf, sidney: x.regra.sidney }; render(); }
+    function recalcularTodas() { if (!confirm('Voltar o faturamento, a perfumaria e a linha Sidney de todas as lojas para o valor da regra? (o % de similar e genérico é mantido)')) return; M.LOJAS.forEach(l => { if (linhas[l].regra) pelaRegra(l); }); }
+
+    async function salvar() {
+      const agora = new Date().toISOString(), dias = M.diasDoMes(comp);
+      const reg = M.LOJAS.filter(l => linhas[l].atual).map(l => { const x = linhas[l], a = x.atual, r = x.regra;
+        return { competencia: comp, loja_num: l, dias, fat: a.fat, pct_simgen: a.pct_simgen, simgen: M.r2(a.fat * a.pct_simgen), perf: a.perf, sidney: a.sidney,
+          base: r ? r.base : null, manual: r ? (difere(a.fat, r.fat) || difere(a.perf, r.perf) || difere(a.sidney, M.r2(a.fat * M.REGRA.sidneyPct))) : true, atualizado_em: agora }; });
+      if (!reg.length) return;
+      const { error } = await _supabase.from('loja_metas').upsert(reg, { onConflict: 'competencia,loja_num' });
+      if (error) return alert('Erro ao salvar: ' + error.message);
+      const { data } = await _supabase.from('loja_metas').select('*'); metas = data || metas;
+      montar();
+      alert(`Metas de ${comp} salvas para ${reg.length} loja(s).`);
+    }
+
+    function renderHistorico() {
+      const comps = [...new Set(resultados.map(r => r.competencia))].sort((a, b) => M.ordem(a) - M.ordem(b)).slice(-6);
+      $('hCab').innerHTML = `<tr><th class="text-left px-4 py-2">Loja</th>${comps.map(c => `<th class="num px-2 py-2">${M.nomeMes(c)}</th>`).join('')}</tr>`;
+      $('hCorpo').innerHTML = M.LOJAS.map(l => `<tr class="border-t border-slate-100"><td class="px-4 py-2 font-semibold">Loja ${l}</td>${comps.map(c => {
+        const r = resultados.find(x => x.competencia === c && x.loja_num === l), m = metas.find(x => x.competencia === c && x.loja_num === l);
+        if (!r) return '<td class="num px-2 py-2 text-slate-300">-</td>';
+        const alc = m && Number(m.fat) > 0 ? r.dados.fat / Number(m.fat) : null;
+        return `<td class="num px-2 py-2">${fmt(r.dados.fat)}${alc != null ? `<div class="text-[10px] ${alc >= 1 ? 'text-emerald-700' : 'text-rose-600'}">${pct(alc)} da meta</div>` : '<div class="text-[10px] text-slate-300">sem meta</div>'}</td>`;
+      }).join('')}</tr>`).join('');
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
