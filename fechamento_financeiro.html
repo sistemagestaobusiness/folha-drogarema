@@ -40,13 +40,10 @@
           <div class="flex-1 min-w-[280px]">
             <div class="font-semibold text-slate-800 text-sm">1. Relatórios do Alpha7</div>
             <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5 max-w-4xl">
-              <div class="md:col-span-2 text-[11px] font-semibold text-slate-600">A) Um arquivo por relatório, do jeito que sai do Alpha7 (padrão)</div>
-              <label class="flex items-center justify-between gap-2">Classificação nível 3 <b class="text-rose-600">*</b> <input type="file" data-slot="CLASSIFICACAO NIVEL 3" accept=".xlsx,.xls,.csv" onchange="lerSlot(this)" class="slot text-[10px] w-56"></label>
-              <label class="flex items-center justify-between gap-2">Prefeitura + Wagner <input type="file" data-slot="PREFEITURA + WAGNER" accept=".xlsx,.xls,.csv" onchange="lerSlot(this)" class="slot text-[10px] w-56"></label>
-              <label class="flex items-center justify-between gap-2">E-commerce <input type="file" data-slot="ECOMMERCE" accept=".xlsx,.xls,.csv" onchange="lerSlot(this)" class="slot text-[10px] w-56"></label>
-              <label class="flex items-center justify-between gap-2">Farmácia Popular (loja 3) <input type="file" data-slot="FARMACIA POPULAR LOJA 3" accept=".xlsx,.xls,.csv" onchange="lerSlot(this)" class="slot text-[10px] w-56"></label>
-              <label class="flex items-center justify-between gap-2">Vitaminas por unidade <input type="file" data-slot="_VIT" accept=".xlsx,.xls,.csv" onchange="lerSlot(this)" class="slot text-[10px] w-56"></label>
-              <label class="flex items-center justify-between gap-2">Linha Sidney por unidade <input type="file" data-slot="_SID" accept=".xlsx,.xls,.csv" onchange="lerSlot(this)" class="slot text-[10px] w-56"></label>
+              <div class="md:col-span-2 text-[11px] font-semibold text-slate-600">A) Arquivos baixados do Alpha7 (padrão): selecione todos de uma vez, a tela reconhece cada um</div>
+              <label class="md:col-span-2 flex items-center gap-2">Relatórios do mês <input type="file" id="arqs" multiple accept=".xlsx,.xls,.csv" onchange="lerVarios(this)" class="text-[10px]">
+                <button type="button" onclick="limparSlots()" class="text-[10px] text-slate-400 hover:text-rose-600 cursor-pointer">limpar</button></label>
+              <div id="listaRel" class="md:col-span-2"></div>
               <div class="md:col-span-2 text-[11px] font-semibold text-slate-600 mt-2">B) Ou a planilha da folha do mês, com os relatórios colados nas abas</div>
               <label class="md:col-span-2 flex items-center gap-2 text-slate-500">Planilha completa <input type="file" id="arq" accept=".xlsx,.xls" onchange="lerArquivo(event)" class="text-[10px]"></label>
             </div>
@@ -60,21 +57,23 @@
       <!-- 2. resultado -->
       <div id="boxResultado" class="hidden cartao bg-white border border-slate-200 rounded-lg overflow-x-auto">
         <div class="px-4 pt-3 flex justify-between items-baseline"><div class="text-sm font-semibold">Resultado por loja · <span id="tituloComp" class="font-mono"></span></div>
-          <div class="text-[10px] text-slate-400">% na coluna TOTAL = média das 7 lojas (igual à planilha)</div></div>
+          <div class="flex items-center gap-4 text-[11px] text-slate-600"><span id="boxComparar"><input type="checkbox" id="chkComparar" class="hidden"></span>
+            <span class="text-[10px] text-slate-400">% na coluna TOTAL = média das 7 lojas</span></div></div>
+        <div id="resumoVar"></div>
         <table class="w-full text-xs mt-2"><thead id="cab"></thead><tbody id="corpo"></tbody></table>
       </div>
 
       <!-- 3. bônus faturamento -->
       <div id="boxBonus" class="hidden cartao bg-white border border-slate-200 rounded-lg p-4">
         <div class="text-sm font-semibold">Bônus faturamento (evento 2015)</div>
-        <p class="text-[11px] text-slate-500">Base = genérico + similar − vitaminas da loja, arredondada para o milhar. O botão lança (ou corrige) uma linha do evento na folha da competência.</p>
+        <p class="text-[11px] text-slate-500">Base = genérico + similar − vitaminas da loja, <b>sem a Farmácia Popular</b> (não tem margem, não gera bônus), arredondada para o milhar. O botão lança (ou corrige) uma linha do evento na folha da competência.</p>
         <div id="bonus" class="mt-2"></div>
       </div>
 
       <!-- 4. farmácia popular -->
       <div id="boxFp" class="hidden cartao bg-white border border-slate-200 rounded-lg p-4">
         <div class="text-sm font-semibold">Farmácia Popular · separação da Loja 3</div>
-        <p class="text-[11px] text-slate-500">Venda feita na Loja 3 por usuário de outra loja sai da Loja 3 e entra na loja dele (pela loja do cadastro do funcionário).</p>
+        <p class="text-[11px] text-slate-500">Venda feita na Loja 3 por usuário de outra loja sai da Loja 3 e entra na loja dele. Vale só para o resultado por loja: não entra em comissão nem na base do bônus.</p>
         <div id="fp" class="mt-2 text-xs"></div>
       </div>
     </div>
@@ -125,6 +124,8 @@
     }
 
     let competencia = '', funcs = [], lojas = [], regras = [], calc = null, comissoes = {}, lancados2015 = {}, nomeArquivo = '', salvo = null, abasLidas = null;
+    let anterior = null, compAnterior = '', fpMapa = {};   // fechamento do mês anterior (comparativo) e loja de cada usuário da farmácia popular
+    let comissaoSistema = {};   // total lançado na folha por evento de comissão (todas as lojas)
     let vinculoManual = {};   // usuário da farmácia popular -> nº da loja (escolhido na tela)
     const COMISSOES = [['2018', 'c_gensim', 'Genérico e similar'], ['2022', 'c_vit', 'Vitaminas'], ['2021', 'c_fixo', 'Covid + Fisiofort + Florais (valor fixo)'], ['2020', 'c_sidney', 'Sidney + Natural + Katigua + Rahda'], ['2019', 'c_perf', 'Perfumaria']];
     const lojaNum = id => { const l = lojas.find(x => x.id === id); const m = l && /LOJA\s*0*(\d+)/i.exec(l.nome_loja || ''); return m ? parseInt(m[1], 10) : null; };
@@ -144,7 +145,7 @@
     async function trocarCompetencia() {
       const v = $('comp').value.trim();
       if (!/^\d{2}\/\d{4}$/.test(v)) return alert('Competência no formato MM/AAAA.');
-      competencia = v; calc = null; abasLidas = null; $('arq').value = ''; slots = {}; document.querySelectorAll('.slot').forEach(i => { i.value = ''; }); await carregarCompetencia();
+      competencia = v; calc = null; abasLidas = null; $('arq').value = ''; slots = {}; naoReconhecidos = []; renderSlots(); await carregarCompetencia();
     }
 
     // dados do sistema para a competência: comissões por loja, 2015 já lançado, regras e fechamento salvo
@@ -154,18 +155,26 @@
         _supabase.from('fechamento_bonus_regras').select('*').eq('ativo', true),
         _supabase.from('fechamento_financeiro').select('*').eq('competencia', competencia).maybeSingle()
       ]);
+      { const [m, a] = competencia.split('/').map(Number); compAnterior = m === 1 ? `12/${a - 1}` : `${String(m - 1).padStart(2, '0')}/${a}`; }
+      const [ra, rm] = await Promise.all([
+        _supabase.from('fechamento_financeiro').select('*').eq('competencia', compAnterior).maybeSingle(),
+        _supabase.from('fechamento_fp_usuarios').select('usuario, loja_num')
+      ]);
+      anterior = ra.data || null; window._cmpInit = false;
+      fpMapa = {}; (rm.data || []).forEach(x => { fpMapa[norm(x.usuario)] = x.loja_num; });
       if (rr.error) { $('avisos').innerHTML = `<div class="text-rose-700">Rode o SQL AU (fechamento financeiro) antes de usar esta tela. ${esc(rr.error.message)}</div>`; return; }
       regras = rr.data || []; salvo = rs.data || null;
-      comissoes = {}; lancados2015 = {}; let semLoja = 0;
+      comissoes = {}; comissaoSistema = {}; lancados2015 = {}; let semLoja = 0;
       (ri.data || []).forEach(i => {
         const cod = (String(i.rubrica || '').match(/^\s*(\d+)/) || [])[1]; const v = parseFloat(i.valor || 0);
         if (cod === '2015') { (lancados2015[i.funcionario_id] = lancados2015[i.funcionario_id] || []).push(i); return; }
         const c = COMISSOES.find(x => x[0] === cod); if (!c || i.tipo !== 'PROVENTO') return;
+        comissaoSistema[cod] = (comissaoSistema[cod] || 0) + v;
         const f = funcs.find(x => x.id === i.funcionario_id), n = f ? lojaNum(f.loja_id) : null;
         if (!n) { semLoja += v; return; }
         comissoes[n] = comissoes[n] || {}; comissoes[n][c[1]] = (comissoes[n][c[1]] || 0) + v;
       });
-      window._comissaoSemLoja = semLoja;
+      window._comissaoSemLoja = semLoja; renderSlots();
       if (abasLidas) recalcular(); else if (salvo) { calc = { ...salvo.dados, salvoEm: salvo.salvo_em }; nomeArquivo = salvo.arquivo || ''; render(); } else render();
     }
 
@@ -180,6 +189,7 @@
     }
     function lojaDoUsuario(usuario) {
       if (vinculoManual[usuario] !== undefined) return vinculoManual[usuario];
+      if (fpMapa[norm(usuario)] !== undefined) return fpMapa[norm(usuario)];   // definido na tela (ou na planilha de agosto)
       const f = acharFuncionario(usuario);
       if (!f) return undefined;            // sem vínculo: fica na loja 3 e aparece para escolher
       return lojaNum(f.loja_id) || 3;
@@ -194,38 +204,64 @@
           const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
           abasLidas = {};
           wb.SheetNames.forEach(n => { abasLidas[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: true }); });
-          vinculoManual = {}; slots = {}; document.querySelectorAll('.slot').forEach(i => { i.value = ''; });
+          vinculoManual = {}; slots = {}; naoReconhecidos = []; renderSlots();
           recalcular();
         } catch (err) { alert('Não foi possível ler o arquivo: ' + err.message); }
       };
       rd.readAsArrayBuffer(arq);
     }
-    // modo A: um arquivo por relatório (lê a 1ª aba de cada um)
-    let slots = {};
-    function lerSlot(inp) {
-      const arq = inp.files[0], slot = inp.dataset.slot;
-      if (!arq) { delete slots[slot]; montarDosSlots(); return; }
-      const rd = new FileReader();
-      rd.onload = e => {
+    // modo A: os arquivos do Alpha7 como são baixados (lê a 1ª aba de cada um e reconhece pelo conteúdo)
+    let slots = {}, naoReconhecidos = [];
+    const RELS = [['NIVEL3', 'Classificação nível 3', 'V', true], ['PREFEITURA', 'Prefeitura (sai do faturamento)', 'V'], ['WAGNER', 'Wagner (sai do faturamento)', 'V'], ['ECOMMERCE', 'E-commerce', 'V'],
+      ['FP', 'Farmácia Popular (loja 3)', 'V'], ['VIT', 'Resumo vitaminas por unidade', 'V'], ['SID', 'Resumo Sidney por unidade', 'V'],
+      ['C2018', 'Comissão SM e GN', 'C'], ['C2019', 'Comissão perfumaria', 'C'], ['C2020', 'Comissão Sidney', 'C'], ['C2021', 'Comissão valor fixo', 'C'], ['C2022', 'Comissão vitaminas', 'C'], ['CQUARENTENA', 'Comissão quarentena', 'C']];
+    const lerUm = arq => new Promise((ok, erro) => { const rd = new FileReader();
+      rd.onload = e => { try { const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        ok(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null, blankrows: true })); } catch (err) { erro(err); } };
+      rd.onerror = () => erro(new Error('falha na leitura')); rd.readAsArrayBuffer(arq); });
+    async function lerVarios(inp) {
+      for (const arq of [...inp.files]) {
         try {
-          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-          slots[slot] = { nome: arq.name, linhas: XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null, blankrows: true }) };
-          $('arq').value = '';
-          montarDosSlots();
-        } catch (err) { alert('Não foi possível ler "' + arq.name + '": ' + err.message); }
-      };
-      rd.readAsArrayBuffer(arq);
+          const linhas = await lerUm(arq), info = FechamentoCore.identificar(arq.name, linhas);
+          if (!info.tipo || /\?$/.test(info.tipo)) { naoReconhecidos = naoReconhecidos.filter(x => x.nome !== arq.name); naoReconhecidos.push({ nome: arq.name, motivo: info.tipo === 'RESUMO?' ? 'resumo por unidade: o nome do arquivo precisa ter VITAMINAS ou SIDNEY' : info.tipo === 'C?' ? 'comissão: o nome do arquivo precisa dizer o plano (SM E GN, PERFUMARIA, SIDNEY, VALOR FIXO, VITAMINAS, QUARENTENA)' : 'não é um relatório conhecido do Alpha7' }); continue; }
+          slots[info.tipo] = { nome: arq.name, linhas, info };
+        } catch (err) { naoReconhecidos.push({ nome: arq.name, motivo: 'não foi possível ler: ' + err.message }); }
+      }
+      inp.value = ''; $('arq').value = '';
+      montarDosSlots();
+    }
+    function limparSlots() { slots = {}; naoReconhecidos = []; montarDosSlots(); }
+    function renderSlots() {
+      const tem = Object.keys(slots).length || naoReconhecidos.length;
+      if (!tem) { $('listaRel').innerHTML = `<div class="text-[11px] text-slate-400">São 13 arquivos: 7 de venda (nível 3, prefeitura, Wagner, e-commerce, farmácia popular, resumo vitaminas, resumo Sidney) e 6 de comissão (SM e GN, perfumaria, Sidney, valor fixo, vitaminas, quarentena).</div>`; return; }
+      const linha = ([t, rot, grupo, obrig]) => { const s = slots[t];
+        const foraMes = s && s.info.competencia && competencia && s.info.competencia !== competencia;
+        let dir = '';
+        if (s && grupo === 'C') { const sis = t === 'CQUARENTENA' ? null : (comissaoSistema[t.slice(1)] || 0), dif = sis == null ? null : sis - s.info.total;
+          dir = `<span class="font-mono">${fmt(s.info.total)}</span>` + (sis == null ? '' : ` <span class="text-slate-400">· no sistema</span> <span class="font-mono">${fmt(sis)}</span> ${Math.abs(dif) < 0.005 ? '<span class="text-emerald-700">✓</span>' : `<span class="text-amber-700 font-semibold" title="lançado no sistema − relatório do Alpha7">${dif > 0 ? '+' : '−'}${fmt(Math.abs(dif))}</span>`}`); }
+        else if (s) dir = `<span class="font-mono">${fmt(s.info.total || 0)}</span>`;
+        return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-100"><span class="w-4 ${s ? 'text-emerald-600' : obrig ? 'text-rose-600' : 'text-slate-300'}">${s ? '✓' : obrig ? '✗' : '○'}</span>
+          <span class="w-52 ${s ? 'text-slate-800' : 'text-slate-400'}">${rot}</span><span class="flex-1 truncate text-slate-500" title="${s ? esc(s.nome) : ''}">${s ? esc(s.nome) : obrig ? 'falta (obrigatório)' : 'não enviado'}${foraMes ? ` <b class="text-rose-700">período ${esc(s.info.periodo)}: não é ${esc(competencia)}</b>` : ''}</span><span class="text-right">${dir}</span></div>`; };
+      $('listaRel').innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 text-[11px] mt-1">
+        <div><div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Venda · entram no resultado por loja <span class="normal-case font-normal">(valor = venda do relatório)</span></div>${RELS.filter(r => r[2] === 'V').map(linha).join('')}</div>
+        <div><div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Comissão · conferência <span class="normal-case font-normal">(relatório × lançado na folha de ${esc(competencia)})</span></div>${RELS.filter(r => r[2] === 'C').map(linha).join('')}</div></div>
+        ${naoReconhecidos.map(x => `<div class="text-[11px] text-rose-700 mt-1">✗ ${esc(x.nome)}: ${esc(x.motivo)}</div>`).join('')}`;
     }
     function montarDosSlots() {
-      const nomes = Object.keys(slots);
-      if (!nomes.length) { abasLidas = null; calc = salvo ? { ...salvo.dados } : null; render(); return; }
+      renderSlots();
+      const venda = RELS.filter(r => r[2] === 'V' && slots[r[0]]).map(r => r[0]);
+      if (!venda.length) { abasLidas = null; calc = salvo ? { ...salvo.dados, salvoEm: salvo.salvo_em } : null; $('avisos').innerHTML = ''; render(); return; }
+      const L = t => (slots[t] || {}).linhas || [];
       abasLidas = {};
-      nomes.filter(n => !n.startsWith('_')).forEach(n => { abasLidas[n] = slots[n].linhas; });
+      if (slots.NIVEL3) abasLidas['CLASSIFICACAO NIVEL 3'] = L('NIVEL3');
+      if (slots.PREFEITURA || slots.WAGNER) abasLidas['PREFEITURA + WAGNER'] = [...L('PREFEITURA'), ...L('WAGNER')];
+      if (slots.ECOMMERCE) abasLidas['ECOMMERCE'] = L('ECOMMERCE');
+      if (slots.FP) abasLidas['FARMACIA POPULAR LOJA 3'] = L('FP');
       // vitaminas e Sidney são dois relatórios iguais: juntos formam o "detalhe total vendido"
-      if (slots._VIT || slots._SID) abasLidas['DETALHE TOTAL VENDIDO'] = [['VITAMINAS'], ...((slots._VIT || {}).linhas || []), ['SIDNEY OLIVEIRA'], ...((slots._SID || {}).linhas || [])];
-      nomeArquivo = nomes.map(n => slots[n].nome).join(' + ').slice(0, 300);
+      if (slots.VIT || slots.SID) abasLidas['DETALHE TOTAL VENDIDO'] = [['VITAMINAS'], ...L('VIT'), ['SIDNEY OLIVEIRA'], ...L('SID')];
+      nomeArquivo = (Object.keys(slots).length + ' arquivos do Alpha7: ' + Object.keys(slots).map(n => slots[n].nome).join(' + ')).slice(0, 300);
       vinculoManual = {};
-      if (!abasLidas['CLASSIFICACAO NIVEL 3']) { calc = null; $('avisos').innerHTML = '<div class="text-[11px] text-slate-500">Falta o relatório "Classificação nível 3" para calcular.</div>'; render(); return; }
+      if (!slots.NIVEL3) { calc = null; $('avisos').innerHTML = '<div class="text-[11px] text-rose-700 font-semibold">Falta o relatório "Classificação nível 3" para calcular.</div>'; render(); return; }
       recalcular();
     }
 
@@ -271,20 +307,51 @@
       if (!calc) { $('avisos').innerHTML = $('avisos').innerHTML || ''; return; }
       const av = [...(calc.avisos || [])];
       if (calc.novo && window._comissaoSemLoja > 0.005) av.push(`Comissões de funcionários sem loja no cadastro não entraram em nenhuma loja: R$ ${fmt(window._comissaoSemLoja)}.`);
+      if (calc.novo) RELS.forEach(([t, rot]) => { const x = slots[t]; if (x && x.info.competencia && x.info.competencia !== competencia) av.push(`ATENÇÃO: o arquivo "${x.nome}" (${rot}) é do período ${x.info.periodo}, e a competência aberta na tela é ${competencia}.`); });
       if (calc.novo && salvo) av.push('Você está vendo um cálculo novo (do arquivo). Ele só substitui o fechamento salvo quando clicar em "Salvar fechamento".');
       $('avisos').innerHTML = av.map(a => `<div class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">${esc(a)}</div>`).join('');
 
       const R = resultadoComComissao(), cols = calc.colunas, lojasCols = cols.filter(c => c !== 'E');
       window._R = R;
-      $('cab').innerHTML = `<tr class="text-[10px] text-slate-500 border-b border-slate-200"><th class="text-left px-4 py-2 w-64"></th>${cols.map(c => `<th class="num px-2 py-2">${esc(R[c].nome)}</th>`).join('')}<th class="num px-4 py-2 text-slate-800">TOTAL</th></tr>`;
+      // comparação com o mês anterior (fechamento salvo): variação embaixo de cada valor
+      const A = anterior ? anterior.dados.resultado : null, comparar = !!A && $('chkComparar').checked;
+      $('boxComparar').innerHTML = A
+        ? `<label class="inline-flex items-center gap-1.5 cursor-pointer noprint"><input type="checkbox" id="chkComparar" ${comparar || window._cmpInit !== true ? 'checked' : ''} onchange="render()"> comparar com <b class="font-mono">${esc(compAnterior)}</b></label>`
+        : `<span class="text-slate-400 noprint">Para comparar, salve também o fechamento de <b class="font-mono">${esc(compAnterior)}</b> (troque a competência no topo e suba os relatórios daquele mês).</span><input type="checkbox" id="chkComparar" class="hidden">`;
+      const cmp = !!A && $('chkComparar').checked; window._cmpInit = true;
+      const NEUTRAS = new Set(['desc', 'c_gensim', 'c_vit', 'c_fixo', 'c_sidney', 'c_perf', 'c_total']);   // subir não é "bom" nem "ruim"
+      const seta = (atu, ant, ehPct, neutra) => {
+        if (!cmp || ant == null || !isFinite(ant) || !isFinite(atu)) return '';
+        const d = atu - ant;
+        if (ehPct) { if (Math.abs(d) < 0.0005) return '<div class="text-[9px] text-slate-300 leading-none">=</div>';
+          return `<div class="text-[9px] leading-none ${neutra ? 'text-slate-500' : d > 0 ? 'text-emerald-600' : 'text-rose-600'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pp</div>`; }
+        if (Math.abs(ant) < 0.005) return Math.abs(atu) < 0.005 ? '' : '<div class="text-[9px] text-sky-600 leading-none">novo</div>';
+        const v = d / Math.abs(ant);
+        if (Math.abs(v) < 0.0005) return '<div class="text-[9px] text-slate-300 leading-none">=</div>';
+        return `<div class="text-[9px] leading-none ${neutra ? 'text-slate-500' : v > 0 ? 'text-emerald-600' : 'text-rose-600'}">${v > 0 ? '▲' : '▼'} ${Math.abs(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</div>`;
+      };
+      const dica = (ant, ehPct) => !cmp || ant == null ? '' : ` title="${esc(compAnterior)}: ${ehPct ? (isFinite(ant) ? (ant * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : '-') : (ant || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}"`;
+
+      // resumo da variação (totais): só aparece na comparação
+      const totalDe = (RR, k) => cols.reduce((x, c) => x + ((k.startsWith('c_') && c === 'E') ? 0 : ((RR[c] || {})[k] || 0)), 0);
+      $('resumoVar').innerHTML = !cmp ? '' : `<div class="grid grid-cols-2 md:grid-cols-5 gap-2 px-4 pt-3">${[['Faturamento líquido', 'liq'], ['Lucro', 'lucro'], ['Genérico + similar', 'gensim'], ['Perfumaria', 'perf'], ['Comissão total', 'c_total']].map(([t, k]) => {
+          const atu = totalDe(R, k), ant = totalDe(A, k), d = atu - ant, v = ant ? d / Math.abs(ant) : 0, neutra = NEUTRAS.has(k);
+          const cor = neutra ? 'text-slate-600' : d >= 0 ? 'text-emerald-600' : 'text-rose-600';
+          return `<div class="border border-slate-200 rounded-lg px-3 py-2"><div class="text-[10px] text-slate-500">${t}</div><div class="font-mono font-bold text-sm">${fmt(atu)}</div>
+            <div class="text-[10px] ${cor} font-semibold">${d >= 0 ? '▲' : '▼'} ${Math.abs(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% <span class="font-normal text-slate-400">(${d >= 0 ? '+' : '−'}${Math.abs(d).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${esc(compAnterior)}: ${fmt(ant)})</span></div></div>`; }).join('')}</div>`;
+
+      $('cab').innerHTML = `<tr class="text-[10px] text-slate-500 border-b border-slate-200"><th class="text-left px-4 py-2 w-64">${cmp ? `<span class="font-normal normal-case">▲▼ = variação sobre ${esc(compAnterior)}</span>` : ''}</th>${cols.map(c => `<th class="num px-2 py-2">${esc(R[c].nome)}</th>`).join('')}<th class="num px-4 py-2 text-slate-800">TOTAL</th></tr>`;
       $('corpo').innerHTML = LINHAS.map(([rot, k, tipo]) => {
         if (tipo === 'H') return `<tr><td colspan="${cols.length + 2}" class="px-4 pt-4 pb-1 text-[11px] font-bold text-slate-900 border-b border-slate-300">${rot}</td></tr>`;
-        const ehPct = tipo === 'P', ehCom = typeof k === 'string' && k.startsWith('c_');
-        const val = c => ehPct ? k(R[c]) : (R[c][k] || 0);
-        const cel = c => (ehCom && c === 'E') ? '' : (ehPct ? pct(val(c)) : fmt(val(c)));
-        const total = ehPct ? pct(lojasCols.reduce((a, c) => a + (isFinite(val(c)) ? val(c) : 0), 0) / lojasCols.length) : fmt(cols.reduce((a, c) => a + ((ehCom && c === 'E') ? 0 : val(c)), 0));
+        const ehPct = tipo === 'P', ehCom = typeof k === 'string' && k.startsWith('c_'), neutra = typeof k === 'string' && NEUTRAS.has(k);
+        const valDe = (RR, c) => !RR || !RR[c] ? null : (ehPct ? k(RR[c]) : (RR[c][k] || 0));
+        const val = c => valDe(R, c);
+        const totDe = RR => !RR ? null : (ehPct ? lojasCols.reduce((x, c) => { const v = valDe(RR, c); return x + (isFinite(v) ? v : 0); }, 0) / lojasCols.length
+                                               : cols.reduce((x, c) => x + ((ehCom && c === 'E') ? 0 : (valDe(RR, c) || 0)), 0));
+        const cel = c => (ehCom && c === 'E') ? '' : (ehPct ? pct(val(c)) : fmt(val(c))) + seta(val(c), valDe(A, c), ehPct, neutra);
+        const total = (ehPct ? pct(totDe(R)) : fmt(totDe(R))) + seta(totDe(R), totDe(A), ehPct, neutra);
         const cls = tipo === 'T' ? 'font-bold text-slate-900 bg-slate-50 border-t border-slate-200' : tipo === 'S' ? 'font-semibold text-slate-800 border-t border-slate-200' : ehPct ? 'text-[10px] text-slate-500' : 'text-slate-600';
-        return `<tr class="${cls}"><td class="px-4 py-1 ${tipo === 'I' ? 'pl-8' : ''} ${ehPct ? 'pl-8 italic' : ''}">${rot}</td>${cols.map(c => `<td class="num px-2 py-1">${cel(c)}</td>`).join('')}<td class="num px-4 py-1 ${ehPct ? '' : 'font-semibold'}">${total}</td></tr>`;
+        return `<tr class="${cls}"><td class="px-4 py-1 ${tipo === 'I' ? 'pl-8' : ''} ${ehPct ? 'pl-8 italic' : ''}">${rot}</td>${cols.map(c => `<td class="num px-2 py-1"${dica(valDe(A, c), ehPct)}>${cel(c)}</td>`).join('')}<td class="num px-4 py-1 ${ehPct ? '' : 'font-semibold'}"${dica(totDe(A), ehPct)}>${total}</td></tr>`;
       }).join('');
       renderBonus(R); renderFp();
     }
@@ -294,17 +361,17 @@
       const nomeF = id => (funcs.find(f => f.id === id) || {}).nome_registro || '—';
       const linhas = regras.map(rg => {
         const col = R[String(rg.loja_num)]; if (!col) return '';
-        const b = FechamentoCore.bonus(rg, col.gensim_sem_vit), ja = lancados2015[rg.funcionario_id] || [], vJa = ja.reduce((a, i) => a + parseFloat(i.valor || 0), 0);
+        const fpv = col.fp_gensim || 0, b = FechamentoCore.bonus(rg, col.base_bonus != null ? col.base_bonus : col.gensim_sem_vit), ja = lancados2015[rg.funcionario_id] || [], vJa = ja.reduce((a, i) => a + parseFloat(i.valor || 0), 0);
         const faixaTxt = !b.faixa ? `abaixo da 1ª faixa (${fmt(b.piso || 0)})` : rg.tipo === 'PERCENTUAL' ? `${(b.faixa[1] * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% (faixa a partir de ${fmt(b.faixa[0])})` : `faixa a partir de ${fmt(b.faixa[0])}`;
         const sit = !ja.length ? '<span class="text-amber-700 font-semibold">não lançado</span>'
           : Math.abs(vJa - b.valor) < 0.005 ? `<span class="text-emerald-700 font-semibold">✓ lançado ${fmt(vJa)}</span>` : `<span class="text-rose-700 font-semibold">lançado ${fmt(vJa)} ≠ calculado</span>`;
-        const det = `Loja ${rg.loja_num} · base ${b.arred.toLocaleString('pt-BR')} · ${rg.tipo === 'PERCENTUAL' && b.faixa ? (b.faixa[1] * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%' : 'faixa'}`;
+        const det = `Loja ${rg.loja_num} · base ${b.arred.toLocaleString('pt-BR')} sem farmácia popular · ${rg.tipo === 'PERCENTUAL' && b.faixa ? (b.faixa[1] * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%' : 'faixa'}`;
         return `<tr class="border-t border-slate-100"><td class="py-2 pr-2"><b>${esc(nomeF(rg.funcionario_id))}</b><div class="text-[10px] text-slate-400">Loja ${rg.loja_num} · ${rg.tipo === 'PERCENTUAL' ? '% por faixa' : 'valor por faixa'} · <span class="underline cursor-pointer noprint" onclick="abrirRegra('${rg.id}')">editar faixas</span></div></td>
-          <td class="num py-2 px-2">${fmt(b.base)}</td><td class="num py-2 px-2">${b.arred.toLocaleString('pt-BR')}</td><td class="py-2 px-2 text-[11px]">${faixaTxt}${b.noTeto ? ' <span class="text-amber-700">· última faixa</span>' : ''}</td>
+          <td class="num py-2 px-2">${fmt(b.base)}${Math.abs(fpv) > 0.005 ? `<div class="text-[10px] text-slate-400 font-normal" title="Farmácia Popular não entra no bônus">${fmt(col.gensim_sem_vit)} − ${fmt(fpv)} de farmácia popular</div>` : ''}</td><td class="num py-2 px-2">${b.arred.toLocaleString('pt-BR')}</td><td class="py-2 px-2 text-[11px]">${faixaTxt}${b.noTeto ? ' <span class="text-amber-700">· última faixa</span>' : ''}</td>
           <td class="num py-2 px-2 font-bold text-sm">${fmt(b.valor)}</td><td class="py-2 px-2 text-[11px]">${sit}</td>
           <td class="py-2 text-right noprint">${calc.novo || salvo ? `<button onclick="lancarBonus('${rg.funcionario_id}', ${b.valor}, '${esc(det)}')" class="px-3 py-1.5 ${Math.abs(vJa - b.valor) < 0.005 && ja.length ? 'border border-slate-200 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} rounded-lg font-bold cursor-pointer">${ja.length ? 'Atualizar na folha' : 'Lançar na folha'}</button>` : ''}</td></tr>`;
       }).join('');
-      $('bonus').innerHTML = `<table class="w-full text-xs"><thead class="text-[10px] text-slate-400 text-left"><tr><th class="py-1">Líder</th><th class="num px-2">Gen + sim − vitaminas</th><th class="num px-2">Arredondado</th><th class="px-2">Faixa</th><th class="num px-2">Bônus</th><th class="px-2">Na folha ${esc(competencia)}</th><th></th></tr></thead>
+      $('bonus').innerHTML = `<table class="w-full text-xs"><thead class="text-[10px] text-slate-400 text-left"><tr><th class="py-1">Líder</th><th class="num px-2">Base (sem farmácia popular)</th><th class="num px-2">Arredondado</th><th class="px-2">Faixa</th><th class="num px-2">Bônus</th><th class="px-2">Na folha ${esc(competencia)}</th><th></th></tr></thead>
         <tbody>${linhas || '<tr><td colspan="7" class="py-2 text-slate-400">Nenhuma regra de bônus ativa.</td></tr>'}</tbody></table>
         <button onclick="abrirRegra('')" class="mt-2 text-[11px] underline text-slate-500 cursor-pointer noprint">+ nova regra de bônus</button>`;
     }
@@ -352,20 +419,30 @@
         ? `<table class="w-full max-w-3xl"><thead class="text-[10px] text-slate-400 text-left"><tr><th class="py-1">Saiu da Loja 3 para</th><th>Usuários</th><th class="num">Venda</th><th class="num">Desconto</th><th class="num">Lucro</th></tr></thead><tbody>
             ${Object.keys(porDest).sort().map(k => `<tr class="border-t border-slate-100"><td class="py-1 font-semibold">Loja ${k}</td><td class="text-[11px] text-slate-500">${[...porDest[k].us].map(esc).join(' · ')}</td><td class="num">${fmt(porDest[k].v)}</td><td class="num">${fmt(porDest[k].d)}</td><td class="num">${fmt(porDest[k].l)}</td></tr>`).join('')}</tbody></table>`
         : `<div class="text-slate-500">${(calc.usuariosFp || []).length ? 'Nenhuma venda de usuário de outra loja: nada foi transferido.' : 'Sem relatório de farmácia popular neste fechamento.'}</div>`)
-        + (calc.novo && sem.length ? `<div class="mt-3 noprint"><div class="font-semibold text-amber-800">Usuários sem vínculo com o cadastro (ficaram na Loja 3). Escolha a loja de cada um, se for de outra:</div>
-            ${sem.map((u, i) => `<div class="flex items-center gap-2 py-0.5"><span class="w-72 truncate">${esc(u)}</span><select onchange="vincular(${i}, this.value)" class="border border-slate-200 rounded px-1 py-0.5">${opLojas(3)}</select></div>`).join('')}</div>` : '');
-      window._semVinculo = sem;
+        + (calc.novo && (calc.usuariosFp || []).length ? `<details class="mt-3 noprint" ${sem.length ? 'open' : ''}><summary class="cursor-pointer font-semibold text-slate-700">Loja de cada usuário (${calc.usuariosFp.length})${sem.length ? ` · <span class="text-amber-700">${sem.length} sem vínculo, ficaram na Loja 3</span>` : ''}</summary>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 mt-1">${calc.usuariosFp.slice().sort().map(u => { const i = calc.usuariosFp.indexOf(u), l = lojaDoUsuario(u);
+              const origem = vinculoManual[u] !== undefined || fpMapa[norm(u)] !== undefined ? 'definido' : l === undefined ? 'sem vínculo' : 'cadastro';
+              return `<div class="flex items-center gap-2 py-0.5"><span class="flex-1 truncate">${esc(u)}</span><span class="text-[10px] ${origem === 'sem vínculo' ? 'text-amber-700 font-bold' : 'text-slate-400'}">${origem}</span>
+                <select onchange="vincular(${i}, this.value)" class="border border-slate-200 rounded px-1 py-0.5">${opLojas(l || 3)}</select></div>`; }).join('')}</div>
+            <p class="text-[10px] text-slate-400 mt-1">A escolha fica guardada para os próximos meses.</p></details>` : '');
     }
-    function vincular(i, loja) { vinculoManual[window._semVinculo[i]] = parseInt(loja, 10); recalcular(); }
+    async function vincular(i, loja) {
+      const u = calc.usuariosFp[i], n = parseInt(loja, 10);
+      vinculoManual[u] = n; fpMapa[norm(u)] = n;
+      const { error } = await _supabase.from('fechamento_fp_usuarios').upsert({ usuario: u, loja_num: n, atualizado_em: new Date().toISOString() }, { onConflict: 'usuario' });
+      if (error) alert('A loja foi aplicada neste cálculo, mas não ficou guardada: ' + error.message);
+      recalcular();
+    }
 
     async function salvar() {
       if (!calc || !calc.novo) return;
       if (!/^\d{2}\/\d{4}$/.test(competencia)) return alert('Informe a competência.');
       if (salvo && !confirm(`Já existe um fechamento salvo de ${competencia}. Substituir pelo cálculo deste arquivo?`)) return;
-      const dados = { colunas: calc.colunas, resultado: window._R, transferencias: calc.transferencias, semVinculo: calc.semVinculo, avisos: calc.avisos, usuariosFp: calc.usuariosFp };
+      const comissaoAlpha7 = {}; RELS.filter(r => r[2] === 'C' && slots[r[0]]).forEach(r => { comissaoAlpha7[r[0]] = { total: slots[r[0]].info.total, usuarios: slots[r[0]].info.usuarios }; });
+      const dados = { comissaoAlpha7, colunas: calc.colunas, resultado: window._R, transferencias: calc.transferencias, semVinculo: calc.semVinculo, avisos: calc.avisos, usuariosFp: calc.usuariosFp };
       const { error } = await _supabase.from('fechamento_financeiro').upsert({ competencia, dados, arquivo: nomeArquivo, salvo_em: new Date().toISOString() }, { onConflict: 'competencia' });
       if (error) return alert('Erro ao salvar: ' + error.message);
-      abasLidas = null; $('arq').value = ''; slots = {}; document.querySelectorAll('.slot').forEach(i => { i.value = ''; });
+      abasLidas = null; $('arq').value = ''; slots = {}; naoReconhecidos = []; renderSlots();
       await carregarCompetencia();
       alert('Fechamento de ' + competencia + ' salvo.');
     }

@@ -108,7 +108,7 @@
       Object.keys(pref[i] || {}).forEach(k => { L[i][k] = L[i][k] || vazio(); soma(L[i][k], pref[i][k], -1); }); });
 
     // 2) farmácia popular: venda na loja 3 feita por usuário de outra loja vai para a loja dele
-    const transferencias = [], semVinculo = [];
+    const transferencias = [], semVinculo = [], fpGS = {};   // fpGS: genérico + similar que entrou (+) ou saiu (−) da loja pela farmácia popular
     fp.forEach(x => {
       const dest = lojaDoUsuario ? lojaDoUsuario(x.usuario) : null;
       if (dest === undefined) { if (!semVinculo.includes(x.usuario)) semVinculo.push(x.usuario); return; }
@@ -116,6 +116,7 @@
       L[3][x.cls] = L[3][x.cls] || vazio(); L[dest][x.cls] = L[dest][x.cls] || vazio();
       soma(L[3][x.cls], x, -1); soma(L[dest][x.cls], x, 1);
       transferencias.push({ ...x, destino: dest });
+      if (x.cls === norm(C.GENERICO) || x.cls === norm(C.SIMILAR)) { fpGS[dest] = (fpGS[dest] || 0) + x.v; fpGS[3] = (fpGS[3] || 0) - x.v; }
     });
 
     // 3) e-commerce sai da loja e vira coluna própria (linha Sidney: só o fabricante SIDNEY OLIVEIRA, como na planilha)
@@ -139,6 +140,8 @@
       const dermo = g(c, C.DERMO), rennova = g(c, C.RENNOVA), etico = g(c, C.ETICO), formulas = g(c, C.FORMULAS), servicos = g(c, C.SERVICOS), covid = g(c, C.COVID);
       R[c.id] = { nome: c.nome, bruto: liq + desc, desc, liq, lucro, gen, sim, gensim, vit: c.vit, gensim_sem_vit: gensim - c.vit,
         perf, ...perfItens, sidney: c.sid, perf_sem_sidney: perf - c.sid,
+        // comissão/bônus não considera farmácia popular (sem margem): base = gen + sim − vitaminas, sem a transferência
+        fp_gensim: fpGS[c.id] || 0, base_bonus: gensim - c.vit - (fpGS[c.id] || 0),
         dermo_total: dermo + rennova, dermo, rennova, efs: etico + formulas + servicos + covid, etico, formulas, servicos, covid };
     });
     // classificações que vieram no relatório e não estão no modelo (ficam só no total da loja)
@@ -158,5 +161,47 @@
     return { base, arred, valor, faixa: escolhida, noTeto: escolhida === fx[fx.length - 1] };
   }
 
-  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular };
+  // relatório "Análise de Plano de Remuneração" (comissão): resumo por usuário até a linha "Total"
+  function lerComissao(rows) {
+    const out = { usuarios: [], total: 0 }; let ix = null;
+    for (const r of (rows || [])) {
+      if (!r) continue;
+      if (!ix) { if (r.some(c => /^USUARIO$/.test(norm(c))) && r.some(c => /^REMUNERACAO$/.test(norm(c)))) ix = colunas(r, { u: /^USUARIO$/, rem: /^REMUNERACAO$/, v: /^VENDA$/ }); continue; }
+      const u = String(r[ix.u] == null ? '' : r[ix.u]).trim();
+      if (/^TOTAL/i.test(u)) { out.totalRelatorio = num(r[ix.rem]); break; }
+      if (!u || typeof r[ix.rem] !== 'number') continue;
+      out.usuarios.push({ usuario: u, venda: num(r[ix.v]), valor: num(r[ix.rem]) }); out.total += num(r[ix.rem]);
+    }
+    return out;
+  }
+
+  // Descobre qual relatório do Alpha7 é o arquivo (pelo conteúdo; o nome só desempata relatórios de formato igual).
+  // tipos: NIVEL3, PREFEITURA, WAGNER, ECOMMERCE, FP, VIT, SID e comissão C2018/C2019/C2020/C2021/C2022/CQUARENTENA
+  const PLANOS = [['C2018', /\bSM\b|\bGN\b|GENERIC|SIMILAR/], ['CQUARENTENA', /QUARENTENA/], ['C2021', /FIXO/], ['C2020', /SIDNEY/], ['C2022', /VITAMINA/], ['C2019', /PERFUMARIA/]];
+  function identificar(nomeArquivo, rows) {
+    const nome = norm(String(nomeArquivo || '').replace(/\.[a-z0-9]+$/i, '').replace(/[_\-.]+/g, ' '));
+    const topo = (rows || []).slice(0, 12);
+    const tem = re => topo.some(r => (r || []).some(c => re.test(norm(c))));
+    const titulo = norm(((rows || [])[0] || [])[0]);
+    const per = /(\d{2})\/(\d{2})\/(\d{4})(?:\s+[\d:]+)?\s+a\s+(\d{2})\/(\d{2})\/(\d{4})/.exec(String(((rows || [])[0] || [])[0] || ''));
+    const info = { tipo: null, periodo: per ? per[0].replace(/\s+\d{2}:\d{2}:\d{2}/g, '') : '', competencia: per ? per[2] + '/' + per[3] : '', mesmoMes: per ? per[2] === per[5] && per[3] === per[6] : null };
+    if (/PLANO DE REMUNERACAO/.test(titulo)) {
+      let p = PLANOS.find(x => x[1].test(nome));
+      if (!p) { const dims = new Set(); let col = -1; (rows || []).forEach(r => { if (!r) return; const j = r.findIndex(c => /^DIMENSAO$/.test(norm(c))); if (j >= 0) { col = j; return; } if (col >= 0 && r[col]) dims.add(norm(r[col])); });
+        const d = [...dims].join(' '); p = PLANOS.find(x => x[0] !== 'CQUARENTENA' && x[0] !== 'C2021' && x[1].test(d)); }
+      info.tipo = p ? p[0] : 'C?'; Object.assign(info, lerComissao(rows));
+      return info;
+    }
+    if (tem(/^USUARIO ORCAMENTO$/)) info.tipo = 'FP';
+    else if (tem(/^FABRICANTE$/)) info.tipo = 'ECOMMERCE';
+    else if (tem(/^CLASSIFICACAO 3. NIVEL$/) || tem(/^COD\. UN\. NEG\.\s*:/)) info.tipo = /PREFEIT/.test(nome) ? 'PREFEITURA' : /WAGNER/.test(nome) ? 'WAGNER' : 'NIVEL3';
+    else if (tem(/^COD\. UN\. NEG\.?$/)) info.tipo = /VITAMINA/.test(nome) ? 'VIT' : /SIDNEY/.test(nome) ? 'SID' : 'RESUMO?';
+    if (info.tipo && !/\?$/.test(info.tipo)) {
+      let v = 0; (rows || []).forEach(r => { if (!r) return; const j = r.findIndex(c => /^TOTAL( GERAL)?$/.test(norm(c))); if (j === 0) { const n = r.find(c => typeof c === 'number' && !Number.isInteger(c)); if (n != null) v = n; } });
+      info.total = v;
+    }
+    return info;
+  }
+
+  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular, lerComissao, identificar };
 })(typeof window !== 'undefined' ? window : globalThis);
