@@ -359,6 +359,7 @@
         <button type="button" onclick="fecharDetalhesItem()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
       <div id="detalheAjustes"></div>
+      <div id="detalheOrigem"></div>
       <div class="text-[10px] font-bold text-slate-500 uppercase pt-1">Histórico (auditoria)</div>
       <div id="detalheHistorico" class="overflow-y-auto border border-slate-200 rounded-lg flex-1"></div>
     </div>
@@ -1797,6 +1798,60 @@
       return lista.map((a, i) => `${i + 1}º: ${fmtMoeda(a.valor)} ${a.motivo ? '- ' + a.motivo : ''}${a.total_parcelas > 1 ? ` (${a.parcela_atual}/${a.total_parcelas})` : ''}`).join(' | ');
     }
 
+    // ORIGEM do lançamento: de onde ele veio (solicitação de freelance/HE, abatimento, férias, automação ou manual)
+    async function carregarOrigemItem(item) {
+      const box = document.getElementById('detalheOrigem');
+      const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+      const dd = v => v ? String(v).slice(0, 10).split('-').reverse().join('/') : '-';
+      const nomeF = id => (listaGlobalFuncionarios.find(f => String(f.id) === String(id)) || {}).nome_registro || '';
+      const linha = (quando, titulo, texto) => `<div class="flex gap-2 py-1 border-t border-slate-100 first:border-t-0"><div class="w-28 shrink-0 font-mono text-[10px] text-slate-500">${quando}</div><div class="text-[11px]"><b>${titulo}</b>${texto ? ' · ' + texto : ''}</div></div>`;
+      const moldura = (titulo, corpo) => `<div class="text-[10px] font-bold text-slate-500 uppercase pt-1">Origem do lançamento</div>
+        <div class="border border-slate-200 rounded-lg p-2 mt-1 bg-slate-50/60"><div class="text-[11px] font-bold text-slate-800 mb-1">${titulo}</div>${corpo}</div>`;
+      const MOT = { FALTA_DIA: 'falta', FALTA_PARCIAL: 'falta parcial', ATESTADO: 'atestado', FERIAS: 'cobertura de férias', ALTA_DEMANDA: 'alta demanda', FERIADO: 'feriado', AUSENCIA: 'ausência' };
+      try {
+        const [rs, rp, rv] = await Promise.all([
+          _supabase.from('freelance_solicitacoes').select('*').or(`folha_item_id.eq.${item.id},folha_item_falta_id.eq.${item.id}`).limit(1),
+          _supabase.from('abatimento_parcelas').select('parcela_num, total_parcelas, lancado_em, abatimentos(*)').eq('folha_item_id', item.id).limit(1),
+          _supabase.from('ferias_solicitacoes').select('*').eq('folha_item_id', item.id).limit(1)
+        ]);
+        const s = (rs.data || [])[0], p = (rp.data || [])[0], v = (rv.data || [])[0];
+        if (s) {
+          const he = s.tipo_solicitacao === 'HORA_EXTRA', daFalta = String(s.folha_item_falta_id) === String(item.id);
+          const hor = `${String(s.hora_inicio || '').slice(0, 5) || '--'} às ${String(s.hora_fim || '').slice(0, 5) || '--'}`;
+          let h = linha(dh(s.created_at), 'Solicitado pelo líder', `${escaparHtml(s.solicitante_email || '-')} · ${escaparHtml(s.loja_solicitante || '')}${s.observacao_lider ? ' · "' + escaparHtml(s.observacao_lider) + '"' : ''}`);
+          h += linha(dd(s.data_servico), he ? 'Dia da hora extra' : 'Dia do freelance', `${hor} · ${String(s.horas_trabalhadas ?? '').replace('.', ',')}h · ${escaparHtml(nomeF(s.funcionario_id))} · motivo: ${escaparHtml(MOT[s.motivo] || s.motivo || '-')}${s.funcionario_ausente_id ? ' · faltou: ' + escaparHtml(nomeF(s.funcionario_ausente_id)) : ''}`);
+          (Array.isArray(s.historico) ? s.historico : []).forEach(x => { h += linha(dh(x.em), escaparHtml(String(x.acao || '').toLowerCase()), `${escaparHtml(x.por || '')}${x.motivo ? ' · ' + escaparHtml(x.motivo) : ''}`); });
+          if (s.supervisor_em) h += linha(dh(s.supervisor_em), 'Supervisor aprovou', `${escaparHtml(s.supervisor_por || '')}${s.supervisor_forcado ? ' (decidido pelo RH no lugar)' : ''}${s.supervisor_obs ? ' · "' + escaparHtml(s.supervisor_obs) + '"' : ''}`);
+          if (s.rh_em) h += linha(dh(s.rh_em), 'RH aprovou e lançou', `${escaparHtml(s.rh_por || '')} · ${fmtMoeda(s.valor_pago)} · ${escaparHtml(String(s.forma_pagamento || '').toLowerCase())} · competência ${escaparHtml(s.competencia_folha || '-')}${s.observacao_rh ? ' · "' + escaparHtml(s.observacao_rh) + '"' : ''}`);
+          box.innerHTML = moldura(`${he ? '⏰ Hora extra' : '🧑‍🤝‍🧑 Freelance'}${daFalta ? ' — este lançamento é o DESCONTO DA FALTA de quem foi coberto' : ''}`, h);
+          return;
+        }
+        if (p && p.abatimentos) {
+          const a = p.abatimentos, TIP = { VENCIDO: 'produto vencido', CAIXA: 'fechamento de caixa', OUTROS: 'outros' };
+          box.innerHTML = moldura(`💸 Abatimento nº ${a.numero} · ${TIP[a.tipo] || a.tipo} · parcela ${p.parcela_num}/${p.total_parcelas}`,
+            linha(dh(a.solicitado_em), 'Solicitado', `${escaparHtml(a.solicitante_email || '')} (${escaparHtml(String(a.origem_perfil || '').toLowerCase())}) · total ${fmtMoeda(a.valor_total)}${a.justificativa ? ' · ' + escaparHtml(a.justificativa) : ''}`)
+            + (a.decidido_em ? linha(dh(a.decidido_em), 'Líder aprovou', `${escaparHtml(a.decidido_por || '')}${a.decisao_obs ? ' · "' + escaparHtml(a.decisao_obs) + '"' : ''}`) : '')
+            + (p.lancado_em ? linha(dh(p.lancado_em), 'Parcela lançada na folha', '') : ''));
+          return;
+        }
+        if (v) {
+          box.innerHTML = moldura(`🏖 Férias · ${dd(v.data_inicio)} a ${dd(v.data_fim)} (${v.dias} dias)`,
+            linha(dh(v.solicitado_em), 'Solicitado', escaparHtml(v.solicitado_por || ''))
+            + (v.pre_aprovado_em ? linha(dh(v.pre_aprovado_em), 'RH pré-aprovou', escaparHtml(v.pre_aprovado_por || '')) : '')
+            + (v.calculado_em ? linha(dh(v.calculado_em), 'Valor calculado', `${escaparHtml(v.calculado_por || '')} · ${fmtMoeda(v.valor_liquido)}`) : '')
+            + (v.lancado_em ? linha(dh(v.lancado_em), 'Lançado na folha', escaparHtml(v.lancado_por || '')) : ''));
+          return;
+        }
+      } catch (e) { }
+      // sem solicitação ligada: automação, importação ou lançamento manual
+      const m = String(item.motivo_ajuste || '');
+      const tipo = /^Automa[cç][aã]o Empr[eé]stimo/i.test(m) ? '🏦 Parcela de empréstimo (automática)'
+        : /Cadastro\)|salário adicional|adicional de caixa/i.test(m) ? '📇 Valor fixo do cadastro do funcionário (automático)'
+        : /Alpha7|consumo|importa/i.test(m) ? '📥 Importação'
+        : item.fixo ? '📌 Lançamento fixo (repetido do mês anterior)' : '✍ Lançamento manual na tela de lançamentos';
+      box.innerHTML = moldura(tipo, m ? `<div class="text-[11px] text-slate-600">${escaparHtml(m)}</div>` : '<div class="text-[11px] text-slate-400">Quem lançou e quando estão no histórico abaixo.</div>');
+    }
+
     async function abrirDetalhesItem(id) {
       const item = mapaItensRenderizados[id];
       if (!item) return;
@@ -1822,7 +1877,9 @@
 
       const hist = document.getElementById('detalheHistorico');
       hist.innerHTML = '<div class="text-[11px] text-slate-400 p-2">Carregando histórico...</div>';
+      document.getElementById('detalheOrigem').innerHTML = '';
       modal.classList.remove('hidden');
+      carregarOrigemItem(item);
 
       const { data, error } = await _supabase.from('audit_logs')
         .select('operation, changed_by, changed_at, old_data, new_data')
