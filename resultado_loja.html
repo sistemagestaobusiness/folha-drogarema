@@ -72,7 +72,24 @@
 
     // ficha individual: valores de premiação por venda já lançados na folha do mês fechado (SQL BD). Uma pessoa por vez.
     let indCache = {}, indSel = '';
+    // "Todas as lojas" (loja 0): soma das lojas em cada mês. Valores e metas são somados;
+    // % de desconto e ticket médio por classificação são a média das lojas ponderada pelo faturamento.
+    function consolidar(lojas) {
+      const SOMA = ['fat', 'lucro', 'simgen', 'perf', 'sidney', 'etico', 'dermo_outros', 'bruto', 'desconto', 'delivery', 'entregas'];
+      [...new Set(dados.map(d => d.competencia))].forEach(c => { const linhas = dados.filter(d => d.competencia === c && d.loja_num > 0), t = { equipe: [] };
+        SOMA.forEach(k => { const v = linhas.map(l => l.dados[k]).filter(x => x != null); if (v.length) t[k] = v.reduce((a, b) => a + Number(b), 0); });
+        ['descp', 'ticket'].forEach(g => { const acc = {}; linhas.forEach(l => { const o = l.dados[g], p = Number(l.dados.fat) || 0; if (!o || !p) return;
+            Object.keys(o).forEach(k => { if (o[k] == null || !isFinite(o[k])) return; const a = (acc[k] = acc[k] || { s: 0, p: 0 }); a.s += o[k] * p; a.p += p; }); });
+          if (Object.keys(acc).length) { t[g] = {}; Object.keys(acc).forEach(k => t[g][k] = acc[k].s / acc[k].p); } });
+        linhas.forEach(l => (l.dados.equipe || []).forEach(p => t.equipe.push(Object.assign({}, p, { nome: p.nome + ' · L' + l.loja_num }))));
+        if (!t.equipe.length) delete t.equipe;
+        dados.push({ competencia: c, loja_num: 0, dados: t, lojas: linhas.length }); });
+      [...new Set(metas.map(m => m.competencia))].forEach(c => { const ms = metas.filter(m => m.competencia === c && m.loja_num > 0); if (ms.length < lojas.length) return;
+        const s = k => ms.reduce((a, m) => a + Number(m[k] || 0), 0), fat = s('fat');
+        metas.push({ competencia: c, loja_num: 0, dias: ms[0].dias, fat, simgen: s('simgen'), perf: s('perf'), sidney: s('sidney'), pct_simgen: fat ? s('simgen') / fat : null }); });
+    }
     async function carregarIndividual() {
+      if (lojaSel === 0) { $('indiv').innerHTML = 'A ficha individual é por loja. Escolha uma loja no filtro acima.'; return; }
       const chave = mesSel + '|' + lojaSel;
       if (!indCache[chave]) { const { data, error } = await _supabase.rpc('fn_valores_individuais_loja', { p_competencia: mesSel, p_loja: lojaSel });
         if (error) { $('indiv').innerHTML = `<span class="text-rose-800 font-semibold">Ficha individual ainda não configurada no banco (SQL BD). ${esc(error.message)}</span>`; return; }
@@ -124,11 +141,12 @@
       dados = rr.data || []; metas = rm.data || [];
       try { const rf = await _supabase.from('loja_faixas').select('loja_num, faixas').eq('categoria', 'SIMGEN'); faixasLoja = rf.error ? [] : (rf.data || []); } catch (e) { faixasLoja = []; }
       const lojas = [...new Set(dados.map(d => d.loja_num))].sort((a, b) => a - b);
+      if (lojas.length > 1) consolidar(lojas);
       if (!lojas.length) { $('aviso').innerHTML = '<div class="cartao text-slate-600">Ainda não há resultado publicado para a sua loja. Ele aparece aqui quando o mês é fechado pela gestão.</div>'; return; }
-      $('selLoja').innerHTML = lojas.map(l => `<option value="${l}">Loja ${l}</option>`).join('');
+      $('selLoja').innerHTML = (lojas.length > 1 ? '<option value="0">Todas as lojas</option>' : '') + lojas.map(l => `<option value="${l}">Loja ${l}</option>`).join('');
       if (lojas.length === 1) $('selLoja').classList.add('hidden');
       $('filtros').classList.remove('hidden'); $('menu').classList.remove('hidden');
-      lojaSel = lojas[0];
+      lojaSel = lojas[0]; $('selLoja').value = lojaSel;
       preencherMeses(); render();
     }
     function preencherMeses() {
@@ -148,7 +166,7 @@
       const hist = {}; dados.filter(d => d.loja_num === lojaSel).forEach(d => { hist[d.competencia] = d.dados; });
       const meses = Object.keys(hist).filter(c => M.ordem(c) <= M.ordem(mesSel)).sort((a, b) => M.ordem(a) - M.ordem(b)).slice(-5);
       const A = hist[mesSel], antC = meses.length > 1 ? meses[meses.length - 2] : null, B = antC ? hist[antC] : null, nm = M.nomeMes;
-      $('sub').innerText = `Loja ${lojaSel} · ${nm(mesSel)}`;
+      $('sub').innerText = `${lojaSel === 0 ? 'Todas as lojas (rede)' : 'Loja ' + lojaSel} · ${nm(mesSel)}`;
       $('menu').innerHTML = SECOES.map(([k, t, i]) => `<button class="item ${k === secao ? 'on' : ''}" onclick="irPara('${k}')">${t}</button>`).join('');
       const parte = (d, k) => d && d.fat && d[k] != null ? d[k] / d.fat : null;
       const titulo = (t, sub) => `<div><h2 class="text-lg font-bold text-slate-900">${t}</h2>${sub ? `<p class="text-[12px] text-slate-500">${sub}</p>` : ''}</div>`;
@@ -206,6 +224,7 @@
           (tem('descp') ? `<div class="cartao"><div class="font-semibold text-slate-900 mb-2">% de desconto da loja</div>${tabelaMeses(ks.map(([k, t]) => [t, d => (d.descp || {})[k], pc, true]))}
             <p class="rot mt-2">Desconto concedido sobre o preço cheio. Subir significa vender com mais desconto.</p></div>` : '') +
           (tem('ticket') ? `<div class="cartao"><div class="font-semibold text-slate-900 mb-2">Ticket médio (R$ por item)</div>${tabelaMeses(ks.map(([k, t]) => [t, d => (d.ticket || {})[k], n2]))}</div>` : '') +
+          (lojaSel === 0 && (tem('descp') || tem('ticket')) ? '<p class="rot">Na visão de todas as lojas, o % de desconto e o ticket são a média das lojas ponderada pelo faturamento.</p>' : '') +
           (!tem('descp') && !tem('ticket') ? '<div class="cartao text-slate-500">Sem dados de desconto e ticket para os meses desta loja.</div>' : '');
       }
 
