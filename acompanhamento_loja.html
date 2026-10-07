@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acompanhamento do mês - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="metas_core.js"></script>
+  <script src="diario_core.js?v=2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+    .num { text-align: right; white-space: nowrap; }
+    .cartao { background: #fff; border-radius: 12px; padding: 18px 20px; }
+    .rot { font-size: 11px; color: #64748b; }
+    .item { padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #475569; cursor: pointer; }
+    .item:hover { background: #e2e8f0; } .item.on { background: #0f172a; color: #fff; font-weight: 600; }
+    .selo { display: inline-block; min-width: 58px; text-align: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .ok { background: #dcfce7; color: #166534; } .atencao { background: #fef9c3; color: #854d0e; } .baixo { background: #fee2e2; color: #b91c1c; } .vazio { color: #cbd5e1; }
+    table.t th { font-weight: 600; font-size: 11px; color: #64748b; padding: 6px 8px; text-align: right; }
+    table.t th:first-child, table.t td:first-child { text-align: left; }
+    table.t td { padding: 8px; border-top: 1px solid #f1f5f9; font-size: 13px; }
+    table.h td, table.h th { padding: 3px 4px; font-size: 11px; text-align: center; }
+    table.h td.c { border-radius: 4px; min-width: 46px; }
+    .trilho { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; position: relative; }
+    .trilho > i { display: block; height: 100%; border-radius: 999px; }
+    .nota { display: inline-block; min-width: 64px; text-align: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+    .n-OTIMO { background: #dcfce7; color: #166534; } .n-BOM { background: #e0f2fe; color: #075985; } .n-REGULAR { background: #fef9c3; color: #854d0e; } .n-RUIM { background: #fee2e2; color: #b91c1c; }
+    .leitura li { padding: 5px 0; border-top: 1px solid #f1f5f9; } .leitura li:first-child { border-top: 0; }
+    .trilho > b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #0f172a; opacity: .45; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen font-sans">
+  <main class="p-6">
+    <div class="space-y-4">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-slate-900">Acompanhamento do mês</h1>
+          <p id="sub" class="text-[12px] text-slate-500">Venda do mês em andamento contra a meta, por loja e por atendente</p>
+        </div>
+        <div id="filtros" class="hidden flex flex-wrap items-center gap-2 text-sm">
+          <select id="selLoja" class="bg-white rounded-lg px-3 py-2 text-sm cursor-pointer" onchange="trocar()" aria-label="Loja"></select>
+          <select id="selMes" class="bg-white rounded-lg px-3 py-2 text-sm cursor-pointer" onchange="trocar()" aria-label="Mês"></select>
+          <label id="btnSubir" class="hidden px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold cursor-pointer">Atualizar dados
+            <input type="file" id="arqs" multiple accept=".xlsx,.xls,.csv" class="hidden" onchange="subir(this)"></label>
+        </div>
+      </div>
+      <div id="aviso" class="text-sm"></div>
+      <nav id="abas" class="hidden flex flex-wrap gap-1"></nav>
+      <div id="conteudo" class="space-y-4"></div>
+    </div>
+  </main>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // ---------------------------------------------------------------------
+    // ACOMPANHAMENTO DO MÊS (planilha "Diário"): o líder sobe os 2 relatórios do Alpha7
+    // (Análise de Venda por classificação e por item) e a tela mostra o alcance da meta,
+    // o % de similar e genérico por atendente e o dia a dia. Só indicadores de venda.
+    // Tabela loja_diario (SQL BC). A conta está em diario_core.js.
+    // ---------------------------------------------------------------------
+    const $ = id => document.getElementById(id), D = DiarioCore, M = MetasCore;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const rs = v => v == null || !isFinite(v) ? '–' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const pc = v => v == null || !isFinite(v) ? '–' : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    const hojeComp = () => { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
+    let perfil = '', lojaSel = null, mesSel = hojeComp(), aba = 'resumo', reg = null, regAnt = null, todas = [], metas = [], podeSubir = false;
+
+    async function inicializar() {
+      const { data: u } = await _supabase.rpc('fn_meu_usuario'); perfil = u ? u.perfil : '';
+      let lojas = M.LOJAS;
+      if (perfil === 'LIDER') { const { data: n } = await _supabase.rpc('fn_minha_loja_num'); lojas = n ? [n] : []; }
+      if (!lojas.length) { $('aviso').innerHTML = '<div class="cartao text-slate-600">Seu usuário não está ligado a uma loja no cadastro.</div>'; return; }
+      podeSubir = perfil === 'LIDER' || perfil === 'GESTOR';
+      $('selLoja').innerHTML = lojas.map(l => `<option value="${l}">Loja ${l}</option>`).join(''); if (lojas.length === 1) $('selLoja').classList.add('hidden');
+      const meses = []; for (let k = 0, c = hojeComp(); k < 6; k++, c = M.somaMes(c, -1)) meses.push(c);
+      $('selMes').innerHTML = meses.map(c => `<option value="${c}">${c}</option>`).join('');
+      lojaSel = lojas[0]; $('filtros').classList.remove('hidden'); if (podeSubir) $('btnSubir').classList.remove('hidden');
+      const rm = await _supabase.from('loja_metas').select('*'); metas = rm.error ? [] : (rm.data || []);
+      await carregar();
+    }
+    async function trocar() { lojaSel = Number($('selLoja').value); mesSel = $('selMes').value; await carregar(); }
+    async function carregar() {
+      const { data: lista, error } = await _supabase.from('loja_diario').select('*').in('competencia', [mesSel, M.somaMes(mesSel, -1)]);
+      const data = (lista || []).find(x => x.competencia === mesSel && x.loja_num === lojaSel);
+      regAnt = (lista || []).find(x => x.competencia === M.somaMes(mesSel, -1) && x.loja_num === lojaSel) || null;
+      todas = (lista || []).filter(x => x.competencia === mesSel);
+      if (error) { $('aviso').innerHTML = `<div class="cartao text-rose-800 font-semibold">Tela ainda não configurada no banco (SQL BC). ${esc(error.message)}</div>`; return; }
+      reg = data || null; $('aviso').innerHTML = ''; render();
+    }
+    const lerArq = arq => new Promise((ok, erro) => { const rd = new FileReader();
+      rd.onload = e => { try { const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' }); ok(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null, blankrows: false })); } catch (x) { erro(x); } };
+      rd.onerror = () => erro(new Error('falha na leitura')); rd.readAsArrayBuffer(arq); });
+    async function subir(inp) {
+      const novo = { dias: (reg && reg.dados.dias) || {}, camp: (reg && reg.dados.camp) || {}, arquivos: (reg && reg.dados.arquivos) || {} }, msgs = []; let mudou = false;
+      for (const arq of [...inp.files]) {
+        try { const rows = await lerArq(arq), t = D.tipo(rows);
+          if (t === 'VENDA') { const v = D.lerVenda(rows, mesSel);
+            if (!v.linhas) { msgs.push(`✗ ${arq.name}: não tem venda de ${mesSel}${v.outrosMeses.length ? ' (tem ' + v.outrosMeses.join(', ') + ')' : ''}.`); continue; }
+            if (reg && reg.dados.geral) novo.geral = reg.dados.geral; novo.dias = v.dias; novo.arquivos.venda = arq.name; mudou = true; msgs.push(`✓ ${arq.name}: venda de ${Object.keys(v.dias).length} dia(s).`); }
+          else if (t === 'CAMPANHA') { const c = D.lerCampanha(rows, mesSel); novo.camp = c.camp; novo.arquivos.campanha = arq.name; mudou = true; msgs.push(`✓ ${arq.name}: ${c.linhas} venda(s) de vitaminas e valor fixo.`); }
+          else if (t === 'GERAL') { if (perfil !== 'GESTOR') { msgs.push(`✗ ${arq.name}: o relatório de todas as lojas é enviado pela gestão.`); continue; }
+            msgs.push(await subirGeral(D.lerGeral(rows), arq.name)); }
+          else msgs.push(`✗ ${arq.name}: não reconheci. Use a "Análise de Venda" com Data, Usuário Orçamento e Classificação (ou Embalagem).`);
+        } catch (x) { msgs.push(`✗ ${arq.name}: ${x.message}`); }
+      }
+      inp.value = '';
+      if (mudou) { const linha = { competencia: mesSel, loja_num: lojaSel, dados: novo, atualizado_em: new Date().toISOString(), atualizado_por: (window.ACESSO || {}).email || null };
+        const { error } = await _supabase.from('loja_diario').upsert(linha, { onConflict: 'competencia,loja_num' });
+        if (error) msgs.push('✗ Não salvou: ' + error.message); else { reg = linha; const k = todas.findIndex(x => x.loja_num === lojaSel); if (k >= 0) todas[k] = linha; else todas.push(linha); } }
+      $('aviso').innerHTML = `<div class="cartao text-[12px] space-y-0.5">${msgs.map(m => `<div class="${m[0] === '✓' ? 'text-emerald-700' : 'text-rose-700 font-semibold'}">${esc(m)}</div>`).join('')}</div>`;
+      render();
+    }
+    // relatório geral (todas as lojas, acumulado até ontem): grava uma "foto" do dia em cada loja
+    async function subirGeral(G, nome) {
+      const d = new Date(), chave = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (chave.slice(5, 7) + '/' + chave.slice(0, 4) !== mesSel) return `✗ ${nome}: o relatório de todas as lojas só pode ser enviado no mês em andamento (${hojeComp()}).`;
+      const linhas = Object.keys(G).map(n => { n = Number(n); const at = todas.find(x => x.loja_num === n), dados = at ? at.dados : { dias: {}, camp: {}, arquivos: {} };
+        dados.geral = Object.assign({}, dados.geral, { [chave]: G[n] }); return { competencia: mesSel, loja_num: n, dados, atualizado_em: at ? at.atualizado_em : new Date().toISOString(), atualizado_por: at ? at.atualizado_por : ((window.ACESSO || {}).email || null) }; });
+      const { error } = await _supabase.from('loja_diario').upsert(linhas, { onConflict: 'competencia,loja_num' });
+      if (error) return `✗ ${nome}: não salvou (${error.message}).`;
+      linhas.forEach(l => { const k = todas.findIndex(x => x.loja_num === l.loja_num); if (k >= 0) todas[k] = l; else todas.push(l); if (l.loja_num === lojaSel) reg = l; });
+      return `✓ ${nome}: ${linhas.length} loja(s) atualizadas (Sidney Oliveira e base das lojas sem relatório do dia).`;
+    }
+    function ir(a) { aba = a; render(); }
+    const selo = (p, alvo) => p == null ? '<span class="vazio">–</span>' : `<span class="selo ${D.nivel(p, alvo)}">${pc(p)}</span>`;
+    const dBR = d => d ? d.slice(8) + '/' + d.slice(5, 7) : '';
+
+    const sinal = v => v == null ? '–' : (v >= 0 ? '+' : '−') + Math.abs(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    const nota = n => n ? `<span class="nota n-${n.normalize('NFD').replace(/[̀-ͯ]/g, '')}">${n}</span>` : '<span class="vazio">–</span>';
+    const metaDe = l => metas.find(m => m.competencia === mesSel && m.loja_num === l) || null;
+    const temDados = x => x && (Object.keys(x.dados.dias || {}).length || Object.keys(x.dados.geral || {}).length);
+
+    function render() {
+      const meta = metaDe(lojaSel), geral = perfil === 'GESTOR' || perfil === 'SUPERVISOR';
+      $('abas').classList.remove('hidden');
+      $('abas').innerHTML = [['resumo', 'Resumo da loja'], ['dias', 'Dia a dia']].concat(geral ? [['lojas', 'Todas as lojas']] : []).map(([k, n]) => `<a class="item ${aba === k ? 'on' : ''}" onclick="ir('${k}')">${n}</a>`).join('');
+      if (aba === 'lojas' && geral) { $('sub').textContent = `Todas as lojas · ${M.nomeMes(mesSel)}`; $('conteudo').innerHTML = telaLojas(); return; }
+      if (!temDados(reg)) {
+        $('conteudo').innerHTML = `<div class="cartao text-slate-600">Ainda não há dados de ${mesSel} para a Loja ${lojaSel}.${podeSubir ? ' Clique em <b>Atualizar dados</b> e escolha os dois relatórios do Alpha7 (podem ser selecionados juntos).' : ''}</div>`; return; }
+      const R = D.resumo(reg.dados, meta, mesSel);
+      $('sub').textContent = `Loja ${lojaSel} · ${M.nomeMes(mesSel)} · dados até ${dBR(R.ref)}${R.semDia ? ' (relatório geral)' : ''} · atualizado em ${new Date(reg.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
+      $('conteudo').innerHTML = aba === 'dias' ? (R.datas.length ? telaDias(R) : '<div class="cartao text-slate-600">O dia a dia aparece quando a loja sobe o relatório de venda por atendente.</div>') : telaResumo(R, meta);
+    }
+
+    function telaResumo(R, meta) {
+      // como estava há 7 dias (mesma conta, com os dados até aquela data) e o mês anterior até o mesmo dia
+      const R7 = R.hoje ? D.resumo(reg.dados, meta, mesSel, D.menosDias(R.hoje, 7)) : null, tem7 = R7 && R7.datas.length > 0;
+      const ant = regAnt ? D.ateODia(regAnt.dados, R.nHoje) : null, temAnt = ant && Object.keys(ant).length > 0;
+      const i7 = k => tem7 ? R7.inds.find(x => x.k === k) : null, nomes = R.equipe.map(e => e.nome);
+      // leitura: frases curtas, o que pede mais atenção primeiro
+      const fr = [];
+      R.inds.forEach(x => { if (x.dv == null) return; const a = i7(x.k), mov = a && a.dv != null ? (Math.abs(x.dv - a.dv) < 0.01 ? ' Estável na semana.' : x.dv > a.dv ? ` Melhorou: há 7 dias estava ${sinal(a.dv)}.` : ` Piorou: há 7 dias estava ${sinal(a.dv)}.`) : '';
+        fr.push({ o: x.dv, t: `<b>${x.rot}</b> ${x.dv >= 0 ? 'acima' : 'abaixo'} do esperado para o dia em <b>${sinal(Math.abs(x.dv)).slice(1)}</b> ${nota(x.nota)}.${mov}${x.falta > 0 ? ` Faltam ${rs(x.falta)}${x.porDia ? ' (' + rs(x.porDia) + ' por dia)' : ''}.` : ' Meta do mês alcançada.'}` }); });
+      fr.sort((a, b) => a.o - b.o);
+      if (R.margem != null) fr.push({ t: `<b>Rentabilidade</b> de <b>${pc(R.margem)}</b> ${nota(R.notaMargem)}${tem7 && R7.margem != null ? `. Há 7 dias: ${pc(R7.margem)}.` : '.'}` });
+      const queda = [], alta = [], aus = [];
+      if (temAnt) R.equipe.forEach(a => { const b = ant[a.nome]; if (!b || b.f < 500) return; const v = a.f / b.f - 1; a.vsAnt = v; if (v <= -0.15) queda.push(`${curto(a.nome, nomes)} (${sinal(v)})`); else if (v >= 0.15) alta.push(`${curto(a.nome, nomes)} (${sinal(v)})`); });
+      R.equipe.forEach(a => { const f = R.datas.length - a.dias; if (f >= 3 && a.f > 0) aus.push(`${curto(a.nome, nomes)} (${f} dias sem venda)`); });
+      if (queda.length) fr.push({ t: `<b>Equipe:</b> venda bem menor que no mesmo período do mês passado: ${esc(queda.join(', '))}.` });
+      if (alta.length) fr.push({ t: `<b>Equipe:</b> venda maior que no mês passado: ${esc(alta.join(', '))}.` });
+      if (aus.length) fr.push({ t: `<b>Presença:</b> ${esc(aus.join(', '))}.` });
+      const leitura = `<div class="cartao"><div class="font-semibold text-slate-900">Leitura do mês até ${dBR(R.ref)}</div><ul class="leitura text-[13px] text-slate-700 mt-2">${fr.map(f => `<li>${f.t}</li>`).join('')}</ul>
+        <p class="rot mt-2">Esperado para o dia: ${pc(R.ritmo)} da meta (${R.nHoje} de ${R.nDias} dias).${tem7 ? '' : ' A comparação com 7 dias atrás aparece quando houver uma semana de dados.'}${temAnt ? '' : ' A comparação da equipe com o mês passado aparece quando o mês anterior tiver sido enviado.'}</p></div>`;
+      // metas: uma linha por indicador
+      const linhaI = x => { const ok = x.dv != null && x.dv > -0.05, a = i7(x.k);
+        return `<tr><td class="font-medium text-slate-900">${x.rot}${x.foto ? ` <span class="rot">até ${dBR(D.menosDias(x.foto, 1))}</span>` : ''}</td><td class="num mono">${rs(x.real)}</td><td class="num mono text-slate-500">${rs(x.meta)}</td>
+          <td style="min-width:150px">${x.meta ? `<div class="flex items-center gap-2 justify-end"><div class="trilho w-24"><i class="${ok ? 'bg-emerald-600' : 'bg-rose-500'}" style="width:${Math.min(100, x.alc * 100)}%"></i><b style="left:${Math.min(100, R.ritmo * 100)}%"></b></div><span class="mono w-12 text-right">${pc(x.alc)}</span></div>` : ''}</td>
+          <td class="num mono ${ok ? 'text-emerald-700' : 'text-rose-700'}">${sinal(x.dv)}</td><td class="num">${nota(x.nota)}</td><td class="num mono text-slate-500">${a ? sinal(a.dv) : '–'}</td><td class="num mono">${x.falta == null ? '–' : x.falta > 0 ? rs(x.falta) : 'meta ok'}</td><td class="num mono">${x.falta > 0 ? rs(x.porDia) : '–'}</td></tr>`; };
+      const indic = `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-3"><div class="font-semibold text-slate-900">Metas do mês</div>
+          <div class="text-[13px] text-slate-600">Similar e genérico no faturamento ${selo(R.pct, R.alvo)} <span class="rot">objetivo ${pc(R.alvo)}${R.pctHoje != null ? ' · hoje ' + pc(R.pctHoje) : ''}</span>${R.margem != null ? ` &nbsp;·&nbsp; Rentabilidade <b>${pc(R.margem)}</b> ${nota(R.notaMargem)}` : ''}</div></div>
+        <table class="t w-full mt-2"><thead><tr><th>Indicador</th><th>Realizado</th><th>Meta</th><th>Alcance</th><th>Contra o esperado</th><th>Nota</th><th>Há 7 dias</th><th>Falta</th><th>Por dia</th></tr></thead><tbody>${R.inds.map(linhaI).join('')}</tbody></table>
+        ${meta ? '' : '<p class="rot mt-2">Sem meta registrada para este mês (console de metas).</p>'}</div>`;
+      // equipe
+      const alc = (v, obj) => { if (!obj) return '<span class="vazio">–</span>'; const a = v / obj, okk = a >= R.ritmo;
+        return `<div class="flex items-center gap-2 justify-end"><div class="trilho w-16"><i class="${okk ? 'bg-emerald-600' : 'bg-rose-500'}" style="width:${Math.min(100, a * 100)}%"></i><b style="left:${Math.min(100, R.ritmo * 100)}%"></b></div><span class="mono w-10 text-right ${okk ? 'text-emerald-700' : 'text-rose-700'}">${Math.round(a * 100)}%</span></div>`; };
+      const linhas = R.equipe.map(a => `<tr><td class="font-medium text-slate-900">${esc(a.nome)}</td><td class="num">${selo(a.pct, R.alvo)}</td><td class="num">${selo(a.pctHoje, R.alvo)}</td>
+        <td class="num mono" title="hoje: ${rs(a.sh)}">${rs(a.s)}</td><td class="num mono" title="hoje: ${rs(a.fh)}">${rs(a.f)}</td>
+        <td class="num mono ${a.vsAnt == null ? 'vazio' : a.vsAnt <= -0.15 ? 'text-rose-700 font-semibold' : a.vsAnt >= 0.15 ? 'text-emerald-700 font-semibold' : 'text-slate-600'}">${a.vsAnt == null ? '–' : sinal(a.vsAnt)}</td>
+        <td class="num">${alc(a.s, a.objS)}</td><td class="num">${alc(a.f, a.objF)}</td>
+        <td class="num mono" title="${a.camp ? esc(Object.entries(a.camp.prod).map(([p, q]) => q + '× ' + p).join('\n')) : ''}">${a.camp ? a.camp.itens : '<span class="vazio">–</span>'}</td></tr>`).join('');
+      const dem = R.demais ? `<tr class="text-slate-500"><td>Demais usuários</td><td class="num">${pc(R.demais.f ? R.demais.s / R.demais.f : null)}</td><td></td><td class="num mono">${rs(R.demais.s)}</td><td class="num mono">${rs(R.demais.f)}</td><td></td><td></td><td></td><td></td></tr>` : '';
+      const equipe = R.equipe.length ? `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Equipe</div>
+          <div class="rot">% sim+gen: <span class="selo ok">na meta</span> <span class="selo atencao">até 7,5 pts abaixo</span> <span class="selo baixo">abaixo</span></div></div>
+          <table class="t w-full mt-2"><thead><tr><th>Atendente</th><th>% sim+gen</th><th>% hoje</th><th>Sim+gen</th><th>Venda total</th><th>Venda × mês passado</th><th>Objetivo sim+gen</th><th>Objetivo venda</th><th>Vit. e valor fixo</th></tr></thead><tbody>${linhas}${dem}</tbody></table>
+          <p class="rot mt-2">Objetivo individual: meta da loja dividida pelos ${R.nEquipe} atendentes com venda no mês; o risco na barra marca onde deveria estar hoje. Venda × mês passado: mesmo período (até o dia ${R.nHoje}).</p></div>`
+        : '<div class="cartao text-slate-600">A equipe aparece quando a loja sobe o relatório de venda por atendente.</div>';
+      return leitura + indic + equipe;
+    }
+
+    // gestor e supervisor: as lojas lado a lado, só as notas
+    function abrirLoja(l) { $('selLoja').value = l; lojaSel = l; aba = 'resumo'; carregar(); }
+    function telaLojas() {
+      const cel = x => x && x.dv != null ? `<td class="num"><span class="mono text-[12px] ${x.dv > -0.05 ? 'text-emerald-700' : 'text-rose-700'} mr-2">${sinal(x.dv)}</span>${nota(x.nota)}</td>` : '<td class="num vazio">–</td>';
+      const linhas = M.LOJAS.map(l => { const x = todas.find(t => t.loja_num === l); if (!temDados(x)) return `<tr><td class="font-medium">Loja ${l}</td><td colspan="7" class="text-slate-400" style="text-align:left">sem dados em ${mesSel}</td></tr>`;
+        const R = D.resumo(x.dados, metaDe(l), mesSel), g = k => R.inds.find(i => i.k === k);
+        return `<tr class="cursor-pointer" onclick="abrirLoja(${l})"><td class="font-medium text-slate-900">Loja ${l}</td><td class="num mono text-slate-500">${dBR(R.ref)}</td>${cel(g('fat'))}${cel(g('simgen'))}${cel(g('perf'))}${cel(g('sidney'))}
+          <td class="num">${selo(R.pct, R.alvo)}</td><td class="num">${R.margem != null ? `<span class="mono text-[12px] mr-2">${pc(R.margem)}</span>${nota(R.notaMargem)}` : '<span class="vazio">–</span>'}</td></tr>`; }).join('');
+      return `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Todas as lojas: contra o esperado para o dia</div><div class="rot">clique na loja para abrir o resumo</div></div>
+        <table class="t w-full mt-2"><thead><tr><th>Loja</th><th>Dados até</th><th>Faturamento</th><th>Similar e genérico</th><th>Perfumaria</th><th>Sidney</th><th>% sim+gen</th><th>Rentabilidade</th></tr></thead><tbody>${linhas}</tbody></table>
+        <p class="rot mt-2">Ótimo: mais de 5% acima do esperado · Bom: de −5% a +5% · Regular: de −5% a −10% · Ruim: abaixo de −10%. Rentabilidade: ótimo a partir de 38,5%, bom de 37%, regular de 36%.</p></div>`;
+    }
+
+    // primeiro nome; se repetir na loja, acrescenta o último sobrenome
+    const curto = (n, todos) => { const p = n.split(' '); return todos.filter(x => x.split(' ')[0] === p[0]).length > 1 ? p[0] + ' ' + p[p.length - 1] : p[0]; };
+    function telaDias(R) {
+      const dias = reg.dados.dias, nomes = R.equipe.map(a => a.nome);
+      const cab = `<tr><th class="text-left">Dia</th><th>Loja</th>${nomes.map(n => `<th title="${esc(n)}">${esc(curto(n, nomes))}</th>`).join('')}</tr>`;
+      const cel = o => { if (!o || !o.f) return '<td class="c vazio">·</td>'; const p = o.s / o.f; return `<td class="c ${D.nivel(p, R.alvo)} mono" title="sim+gen ${rs(o.s)} de ${rs(o.f)}">${Math.round(p * 100)}%</td>`; };
+      const corpo = R.datas.slice().reverse().map(d => { const us = dias[d], t = { f: 0, s: 0 }; Object.values(us).forEach(o => { t.f += o.f; t.s += o.s; });
+        return `<tr><td class="text-left mono text-slate-600">${dBR(d)}</td>${cel(t)}${nomes.map(n => cel(us[n])).join('')}</tr>`; }).join('');
+      const tot = `<tr class="font-semibold"><td class="text-left">Mês</td>${cel(R.tot)}${R.equipe.map(a => cel(a)).join('')}</tr>`;
+      return `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Dia a dia: % de similar e genérico na venda de cada atendente</div>
+        <div class="rot">objetivo ${pc(R.alvo)} · <span class="selo ok">na meta</span> <span class="selo atencao">atenção</span> <span class="selo baixo">abaixo</span> · passe o mouse para ver os valores</div></div>
+        <table class="h mt-3" style="border-collapse:separate;border-spacing:3px"><thead>${cab}</thead><tbody>${tot}${corpo}</tbody></table></div>`;
+    }
+    inicializar();
+  </script>
+</body>
+</html>
