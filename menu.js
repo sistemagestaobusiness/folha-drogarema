@@ -26,7 +26,7 @@
   const telas = new Set((window.ACESSO.telas || []).map(t => String(t).toLowerCase()));
   const L = 232;
   // perfis que só usam o sistema em tela cheia no computador (para incluir outro perfil, acrescentar aqui)
-  const TELA_CHEIA = ['LIDER', 'SUPERVISOR'];
+  const TELA_CHEIA = [];   // DESLIGADA em 07/10. Para religar: ['LIDER', 'SUPERVISOR']
   const CELULAR = Math.min(screen.width, screen.height) < 700 || (window.matchMedia && matchMedia('(hover: none)').matches);
 
   const css = document.createElement('style');
@@ -156,7 +156,7 @@
     av.innerHTML = '<img src="logo_business_icone.png" alt=""><b>Use o sistema em tela cheia</b><p>Aperte a tecla <b style="font-size:13px">F11</b> para continuar. Com o F11 a tela cheia continua ao trocar de tela; pelo botão abaixo ela vale só para a tela atual.</p><button type="button">Entrar em tela cheia</button>';
     document.body.appendChild(av);
     av.querySelector('button').onclick = () => { try { const p = document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
-    const cheia = () => !!document.fullscreenElement || (window.innerHeight >= screen.height * 0.98 && window.innerWidth >= screen.width * 0.98);
+    const cheia = () => !!document.fullscreenElement || (window.outerHeight >= screen.height - 8 && window.outerWidth >= screen.width - 8) || (window.innerHeight >= screen.height * 0.98 && window.innerWidth >= screen.width * 0.98);
     const ver = () => document.documentElement.classList.toggle('sem-tela-cheia', !cheia());
     ver(); window.addEventListener('resize', ver); document.addEventListener('fullscreenchange', ver); setInterval(ver, 1500);
   }
