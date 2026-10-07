@@ -70,12 +70,30 @@
     const SECOES = [['geral', 'Visão geral', '◧'], ['categorias', 'Categorias', '▤'], ['precos', 'Desconto e ticket', '％'], ['delivery', 'Delivery', '➜'], ['equipe', 'Equipe', '◔'], ['metas', 'Metas', '◎']];
     let dados = [], metas = [], perfil = '', lojaSel = null, mesSel = '', secao = 'geral';
 
+    let faixasLoja = [];
+    // faixas de premiação de similar e genérico (espelho do Alpha7; quem altera é o Gestor, em Metas das lojas)
+    function cartaoFaixas(venda) {
+      const reg = faixasLoja.find(f => f.loja_num === lojaSel); const fx = ((reg && reg.faixas) || []).map(f => ({ de: Number(f.ini) * 1000, pct: Number(f.pct) / 100 })).filter(f => f.de > 0).sort((a, b) => a.de - b.de);
+      if (!fx.length || !(venda > 0)) return '';
+      let i = -1; fx.forEach((f, k) => { if (venda >= f.de) i = k; });
+      const at = i >= 0 ? fx[i] : null, px = fx[i + 1] || null, ganho = at ? venda * at.pct : 0;
+      const p1 = v => (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+      let txt = at ? `A loja vendeu <b>${rs(venda)}</b> em similar e genérico e ficou na faixa de <b>${p1(at.pct)}</b>: premiação estimada da loja de <b>${rs(ganho)}</b>.`
+        : `A loja vendeu <b>${rs(venda)}</b> em similar e genérico e não chegou à primeira faixa (${rs(fx[0].de)}).`;
+      if (px) txt += ` Com mais <b>${rs(px.de - venda)}</b> de venda chegaria a ${rs(px.de)}, faixa de <b>${p1(px.pct)}</b>: a estimativa passaria para <b>${rs(px.de * px.pct)}</b>${at ? ` (${rs(px.de * px.pct - ganho)} a mais)` : ''}.`;
+      else txt += ' É a faixa mais alta da loja.';
+      const tab = fx.map((f, k) => `<tr class="${k === i ? 'font-semibold text-slate-900' : 'text-slate-500'}"><td class="py-0.5 pr-6">${rs(f.de)}${fx[k + 1] ? ' até ' + rs(fx[k + 1].de) : ' ou mais'}</td><td class="num mono">${p1(f.pct)}</td><td class="pl-3">${k === i ? '← faixa do mês' : ''}</td></tr>`).join('');
+      return `<div class="cartao"><div class="font-semibold text-slate-900">Similar e genérico: faixa de premiação</div><p class="text-[13px] text-slate-700 mt-2 leading-relaxed">${txt}</p>
+        <p class="rot mt-1">Estimativa da loja; o valor de cada pessoa é calculado individualmente.</p><details class="mt-1"><summary class="rot cursor-pointer">ver as faixas da loja</summary><table class="text-[12px] mt-2">${tab}</table>
+        <p class="rot mt-1">Estimativa para a loja inteira, pela venda do mês. O valor de cada pessoa é calculado individualmente no Alpha7 e a soma pode ser menor (nem toda venda entra na premiação).</p></details></div>`;
+    }
     async function inicializar() {
       const { data: u } = await _supabase.rpc('fn_meu_usuario');
       perfil = u ? u.perfil : '';
       const [rr, rm] = await Promise.all([_supabase.from('loja_resultados').select('competencia, loja_num, dados'), _supabase.from('loja_metas').select('*')]);
       if (rr.error || rm.error) { $('aviso').innerHTML = `<div class="cartao text-rose-800 font-semibold">Tela ainda não configurada no banco (SQL AZ). ${esc((rr.error || rm.error).message)}</div>`; return; }
       dados = rr.data || []; metas = rm.data || [];
+      try { const rf = await _supabase.from('loja_faixas').select('loja_num, faixas').eq('categoria', 'SIMGEN'); faixasLoja = rf.error ? [] : (rf.data || []); } catch (e) { faixasLoja = []; }
       const lojas = [...new Set(dados.map(d => d.loja_num))].sort((a, b) => a - b);
       if (!lojas.length) { $('aviso').innerHTML = '<div class="cartao text-slate-600">Ainda não há resultado publicado para a sua loja. Ele aparece aqui quando o mês é fechado pela gestão.</div>'; return; }
       $('selLoja').innerHTML = lojas.map(l => `<option value="${l}">Loja ${l}</option>`).join('');
@@ -201,7 +219,7 @@
           (mMes ? `<div class="cartao"><div class="font-semibold text-slate-900">Alcance da meta de ${nm(mesSel)}</div>
             <div class="grid gap-3 mt-2 rot" style="grid-template-columns: 200px 1fr 120px 120px 80px"><div></div><div></div><div class="num">Meta</div><div class="num">Realizado</div><div class="num">Alcance</div></div>
             ${linhaAlc('Faturamento total', Number(mMes.fat), A.fat)}${linhaAlc('Similar e genérico', Number(mMes.simgen), A.simgen)}${linhaAlc('Perfumaria + fito', Number(mMes.perf), A.perf)}${linhaAlc('Linha Sidney', Number(mMes.sidney), A.sidney)}
-            <p class="rot mt-2">Similar e genérico: meta de ${pc(Number(mMes.pct_simgen))} do faturamento, realizado ${pc(parte(A, 'simgen'))}.</p></div>` : `<div class="cartao text-slate-500">Não havia meta registrada para ${nm(mesSel)}.</div>`) +
+            <p class="rot mt-2">Similar e genérico: meta de ${pc(Number(mMes.pct_simgen))} do faturamento, realizado ${pc(parte(A, 'simgen'))}.</p></div>` : `<div class="cartao text-slate-500">Não havia meta registrada para ${nm(mesSel)}.</div>`) + cartaoFaixas(A.simgen) +
           (mProx ? `<div class="cartao"><div class="font-semibold text-slate-900">Meta para ${nm(prox)} <span class="rot font-normal">· ${mProx.dias} dias</span></div>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">${[['Faturamento total', mProx.fat, ''], ['Similar e genérico', mProx.simgen, pc(Number(mProx.pct_simgen)) + ' do faturamento'], ['Perfumaria + fito', mProx.perf, ''], ['Linha Sidney', mProx.sidney, '']]
               .map(([t, v, d]) => `<div class="bg-slate-50 rounded-lg p-3"><div class="rot">${t}</div><div class="mono font-bold text-[16px] text-slate-900 mt-0.5">${rs(Number(v))}</div><div class="rot mt-0.5">${rs(Number(v) / mProx.dias)} por dia${d ? ' · ' + d : ''}</div></div>`).join('')}</div>

@@ -59,6 +59,13 @@
         <p class="px-4 py-2 text-[11px] text-slate-500">Regra: faturamento = média diária dos 3 últimos meses + 2% × dias do mês · perfumaria = média diária + 10% × dias · similar e genérico = meta de faturamento × % da loja · Sidney = 4% da meta de faturamento. Campo em amarelo = diferente da regra.</p>
       </div>
 
+      <div class="bloco hidden bg-white rounded-xl p-4">
+        <div class="flex items-center justify-between gap-3"><div class="text-sm font-semibold">Faixas de premiação · similar e genérico <span class="text-[11px] font-normal text-slate-500">(igual ao Alpha7: venda da loja em milhares = % · separar por ponto e vírgula)</span></div>
+          <button type="button" onclick="salvarFaixas()" class="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer">Salvar faixas</button></div>
+        <div id="fxCorpo" class="mt-3 space-y-1.5 text-xs"></div><div id="fxMsg" class="text-[11px] mt-2"></div>
+        <p class="text-[11px] text-slate-500 mt-1">Exemplo: <span class="font-mono">110=2; 131=2,5; 141=3</span> quer dizer: de R$ 110 mil a R$ 131 mil paga 2%, de 131 a 141 paga 2,5%, de 141 em diante 3%. O líder só vê, sem alterar.</p>
+      </div>
+
       <div class="bloco hidden bg-white rounded-xl overflow-x-auto">
         <div class="px-4 pt-3 text-sm font-semibold">Histórico: realizado × meta <span class="text-[11px] font-normal text-slate-500">(faturamento; % = alcance da meta do mês)</span></div>
         <table class="w-full text-xs mt-2"><thead id="hCab" class="text-[10px] text-slate-500 border-b border-slate-200"></thead><tbody id="hCorpo"></tbody></table>
@@ -82,6 +89,27 @@
     const lerNum = t => { const s = String(t).trim().replace(/[R$\s]/g, ''); const n = parseFloat(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s); return isFinite(n) ? n : NaN; };
     let resultados = [], metas = [], comp = '', linhas = {};   // linhas[loja] = { regra, atual, salvo }
 
+    let faixas = {};
+    const fxTexto = l => (faixas[l] || []).map(f => String(f.ini).replace('.', ',') + '=' + String(f.pct).replace('.', ',')).join('; ');
+    async function carregarFaixas() {
+      const { data, error } = await _supabase.from('loja_faixas').select('loja_num, faixas').eq('categoria', 'SIMGEN');
+      if (error) { $('fxCorpo').innerHTML = '<div class="text-amber-800">Rode o SQL BB (faixas de premiação) para usar este quadro.</div>'; return; }
+      faixas = {}; (data || []).forEach(d => faixas[d.loja_num] = d.faixas || []);
+      $('fxCorpo').innerHTML = M.LOJAS.map(l => `<label class="flex items-center gap-3"><span class="w-14 font-semibold">Loja ${l}</span><input id="fx${l}" value="${fxTexto(l)}" class="flex-1 border border-slate-300 rounded px-2 py-1.5 font-mono"></label>`).join('');
+    }
+    async function salvarFaixas() {
+      const reg = []; let erro = '';
+      M.LOJAS.forEach(l => { const el = $('fx' + l); if (!el) return; const fx = [];
+        el.value.split(';').map(s => s.trim()).filter(Boolean).forEach(p => { const [a, b] = p.split('='); const ini = lerNum(a || ''), pc = lerNum(String(b || '').replace('%', ''));
+          if (!(ini > 0) || !(pc >= 0) || pc > 30) erro = erro || `Loja ${l}: não entendi "${p}".`; else fx.push({ ini, pct: pc }); });
+        fx.sort((x, y) => x.ini - y.ini);
+        for (let k = 1; k < fx.length; k++) if (fx[k].ini === fx[k - 1].ini) erro = erro || `Loja ${l}: faixa ${fx[k].ini} repetida.`;
+        reg.push({ loja_num: l, categoria: 'SIMGEN', faixas: fx, atualizado_em: new Date().toISOString(), atualizado_por: (window.ACESSO || {}).email || null }); });
+      if (erro) { $('fxMsg').innerHTML = `<span class="text-rose-700 font-bold">${erro}</span>`; return; }
+      const { error } = await _supabase.from('loja_faixas').upsert(reg, { onConflict: 'loja_num,categoria' });
+      $('fxMsg').innerHTML = error ? `<span class="text-rose-700 font-bold">Não salvou: ${error.message}</span>` : '<span class="text-emerald-700 font-bold">Faixas salvas.</span>';
+      if (!error) carregarFaixas();
+    }
     async function inicializar() {
       const { data: u } = await _supabase.rpc('fn_meu_usuario');
       if (!u || u.perfil !== 'GESTOR') { $('semAcesso').innerText = 'Esta tela é exclusiva do perfil Gestor.'; $('semAcesso').classList.remove('hidden'); return; }
@@ -97,7 +125,7 @@
       $('boxComp').classList.remove('hidden'); document.querySelectorAll('.bloco').forEach(b => b.classList.remove('hidden'));
       $('comp').innerHTML = opcoes.reverse().map(c => `<option value="${c}">${c}</option>`).join('');
       comp = opcoes[0];
-      montar();
+      montar(); carregarFaixas();
     }
     function trocar() { comp = $('comp').value; montar(); }
 
