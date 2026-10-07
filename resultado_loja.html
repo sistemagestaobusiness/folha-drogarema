@@ -84,7 +84,7 @@
       const box = $('indiv'); if (!box || secao !== 'individual') return;
       const linhas = indCache[mesSel + '|' + lojaSel] || [], pessoas = {}; linhas.forEach(x => (pessoas[x.funcionario] = pessoas[x.funcionario] || { nome: x.nome, itens: [] }).itens.push(x));
       const ids = Object.keys(pessoas).sort((a, b) => pessoas[a].nome.localeCompare(pessoas[b].nome));
-      if (!ids.length) { box.innerHTML = `Não há valores lançados para a Loja ${lojaSel} em ${nm(mesSel)}.`; return; }
+      if (!ids.length) { box.innerHTML = `Não há valores lançados para a Loja ${lojaSel} em ${M.nomeMes(mesSel)}.`; return; }
       if (!pessoas[indSel]) indSel = '';
       const p = pessoas[indSel], v2 = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const tot = p ? p.itens.reduce((a, i) => a + Number(i.valor || 0), 0) : 0;
@@ -92,11 +92,11 @@
       box.innerHTML = `<div class="flex flex-wrap items-center gap-3"><label class="text-[13px] text-slate-600">Funcionário</label>
           <select onchange="escolherIndividual(this.value)" class="bg-slate-100 rounded-lg px-3 py-2 text-sm cursor-pointer"><option value="">selecione…</option>${ids.map(i => `<option value="${i}" ${i === indSel ? 'selected' : ''}>${esc(pessoas[i].nome)}</option>`).join('')}</select>
           ${p ? `<button onclick="escolherIndividual('')" class="text-[12px] text-slate-500 underline cursor-pointer">fechar</button>` : ''}</div>
-        ${p ? `<div class="mt-4"><div class="text-lg font-bold text-slate-900">${esc(p.nome)}</div><div class="rot">${nm(mesSel)} · Loja ${lojaSel}</div>
+        ${p ? `<div class="mt-4"><div class="text-lg font-bold text-slate-900">${esc(p.nome)}</div><div class="rot">${M.nomeMes(mesSel)} · Loja ${lojaSel}</div>
           <table class="t w-full text-[13px] mt-3" style="max-width:760px"><thead><tr><th class="text-left">Item</th><th class="num">Venda considerada</th><th class="num">%</th><th class="num">Valor</th></tr></thead><tbody>
           ${p.itens.map(i => `<tr><td>${esc(i.descricao || i.codigo)}</td><td class="num mono text-slate-600">${i.venda_base != null ? v2(i.venda_base) : '–'}</td><td class="num mono text-slate-500">${i.venda_base > 0 ? pc(i.valor / i.venda_base) : '–'}</td><td class="num mono font-semibold">${v2(i.valor)}</td></tr>`).join('')}
           <tr><td class="font-semibold">Total</td><td></td><td></td><td class="num mono font-bold text-slate-900">${v2(tot)}</td></tr></tbody></table>
-          <p class="rot mt-3">Valores lançados na folha de ${nm(mesSel)}, calculados pelo Alpha7. Mostra uma pessoa por vez.</p></div>`
+          <p class="rot mt-3">Valores lançados na folha de ${M.nomeMes(mesSel)}, calculados pelo Alpha7. Mostra uma pessoa por vez.</p></div>`
         : '<p class="rot mt-3">Escolha um funcionário para ver os valores dele. A tela mostra uma pessoa por vez.</p>'}`;
     }
     let faixasLoja = [];
