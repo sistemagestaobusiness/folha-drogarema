@@ -19,7 +19,7 @@
       ['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['cadastro_solicitacoes.html', 'Solicitações de cadastro', '☰'], ['organograma.html', 'Organograma', '⌂']]],
     ['Financeiro', [['financeiro.html', 'Pagamentos', '$']]],
     ['Relatórios', [['resumo_folha.html', 'Resumo da competência', '≡'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['recibo_pagamento.html', 'Recibos', '▯']]],
-    ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento do mês', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
+    ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
     ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
     ['Segurança', [['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]]
   ];
@@ -57,7 +57,8 @@
     #menuSistema .sec.aberto .grupo::after { transform: rotate(90deg); }
     #menuSistema .sec .itens { display: none; padding-bottom: 4px; }
     #menuSistema .sec.aberto .itens { display: block; }
-    #menuSistema a.it { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: #475569; text-decoration: none; line-height: 1.2; }
+    #menuSistema a.it { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: #475569; text-decoration: none; line-height: 1.2; white-space: nowrap; }
+    #menuSistema a.it span:not(.bolha) { overflow: hidden; text-overflow: ellipsis; }
     #menuSistema a.it:hover { background: #e2e8f0; color: #0f172a; }
     #menuSistema a.it.on { background: #0f172a; color: #fff; font-weight: 600; }
     #menuSistema a.it i { width: 16px; text-align: center; font-style: normal; opacity: .65; font-size: 12px; }

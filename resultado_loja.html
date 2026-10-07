@@ -67,9 +67,38 @@
     // variação: seta + texto (não depende só da cor)
     const selo = (v, pp) => v == null || !isFinite(v) ? '<span class="text-slate-300">–</span>'
       : `<span class="mono text-[12px] ${v >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${v >= 0 ? '▲' : '▼'} ${pp ? Math.abs(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' pp' : pc(Math.abs(v))}</span>`;
-    const SECOES = [['geral', 'Visão geral', '◧'], ['categorias', 'Categorias', '▤'], ['precos', 'Desconto e ticket', '％'], ['delivery', 'Delivery', '➜'], ['equipe', 'Equipe', '◔'], ['metas', 'Metas', '◎']];
+    const SECOES = [['geral', 'Visão geral', '◧'], ['categorias', 'Categorias', '▤'], ['precos', 'Desconto e ticket', '％'], ['delivery', 'Delivery', '➜'], ['equipe', 'Equipe', '◔'], ['individual', 'Individual', '☺'], ['metas', 'Metas', '◎']];
     let dados = [], metas = [], perfil = '', lojaSel = null, mesSel = '', secao = 'geral';
 
+    // ficha individual: valores de premiação por venda já lançados na folha do mês fechado (SQL BD). Uma pessoa por vez.
+    let indCache = {}, indSel = '';
+    async function carregarIndividual() {
+      const chave = mesSel + '|' + lojaSel;
+      if (!indCache[chave]) { const { data, error } = await _supabase.rpc('fn_valores_individuais_loja', { p_competencia: mesSel, p_loja: lojaSel });
+        if (error) { $('indiv').innerHTML = `<span class="text-rose-800 font-semibold">Ficha individual ainda não configurada no banco (SQL BD). ${esc(error.message)}</span>`; return; }
+        indCache[chave] = data || []; }
+      desenharIndividual();
+    }
+    function escolherIndividual(v) { indSel = v; desenharIndividual(); }
+    function desenharIndividual() {
+      const box = $('indiv'); if (!box || secao !== 'individual') return;
+      const linhas = indCache[mesSel + '|' + lojaSel] || [], pessoas = {}; linhas.forEach(x => (pessoas[x.funcionario] = pessoas[x.funcionario] || { nome: x.nome, itens: [] }).itens.push(x));
+      const ids = Object.keys(pessoas).sort((a, b) => pessoas[a].nome.localeCompare(pessoas[b].nome));
+      if (!ids.length) { box.innerHTML = `Não há valores lançados para a Loja ${lojaSel} em ${nm(mesSel)}.`; return; }
+      if (!pessoas[indSel]) indSel = '';
+      const p = pessoas[indSel], v2 = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const tot = p ? p.itens.reduce((a, i) => a + Number(i.valor || 0), 0) : 0;
+      box.className = 'cartao';
+      box.innerHTML = `<div class="flex flex-wrap items-center gap-3"><label class="text-[13px] text-slate-600">Funcionário</label>
+          <select onchange="escolherIndividual(this.value)" class="bg-slate-100 rounded-lg px-3 py-2 text-sm cursor-pointer"><option value="">selecione…</option>${ids.map(i => `<option value="${i}" ${i === indSel ? 'selected' : ''}>${esc(pessoas[i].nome)}</option>`).join('')}</select>
+          ${p ? `<button onclick="escolherIndividual('')" class="text-[12px] text-slate-500 underline cursor-pointer">fechar</button>` : ''}</div>
+        ${p ? `<div class="mt-4"><div class="text-lg font-bold text-slate-900">${esc(p.nome)}</div><div class="rot">${nm(mesSel)} · Loja ${lojaSel}</div>
+          <table class="t w-full text-[13px] mt-3" style="max-width:760px"><thead><tr><th class="text-left">Item</th><th class="num">Venda considerada</th><th class="num">%</th><th class="num">Valor</th></tr></thead><tbody>
+          ${p.itens.map(i => `<tr><td>${esc(i.descricao || i.codigo)}</td><td class="num mono text-slate-600">${i.venda_base != null ? v2(i.venda_base) : '–'}</td><td class="num mono text-slate-500">${i.venda_base > 0 ? pc(i.valor / i.venda_base) : '–'}</td><td class="num mono font-semibold">${v2(i.valor)}</td></tr>`).join('')}
+          <tr><td class="font-semibold">Total</td><td></td><td></td><td class="num mono font-bold text-slate-900">${v2(tot)}</td></tr></tbody></table>
+          <p class="rot mt-3">Valores lançados na folha de ${nm(mesSel)}, calculados pelo Alpha7. Mostra uma pessoa por vez.</p></div>`
+        : '<p class="rot mt-3">Escolha um funcionário para ver os valores dele. A tela mostra uma pessoa por vez.</p>'}`;
+    }
     let faixasLoja = [];
     // faixas de premiação de similar e genérico (espelho do Alpha7; quem altera é o Gestor, em Metas das lojas)
     function cartaoFaixas(venda) {
@@ -192,6 +221,10 @@
           <div class="cartao">${tabelaMeses([['Venda por delivery', d => d.delivery, rs], ['% sobre a venda', d => parte(d, 'delivery'), pc, true], ['Quantidade de entregas', d => d.entregas, n0]])}</div>`);
       }
 
+      if (secao === 'individual') {
+        h = titulo('Individual', 'valores de cada pessoa em ' + nm(mesSel) + ', uma por vez') + '<div id="indiv" class="cartao text-slate-500">Carregando…</div>';
+        $('conteudo').innerHTML = h; carregarIndividual(); return;
+      }
       if (secao === 'equipe') {
         const eq = A.equipe || [], eqB = (B && B.equipe) || [];
         const cols = [['simgen', 'Similar e genérico'], ['perf', 'Perfumaria'], ['sidney', 'Linha Sidney'], ['vit', 'Vitaminas']];

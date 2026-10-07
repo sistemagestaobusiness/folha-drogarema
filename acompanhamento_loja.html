@@ -9,7 +9,7 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="metas_core.js"></script>
-  <script src="diario_core.js?v=2"></script>
+  <script src="diario_core.js?v=3"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
@@ -143,7 +143,7 @@
       if (aba === 'lojas' && geral) { $('sub').textContent = `Todas as lojas · ${M.nomeMes(mesSel)}`; $('conteudo').innerHTML = telaLojas(); return; }
       if (!temDados(reg)) {
         $('conteudo').innerHTML = `<div class="cartao text-slate-600">Ainda não há dados de ${mesSel} para a Loja ${lojaSel}.${podeSubir ? ' Clique em <b>Atualizar dados</b> e escolha os dois relatórios do Alpha7 (podem ser selecionados juntos).' : ''}</div>`; return; }
-      const R = D.resumo(reg.dados, meta, mesSel);
+      const R = D.resumo(reg.dados, meta, mesSel, null, regAnt ? D.ateODia(regAnt.dados, 31) : null);
       $('sub').textContent = `Loja ${lojaSel} · ${M.nomeMes(mesSel)} · dados até ${dBR(R.ref)}${R.semDia ? ' (relatório geral)' : ''} · atualizado em ${new Date(reg.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
       $('conteudo').innerHTML = aba === 'dias' ? (R.datas.length ? telaDias(R) : '<div class="cartao text-slate-600">O dia a dia aparece quando a loja sobe o relatório de venda por atendente.</div>') : telaResumo(R, meta);
     }
@@ -161,7 +161,7 @@
       if (R.margem != null) fr.push({ t: `<b>Rentabilidade</b> de <b>${pc(R.margem)}</b> ${nota(R.notaMargem)}${tem7 && R7.margem != null ? `. Há 7 dias: ${pc(R7.margem)}.` : '.'}` });
       const queda = [], alta = [], aus = [];
       if (temAnt) R.equipe.forEach(a => { const b = ant[a.nome]; if (!b || b.f < 500) return; const v = a.f / b.f - 1; a.vsAnt = v; if (v <= -0.15) queda.push(`${curto(a.nome, nomes)} (${sinal(v)})`); else if (v >= 0.15) alta.push(`${curto(a.nome, nomes)} (${sinal(v)})`); });
-      R.equipe.forEach(a => { const f = R.datas.length - a.dias; if (f >= 3 && a.f > 0) aus.push(`${curto(a.nome, nomes)} (${f} dias sem venda)`); });
+      R.equipe.forEach(a => { const f = R.datas.length - a.dias; if (f >= 3 && a.fixo) aus.push(`${curto(a.nome, nomes)} (${f} dias sem venda)`); });
       if (queda.length) fr.push({ t: `<b>Equipe:</b> venda bem menor que no mesmo período do mês passado: ${esc(queda.join(', '))}.` });
       if (alta.length) fr.push({ t: `<b>Equipe:</b> venda maior que no mês passado: ${esc(alta.join(', '))}.` });
       if (aus.length) fr.push({ t: `<b>Presença:</b> ${esc(aus.join(', '))}.` });
@@ -169,6 +169,7 @@
         <p class="rot mt-2">Esperado para o dia: ${pc(R.ritmo)} da meta (${R.nHoje} de ${R.nDias} dias).${tem7 ? '' : ' A comparação com 7 dias atrás aparece quando houver uma semana de dados.'}${temAnt ? '' : ' A comparação da equipe com o mês passado aparece quando o mês anterior tiver sido enviado.'}</p></div>`;
       // metas: uma linha por indicador
       const linhaI = x => { const ok = x.dv != null && x.dv > -0.05, a = i7(x.k);
+        if (x.semDado) return `<tr><td class="font-medium text-slate-900">${x.rot}</td><td class="num vazio">–</td><td class="num mono text-slate-500">${rs(x.meta)}</td><td colspan="6" class="rot" style="text-align:left;padding-left:24px">o realizado vem do relatório de todas as lojas (por fabricante), enviado pela gestão</td></tr>`;
         return `<tr><td class="font-medium text-slate-900">${x.rot}${x.foto ? ` <span class="rot">até ${dBR(D.menosDias(x.foto, 1))}</span>` : ''}</td><td class="num mono">${rs(x.real)}</td><td class="num mono text-slate-500">${rs(x.meta)}</td>
           <td style="min-width:150px">${x.meta ? `<div class="flex items-center gap-2 justify-end"><div class="trilho w-24"><i class="${ok ? 'bg-emerald-600' : 'bg-rose-500'}" style="width:${Math.min(100, x.alc * 100)}%"></i><b style="left:${Math.min(100, R.ritmo * 100)}%"></b></div><span class="mono w-12 text-right">${pc(x.alc)}</span></div>` : ''}</td>
           <td class="num mono ${ok ? 'text-emerald-700' : 'text-rose-700'}">${sinal(x.dv)}</td><td class="num">${nota(x.nota)}</td><td class="num mono text-slate-500">${a ? sinal(a.dv) : '–'}</td><td class="num mono">${x.falta == null ? '–' : x.falta > 0 ? rs(x.falta) : 'meta ok'}</td><td class="num mono">${x.falta > 0 ? rs(x.porDia) : '–'}</td></tr>`; };
@@ -178,7 +179,7 @@
         ${meta ? '' : '<p class="rot mt-2">Sem meta registrada para este mês (console de metas).</p>'}</div>`;
       // equipe
       const alc = (v, obj) => { if (!obj) return '<span class="vazio">–</span>'; const a = v / obj, okk = a >= R.ritmo;
-        return `<div class="flex items-center gap-2 justify-end"><div class="trilho w-16"><i class="${okk ? 'bg-emerald-600' : 'bg-rose-500'}" style="width:${Math.min(100, a * 100)}%"></i><b style="left:${Math.min(100, R.ritmo * 100)}%"></b></div><span class="mono w-10 text-right ${okk ? 'text-emerald-700' : 'text-rose-700'}">${Math.round(a * 100)}%</span></div>`; };
+        return `<div class="flex items-center gap-2 justify-end" title="Realizado ${rs(v)} de ${rs(obj)} (objetivo do mês inteiro). Até hoje o esperado era ${rs(obj * R.ritmo)}."><div class="trilho w-16"><i class="${okk ? 'bg-emerald-600' : 'bg-rose-500'}" style="width:${Math.min(100, a * 100)}%"></i><b style="left:${Math.min(100, R.ritmo * 100)}%"></b></div><span class="mono w-10 text-right ${okk ? 'text-emerald-700' : 'text-rose-700'}">${Math.round(a * 100)}%</span></div><div class="rot text-right" style="font-size:10px">de ${rs(obj)}</div>`; };
       const linhas = R.equipe.map(a => `<tr><td class="font-medium text-slate-900">${esc(a.nome)}</td><td class="num">${selo(a.pct, R.alvo)}</td><td class="num">${selo(a.pctHoje, R.alvo)}</td>
         <td class="num mono" title="hoje: ${rs(a.sh)}">${rs(a.s)}</td><td class="num mono" title="hoje: ${rs(a.fh)}">${rs(a.f)}</td>
         <td class="num mono ${a.vsAnt == null ? 'vazio' : a.vsAnt <= -0.15 ? 'text-rose-700 font-semibold' : a.vsAnt >= 0.15 ? 'text-emerald-700 font-semibold' : 'text-slate-600'}">${a.vsAnt == null ? '–' : sinal(a.vsAnt)}</td>
@@ -187,8 +188,9 @@
       const dem = R.demais ? `<tr class="text-slate-500"><td>Demais usuários</td><td class="num">${pc(R.demais.f ? R.demais.s / R.demais.f : null)}</td><td></td><td class="num mono">${rs(R.demais.s)}</td><td class="num mono">${rs(R.demais.f)}</td><td></td><td></td><td></td><td></td></tr>` : '';
       const equipe = R.equipe.length ? `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Equipe</div>
           <div class="rot">% sim+gen: <span class="selo ok">na meta</span> <span class="selo atencao">até 7,5 pts abaixo</span> <span class="selo baixo">abaixo</span></div></div>
-          <table class="t w-full mt-2"><thead><tr><th>Atendente</th><th>% sim+gen</th><th>% hoje</th><th>Sim+gen</th><th>Venda total</th><th>Venda × mês passado</th><th>Objetivo sim+gen</th><th>Objetivo venda</th><th>Vit. e valor fixo</th></tr></thead><tbody>${linhas}${dem}</tbody></table>
-          <p class="rot mt-2">Objetivo individual: meta da loja dividida pelos ${R.nEquipe} atendentes com venda no mês; o risco na barra marca onde deveria estar hoje. Venda × mês passado: mesmo período (até o dia ${R.nHoje}).</p></div>`
+          <table class="t w-full mt-2"><thead><tr><th>Atendente</th><th>% sim+gen</th><th>% hoje</th><th>Sim+gen</th><th>Venda total</th><th>Venda × mês passado</th><th>Sim+gen: do objetivo do mês</th><th>Venda: do objetivo do mês</th><th>Vit. e valor fixo</th></tr></thead><tbody>${linhas}${dem}</tbody></table>
+          <p class="rot mt-2"><b>Como ler o objetivo:</b> o percentual é quanto do objetivo do <u>mês inteiro</u> a pessoa já fez (o valor do objetivo está abaixo dele). O risco na barra marca os ${pc(R.ritmo)} esperados até hoje: verde se já passou do risco, vermelho se está atrás.
+          Objetivo de cada um = meta da loja × participação: ${R.origemObj === 'ANTERIOR' ? 'a parte que a pessoa teve na venda da equipe no mês passado' : `divisão igual entre os ${R.nEquipe} atendentes com pelo menos 3% da venda da loja (passa a usar a participação do mês passado quando ele for enviado)`}. Venda × mês passado: mesmo período (até o dia ${R.nHoje}).</p></div>`
         : '<div class="cartao text-slate-600">A equipe aparece quando a loja sobe o relatório de venda por atendente.</div>';
       return leitura + indic + equipe;
     }

@@ -20,7 +20,10 @@
   }
   const compDe = d => d.slice(5, 7) + '/' + d.slice(0, 4);
   // "ALINE INAMURA - 875" -> "ALINE INAMURA"; vazio ou "sistema" -> '' (entra em "Demais")
-  function usuario(v) { const s = String(v == null ? '' : v).replace(/\s*-\s*\d+\s*$/, '').trim().toUpperCase(); return !s || /^SISTEMA\b/.test(s) ? '' : s; }
+  // diretoria: a venda conta para a loja, mas a pessoa não aparece na lista (entra em "Demais usuários")
+  const FORA_DA_LISTA = [/^SANDRO\b.*\bGOTO\b/, /^SANDRO BURON\b/, /^WAGNER GABRIEL\b/];
+  const oculto = s => FORA_DA_LISTA.some(re => re.test(norm(s)));
+  function usuario(v) { const s = String(v == null ? '' : v).replace(/\s*-\s*\d+\s*$/, '').trim().toUpperCase(); return !s || /^SISTEMA\b/.test(s) || oculto(s) ? '' : s; }
   function cabecalho(rows, precisa) {
     for (let i = 0; i < Math.min(rows.length, 30); i++) { const r = (rows[i] || []).map(norm); const ix = {}; let ok = true;
       Object.keys(precisa).forEach(k => { const j = r.findIndex(c => precisa[k].test(c)); if (j < 0) ok = false; ix[k] = j; }); if (ok) return { linha: i, ix }; }
@@ -72,10 +75,10 @@
   function nota(dv) { return dv == null ? null : dv > 0.05 ? 'ÓTIMO' : dv > -0.05 ? 'BOM' : dv > -0.10 ? 'REGULAR' : 'RUIM'; }
   function notaMargem(m) { return m == null ? null : m < 0.36 ? 'RUIM' : m < 0.37 ? 'REGULAR' : m < 0.385 ? 'BOM' : 'ÓTIMO'; }
   // resumo para a tela. meta = linha de loja_metas (ou null). ate = 'AAAA-MM-DD' para ver como estava naquela data.
-  function resumo(dados, meta, comp, ate) {
+  function resumo(dados, meta, comp, ate, ant) {
     const todos = (dados && dados.dias) || {}, datas = Object.keys(todos).filter(d => !ate || d <= ate).sort(), hoje = datas[datas.length - 1] || null;
     const tot = { f: 0, s: 0, p: 0, l: 0 }, hj = { f: 0, s: 0 }, at = {}; let temLucro = false;
-    datas.forEach(d => Object.keys(todos[d]).forEach(u => { const o = todos[d][u]; tot.f += o.f; tot.s += o.s; tot.p += o.p || 0; if (o.l != null) { tot.l += o.l; temLucro = true; }
+    datas.forEach(d => Object.keys(todos[d]).forEach(u0 => { const o = todos[d][u0], u = oculto(u0) ? '' : u0; tot.f += o.f; tot.s += o.s; tot.p += o.p || 0; if (o.l != null) { tot.l += o.l; temLucro = true; }
       if (d === hoje) { hj.f += o.f; hj.s += o.s; }
       const a = (at[u] = at[u] || { nome: u, f: 0, s: 0, fh: 0, sh: 0, dias: 0 }); a.f += o.f; a.s += o.s; if (o.f > 0) a.dias++; if (d === hoje) { a.fh += o.f; a.sh += o.s; } }));
     // relatório geral: última foto até a data (traz Sidney; e serve de base quando a loja ainda não subiu o relatório do dia)
@@ -84,22 +87,31 @@
     const ref = hoje || (kf ? menosDias(kf, 1) : null);   // a foto do relatório geral vai até a véspera
     const nDias = diasDoMes(comp), nHoje = ref ? Number(ref.slice(8)) : 0, rest = Math.max(1, nDias - nHoje + (semDia ? 0 : 1)), ritmo = nHoje / nDias;
     const equipe = Object.values(at).filter(a => a.nome).sort((a, b) => b.f - a.f), demais = at[''] || null;
-    const n = equipe.length || 1, camp = (dados && dados.camp) || {};
+    const camp = (dados && dados.camp) || {};
+    // objetivo individual = meta da loja x participação da pessoa.
+    //   participação: a do mês anterior fechado (venda dela / venda da equipe), quando esse mês foi enviado;
+    //   sem mês anterior: divisão igual entre quem tem pelo menos 3% da venda da loja (quem vende de passagem fica sem objetivo).
+    const antTot = ant ? Object.keys(ant).filter(k => k && !oculto(k)).reduce((t, k) => t + ant[k].f, 0) : 0;
+    const fixos = equipe.filter(a => tot.f && a.f / tot.f >= 0.03), n = fixos.length || 1;
     equipe.forEach(a => { a.pct = a.f ? a.s / a.f : 0; a.pctHoje = a.fh ? a.sh / a.fh : null; a.camp = camp[a.nome] || null;
-      a.objS = meta && meta.simgen ? Number(meta.simgen) / n : null; a.objF = meta && meta.fat ? Number(meta.fat) / n : null; });
+      a.fixo = fixos.includes(a);
+      a.part = antTot > 0 ? (ant[a.nome] ? ant[a.nome].f / antTot : 0) : (a.fixo ? 1 / n : 0);
+      a.objS = meta && meta.simgen && a.part > 0 ? Number(meta.simgen) * a.part : null; a.objF = meta && meta.fat && a.part > 0 ? Number(meta.fat) * a.part : null; });
+    const origemObj = antTot > 0 ? 'ANTERIOR' : 'IGUAL';
     // indicadores: realizado, meta, alcance, desvio contra o esperado para o dia, nota, quanto falta e por dia
     const ind = (k, rot, real, me, antesDeHoje) => { me = Number(me) || null; const alc = me ? real / me : null, dv = desvio(alc, ritmo), falta = me ? Math.max(0, me - real) : null;
       return { k, rot, real, meta: me, alc, dv, nota: nota(dv), falta, porDia: falta != null ? Math.max(0, me - (antesDeHoje == null ? real : antesDeHoje)) / rest : null }; };
     const inds = [ind('fat', 'Faturamento total', tot.f, meta && meta.fat, tot.f - hj.f), ind('simgen', 'Similar e genérico', tot.s, meta && meta.simgen, tot.s - hj.s), ind('perf', 'Perfumaria', tot.p, meta && meta.perf)];
     if (foto && !ate) inds.push(Object.assign(ind('sidney', 'Sidney Oliveira', foto.sid, meta && meta.sidney), { foto: kf }));
+    else if (!ate && meta && meta.sidney) inds.push({ k: 'sidney', rot: 'Sidney Oliveira', real: null, meta: Number(meta.sidney), alc: null, dv: null, nota: null, falta: null, porDia: null, semDado: true });
     const margem = temLucro && tot.f ? tot.l / tot.f : null;
-    return { hoje, ref, datas, nDias, nHoje, ritmo, tot, hj, equipe, demais, nEquipe: n, inds, margem, notaMargem: notaMargem(margem), semDia: !!semDia,
+    return { hoje, ref, datas, nDias, nHoje, ritmo, tot, hj, equipe, demais, nEquipe: n, origemObj, inds, margem, notaMargem: notaMargem(margem), semDia: !!semDia,
       pct: tot.f ? tot.s / tot.f : 0, pctHoje: hj.f ? hj.s / hj.f : null, alvo: meta && meta.pct_simgen ? Number(meta.pct_simgen) : 0.45 };
   }
   const menosDias = (d, n) => { const x = new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8))); x.setUTCDate(x.getUTCDate() - n); return x.toISOString().slice(0, 10); };
   // venda de cada atendente no mês anterior até o mesmo dia do mês -> { NOME: { f, s } }
   function ateODia(dadosAnt, diaDoMes) { const out = {}; Object.keys((dadosAnt && dadosAnt.dias) || {}).forEach(d => { if (Number(d.slice(8)) > diaDoMes) return;
-    Object.keys(dadosAnt.dias[d]).forEach(u => { const o = dadosAnt.dias[d][u], a = (out[u] = out[u] || { f: 0, s: 0 }); a.f += o.f; a.s += o.s; }); }); return out; }
+    Object.keys(dadosAnt.dias[d]).forEach(u0 => { const u = oculto(u0) ? '' : u0, o = dadosAnt.dias[d][u], a = (out[u] = out[u] || { f: 0, s: 0 }); a.f += o.f; a.s += o.s; }); }); return out; }
   // cor do % de similar e genérico: verde na meta, amarelo até 7,5 pontos abaixo, vermelho além disso (regra da planilha: 45% / 37,5%)
   function nivel(p, alvo) { if (p == null) return ''; return p >= alvo ? 'ok' : p >= alvo - 0.075 ? 'atencao' : 'baixo'; }
   global.DiarioCore = { tipo, lerVenda, lerCampanha, lerGeral, resumo, nivel, desvio, nota, notaMargem, menosDias, ateODia, dia, usuario, diasDoMes, norm };

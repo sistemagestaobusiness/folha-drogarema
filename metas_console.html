@@ -67,7 +67,7 @@
       </div>
 
       <div class="bloco hidden bg-white rounded-xl overflow-x-auto">
-        <div class="px-4 pt-3 text-sm font-semibold">Histórico: realizado × meta <span class="text-[11px] font-normal text-slate-500">(faturamento; % = alcance da meta do mês)</span></div>
+        <div class="px-4 pt-3 flex flex-wrap items-center justify-between gap-2"><div class="text-sm font-semibold">Histórico: realizado × meta <span class="text-[11px] font-normal text-slate-500">(% = alcance da meta do mês)</span></div><div id="hSel" class="flex gap-1 text-xs"></div></div>
         <table class="w-full text-xs mt-2"><thead id="hCab" class="text-[10px] text-slate-500 border-b border-slate-200"></thead><tbody id="hCorpo"></tbody></table>
       </div>
     </div>
@@ -201,14 +201,17 @@
       alert(`Metas de ${comp} salvas para ${reg.length} loja(s).`);
     }
 
+    const H_IND = [['fat', 'Faturamento'], ['simgen', 'Similar e genérico'], ['perf', 'Perfumaria'], ['sidney', 'Sidney']]; let hInd = 'fat';
+    function trocarHist(k) { hInd = k; renderHistorico(); }
     function renderHistorico() {
+      $('hSel').innerHTML = H_IND.map(([k, n]) => `<button type="button" onclick="trocarHist('${k}')" class="px-3 py-1.5 rounded-full cursor-pointer ${hInd === k ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 hover:bg-slate-100'}">${n}</button>`).join('');
       const comps = [...new Set(resultados.map(r => r.competencia))].sort((a, b) => M.ordem(a) - M.ordem(b)).slice(-6);
       $('hCab').innerHTML = `<tr><th class="text-left px-4 py-2">Loja</th>${comps.map(c => `<th class="num px-2 py-2">${M.nomeMes(c)}</th>`).join('')}</tr>`;
       $('hCorpo').innerHTML = M.LOJAS.map(l => `<tr class="border-t border-slate-100"><td class="px-4 py-2 font-semibold">Loja ${l}</td>${comps.map(c => {
         const r = resultados.find(x => x.competencia === c && x.loja_num === l), m = metas.find(x => x.competencia === c && x.loja_num === l);
         if (!r) return '<td class="num px-2 py-2 text-slate-300">-</td>';
-        const alc = m && Number(m.fat) > 0 ? r.dados.fat / Number(m.fat) : null;
-        return `<td class="num px-2 py-2">${fmt(r.dados.fat)}${alc != null ? `<div class="text-[10px] ${alc >= 1 ? 'text-emerald-700' : 'text-rose-600'}">${pct(alc)} da meta</div>` : '<div class="text-[10px] text-slate-300">sem meta</div>'}</td>`;
+        const alc = m && Number(m[hInd]) > 0 ? (r.dados[hInd] || 0) / Number(m[hInd]) : null;
+        return `<td class="num px-2 py-2">${fmt(r.dados[hInd])}${alc != null ? `<div class="text-[10px] ${alc >= 1 ? 'text-emerald-700' : 'text-rose-600'}">${pct(alc)} da meta</div>` : '<div class="text-[10px] text-slate-300">sem meta</div>'}</td>`;
       }).join('')}</tr>`).join('');
     }
 
