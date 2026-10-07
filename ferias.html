@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Férias - Sistema Drogarema</title>
+  <title>Férias - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="escala_core.js"></script>
@@ -438,7 +439,7 @@
       if (ini && addDias(ini, dias - 1) > p.limite_gozo) avisos.push(`⚠ Termina depois do vencimento (${dbr(p.limite_gozo)}): gera pagamento em dobro.`);
       if (ini && [5, 6].includes(new Date(ini + 'T12:00:00').getDay())) avisos.push('⚠ A CLT não permite iniciar férias 2 dias antes de feriado ou do descanso semanal (evite sexta/sábado).');
       $('sPrevia').innerHTML = ini ? `<b>${dbr(ini)} → ${dbr(addDias(ini, dias - 1))}</b> · ${dias} dia(s)${abono ? ` + ${abono} vendidos` : ''} · retorna em <b>${dbr(addDias(ini, dias))}</b><br>Saldo após: ${p.saldo - dias - abono} dia(s)` : 'Informe o início.';
-      if (antecipada) $('sPrevia').innerHTML += `<div class="mt-1 text-sky-800">ℹ <b>Férias antecipadas</b>: o período aquisitivo só completa 12 meses em ${dbr(p.aquisitivo_fim)}. É permitido (costume da Drogarema); os dias saem do saldo deste período.</div>`;
+      if (antecipada) $('sPrevia').innerHTML += `<div class="mt-1 text-sky-800">ℹ <b>Férias antecipadas</b>: o período aquisitivo só completa 12 meses em ${dbr(p.aquisitivo_fim)}. É permitido (costume da empresa); os dias saem do saldo deste período.</div>`;
       if (avisos.length) $('sPrevia').innerHTML += `<div class="mt-1 text-amber-800 font-bold">${avisos.join('<br>')}</div>`;
       impactoLoja();
     }

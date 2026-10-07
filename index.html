@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Executivo - Sistema Drogarema</title>
+  <title>Dashboard Executivo - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -25,7 +26,7 @@
       <div>
         <div class="flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-          <h1 class="text-lg font-bold text-slate-900 tracking-wide">DROGAREMA PHARMA</h1>
+          <h1 class="text-lg font-bold text-slate-900 tracking-wide">PAINEL DE GESTÃO</h1>
           <span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono border border-slate-200">Gestão de Folha</span>
         </div>
         <p class="text-xs text-slate-500 mt-0.5">Painel de Fechamento e Inteligência Contábil</p>
@@ -49,84 +50,9 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
       
       <!-- ==========================================
-           COLUNA 1: MENU LATERAL ESQUERDO (Navegação)
-           ========================================== -->
-      <div class="lg:col-span-2 space-y-3">
-        
-        <!-- MENU ORGANIZADO POR ÁREA -->
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-emerald-50 text-emerald-800">📅 Folha do mês</h3>
-          <div class="flex flex-col p-1.5 text-[11px] font-medium">
-            <a href="lancamentos.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">✏️</span> <span>Lançamentos</span></a>
-            <a href="importar_alpha7.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📥</span> <span>Importar Alpha7 (comissões)</span></a>
-            <a href="importar_consumo_farmacia.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">💊</span> <span>Importar consumo farmácia</span></a>
-            <a href="emprestimos.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🤝</span> <span>Empréstimos</span></a>
-            <a href="decimo_terceiro.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🎄</span> <span>Controle do 13º</span></a>
-            <a href="abatimentos.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">💸</span> <span>Abatimentos (vencidos, caixa, outros)</span></a>
-          </div>
-        </div>
-
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-indigo-50 text-indigo-800">✅ Aprovações e jornada</h3>
-          <div class="flex flex-col p-1.5 text-[11px] font-medium">
-            <a href="freelance_solicitacao.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📝</span> <span>Solicitar freelance / hora extra</span></a>
-            <a href="supervisor_freelance.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🧭</span> <span>Aprovação do supervisor</span></a>
-            <a href="rh_aprovacao_freelance.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🗂</span> <span>Aprovação do RH</span></a>
-            <a href="ferias.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏖</span> <span>Férias</span></a>
-            <a href="escala.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📅</span> <span>Escala das lojas</span></a>
-            <a href="banco_horas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">⏱</span> <span>Banco de horas</span></a>
-          </div>
-        </div>
-
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-sky-50 text-sky-800">💵 Financeiro</h3>
-          <div class="flex flex-col p-1.5 text-[11px] font-medium">
-            <a href="financeiro.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">💳</span> <span>Pagamentos (Financeiro)</span></a>
-          </div>
-        </div>
-
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-amber-50 text-amber-800">📊 Relatórios</h3>
-          <div class="flex flex-col p-1.5 text-[11px] font-medium">
-            <a href="resumo_folha.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🧾</span> <span>Resumo da competência</span></a>
-            <a href="resumo_diretoria.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📈</span> <span>Resumo da diretoria</span></a>
-            <a href="resultado_loja.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏬</span> <span>Resultado da loja</span></a>
-            <div class="flex items-center gap-1 px-2 py-1">
-              <a href="fechamento_financeiro.html" title="Gestão: fecha o mês e publica o resultado das lojas" class="flex-1 text-center px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] transition">🏪 Fechamento</a>
-              <a href="metas_console.html" title="Gestão: metas de todas as lojas" class="flex-1 text-center px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] transition">🎯 Metas</a>
-            </div>
-            <a href="recibo_pagamento.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📄</span> <span>Gerar recibos</span></a>
-          </div>
-        </div>
-
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-slate-100 text-slate-700">🗃 Cadastros</h3>
-          <div class="flex flex-col p-1.5 text-[11px] font-medium">
-            <a href="funcionarios.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">👥</span> <span>Funcionários</span></a>
-            <a href="cadastro_solicitacoes.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">👤</span> <span>Pedidos de cadastro (líderes)</span></a>
-            <a href="organograma.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏛</span> <span>Organograma</span></a>
-            <a href="empresas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏢</span> <span>Empresas e contas bancárias</span></a>
-            <a href="lojas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🏪</span> <span>Lojas e setores</span></a>
-            <a href="eventos.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">⚡</span> <span>Tipos de eventos</span></a>
-            <a href="rubricas.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">📋</span> <span>Rubricas Alpha7 (De>Para)</span></a>
-          </div>
-        </div>
-
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <h3 class="font-black text-[10px] uppercase tracking-wider px-3 py-2 bg-rose-50 text-rose-800">🛡 Segurança</h3>
-          <div class="flex flex-col p-1.5 text-[11px] font-medium">
-            <a href="auditoria.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🔎</span> <span>Auditoria e logs</span></a>
-            <a href="perfis.html" class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-slate-700 transition"><span class="w-4 text-center">🔐</span> <span>Perfis e acessos</span></a>
-          </div>
-        </div>
-
-
-      </div>
-
-      <!-- ==========================================
            COLUNA 2: PAINEL PRINCIPAL (Centro)
            ========================================== -->
-      <div class="lg:col-span-7 space-y-5">
+      <div class="lg:col-span-9 space-y-5">
         
         <!-- Banner de Período Ativo & Ação de Alto Impacto -->
         <div class="bg-white border border-slate-200 p-5 rounded-xl shadow-sm flex flex-col justify-between">
@@ -533,7 +459,7 @@
         const carimbo = agora.toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const conteudo = JSON.stringify({ sistema: 'folha-drogarema', gerado_em: agora.toISOString(), gerado_por: emailIndex, referencia: rotulo, tabelas: dados });
         const arquivo = new Blob([conteudo], { type: 'application/json' });
-        const nome = `backup_drogarema_${rotulo}_${carimbo}.json`;
+        const nome = `backup_business_${rotulo}_${carimbo}.json`;
         aviso.innerText = '💾 Backup: enviando cópia para o Supabase...';
         const pasta = rotulo === 'manual' ? 'manual' : rotulo;
         const { error: errUp } = await _supabase.storage.from('backups').upload(`${pasta}/${nome}`, arquivo, { upsert: false, contentType: 'application/json' });
