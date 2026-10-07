@@ -101,6 +101,17 @@
     return out;
   }
 
+  // relatório de entregas com vários meses (blocos "Ano-mês: AAAA-MM"): devolve só as linhas do mês pedido (MM/AAAA)
+  function entregasDoMes(rows, comp) {
+    const meses = [], linhas = []; let atual = null;
+    (rows || []).forEach(r => { if (!r) return;
+      const m = r.map(c => String(c == null ? '' : c).match(/ano-m[eê]s:\s*(\d{4})-(\d{2})/i)).find(Boolean);
+      if (m) { atual = m[2] + '/' + m[1]; if (!meses.includes(atual)) meses.push(atual); return; }
+      const cab = r.some(c => /^ENTREGAS$/.test(norm(c))) && r.some(c => /^UN\. NEG\.?$/.test(norm(c)));
+      if (cab || atual === null || atual === comp) linhas.push(r); });
+    return { linhas: meses.length && !meses.includes(comp) ? [] : linhas, meses, achou: !meses.length || meses.includes(comp) };
+  }
+
   // abas: { nomeDaAba: [[celulas...], ...] } ; lojaDoUsuario(usuario) -> nº da loja (ou null = fica na loja 3)
   function calcular(abas, lojaDoUsuario) {
     const avisos = [];
@@ -228,5 +239,5 @@
     return info;
   }
 
-  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular, lerComissao, lerEntregas, identificar };
+  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular, lerComissao, lerEntregas, entregasDoMes, identificar };
 })(typeof window !== 'undefined' ? window : globalThis);

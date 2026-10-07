@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="fechamento_core.js"></script>
+  <script src="fechamento_core.js?v=2"></script>
   <script src="metas_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -214,6 +214,7 @@
     }
     // modo A: os arquivos do Alpha7 como são baixados (lê a 1ª aba de cada um e reconhece pelo conteúdo)
     let slots = {}, naoReconhecidos = [];
+    let entregasExtra = null;   // arquivo de entregas (delivery): vale para os arquivos do Alpha7 e para a planilha completa; continua ao trocar de competência
     const RELS = [['NIVEL3', 'Classificação nível 3', 'V', true], ['PREFEITURA', 'Prefeitura (sai do faturamento)', 'V'], ['WAGNER', 'Wagner (sai do faturamento)', 'V'], ['ECOMMERCE', 'E-commerce', 'V'],
       ['FP', 'Farmácia Popular (loja 3)', 'V'], ['VIT', 'Resumo vitaminas por unidade', 'V'], ['SID', 'Resumo Sidney por unidade', 'V'], ['ENTREGAS', 'Entregas (delivery)', 'V'],
       ['C2018', 'Comissão SM e GN', 'C'], ['C2019', 'Comissão perfumaria', 'C'], ['C2020', 'Comissão Sidney', 'C'], ['C2021', 'Comissão valor fixo', 'C'], ['C2022', 'Comissão vitaminas', 'C'], ['CQUARENTENA', 'Comissão quarentena', 'C']];
@@ -226,17 +227,18 @@
         try {
           const linhas = await lerUm(arq), info = FechamentoCore.identificar(arq.name, linhas);
           if (!info.tipo || /\?$/.test(info.tipo)) { naoReconhecidos = naoReconhecidos.filter(x => x.nome !== arq.name); naoReconhecidos.push({ nome: arq.name, motivo: info.tipo === 'RESUMO?' ? 'resumo por unidade: o nome do arquivo precisa ter VITAMINAS ou SIDNEY' : info.tipo === 'C?' ? 'comissão: o nome do arquivo precisa dizer o plano (SM E GN, PERFUMARIA, SIDNEY, VALOR FIXO, VITAMINAS, QUARENTENA)' : 'não é um relatório conhecido do Alpha7' }); continue; }
+          if (info.tipo === 'ENTREGAS') { entregasExtra = { nome: arq.name, linhas, info }; continue; }
           slots[info.tipo] = { nome: arq.name, linhas, info };
         } catch (err) { naoReconhecidos.push({ nome: arq.name, motivo: 'não foi possível ler: ' + err.message }); }
       }
-      inp.value = ''; $('arq').value = '';
-      montarDosSlots();
+      inp.value = '';
+      if (Object.keys(slots).length) { $('arq').value = ''; montarDosSlots(); } else { renderSlots(); if (abasLidas) recalcular(); }
     }
-    function limparSlots() { slots = {}; naoReconhecidos = []; montarDosSlots(); }
+    function limparSlots() { slots = {}; naoReconhecidos = []; entregasExtra = null; montarDosSlots(); }
     function renderSlots() {
-      const tem = Object.keys(slots).length || naoReconhecidos.length;
+      const tem = Object.keys(slots).length || naoReconhecidos.length || entregasExtra;
       if (!tem) { $('listaRel').innerHTML = `<div class="text-[11px] text-slate-400">São 13 arquivos: 7 de venda (nível 3, prefeitura, Wagner, e-commerce, farmácia popular, resumo vitaminas, resumo Sidney) e 6 de comissão (SM e GN, perfumaria, Sidney, valor fixo, vitaminas, quarentena).</div>`; return; }
-      const linha = ([t, rot, grupo, obrig]) => { const s = slots[t];
+      const linha = ([t, rot, grupo, obrig]) => { const s = t === 'ENTREGAS' ? entregasExtra : slots[t];
         const foraMes = s && s.info.competencia && competencia && s.info.competencia !== competencia;
         let dir = '';
         if (s && grupo === 'C') { const sis = t === 'CQUARENTENA' ? null : (comissaoSistema[t.slice(1)] || 0), dif = sis == null ? null : sis - s.info.total;
@@ -260,7 +262,6 @@
       if (slots.ECOMMERCE) abasLidas['ECOMMERCE'] = L('ECOMMERCE');
       if (slots.FP) abasLidas['FARMACIA POPULAR LOJA 3'] = L('FP');
       // vitaminas e Sidney são dois relatórios iguais: juntos formam o "detalhe total vendido"
-      if (slots.ENTREGAS) abasLidas['ENTREGAS'] = L('ENTREGAS');
       if (slots.VIT || slots.SID) abasLidas['DETALHE TOTAL VENDIDO'] = [['VITAMINAS'], ...L('VIT'), ['SIDNEY OLIVEIRA'], ...L('SID')];
       nomeArquivo = (Object.keys(slots).length + ' arquivos do Alpha7: ' + Object.keys(slots).map(n => slots[n].nome).join(' + ')).slice(0, 300);
       vinculoManual = {};
@@ -269,6 +270,12 @@
     }
 
     function recalcular() {
+      window._entMsg = '';
+      if (abasLidas && entregasExtra) { const e = FechamentoCore.entregasDoMes(entregasExtra.linhas, competencia);
+        abasLidas['ENTREGAS'] = e.linhas;
+        const n = Object.keys(FechamentoCore.lerEntregas(e.linhas)).length;
+        window._entMsg = e.achou && n ? `Delivery: lido de "${entregasExtra.nome}"${e.meses.length ? ' (mês ' + competencia + ')' : ' (o arquivo não informa o mês: confira se é de ' + competencia + ')'}, ${n} loja(s).`
+          : `ATENÇÃO: o arquivo de entregas "${entregasExtra.nome}" não tem o mês ${competencia}${e.meses.length ? ' (tem: ' + e.meses.join(', ') + ')' : ''}. O delivery ficou vazio neste fechamento.`; }
       try { calc = FechamentoCore.calcular(abasLidas, lojaDoUsuario); calc.novo = true; }
       catch (err) { calc = null; $('avisos').innerHTML = `<div class="text-rose-700 font-bold">${esc(err.message)}</div>`; }
       render();
@@ -313,6 +320,7 @@
       const av = [...(calc.avisos || [])];
       if (calc.novo && window._comissaoSemLoja > 0.005) av.push(`Comissões de funcionários sem loja no cadastro não entraram em nenhuma loja: R$ ${fmt(window._comissaoSemLoja)}.`);
       if (calc.novo) RELS.forEach(([t, rot]) => { const x = slots[t]; if (x && x.info.competencia && x.info.competencia !== competencia) av.push(`ATENÇÃO: o arquivo "${x.nome}" (${rot}) é do período ${x.info.periodo}, e a competência aberta na tela é ${competencia}.`); });
+      if (calc.novo && window._entMsg) av.push(window._entMsg);
       if (calc.novo && salvo) av.push('Você está vendo um cálculo novo (do arquivo). Ele só substitui o fechamento salvo quando clicar em "Salvar fechamento".');
       $('avisos').innerHTML = av.map(a => `<div class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">${esc(a)}</div>`).join('');
 
