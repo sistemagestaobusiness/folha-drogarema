@@ -31,30 +31,41 @@
 
   const css = document.createElement('style');
   css.textContent = `
-    html.menu-on body { padding-left: ${L}px; background: #f1f5f9 !important; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    html.menu-on .fixed.inset-x-0 { left: ${L}px; }
-    #menuSistema { position: fixed; top: 0; left: 0; bottom: 0; width: ${L}px; background: #fff; z-index: 45; display: flex; flex-direction: column; font-family: inherit; box-shadow: 1px 0 0 #e2e8f0; }
-    #menuSistema .marca { padding: 18px 18px 10px; }
+    html.menu-on body { padding-left: calc(${L}px + var(--corpo-pl, 0px)); background: #f1f5f9 !important; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    html.menu-on .fixed.inset-x-0, html.menu-on .fixed.top-0.left-0.right-0 { left: ${L}px; }
+    /* cabeçalho único das telas: título, subtítulo e uma linha divisória */
+    html.menu-on .cab-sis { position: static !important; background: transparent !important; border: 0 !important; border-bottom: 1px solid #cbd5e1 !important; border-radius: 0 !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; padding-top: 2px !important; padding-bottom: 14px !important; margin-top: 0 !important; margin-bottom: 18px !important; }
+    html.menu-on .tit-sis { font-size: 21px !important; font-weight: 700 !important; letter-spacing: 0 !important; line-height: 1.25 !important; color: #0f172a !important; }
+    #menuFecha { position: absolute; top: 14px; right: 8px; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #94a3b8; font-size: 15px; cursor: pointer; }
+    #menuFecha:hover { background: #e2e8f0; color: #0f172a; }
+    @media (min-width: 901px) {
+      html.menu-oculto #menuSistema { transform: translateX(-100%); }
+      html.menu-oculto body { padding-left: calc(54px + var(--corpo-pl, 0px)); }
+      html.menu-oculto .fixed.inset-x-0, html.menu-oculto .fixed.top-0.left-0.right-0 { left: 0; }
+      html.menu-oculto #menuAbre { display: block; }
+    }
+    #menuSistema { position: fixed; top: 0; left: 0; bottom: 0; width: ${L}px; background: #f1f5f9; z-index: 45; display: flex; flex-direction: column; font-family: inherit; border-right: 1px solid #cbd5e1; transition: transform .15s; }
+    #menuSistema .marca { padding: 18px 18px 10px; position: relative; }
     #menuSistema .marca b { display: block; font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: -.01em; }
     #menuSistema .marca span { font-size: 11px; color: #94a3b8; }
     #menuSistema nav { flex: 1; overflow-y: auto; padding: 4px 10px 12px; }
     #menuSistema .marca img { height: 34px; display: block; margin-bottom: 6px; }
-    #menuSistema .sec { border-top: 2px solid #e2e8f0; margin-top: 6px; padding-top: 4px; }
+    #menuSistema .sec { border-top: 1px solid #cbd5e1; margin-top: 6px; padding-top: 4px; }
     #menuSistema .grupo { display: flex; align-items: center; width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #475569; padding: 9px 10px; border-radius: 8px; text-align: left; }
-    #menuSistema .grupo:hover { background: #f8fafc; color: #0f172a; }
+    #menuSistema .grupo:hover { background: #e2e8f0; color: #0f172a; }
     #menuSistema .grupo::after { content: '▸'; margin-left: auto; font-size: 11px; color: #94a3b8; transition: transform .12s; }
     #menuSistema .sec.aberto .grupo::after { transform: rotate(90deg); }
     #menuSistema .sec .itens { display: none; padding-bottom: 4px; }
     #menuSistema .sec.aberto .itens { display: block; }
     #menuSistema a.it { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: #475569; text-decoration: none; line-height: 1.2; }
-    #menuSistema a.it:hover { background: #f1f5f9; color: #0f172a; }
+    #menuSistema a.it:hover { background: #e2e8f0; color: #0f172a; }
     #menuSistema a.it.on { background: #0f172a; color: #fff; font-weight: 600; }
     #menuSistema a.it i { width: 16px; text-align: center; font-style: normal; opacity: .65; font-size: 12px; }
     #menuSistema a.it .bolha { margin-left: auto; background: #e11d48; color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; min-width: 18px; padding: 1px 5px; text-align: center; }
-    #menuSistema .pe { padding: 10px 14px 14px; box-shadow: 0 -1px 0 #f1f5f9; font-size: 11px; color: #64748b; }
+    #menuSistema .pe { padding: 10px 14px 14px; border-top: 1px solid #cbd5e1; font-size: 11px; color: #64748b; }
     #menuSistema .pe .quem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; }
-    #menuSistema .pe button { margin-top: 8px; width: 100%; padding: 7px; border-radius: 8px; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 600; cursor: pointer; border: 0; }
-    #menuSistema .pe button:hover { background: #e2e8f0; }
+    #menuSistema .pe button { margin-top: 8px; width: 100%; padding: 7px; border-radius: 8px; background: #e2e8f0; color: #334155; font-size: 12px; font-weight: 600; cursor: pointer; border: 0; }
+    #menuSistema .pe button:hover { background: #cbd5e1; }
     #menuAbre { display: none; position: fixed; top: 10px; left: 10px; z-index: 46; width: 36px; height: 36px; border-radius: 8px; background: #0f172a; color: #fff; border: 0; font-size: 16px; cursor: pointer; }
     #menuTopo { display: none; position: fixed; top: 0; left: 0; right: 0; height: 52px; background: #fff; z-index: 44; box-shadow: 0 1px 0 #e2e8f0; align-items: center; justify-content: center; }
     #menuTopo img { height: 26px; }
@@ -97,12 +108,17 @@
       if (!g) return its;
       const aberto = g in guard ? !!guard[g] : vis.some(i => i[0] === PAGINA);
       return `<div class="sec ${aberto ? 'aberto' : ''}" data-g="${g}"><button type="button" class="grupo">${g}</button><div class="itens">${its}</div></div>`; }).join('');
+    try { document.documentElement.style.setProperty('--corpo-pl', (parseFloat(getComputedStyle(document.body).paddingLeft) || 0) + 'px'); } catch (e) {}
+    try { if (localStorage.getItem('menu_oculto') === '1') document.documentElement.classList.add('menu-oculto'); } catch (e) {}
     const aside = document.createElement('aside'); aside.id = 'menuSistema';
-    aside.innerHTML = `<div class="marca"><img src="logo_business.png" alt="${MARCA}"><span>Sistema de gestão</span></div><nav>${corpo}</nav>
+    aside.innerHTML = `<div class="marca"><img src="logo_business.png" alt="${MARCA}"><span>Sistema de gestão</span><button type="button" id="menuFecha" title="Ocultar o menu" aria-label="Ocultar o menu">«</button></div><nav>${corpo}</nav>
       <div class="pe"><div class="quem" title="${esc(window.ACESSO.email || '')}">${esc(window.ACESSO.email || '')}</div><div>${esc(window.ACESSO.perfil || '')}</div><button type="button" id="menuSair">Sair</button></div>`;
     document.body.appendChild(aside);
     const abre = document.createElement('button'); abre.id = 'menuAbre'; abre.type = 'button'; abre.textContent = '☰'; abre.setAttribute('aria-label', 'Abrir o menu');
-    abre.onclick = () => document.documentElement.classList.toggle('menu-aberto');
+    const ocultar = v => { document.documentElement.classList.toggle('menu-oculto', v); try { localStorage.setItem('menu_oculto', v ? '1' : '0'); } catch (e) {} window.dispatchEvent(new Event('resize')); };
+    abre.title = 'Mostrar o menu';
+    abre.onclick = () => { if (window.innerWidth > 900) ocultar(false); else document.documentElement.classList.toggle('menu-aberto'); };
+    aside.querySelector('#menuFecha').onclick = () => { if (window.innerWidth > 900) ocultar(true); else document.documentElement.classList.remove('menu-aberto'); };
     document.body.appendChild(abre);
     const topo = document.createElement('div'); topo.id = 'menuTopo'; topo.innerHTML = '<img src="logo_business.png" alt="Business">'; document.body.appendChild(topo);
     aside.addEventListener('click', e => { const gb = e.target.closest('button.grupo'); if (!gb) return;
@@ -116,6 +132,25 @@
       location.replace('login.html');
     };
     const ativo = aside.querySelector('a.it.on'); if (ativo && ativo.scrollIntoView) ativo.scrollIntoView({ block: 'nearest' });
+  }
+
+  // padrão único: mesmo cabeçalho e mesma largura útil em todas as telas
+  function blocoTitulo() {
+    const h1 = document.querySelector('h1'); let cab = null; if (!h1) return [null, null];
+    let e = h1.parentElement; for (let k = 0; k < 4 && e && e !== document.body; k++, e = e.parentElement) { if ((e.textContent || '').length <= 700 && e.offsetHeight <= 220) cab = e; else break; }
+    return [h1, cab];
+  }
+  function padronizar() {
+    if (PAGINA === 'index.html') return;
+    const [h1, cab] = blocoTitulo(); if (!h1) return;
+    if (cab) cab.classList.add('cab-sis');
+    if (!h1.classList.contains('tit-sis')) { h1.classList.add('tit-sis'); let primeiro = true;
+      h1.childNodes.forEach(n => { if (n.nodeType !== 3) return; let t = n.nodeValue; if (!/[A-ZÀ-Ú]{3}/.test(t) || t !== t.toUpperCase()) { if (t.trim()) primeiro = false; return; }
+        t = t.toLowerCase().replace(/(^|[\s(])(rh|he|vt|inss|fgts|irrf)(?=$|[\s).,])/g, (a, p, s) => p + s.toUpperCase());
+        if (primeiro) { t = t.replace(/[a-zà-ú]/, c => c.toUpperCase()); primeiro = false; } n.nodeValue = t; }); }
+    if (PAGINA === 'recibo_pagamento.html') return;
+    document.querySelectorAll('[class*="max-w-"]').forEach(el => { if (el.dataset.larg || el.closest('#menuSistema, .fixed, [role="dialog"]')) return; el.dataset.larg = '1';
+      const mw = parseFloat(getComputedStyle(el).maxWidth); if (mw >= 1000) { el.style.maxWidth = 'none'; el.style.marginLeft = '0'; el.style.marginRight = '0'; } });
   }
 
   // tira do cabeçalho da tela os atalhos que o menu já tem (e leva o aviso numérico para o menu)
@@ -161,6 +196,6 @@
     ver(); window.addEventListener('resize', ver); document.addEventListener('fullscreenchange', ver); setInterval(ver, 1500);
   }
 
-  const iniciar = () => { montar(); telaCheia(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+  const iniciar = () => { montar(); padronizar(); setTimeout(padronizar, 700); telaCheia(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
