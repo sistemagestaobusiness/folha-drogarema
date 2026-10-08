@@ -69,7 +69,7 @@
     const rs = v => v == null || !isFinite(v) ? '–' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     const pc = v => v == null || !isFinite(v) ? '–' : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
     const hojeComp = () => { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
-    let perfil = '', lojaSel = null, mesSel = hojeComp(), aba = 'resumo', reg = null, regAnt = null, eqAnt = null, todas = [], metas = [], podeSubir = false;
+    let perfil = '', lojaSel = null, mesSel = hojeComp(), aba = 'resumo', reg = null, regAnt = null, eqAnt = null, partTab = [], editPart = false, todas = [], metas = [], podeSubir = false;
 
     async function inicializar() {
       const { data: u } = await _supabase.rpc('fn_meu_usuario'); perfil = u ? u.perfil : '';
@@ -90,6 +90,8 @@
       const data = (lista || []).find(x => x.competencia === mesSel && x.loja_num === lojaSel);
       regAnt = (lista || []).find(x => x.competencia === M.somaMes(mesSel, -1) && x.loja_num === lojaSel) || null;
       todas = (lista || []).filter(x => x.competencia === mesSel);
+      // participação de cada atendente na meta, definida pela loja (SQL BG)
+      partTab = []; editPart = false; try { const rp = await _supabase.from('loja_participacao').select('*').eq('loja_num', lojaSel); if (!rp.error) partTab = rp.data || []; } catch (e) {}
       // equipe do mês anterior fechado (resultado publicado): base da participação individual na meta
       eqAnt = null; try { const rr = await _supabase.from('loja_resultados').select('dados').eq('competencia', M.somaMes(mesSel, -1)).eq('loja_num', lojaSel).maybeSingle();
         if (!rr.error && rr.data && (rr.data.dados.equipe || []).length) eqAnt = D.deEquipe(rr.data.dados.equipe); } catch (e) {}
@@ -149,6 +151,7 @@
       // participação: mês anterior completo no acompanhamento (venda real por atendente); senão, a equipe do mês fechado; senão, divisão igual
       const antDiario = regAnt && Object.keys(regAnt.dados.dias || {}).length >= 20 ? D.ateODia(regAnt.dados, 31) : null;
       const R = D.resumo(reg.dados, meta, mesSel, null, antDiario || eqAnt); R.origemObj = antDiario ? 'DIARIO' : eqAnt ? 'FECHADO' : 'IGUAL';
+      aplicarParticipacao(R, meta);
       $('sub').textContent = `Loja ${lojaSel} · ${M.nomeMes(mesSel)} · dados até ${dBR(R.ref)}${R.semDia ? ' (relatório geral)' : ''} · atualizado em ${new Date(reg.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
       $('conteudo').innerHTML = aba === 'dias' ? (R.datas.length ? telaDias(R) : '<div class="cartao text-slate-600">O dia a dia aparece quando a loja sobe o relatório de venda por atendente.</div>') : telaResumo(R, meta);
     }
@@ -188,19 +191,72 @@
       const linhas = R.equipe.map(a => `<tr><td class="font-medium text-slate-900">${esc(a.nome)}</td><td class="num">${selo(a.pct, R.alvo)}</td><td class="num">${selo(a.pctHoje, R.alvo)}</td>
         <td class="num mono" title="hoje: ${rs(a.sh)}">${rs(a.s)}</td><td class="num mono" title="hoje: ${rs(a.fh)}">${rs(a.f)}</td>
         <td class="num mono ${a.vsAnt == null ? 'vazio' : a.vsAnt <= -0.15 ? 'text-rose-700 font-semibold' : a.vsAnt >= 0.15 ? 'text-emerald-700 font-semibold' : 'text-slate-600'}">${a.vsAnt == null ? '–' : sinal(a.vsAnt)}</td>
-        <td class="num">${alc(a.s, a.objS, a.partS)}</td><td class="num">${alc(a.f, a.objF, a.part)}</td>
+        ${a.fora ? '<td class="num rot" colspan="2">fora da meta</td>' : `<td class="num">${alc(a.s, a.objS, a.partS)}</td><td class="num">${alc(a.f, a.objF, a.part)}</td>`}
         <td class="num mono" title="${a.camp ? esc(Object.entries(a.camp.prod).map(([p, q]) => q + '× ' + p).join('\n')) : ''}">${a.camp ? a.camp.itens : '<span class="vazio">–</span>'}</td></tr>`).join('');
       const dem = R.demais ? `<tr class="text-slate-500"><td>Demais usuários</td><td class="num">${pc(R.demais.f ? R.demais.s / R.demais.f : null)}</td><td></td><td class="num mono">${rs(R.demais.s)}</td><td class="num mono">${rs(R.demais.f)}</td><td></td><td></td><td></td><td></td></tr>` : '';
-      const equipe = R.equipe.length ? `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Equipe</div>
+      const equipe = R.equipe.length ? `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Equipe ${podeEditarPart() ? `<button type="button" onclick="abrirPart()" class="ml-3 text-[12px] font-normal px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">Participação na meta</button>` : ''}</div>
           <div class="rot">% sim+gen: <span class="selo ok">na meta</span> <span class="selo atencao">até 7,5 pts abaixo</span> <span class="selo baixo">abaixo</span></div></div>
           <table class="t w-full mt-2"><thead><tr><th>Atendente</th><th>% sim+gen</th><th>% hoje</th><th>Sim+gen</th><th>Venda total</th><th>Venda × mês passado</th><th>Sim+gen: do objetivo do mês</th><th>Venda: do objetivo do mês</th><th>Vit. e valor fixo</th></tr></thead><tbody>${linhas}${dem}</tbody></table>
           <p class="rot mt-2"><b>Como ler o objetivo:</b> o percentual é quanto do objetivo do <u>mês inteiro</u> a pessoa já fez (o valor do objetivo está abaixo dele). O risco na barra marca os ${pc(R.ritmo)} esperados até hoje: verde se já passou do risco, vermelho se está atrás.
-          Objetivo de cada um = meta da loja × participação da pessoa: ${R.origemObj === 'DIARIO' ? 'a parte que ela teve na venda da equipe no mês passado' : R.origemObj === 'FECHADO' ? `a parte que ela teve na venda da equipe em ${M.nomeMes(M.somaMes(mesSel, -1))}, pelo resultado fechado (passe o mouse no percentual para ver a participação)` : `sem mês anterior fechado com equipe, usei divisão igual entre os ${R.nEquipe} atendentes com pelo menos 3% da venda da loja`}. Quem não vendeu no mês passado fica sem objetivo. Venda × mês passado: mesmo período (até o dia ${R.nHoje}).</p></div>`
+          Objetivo de cada um = meta da loja × participação da pessoa: ${R.origemObj === 'LOJA' ? `a participação definida pela loja, em vigor desde ${M.nomeMes(R.vigPart)} (${R.nEquipe} pessoas na meta; botão "Participação na meta")` : R.origemObj === 'DIARIO' ? 'a parte que ela teve na venda da equipe no mês passado' : R.origemObj === 'FECHADO' ? `a parte que ela teve na venda da equipe em ${M.nomeMes(M.somaMes(mesSel, -1))}, pelo resultado fechado (passe o mouse no percentual para ver a participação)` : `sem mês anterior fechado com equipe, usei divisão igual entre os ${R.nEquipe} atendentes com pelo menos 3% da venda da loja`}. Quem não vendeu no mês passado fica sem objetivo. Venda × mês passado: mesmo período (até o dia ${R.nHoje}).</p></div>`
         : '<div class="cartao text-slate-600">A equipe aparece quando a loja sobe o relatório de venda por atendente.</div>';
-      return leitura + indic + equipe;
+      return leitura + indic + equipe + (editPart ? telaPart(R) : '');
     }
 
     // gestor e supervisor: as lojas lado a lado, só as notas
+    // participação definida pela loja: vale sobre qualquer outra regra; quem está fora da meta continua somando para a loja
+    const podeEditarPart = () => perfil === 'GESTOR' || perfil === 'LIDER';
+    // divisão em vigor no mês: a gravada com o mês de início mais recente que não passa do mês escolhido
+    const ordM = c => Number(String(c).slice(3)) * 12 + Number(String(c).slice(0, 2));
+    function partDoMes() { const vs = [...new Set(partTab.map(p => p.vigencia || '01/2000'))].filter(v => ordM(v) <= ordM(mesSel)).sort((a, b) => ordM(b) - ordM(a));
+      return vs.length ? { vig: vs[0], linhas: partTab.filter(p => (p.vigencia || '01/2000') === vs[0]) } : { vig: null, linhas: [] }; }
+    function aplicarParticipacao(R, meta) {
+      const pm = partDoMes(), tab = {}; pm.linhas.forEach(p => tab[String(p.nome).toUpperCase()] = p); if (!pm.linhas.length) return; R.vigPart = pm.vig;
+      R.origemObj = 'LOJA';
+      R.equipe.forEach(a => { const p = tab[a.nome]; a.fora = !p || !p.participa;
+        a.partS = a.fora ? 0 : Number(p.pct_simgen) / 100; a.part = a.fora ? 0 : Number(p.pct_fat) / 100;
+        a.objS = meta && meta.simgen && a.partS > 0 ? Number(meta.simgen) * a.partS : null; a.objF = meta && meta.fat && a.part > 0 ? Number(meta.fat) * a.part : null; });
+      R.nEquipe = pm.linhas.filter(p => p.participa).length;
+    }
+    function abrirPart() { editPart = !editPart; render(); if (editPart) setTimeout(() => { somarPart(); const e = $('boxPart'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); }
+    function linhasPart() { return [...document.querySelectorAll('#boxPart tr[data-nome]')].map(tr => ({ tr, nome: tr.dataset.nome, part: tr.querySelector('.pp').checked, s: tr.querySelector('.ps'), f: tr.querySelector('.pf') })); }
+    const lerPct = el => { const n = parseFloat(String(el.value).replace(',', '.')); return isFinite(n) ? n : 0; };
+    function somarPart() {
+      const L = linhasPart(); let ss = 0, sf = 0;
+      L.forEach(x => { x.s.disabled = x.f.disabled = !x.part; x.tr.classList.toggle('opacity-50', !x.part); if (x.part) { ss += lerPct(x.s); sf += lerPct(x.f); } });
+      const ok = v => Math.abs(v - 100) < 0.05, fm = v => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%';
+      $('somaPart').innerHTML = `Soma de quem participa: similar e genérico <b class="${ok(ss) ? 'text-emerald-700' : 'text-rose-700'}">${fm(ss)}</b> · faturamento <b class="${ok(sf) ? 'text-emerald-700' : 'text-rose-700'}">${fm(sf)}</b>${ok(ss) && ok(sf) ? '' : ' · precisa fechar 100%'}`;
+      return ok(ss) && ok(sf);
+    }
+    function igualPart() { const L = linhasPart().filter(x => x.part), v = L.length ? Math.round(10000 / L.length) / 100 : 0;
+      L.forEach((x, i) => { const val = i === L.length - 1 ? Math.round((100 - v * (L.length - 1)) * 100) / 100 : v; x.s.value = String(val).replace('.', ','); x.f.value = String(val).replace('.', ','); }); somarPart(); }
+    function ajustarPart() { ['s', 'f'].forEach(k => { const L = linhasPart().filter(x => x.part), t = L.reduce((a, x) => a + lerPct(x[k]), 0); if (!t) return;
+      let acc = 0; L.forEach((x, i) => { const val = i === L.length - 1 ? Math.round((100 - acc) * 100) / 100 : Math.round(lerPct(x[k]) * 100 / t * 100) / 100; acc += val; x[k].value = String(val).replace('.', ','); }); }); somarPart(); }
+    async function salvarPart() {
+      if (!somarPart()) return alert('A soma de quem participa precisa fechar 100% em similar e genérico e em faturamento. Use "Ajustar para 100%" ou "Dividir igual".');
+      const quem = (window.ACESSO || {}).email || null, agora = new Date().toISOString();
+      const futuros = [...new Set(partTab.map(p => p.vigencia))].filter(v => v && ordM(v) > ordM(mesSel));
+      if (futuros.length && !confirm(`Já existe divisão gravada a partir de ${futuros.join(', ')}. Esta alteração vale de ${mesSel} até o mês anterior a ela. Continuar?`)) return;
+      const linhas = linhasPart().map(x => ({ loja_num: lojaSel, vigencia: mesSel, nome: x.nome, participa: x.part, pct_simgen: x.part ? lerPct(x.s) : 0, pct_fat: x.part ? lerPct(x.f) : 0, atualizado_em: agora, atualizado_por: quem }));
+      // grava a divisão completa da loja a partir deste mês (quem saiu da lista some só daqui para frente)
+      await _supabase.from('loja_participacao').delete().eq('loja_num', lojaSel).eq('vigencia', mesSel);
+      const { error } = await _supabase.from('loja_participacao').insert(linhas);
+      if (error) return alert('Não salvou: ' + error.message);
+      partTab = partTab.filter(p => p.vigencia !== mesSel).concat(linhas); editPart = false; render();
+    }
+    function telaPart(R) {
+      const pm = partDoMes(), tab = {}; pm.linhas.forEach(p => tab[String(p.nome).toUpperCase()] = p);
+      const nomes = [...new Set([...pm.linhas.map(p => String(p.nome).toUpperCase()), ...R.equipe.filter(a => a.fixo).map(a => a.nome)])].sort((a, b) => a.localeCompare(b));
+      const v = n => String(Math.round(Number(n || 0) * 100) / 100).replace('.', ',');
+      return `<div id="boxPart" class="cartao"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Participação na meta · Loja ${lojaSel}</div>
+          <div class="flex gap-2 text-[12px]"><button type="button" onclick="igualPart()" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-pointer">Dividir igual</button><button type="button" onclick="ajustarPart()" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-pointer">Ajustar para 100%</button>
+          <button type="button" onclick="abrirPart()" class="px-3 py-1.5 rounded-lg text-slate-500 cursor-pointer">Cancelar</button><button type="button" onclick="salvarPart()" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white font-semibold cursor-pointer">Salvar</button></div></div>
+        <p class="rot mt-1"><b>Vale a partir de ${M.nomeMes(mesSel)}</b>${pm.vig ? ` (a divisão atual vem de ${M.nomeMes(pm.vig)})` : ''}; os meses anteriores continuam com a divisão que tinham. Desmarque quem não entra na meta (ex.: caixa): a venda dele continua contando para a loja. A divisão entre quem participa precisa fechar 100%.</p>
+        <table class="t mt-3 text-[13px]" style="max-width:700px"><thead><tr><th>Atendente</th><th style="text-align:center">Participa</th><th>% sim+gen</th><th>% faturamento</th></tr></thead><tbody>
+        ${nomes.map(n => { const p = tab[n], part = p ? p.participa : false; return `<tr data-nome="${esc(n)}"><td>${esc(n)}</td><td style="text-align:center"><input type="checkbox" class="pp w-4 h-4 cursor-pointer" ${part ? 'checked' : ''} onchange="somarPart()"></td>
+          <td class="num"><input class="ps w-20 text-right mono bg-slate-50 rounded px-2 py-1" value="${p ? v(p.pct_simgen) : '0'}" oninput="somarPart()"></td><td class="num"><input class="pf w-20 text-right mono bg-slate-50 rounded px-2 py-1" value="${p ? v(p.pct_fat) : '0'}" oninput="somarPart()"></td></tr>`; }).join('')}</tbody></table>
+        <div id="somaPart" class="text-[12px] text-slate-600 mt-3"></div></div>`;
+    }
     function abrirLoja(l) { $('selLoja').value = l; lojaSel = l; aba = 'resumo'; carregar(); }
     function telaLojas() {
       const cel = x => x && x.dv != null ? `<td class="num"><span class="mono text-[12px] ${x.dv > -0.05 ? 'text-emerald-700' : 'text-rose-700'} mr-2">${sinal(x.dv)}</span>${nota(x.nota)}</td>` : '<td class="num vazio">–</td>';
