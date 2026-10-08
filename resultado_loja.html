@@ -112,6 +112,10 @@
       if (!pessoas[indSel]) indSel = '';
       const p = pessoas[indSel], v2 = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const tot = p ? p.itens.reduce((a, i) => a + Number(i.valor || 0), 0) : 0;
+      // linha com venda e sem valor lançado: aparece com R$ 0,00 (a venda não atingiu a faixa do plano em nenhuma loja)
+      const PLANO = [['2018', 'simgen', 'COMISSAO SM E GN'], ['2019', 'perf', 'COMISSAO PERFUMARIA'], ['2020', 'sidney', 'COMISSAO SIDNEY'], ['2022', 'vit', 'COMISSAO VITAMINAS']];
+      const linhasP = !p ? [] : p.itens.concat(PLANO.filter(([c, k]) => p.venda && Number(p.venda[k] || 0) > 0 && !p.itens.some(i => i.codigo === c)).map(([c, k, d]) => ({ codigo: c, descricao: d, venda: Number(p.venda[k]), zero: true })))
+        .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
       box.className = 'cartao';
       box.innerHTML = `<div class="flex flex-wrap items-center gap-3"><label class="text-[13px] text-slate-600">Funcionário</label>
           <select onchange="escolherIndividual(this.value)" class="bg-slate-100 rounded-lg px-3 py-2 text-sm cursor-pointer"><option value="">selecione…</option>${ids.map(i => `<option value="${i}" ${i === indSel ? 'selected' : ''}>${esc(pessoas[i].nome)}</option>`).join('')}</select>
@@ -120,10 +124,10 @@
           <div class="rot mt-4 mb-1 font-semibold">Venda no mês</div>
           ${p.venda ? `<div class="grid grid-cols-2 lg:grid-cols-4 gap-3" style="max-width:760px">${VEND.map(([k, t]) => `<div class="bg-slate-50 rounded-lg px-3 py-2"><div class="rot">${t}</div><div class="mono font-semibold text-slate-900">${v2(p.venda[k] || 0)}</div></div>`).join('')}</div>` : '<div class="rot">Sem venda por atendente publicada para este mês.</div>'}
           <div class="rot mt-4 mb-1 font-semibold">Valores do mês</div>
-          ${!p.itens.length ? '<div class="text-[13px] text-slate-600">Sem valor lançado neste mês.</div>' : `<table class="t w-full text-[13px]" style="max-width:760px"><thead><tr><th class="text-left">Item</th><th class="num">Venda que gerou o valor</th><th class="num">%</th><th class="num">Valor</th></tr></thead><tbody>
-          ${p.itens.map(i => `<tr><td>${esc(i.descricao || i.codigo)}</td><td class="num mono text-slate-600">${i.venda_base != null ? v2(i.venda_base) : '–'}</td><td class="num mono text-slate-500">${i.venda_base > 0 ? pc(i.valor / i.venda_base) : '–'}</td><td class="num mono font-semibold">${v2(i.valor)}</td></tr>`).join('')}
+          ${!linhasP.length ? '<div class="text-[13px] text-slate-600">Sem venda nem valor lançado neste mês.</div>' : `<table class="t w-full text-[13px]" style="max-width:760px"><thead><tr><th class="text-left">Item</th><th class="num">Venda que gerou o valor</th><th class="num">%</th><th class="num">Valor</th></tr></thead><tbody>
+          ${linhasP.map(i => i.zero ? `<tr class="text-slate-500"><td>${esc(i.descricao)}</td><td class="num mono">${v2(i.venda)}</td><td class="num">–</td><td class="num mono">R$ 0,00 <span class="rot">não atingiu a faixa</span></td></tr>` : `<tr><td>${esc(i.descricao || i.codigo)}</td><td class="num mono text-slate-600">${i.venda_base != null ? v2(i.venda_base) : '–'}</td><td class="num mono text-slate-500">${i.venda_base > 0 ? pc(i.valor / i.venda_base) : '–'}</td><td class="num mono font-semibold">${v2(i.valor)}</td></tr>`).join('')}
           <tr><td class="font-semibold">Total</td><td></td><td></td><td class="num mono font-bold text-slate-900">${v2(tot)}</td></tr></tbody></table>`}
-          <p class="rot mt-3">Venda no mês: tudo o que a pessoa vendeu em cada linha, em qualquer loja. "Venda que gerou o valor": só a parte feita em loja que atingiu a faixa do plano; por isso pode ser menor que a venda do mês. Valores lançados na folha de ${M.nomeMes(mesSel)}, calculados pelo Alpha7.</p></div>`
+          <p class="rot mt-3">Venda no mês: tudo o que a pessoa vendeu em cada linha, em qualquer loja. "Venda que gerou o valor": só a parte feita em loja que atingiu a faixa do plano; por isso pode ser menor que a venda do mês. R$ 0,00: houve venda na linha, mas a loja não atingiu a faixa mínima do plano. Valores lançados na folha de ${M.nomeMes(mesSel)}, calculados pelo Alpha7.</p></div>`
         : '<p class="rot mt-3">Escolha um funcionário para ver os valores dele. A tela mostra uma pessoa por vez.</p>'}`;
     }
     let faixasLoja = [];
