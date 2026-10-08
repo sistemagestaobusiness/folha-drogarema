@@ -91,12 +91,13 @@
     // objetivo individual = meta da loja x participação da pessoa.
     //   participação: a do mês anterior fechado (venda dela / venda da equipe), quando esse mês foi enviado;
     //   sem mês anterior: divisão igual entre quem tem pelo menos 3% da venda da loja (quem vende de passagem fica sem objetivo).
-    const antTot = ant ? Object.keys(ant).filter(k => k && !oculto(k)).reduce((t, k) => t + ant[k].f, 0) : 0;
+    const chAnt = ant ? Object.keys(ant).filter(k => k && !oculto(k)) : [], antTot = chAnt.reduce((t, k) => t + (ant[k].f || 0), 0), antTotS = chAnt.reduce((t, k) => t + (ant[k].s || 0), 0);
     const fixos = equipe.filter(a => tot.f && a.f / tot.f >= 0.03), n = fixos.length || 1;
     equipe.forEach(a => { a.pct = a.f ? a.s / a.f : 0; a.pctHoje = a.fh ? a.sh / a.fh : null; a.camp = camp[a.nome] || null;
       a.fixo = fixos.includes(a);
       a.part = antTot > 0 ? (ant[a.nome] ? ant[a.nome].f / antTot : 0) : (a.fixo ? 1 / n : 0);
-      a.objS = meta && meta.simgen && a.part > 0 ? Number(meta.simgen) * a.part : null; a.objF = meta && meta.fat && a.part > 0 ? Number(meta.fat) * a.part : null; });
+      a.partS = antTotS > 0 ? (ant[a.nome] ? (ant[a.nome].s || 0) / antTotS : 0) : a.part;
+      a.objS = meta && meta.simgen && a.partS > 0 ? Number(meta.simgen) * a.partS : null; a.objF = meta && meta.fat && a.part > 0 ? Number(meta.fat) * a.part : null; });
     const origemObj = antTot > 0 ? 'ANTERIOR' : 'IGUAL';
     // indicadores: realizado, meta, alcance, desvio contra o esperado para o dia, nota, quanto falta e por dia
     const ind = (k, rot, real, me, antesDeHoje) => { me = Number(me) || null; const alc = me ? real / me : null, dv = desvio(alc, ritmo), falta = me ? Math.max(0, me - real) : null;
@@ -114,5 +115,8 @@
     Object.keys(dadosAnt.dias[d]).forEach(u0 => { const u = oculto(u0) ? '' : u0, o = dadosAnt.dias[d][u], a = (out[u] = out[u] || { f: 0, s: 0 }); a.f += o.f; a.s += o.s; }); }); return out; }
   // cor do % de similar e genérico: verde na meta, amarelo até 7,5 pontos abaixo, vermelho além disso (regra da planilha: 45% / 37,5%)
   function nivel(p, alvo) { if (p == null) return ''; return p >= alvo ? 'ok' : p >= alvo - 0.075 ? 'atencao' : 'baixo'; }
-  global.DiarioCore = { tipo, lerVenda, lerCampanha, lerGeral, resumo, nivel, desvio, nota, notaMargem, menosDias, ateODia, dia, usuario, diasDoMes, norm };
+  // participação pelo mês fechado: equipe publicada no fechamento -> { NOME: { s: sim+gen, f: soma das linhas } }
+  function deEquipe(equipe) { const out = {}; (equipe || []).forEach(e => { const n = String(e.nome || '').trim().toUpperCase(); if (!n) return;
+    out[n] = { s: Number(e.simgen || 0), f: Number(e.simgen || 0) + Number(e.perf || 0) + Number(e.sidney || 0) + Number(e.vit || 0) }; }); return out; }
+  global.DiarioCore = { deEquipe, tipo, lerVenda, lerCampanha, lerGeral, resumo, nivel, desvio, nota, notaMargem, menosDias, ateODia, dia, usuario, diasDoMes, norm };
 })(typeof window !== 'undefined' ? window : globalThis);

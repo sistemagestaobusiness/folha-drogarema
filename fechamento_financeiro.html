@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="fechamento_core.js?v=2"></script>
+  <script src="fechamento_core.js?v=3"></script>
   <script src="metas_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -484,11 +484,14 @@
         const agora = new Date().toISOString();
         // vendas por atendente (dos relatórios por usuário do Alpha7): só o valor vendido, na loja do cadastro de cada um
         const equipe = {}, campoDe = { C2018: 'simgen', C2019: 'perf', C2020: 'sidney', C2022: 'vit' };
-        Object.keys(campoDe).forEach(t => ((slots[t] || {}).info || {}).usuarios?.forEach(u => {
+        // venda de cada atendente no plano: a do quadro de detalhe do relatório (toda a venda, com ou sem premiação);
+        // se o arquivo não tiver o detalhe, usa o resumo do topo (só a venda premiada)
+        Object.keys(campoDe).forEach(t => { const info = (slots[t] || {}).info || {}, lista = (info.detalhe && info.detalhe.length) ? info.detalhe : (info.usuarios || []);
+          lista.forEach(u => {
           const f = acharFuncionario(u.usuario), l = f ? lojaNum(f.loja_id) : null; if (!l || !(u.venda > 0)) return;
           const e = (equipe[l] = equipe[l] || {}), nomeU = String(u.usuario).replace(/\s*-\s*\d+\s*$/, '').trim();
-          const p = e[f.id] || (e[f.id] = { nome: nomeU, simgen: 0, perf: 0, sidney: 0, vit: 0 });
-          p[campoDe[t]] = Math.round((p[campoDe[t]] + u.venda) * 100) / 100; }));
+          const p = e[f.id] || (e[f.id] = { fid: String(f.id), nome: nomeU, simgen: 0, perf: 0, sidney: 0, vit: 0 });
+          p[campoDe[t]] = Math.round((p[campoDe[t]] + u.venda) * 100) / 100; }); });
         const linhas = MetasCore.LOJAS.filter(l => R[String(l)]).map(l => { const d = MetasCore.publicar(R[String(l)]);
           if (equipe[l]) d.equipe = Object.values(equipe[l]).sort((a, b) => a.nome.localeCompare(b.nome));
           return { competencia, loja_num: l, dados: d, publicado_em: agora }; });

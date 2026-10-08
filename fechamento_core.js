@@ -207,6 +207,19 @@
       if (!u || typeof r[ix.rem] !== 'number') continue;
       out.usuarios.push({ usuario: u, venda: num(r[ix.v]), valor: num(r[ix.rem]) }); out.total += num(r[ix.rem]);
     }
+    // quadros de detalhe (Usuário, Dimensão, Qtd., Venda, Meta, % Atingida, Premiação, Remun.): trazem TODA a venda do
+    // atendente no plano, inclusive a que não gerou premiação (o resumo do topo só soma a venda premiada)
+    const det = {}; let id = null;
+    for (const r of (rows || [])) {
+      if (!r) continue;
+      if (r.some(c => /^USUARIO$/.test(norm(c))) && r.some(c => /^DIMENSAO$/.test(norm(c)))) { id = colunas(r, { u: /^USUARIO$/, v: /^VENDA$/, rem: /^REMUN/ }); continue; }
+      if (r.some(c => /^USUARIO$/.test(norm(c)))) { id = null; continue; }
+      if (!id) continue;
+      const u = String(r[id.u] == null ? '' : r[id.u]).trim();
+      if (!u || /^TOTAL/i.test(u) || typeof r[id.v] !== 'number') continue;
+      const d = (det[u] = det[u] || { usuario: u, venda: 0, valor: 0 }); d.venda += num(r[id.v]); d.valor += num(r[id.rem]);
+    }
+    out.detalhe = Object.values(det);
     return out;
   }
 

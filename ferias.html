@@ -371,7 +371,7 @@
         const pessoas = [...new Set(lista.map(s => s.funcionario_id))];
         return `<button onclick="abrirMes(${i})" class="text-left bg-white border ${pessoas.length ? 'border-emerald-300' : 'border-slate-200'} hover:shadow rounded-xl p-3 cursor-pointer min-h-[110px]">
           <div class="flex justify-between items-center"><b>${m}</b><span class="text-[10px] ${pessoas.length ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'} px-2 rounded-full font-bold">${pessoas.length}</span></div>
-          <div class="mt-1 space-y-0.5">${pessoas.slice(0, 5).map(id => `<div class="text-[10px] truncate">🏖 ${esc(func(id).nome_registro)}</div>`).join('')}
+          <div class="mt-1 space-y-0.5">${pessoas.slice(0, 5).map(id => { const pend = lista.some(s => s.funcionario_id === id && s.status === 'SOLICITADA'); return `<div class="text-[10px] truncate ${pend ? 'text-amber-700' : ''}" title="${pend ? 'Solicitada, aguardando aprovação' : ''}">${pend ? '⏳' : '🏖'} ${esc(func(id).nome_registro)}${pend ? ' <span class="text-[9px]">(a aprovar)</span>' : ''}</div>`; }).join('')}
           ${pessoas.length > 5 ? `<div class="text-[10px] text-slate-400">+ ${pessoas.length - 5}</div>` : ''}</div></button>`;
       }).join('');
     }

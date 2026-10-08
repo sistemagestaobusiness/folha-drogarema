@@ -9,7 +9,7 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="metas_core.js"></script>
-  <script src="diario_core.js?v=3"></script>
+  <script src="diario_core.js?v=4"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
@@ -69,7 +69,7 @@
     const rs = v => v == null || !isFinite(v) ? '–' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     const pc = v => v == null || !isFinite(v) ? '–' : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
     const hojeComp = () => { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
-    let perfil = '', lojaSel = null, mesSel = hojeComp(), aba = 'resumo', reg = null, regAnt = null, todas = [], metas = [], podeSubir = false;
+    let perfil = '', lojaSel = null, mesSel = hojeComp(), aba = 'resumo', reg = null, regAnt = null, eqAnt = null, todas = [], metas = [], podeSubir = false;
 
     async function inicializar() {
       const { data: u } = await _supabase.rpc('fn_meu_usuario'); perfil = u ? u.perfil : '';
@@ -90,6 +90,9 @@
       const data = (lista || []).find(x => x.competencia === mesSel && x.loja_num === lojaSel);
       regAnt = (lista || []).find(x => x.competencia === M.somaMes(mesSel, -1) && x.loja_num === lojaSel) || null;
       todas = (lista || []).filter(x => x.competencia === mesSel);
+      // equipe do mês anterior fechado (resultado publicado): base da participação individual na meta
+      eqAnt = null; try { const rr = await _supabase.from('loja_resultados').select('dados').eq('competencia', M.somaMes(mesSel, -1)).eq('loja_num', lojaSel).maybeSingle();
+        if (!rr.error && rr.data && (rr.data.dados.equipe || []).length) eqAnt = D.deEquipe(rr.data.dados.equipe); } catch (e) {}
       if (error) { $('aviso').innerHTML = `<div class="cartao text-rose-800 font-semibold">Tela ainda não configurada no banco (SQL BC). ${esc(error.message)}</div>`; return; }
       reg = data || null; $('aviso').innerHTML = ''; render();
     }
@@ -143,7 +146,9 @@
       if (aba === 'lojas' && geral) { $('sub').textContent = `Todas as lojas · ${M.nomeMes(mesSel)}`; $('conteudo').innerHTML = telaLojas(); return; }
       if (!temDados(reg)) {
         $('conteudo').innerHTML = `<div class="cartao text-slate-600">Ainda não há dados de ${mesSel} para a Loja ${lojaSel}.${podeSubir ? ' Clique em <b>Atualizar dados</b> e escolha os dois relatórios do Alpha7 (podem ser selecionados juntos).' : ''}</div>`; return; }
-      const R = D.resumo(reg.dados, meta, mesSel, null, regAnt ? D.ateODia(regAnt.dados, 31) : null);
+      // participação: mês anterior completo no acompanhamento (venda real por atendente); senão, a equipe do mês fechado; senão, divisão igual
+      const antDiario = regAnt && Object.keys(regAnt.dados.dias || {}).length >= 20 ? D.ateODia(regAnt.dados, 31) : null;
+      const R = D.resumo(reg.dados, meta, mesSel, null, antDiario || eqAnt); R.origemObj = antDiario ? 'DIARIO' : eqAnt ? 'FECHADO' : 'IGUAL';
       $('sub').textContent = `Loja ${lojaSel} · ${M.nomeMes(mesSel)} · dados até ${dBR(R.ref)}${R.semDia ? ' (relatório geral)' : ''} · atualizado em ${new Date(reg.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
       $('conteudo').innerHTML = aba === 'dias' ? (R.datas.length ? telaDias(R) : '<div class="cartao text-slate-600">O dia a dia aparece quando a loja sobe o relatório de venda por atendente.</div>') : telaResumo(R, meta);
     }
@@ -178,19 +183,19 @@
         <table class="t w-full mt-2"><thead><tr><th>Indicador</th><th>Realizado</th><th>Meta</th><th>Alcance</th><th>Contra o esperado</th><th>Nota</th><th>Há 7 dias</th><th>Falta</th><th>Por dia</th></tr></thead><tbody>${R.inds.map(linhaI).join('')}</tbody></table>
         ${meta ? '' : '<p class="rot mt-2">Sem meta registrada para este mês (console de metas).</p>'}</div>`;
       // equipe
-      const alc = (v, obj) => { if (!obj) return '<span class="vazio">–</span>'; const a = v / obj, okk = a >= R.ritmo;
-        return `<div class="flex items-center gap-2 justify-end" title="Realizado ${rs(v)} de ${rs(obj)} (objetivo do mês inteiro). Até hoje o esperado era ${rs(obj * R.ritmo)}."><div class="trilho w-16"><i class="${okk ? 'bg-emerald-600' : 'bg-rose-500'}" style="width:${Math.min(100, a * 100)}%"></i><b style="left:${Math.min(100, R.ritmo * 100)}%"></b></div><span class="mono w-10 text-right ${okk ? 'text-emerald-700' : 'text-rose-700'}">${Math.round(a * 100)}%</span></div><div class="rot text-right" style="font-size:10px">de ${rs(obj)}</div>`; };
+      const alc = (v, obj, pt) => { if (!obj) return '<span class="vazio">–</span>'; const a = v / obj, okk = a >= R.ritmo;
+        return `<div class="flex items-center gap-2 justify-end" title="Realizado ${rs(v)} de ${rs(obj)} (objetivo do mês inteiro = ${pc(pt)} da meta da loja). Até hoje o esperado era ${rs(obj * R.ritmo)}."><div class="trilho w-16"><i class="${okk ? 'bg-emerald-600' : 'bg-rose-500'}" style="width:${Math.min(100, a * 100)}%"></i><b style="left:${Math.min(100, R.ritmo * 100)}%"></b></div><span class="mono w-10 text-right ${okk ? 'text-emerald-700' : 'text-rose-700'}">${Math.round(a * 100)}%</span></div><div class="rot text-right" style="font-size:10px">de ${rs(obj)}</div>`; };
       const linhas = R.equipe.map(a => `<tr><td class="font-medium text-slate-900">${esc(a.nome)}</td><td class="num">${selo(a.pct, R.alvo)}</td><td class="num">${selo(a.pctHoje, R.alvo)}</td>
         <td class="num mono" title="hoje: ${rs(a.sh)}">${rs(a.s)}</td><td class="num mono" title="hoje: ${rs(a.fh)}">${rs(a.f)}</td>
         <td class="num mono ${a.vsAnt == null ? 'vazio' : a.vsAnt <= -0.15 ? 'text-rose-700 font-semibold' : a.vsAnt >= 0.15 ? 'text-emerald-700 font-semibold' : 'text-slate-600'}">${a.vsAnt == null ? '–' : sinal(a.vsAnt)}</td>
-        <td class="num">${alc(a.s, a.objS)}</td><td class="num">${alc(a.f, a.objF)}</td>
+        <td class="num">${alc(a.s, a.objS, a.partS)}</td><td class="num">${alc(a.f, a.objF, a.part)}</td>
         <td class="num mono" title="${a.camp ? esc(Object.entries(a.camp.prod).map(([p, q]) => q + '× ' + p).join('\n')) : ''}">${a.camp ? a.camp.itens : '<span class="vazio">–</span>'}</td></tr>`).join('');
       const dem = R.demais ? `<tr class="text-slate-500"><td>Demais usuários</td><td class="num">${pc(R.demais.f ? R.demais.s / R.demais.f : null)}</td><td></td><td class="num mono">${rs(R.demais.s)}</td><td class="num mono">${rs(R.demais.f)}</td><td></td><td></td><td></td><td></td></tr>` : '';
       const equipe = R.equipe.length ? `<div class="cartao overflow-x-auto"><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-semibold text-slate-900">Equipe</div>
           <div class="rot">% sim+gen: <span class="selo ok">na meta</span> <span class="selo atencao">até 7,5 pts abaixo</span> <span class="selo baixo">abaixo</span></div></div>
           <table class="t w-full mt-2"><thead><tr><th>Atendente</th><th>% sim+gen</th><th>% hoje</th><th>Sim+gen</th><th>Venda total</th><th>Venda × mês passado</th><th>Sim+gen: do objetivo do mês</th><th>Venda: do objetivo do mês</th><th>Vit. e valor fixo</th></tr></thead><tbody>${linhas}${dem}</tbody></table>
           <p class="rot mt-2"><b>Como ler o objetivo:</b> o percentual é quanto do objetivo do <u>mês inteiro</u> a pessoa já fez (o valor do objetivo está abaixo dele). O risco na barra marca os ${pc(R.ritmo)} esperados até hoje: verde se já passou do risco, vermelho se está atrás.
-          Objetivo de cada um = meta da loja × participação: ${R.origemObj === 'ANTERIOR' ? 'a parte que a pessoa teve na venda da equipe no mês passado' : `divisão igual entre os ${R.nEquipe} atendentes com pelo menos 3% da venda da loja (passa a usar a participação do mês passado quando ele for enviado)`}. Venda × mês passado: mesmo período (até o dia ${R.nHoje}).</p></div>`
+          Objetivo de cada um = meta da loja × participação da pessoa: ${R.origemObj === 'DIARIO' ? 'a parte que ela teve na venda da equipe no mês passado' : R.origemObj === 'FECHADO' ? `a parte que ela teve na venda da equipe em ${M.nomeMes(M.somaMes(mesSel, -1))}, pelo resultado fechado (passe o mouse no percentual para ver a participação)` : `sem mês anterior fechado com equipe, usei divisão igual entre os ${R.nEquipe} atendentes com pelo menos 3% da venda da loja`}. Quem não vendeu no mês passado fica sem objetivo. Venda × mês passado: mesmo período (até o dia ${R.nHoje}).</p></div>`
         : '<div class="cartao text-slate-600">A equipe aparece quando a loja sobe o relatório de venda por atendente.</div>';
       return leitura + indic + equipe;
     }
