@@ -59,6 +59,8 @@
         <select id="fTipo" onchange="renderizar()" class="border border-slate-300 rounded p-1.5 font-bold">
           <option value="">Todos</option><option value="FREELANCE">Freelance</option><option value="HORA_EXTRA">Hora extra</option>
         </select></div>
+      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Loja</label>
+        <select id="fLoja" onchange="renderizar()" class="border border-slate-300 rounded p-1.5 font-bold"><option value="">Todas</option></select></div>
       <span id="fResumo" class="text-[10px] text-slate-400"></span>
     </div>
 
@@ -169,11 +171,17 @@
       const box = document.getElementById('lista');
       const termo = normTxt(document.getElementById('fNome').value.trim());
       const funcao = document.getElementById('fFuncao').value, tipo = document.getElementById('fTipo').value;
+      // lojas que aparecem nas solicitações carregadas (mantém a escolha ao trocar de aba)
+      const selL = document.getElementById('fLoja'), lojaEsc = selL.value;
+      const lojasL = [...new Set(dadosCarregados.map(r => r.loja_solicitante || 'SEM LOJA'))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+      selL.innerHTML = '<option value="">Todas</option>' + lojasL.map(l => `<option value="${esc(l)}" ${l === lojaEsc ? 'selected' : ''}>${esc(l)}</option>`).join('');
+      const loja = lojasL.includes(lojaEsc) ? lojaEsc : '';
       const lista = dadosCarregados.filter(r =>
         (!termo || termo.split(/\s+/).every(p => normTxt(nome(r.funcionario_id)).includes(p) || (r.funcionario_ausente_id && normTxt(nome(r.funcionario_ausente_id)).includes(p))))
         && (!funcao || normTxt(r.cargo_exercido).startsWith(funcao))
-        && (!tipo || (r.tipo_solicitacao || 'FREELANCE') === tipo));
-      const filtrando = termo || funcao || tipo;
+        && (!tipo || (r.tipo_solicitacao || 'FREELANCE') === tipo)
+        && (!loja || (r.loja_solicitante || 'SEM LOJA') === loja));
+      const filtrando = termo || funcao || tipo || loja;
       document.getElementById('fResumo').innerText = filtrando ? `${lista.length} de ${dadosCarregados.length} solicitação(ões)` : '';
       if (lista.length === 0) {
         box.innerHTML = `<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">${filtrando ? 'Nenhuma solicitação com esse filtro.' : aba === 'pend' ? '🎉 Nenhuma solicitação aguardando.' : 'Nenhuma decisão no período.'}</div>`;
