@@ -76,6 +76,7 @@
               <option value="ESCALA">Escala</option>
               <option value="COMPENSAR">Compensar horas</option>
               <option value="ALTA_DEMANDA">Alta demanda</option>
+              <option value="COMPLEMENTO_JORNADA">Complemento de jornada (sem pagamento)</option>
             </select>
           </div>
           <div id="boxAusente" class="hidden bg-rose-50 border border-rose-200 rounded-lg p-3">
@@ -203,7 +204,7 @@
     const INTERVALO_MIN_HORAS = 6;    // acima de 6h de jornada, desconta intervalo
     const INTERVALO_HORAS = 1;        // 1h de descanso
     const MOTIVOS_COM_AUSENTE = ['FALTA_DIA', 'FALTA_PARCIAL', 'ATESTADO', 'AUSENCIA'];
-    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda', FERIADO: '🎉 Trabalho em feriado (HE 100%)' };
+    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda', FERIADO: '🎉 Trabalho em feriado (HE 100%)', COMPLEMENTO_JORNADA: 'Complemento de jornada (sem pagamento)' };
     const STATUS = {
       PENDENTE_SUPERVISOR: { txt: 'AGUARDANDO SUPERVISOR', cls: 'bg-amber-100 text-amber-800' },
       PENDENTE_RH:         { txt: 'AGUARDANDO RH',         cls: 'bg-sky-100 text-sky-800' },
@@ -508,8 +509,8 @@
         if (!m0 || m0.foraDoHorario) partes.push(`<div class="text-slate-600">ℹ O horário ${ini}–${fim} fica fora do funcionamento da loja.</div>`);
         else if (!m0.abaixo) {
           const t = `Das ${ini} às ${fim} a loja já tem pelo menos ${m0.menor} pessoa(s) (mínimo ${cob0.minimo}) contando a escala${cob0.extras.length ? ' e os pedidos já enviados' : ''}, mesmo sem este pedido.`;
-          if (!['ALTA_DEMANDA', 'COMPENSAR'].includes(motivo)) avisos.push(t + ' Explique o motivo na observação.');
-          partes.push(`<div class="${['ALTA_DEMANDA', 'COMPENSAR'].includes(motivo) ? 'text-slate-600' : 'bg-amber-50 border border-amber-300 text-amber-900 rounded p-2 font-bold'}">ℹ ${esc(t)}</div>`);
+          if (!['ALTA_DEMANDA', 'COMPENSAR', 'COMPLEMENTO_JORNADA'].includes(motivo)) avisos.push(t + ' Explique o motivo na observação.');
+          partes.push(`<div class="${['ALTA_DEMANDA', 'COMPENSAR', 'COMPLEMENTO_JORNADA'].includes(motivo) ? 'text-slate-600' : 'bg-amber-50 border border-amber-300 text-amber-900 rounded p-2 font-bold'}">ℹ ${esc(t)}</div>`);
         } else if (!EC.cobertura(loja, data, { extras: [{ funcionario_id: funcId || null, entrada: ini, saida: fim }] }).slots.some((s, i) => s.qtd > cob0.slots[i].qtd)) {
           partes.push(`<div class="text-slate-600">ℹ Este pedido não aumenta a cobertura: a pessoa já está na escala nesse horário.${resto.length ? ` Continua faltando: ${EC.txtBuracos(resto)}.` : ''}</div>`);
         } else {

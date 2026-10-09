@@ -143,7 +143,7 @@
     const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda', FERIADO: '🎉 Trabalho em feriado (HE 100%)' };
+    const NOMES_MOTIVO = { FALTA_DIA: 'Falta (dia todo)', FALTA_PARCIAL: 'Falta (parcial)', ATESTADO: 'Atestado', AUSENCIA: 'Ausência', ESCALA: 'Escala', COMPENSAR: 'Compensar horas', ALTA_DEMANDA: 'Alta demanda', FERIADO: '🎉 Trabalho em feriado (HE 100%)', COMPLEMENTO_JORNADA: 'Complemento de jornada (sem pagamento)' };
     const STATUS = {
       PENDENTE_SUPERVISOR: { txt: 'AGUARDANDO SUPERVISOR', cls: 'bg-amber-100 text-amber-800' },
       PENDENTE_RH: { txt: 'AGUARDANDO RH', cls: 'bg-sky-100 text-sky-800' },
@@ -299,7 +299,7 @@
       const sup = r.supervisor_em ? `<div class="text-[11px]">Supervisor: <b>${r.status === 'REJEITADA' && !r.rh_em ? 'recusou' : 'aprovou'}</b> — ${esc(r.supervisor_por || '')}${r.supervisor_forcado ? ' <b class="text-amber-700">(no lugar do supervisor)</b>' : ''} em ${new Date(r.supervisor_em).toLocaleString('pt-BR')}${r.supervisor_obs ? ' · "' + esc(r.supervisor_obs) + '"' : ''}</div>` : '';
       const rh = r.rh_em ? `<div class="text-[11px]">RH: ${esc(r.rh_por || '')} em ${new Date(r.rh_em).toLocaleString('pt-BR')}${r.observacao_rh ? ' · "' + esc(r.observacao_rh) + '"' : ''}</div>` : '';
       const canc = r.status === 'CANCELADA' ? `<div class="text-[11px] bg-rose-50 border-l-2 border-rose-400 pl-2 text-rose-800"><b>🚫 Cancelada${r.cancelado_por ? ' por ' + esc(r.cancelado_por) : ''}${r.cancelado_em ? ' em ' + new Date(r.cancelado_em).toLocaleString('pt-BR') : ''}:</b> ${esc(r.cancelado_motivo || 'sem motivo informado')}</div>` : '';
-      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha + (compAberta && ordemComp(r.competencia_folha) > ordemComp(compAberta) ? ' <b class="text-sky-700">(aguardando abertura do mês)</b>' : '') : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
+      const fin = r.status === 'APROVADA' ? `<div class="text-[11px] text-emerald-800">${r.modo_freelancer === 'COMPLEMENTO' ? 'Complemento de jornada (sem pagamento e sem banco de horas)' : r.modo_freelancer === 'COMPENSAR' ? 'Compensou horas no banco (sem pagamento)' : `Pago ${fmtR(r.valor_pago)}`}${r.competencia_folha ? ' · competência ' + r.competencia_folha + (compAberta && ordemComp(r.competencia_folha) > ordemComp(compAberta) ? ' <b class="text-sky-700">(aguardando abertura do mês)</b>' : '') : ''}${r.pagamento_status ? ' · ' + (PGTO[r.pagamento_status] || r.pagamento_status) + (r.pago_em ? ' em ' + dataBR(r.pago_em) : '') : ''}${r.tratamento_ausencia ? ' · ausente: ' + TRAT[r.tratamento_ausencia] : ''}</div>` : '';
       return `
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           <div class="flex flex-col md:flex-row justify-between gap-3">
@@ -386,6 +386,13 @@
       const { data: r } = await _supabase.from('freelance_solicitacoes').select('*').eq('id', id).single();
       if (!r) return;
       if (!confirmaAntecedencia(r)) return;
+      // complemento de jornada: só confirma; não tem pagamento, lançamento na folha nem banco de horas
+      if (r.motivo === 'COMPLEMENTO_JORNADA') {
+        if (!confirm(`Aprovar o COMPLEMENTO DE JORNADA de ${nome(r.funcionario_id)} em ${dataBR(r.data_servico)} (${r.horas_trabalhadas}h, ${r.loja_solicitante || ''})?\n\nConta na escala da loja. Não gera pagamento, lançamento na folha nem banco de horas.`)) return;
+        const { error } = await _supabase.rpc('fn_freelance_decisao_rh', { p_id: r.id, p_aprovar: true, p_modo_freelancer: 'COMPLEMENTO', p_horas: r.horas_trabalhadas });
+        if (error) return alert('Não aprovado: ' + error.message + (/inválid|COMPLEMENTO/i.test(error.message) ? ' (rode o SQL BI)' : ''));
+        return carregar();
+      }
       atual = r;
       document.getElementById('apResumo').innerText = `${r.loja_solicitante || ''} · ${dataBR(r.data_servico)} · ${NOMES_MOTIVO[r.motivo] || r.motivo || ''} · lança na competência ${compDoFato(r.data_servico).txt}`;
       await prepararEscala([r]);
