@@ -109,6 +109,23 @@
               <div id="info13" class="hidden text-[10px] bg-white border border-sky-200 rounded p-2 text-slate-700 space-y-0.5"></div>
             </div>
 
+            <!-- Reembolso (ex.: 2031 REEMB. VALE TRANSPORTE desde 10/2026): dias com data e valor; o valor do lançamento é a soma -->
+            <div id="boxReembolso" class="hidden bg-violet-50 border border-violet-300 p-3 rounded-lg space-y-2">
+              <div class="flex justify-between items-center">
+                <label class="block text-xs font-bold text-violet-800 uppercase">🚌 Dias do reembolso *</label>
+                <button type="button" onclick="addDiaReembolso()" class="px-2 py-1 bg-white hover:bg-violet-100 text-violet-800 border border-violet-300 rounded font-bold text-[11px] cursor-pointer">+ dia</button>
+              </div>
+              <div class="grid grid-cols-12 gap-1 text-[9px] font-bold text-violet-700 uppercase px-0.5">
+                <span class="col-span-4">Data</span><span class="col-span-3">Valor (R$)</span><span class="col-span-4">Trajeto / descrição</span><span></span>
+              </div>
+              <div id="listaDiasReembolso" class="space-y-1"></div>
+              <div class="flex justify-between text-[11px] font-bold text-violet-900 border-t border-violet-200 pt-1.5">
+                <span id="qtdDiasReembolso">0 dia(s)</span><span id="totalReembolso" class="font-mono">R$ 0,00</span>
+              </div>
+              <p class="text-[10px] text-violet-700 leading-tight">Um dia por linha, com o valor gasto. O valor do lançamento é a soma dos dias. Trajeto é opcional (ex.: LOJA 02 → LOJA 05). Pago só fora do 5º dia útil: não entra no holerite.</p>
+              <datalist id="dlTrajetos"></datalist>
+            </div>
+
             <div id="avisoItemTravado" class="hidden bg-emerald-50 border border-emerald-300 text-emerald-800 p-2.5 rounded-lg text-[11px] font-bold">
               🔒 Pagamento já confirmado pelo Financeiro. Este lançamento não pode ser excluído e só o EVENTO pode ser trocado.
             </div>
@@ -718,19 +735,87 @@
     }
 
     const ehForaHolerite = cat => !!cat && cat !== 'ADIANTAMENTO';
+    // categoria "pago fora" respeitando a competência inicial da regra (tipos_eventos.pagamento_extra_desde)
+    const ordComp = c => { const m = String(c || '').match(/^(\d{2})\/(\d{4})$/); return m ? (+m[2]) * 100 + (+m[1]) : 0; };
+    const catPagExtra = (ev, comp) => !ev || !ev.pagamento_extra_tipo ? null
+      : (ev.pagamento_extra_desde && ordComp(comp) < ordComp(ev.pagamento_extra_desde) ? null : ev.pagamento_extra_tipo);
+
+    // ---------------- REEMBOLSO: dias (data, valor, trajeto) ----------------
+    let lojasTrajeto = null;
+    async function carregarSugestoesTrajeto() {
+      if (lojasTrajeto) return;
+      const { data } = await _supabase.from('lojas').select('nome_loja').order('nome_loja');
+      lojasTrajeto = (data || []).map(l => l.nome_loja);
+      document.getElementById('dlTrajetos').innerHTML = lojasTrajeto.map(n => `<option value="${escaparHtml(n)}">`).join('');
+    }
+    function addDiaReembolso(dia) {
+      const d = dia || {};
+      const lista = document.getElementById('listaDiasReembolso');
+      const row = document.createElement('div');
+      row.className = 'linhaDiaReemb grid grid-cols-12 gap-1 items-center';
+      row.innerHTML = `<input type="date" class="rdData col-span-4 bg-white border border-violet-200 rounded p-1.5 text-xs font-mono" value="${escaparHtml(d.data || '')}">
+        <input type="number" step="0.01" min="0" class="rdValor col-span-3 bg-white border border-violet-200 rounded p-1.5 text-xs font-mono" value="${d.valor != null ? d.valor : ''}" oninput="somarReembolso()">
+        <input type="text" list="dlTrajetos" maxlength="80" class="rdTrajeto col-span-4 bg-white border border-violet-200 rounded p-1.5 text-xs uppercase" value="${escaparHtml(d.trajeto || '')}" placeholder="opcional">
+        <button type="button" class="text-violet-400 hover:text-rose-600 font-bold cursor-pointer" title="Remover dia" onclick="this.parentElement.remove(); somarReembolso()">✕</button>`;
+      lista.appendChild(row);
+      if (!dia) row.querySelector('.rdData').focus();
+      somarReembolso();
+    }
+    function lerDiasReembolso() {
+      return [...document.querySelectorAll('#listaDiasReembolso .linhaDiaReemb')].map(r => ({
+        data: r.querySelector('.rdData').value,
+        valor: Math.round((parseFloat(r.querySelector('.rdValor').value) || 0) * 100) / 100,
+        trajeto: removerAcentosEColocarMaiuscula(r.querySelector('.rdTrajeto').value.trim()).replace(/\s*->\s*/g, ' → ')
+      })).filter(d => d.data || d.valor || d.trajeto);
+    }
+    function somarReembolso() {
+      const dias = lerDiasReembolso();
+      const total = Math.round(dias.reduce((a, d) => a + d.valor, 0) * 100) / 100;
+      document.getElementById('qtdDiasReembolso').innerText = `${dias.length} dia(s)`;
+      document.getElementById('totalReembolso').innerText = 'R$ ' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      if (!document.getElementById('boxReembolso').classList.contains('hidden')) document.getElementById('valorLancamento').value = total ? total.toFixed(2) : '';
+      return total;
+    }
+    // liga/desliga o modo reembolso no formulário (valor = soma, sem fixo, sem ajustes, sempre provento)
+    function modoReembolso(ativo, dias) {
+      const box = document.getElementById('boxReembolso');
+      const estava = !box.classList.contains('hidden');
+      box.classList.toggle('hidden', !ativo);
+      const valor = document.getElementById('valorLancamento');
+      valor.readOnly = ativo; valor.classList.toggle('bg-violet-50', ativo);
+      const fixo = document.getElementById('checkFixo');
+      fixo.disabled = ativo; if (ativo) fixo.checked = false;
+      if (ativo) {
+        document.getElementById('tipoLancamento').value = 'PROVENTO';
+        document.getElementById('containerAbatimento').classList.add('hidden');
+        document.getElementById('containerAbatimento2').classList.add('hidden');
+        carregarSugestoesTrajeto();
+        if (dias) { document.getElementById('listaDiasReembolso').innerHTML = ''; dias.forEach(d => addDiaReembolso(d)); }
+        if (!document.querySelector('#listaDiasReembolso .linhaDiaReemb')) addDiaReembolso();
+        somarReembolso();
+      } else if (estava) {
+        document.getElementById('listaDiasReembolso').innerHTML = '';
+        if (valor.readOnly === false && estava) valor.value = '';
+      }
+      document.getElementById('tipoLancamento').disabled = ativo;
+    }
 
     function atualizarBoxVencimento() {
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
-      const extra = ev && ev.pagamento_extra_tipo;
+      const extra = catPagExtra(ev, competenciaRegraLancamento);
       document.getElementById('boxVencimentoPag').classList.toggle('hidden', !extra);
       document.getElementById('info13').classList.add('hidden');
+      const idEd = document.getElementById('editLancamentoId').value;
+      modoReembolso(extra === 'REEMBOLSO', extra === 'REEMBOLSO' && idEd ? ((mapaItensRenderizados[idEd] || {}).reembolso_dias || []) : null);
       if (!extra) return;
-      document.getElementById('txtVencimentoPag').innerText = ehForaHolerite(extra)
+      document.getElementById('txtVencimentoPag').innerText = extra === 'REEMBOLSO'
+        ? 'Reembolso: fica FORA do holerite (3º quadro) e vai para o Financeiro pagar na data informada. Reembolsos da pessoa com a mesma data de pagamento viram uma linha só no Financeiro.'
+        : ehForaHolerite(extra)
         ? `${ROTULO_PAG_EXTRA[extra] || extra}: fica FORA do holerite (3º quadro) e vai para o Financeiro pagar na data informada. Lançamentos do mesmo tipo no mês viram um único pagamento (valor líquido).`
         : `Adiantamento: continua no holerite (desconto) e o valor vai para o Financeiro pagar na data informada. Contábil + não contábil viram um único pagamento.`;
       // mesma data do pagamento já em aberto deste tipo
       const campo = document.getElementById('inputVencimentoPag');
-      if (!campo.value) {
+      if (!campo.value && extra !== 'REEMBOLSO') {
         const irmao = Object.values(mapaItensRenderizados).find(i => {
           const e = eventoDaRubrica(i.rubrica); const p = mapaPagExtras[i.id];
           return e && e.pagamento_extra_tipo === extra && p && p.status !== 'PAGO';
@@ -1258,6 +1343,7 @@
             ${itemTravado(item.id) || exclusaoBloqueada ? `<span class="text-slate-300 px-1">🔒</span>` : `<button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>`}`;
         return `<tr class="hover:bg-slate-50">
           <td class="py-1 px-2 text-slate-700 font-medium"><span class="text-[9px] font-bold text-sky-800 bg-sky-100 px-1 rounded mr-1">${ROTULO_PAG_EXTRA[item.catPag] || ''}</span>${escaparHtml(item.rubrica)} ${badgePagExtra(item)}
+            ${Array.isArray(item.reembolso_dias) && item.reembolso_dias.length ? `<div class="text-[10px] text-violet-700 font-normal">🚌 ${item.reembolso_dias.map(d => `${escaparHtml(String(d.data || '').slice(8, 10) + '/' + String(d.data || '').slice(5, 7))}${d.trajeto ? ' ' + escaparHtml(d.trajeto) : ''} (${parseFloat(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join(' · ')}</div>` : ''}
             <span onclick="abrirDetalhesItem('${item.id}')" class="text-slate-300 hover:text-slate-600 cursor-pointer ml-1 text-[10px] select-none" title="Histórico do lançamento">🕘</span></td>
           <td class="py-1 px-2 text-right font-mono font-bold w-24 ${item.tipo === 'DESCONTO' ? 'text-rose-700' : 'text-emerald-700'}">${item.tipo === 'DESCONTO' ? '- ' : ''}${fmt(item.valor)}</td>
           <td class="py-1 px-2 text-center w-16">${acoes}</td>
@@ -1289,7 +1375,7 @@
       });
 
       // 13º, férias, rescisão e VT ficam fora do holerite (3º quadro) e não somam no líquido
-      itensEnriquecidos.forEach(l => { const e = eventoDaRubrica(l.rubrica); l.foraHolerite = ehForaHolerite(e && e.pagamento_extra_tipo); l.catPag = e && e.pagamento_extra_tipo; });
+      itensEnriquecidos.forEach(l => { const e = eventoDaRubrica(l.rubrica); const cat = catPagExtra(e, l.competencia || competenciaRegraLancamento); l.foraHolerite = ehForaHolerite(cat); l.catPag = cat; });
       renderizarForaHolerite(itensEnriquecidos.filter(l => l.foraHolerite));
       const contabilItens = itensEnriquecidos.filter(l => !l.isNaoContabil && !l.foraHolerite);
       const naoContabilItens = itensEnriquecidos.filter(l => l.isNaoContabil && !l.foraHolerite);
@@ -1504,11 +1590,14 @@
        'valorAbatimento', 'inputMotivo', 'inputParcelaAtual', 'inputTotalParcelas',
        'valorAbatimento2', 'inputMotivo2', 'inputParcelaAtual2', 'inputTotalParcelas2'
       ].forEach(id => { const el = document.getElementById(id); if (el) { el.disabled = travar; el.classList.toggle('opacity-50', travar); } });
+      document.querySelectorAll('#boxReembolso input, #boxReembolso button').forEach(el => { el.disabled = travar; el.classList.toggle('opacity-50', travar); });
       document.getElementById('avisoItemTravado').classList.toggle('hidden', !travar);
     }
 
     function cancelarEdicao() {
       aplicarTravaEdicao(false);
+      document.getElementById('editLancamentoId').value = '';
+      modoReembolso(false);
       document.getElementById('inputVencimentoPag').value = '';
       document.getElementById('boxVencimentoPag').classList.add('hidden');
       document.getElementById('editLancamentoId').value = '';
@@ -1535,8 +1624,8 @@
       const funcionario_id = document.getElementById('selectFuncionarioNovo').value;
       let rubrica = removerAcentosEColocarMaiuscula(document.getElementById('inputRubrica').value);
       const tipo = document.getElementById('tipoLancamento').value;
-      const valorBruto = parseFloat(document.getElementById('valorLancamento').value) || 0;
-      const fixo = document.getElementById('checkFixo').checked;
+      let valorBruto = parseFloat(document.getElementById('valorLancamento').value) || 0;
+      let fixo = document.getElementById('checkFixo').checked;
 
       if (!funcionario_id) {
         alert("Selecione um funcionário válido!");
@@ -1550,7 +1639,9 @@
         document.getElementById('inputRubrica').focus();
         return;
       }
-      const ehPagExtra = !!(eventoSel && eventoSel.pagamento_extra_tipo);
+      const catSel = catPagExtra(eventoSel, competenciaRegraLancamento);
+      const ehPagExtra = !!catSel;
+      const ehReembolso = catSel === 'REEMBOLSO';
 
       // Lançamento já PAGO pelo Financeiro: grava somente a troca do evento
       if (idEdicao && itemTravado(idEdicao)) {
@@ -1577,14 +1668,27 @@
             '\n\nLançar mesmo assim?')) return;
       }
       if (ehPagExtra && !vencimentoPag) {
-        alert(`O evento ${eventoSel.codigo_evento} é pago fora do 5º dia útil (${ROTULO_PAG_EXTRA[eventoSel.pagamento_extra_tipo] || eventoSel.pagamento_extra_tipo}). Informe a data de vencimento.`);
+        alert(`O evento ${eventoSel.codigo_evento} é pago fora do 5º dia útil (${ROTULO_PAG_EXTRA[catSel] || catSel}). Informe a data ${ehReembolso ? 'prevista de pagamento' : 'de vencimento'}.`);
         document.getElementById('boxVencimentoPag').classList.remove('hidden');
         document.getElementById('inputVencimentoPag').focus();
         return;
       }
 
-      // Ajustes do botão "+" (1º e 2º)
-      const ajustes = [lerPainelAjuste(1), lerPainelAjuste(2)].filter(Boolean);
+      // Reembolso: dias obrigatórios, valor = soma dos dias
+      let diasReembolso = null;
+      if (ehReembolso) {
+        diasReembolso = lerDiasReembolso();
+        if (!diasReembolso.length) { alert('Informe os dias do reembolso (data e valor de cada dia).'); addDiaReembolso(); return; }
+        const ruim = diasReembolso.find(d => !d.data || !(d.valor > 0));
+        if (ruim) { alert('Cada dia do reembolso precisa de data e valor.'); return; }
+        const datas = diasReembolso.map(d => d.data);
+        const repetida = datas.find((d, i) => datas.indexOf(d) !== i);
+        if (repetida && !confirm(`O dia ${repetida.split('-').reverse().join('/')} aparece mais de uma vez. Confirma (ex.: ida e volta)?`)) return;
+        diasReembolso.sort((a, b) => a.data.localeCompare(b.data));
+      }
+
+      // Ajustes do botão "+" (1º e 2º) — não se aplicam ao reembolso
+      const ajustes = ehReembolso ? [] : [lerPainelAjuste(1), lerPainelAjuste(2)].filter(Boolean);
       const agora = new Date().toISOString();
       const itemOriginal = idEdicao ? (mapaItensRenderizados[idEdicao] || {}) : {};
       const ajustesAnteriores = lerAjustesDoItem(itemOriginal);
@@ -1627,6 +1731,13 @@
         ajustes: ajustes.length > 0 ? ajustes : null,
         vencimento_pagamento: ehPagExtra ? vencimentoPag : null
       };
+      if (ehReembolso) {
+        payload.reembolso_dias = diasReembolso;
+        payload.valor = payload.valor_bruto = Math.round(diasReembolso.reduce((a, d) => a + d.valor, 0) * 100) / 100;
+        payload.tipo = 'PROVENTO'; payload.fixo = false; payload.abatimento_sigiloso = 0; payload.ajustes = null;
+      } else if (itemOriginal.reembolso_dias) {
+        payload.reembolso_dias = null;   // trocou o reembolso por outro evento
+      }
 
       let error;
       if (idEdicao) {

@@ -216,7 +216,7 @@
     }
     function origemTxt(i) {
       if (i.origem === 'FOLHA') return `folha ${esc(i.competencia || '')} enviada pelo RH`;
-      if (i.origem === 'LANCAMENTO') return `lançamento ${esc(i.competencia || '')}${i.rubrica ? ' · ' + esc(i.rubrica) : ''}`;
+      if (i.origem === 'LANCAMENTO') return `lançamento ${esc(i.competencia || '')}${i.rubrica ? ' · ' + esc(i.rubrica) : ''}${i.descricao ? ' · ' + esc(i.descricao) : ''}`;
       return esc(i.descricao || 'solicitação aprovada');
     }
 

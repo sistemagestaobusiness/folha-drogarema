@@ -209,9 +209,12 @@
 
         const dadosFuncMap = {};
         // 13º, férias e rescisão são pagos fora do holerite (não entram aqui); o VT vira coluna própria no custo
-        const catEvento = {};
-        eventos.forEach(e => { if (e.pagamento_extra_tipo) catEvento[String(e.codigo_evento)] = e.pagamento_extra_tipo; });
-        const catDoItem = it => catEvento[(String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1]];
+        // pagamento_extra_desde: a regra só vale a partir daquela competência (ex.: 2031 reembolso desde 10/2026)
+        const catEvento = {}, catDesde = {};
+        eventos.forEach(e => { if (e.pagamento_extra_tipo) { catEvento[String(e.codigo_evento)] = e.pagamento_extra_tipo; catDesde[String(e.codigo_evento)] = e.pagamento_extra_desde || ''; } });
+        const ordCompFH = c => { const m = String(c || '').match(/^(\d{2})\/(\d{4})$/); return m ? (+m[2]) * 100 + (+m[1]) : 0; };
+        const catDoItem = it => { const c = (String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1];
+          return catEvento[c] && (!catDesde[c] || ordCompFH(it.competencia) >= ordCompFH(catDesde[c])) ? catEvento[c] : undefined; };
 
         itensFolha.forEach(item => {
           const fId = item.funcionario_id;
@@ -255,7 +258,8 @@
           const val = parseFloat(item.valor || 0);
           target.qtd_itens++;
           const cat = catDoItem(item);
-          if (cat === 'VALE_TRANSPORTE') { target.vt += val; return; }
+          // VT e reembolso de transporte (pagos fora da folha) entram no custo empresa pela coluna VT
+          if (cat === 'VALE_TRANSPORTE' || cat === 'REEMBOLSO') { target.vt += val; return; }
           if (cat && cat !== 'ADIANTAMENTO') return;
           const rubrica = String(item.rubrica || '').toUpperCase();
           const tipo = (item.tipo || 'PROVENTO').toUpperCase();

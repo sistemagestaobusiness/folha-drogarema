@@ -251,8 +251,10 @@
         const dadosFuncMap = {};
 
         // 13º, férias, rescisão e VT são pagos FORA do holerite: não entram neste cálculo
-        const codigosForaHolerite = new Set(eventos.filter(e => e.pagamento_extra_tipo && e.pagamento_extra_tipo !== 'ADIANTAMENTO').map(e => String(e.codigo_evento)));
-        const foraDoHolerite = it => codigosForaHolerite.has((String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1]);
+        // pagamento_extra_desde: a regra "fora do holerite" só vale a partir daquela competência (ex.: 2031 reembolso desde 10/2026)
+        const ordCompFH = c => { const m = String(c || '').match(/^(\d{2})\/(\d{4})$/); return m ? (+m[2]) * 100 + (+m[1]) : 0; };
+        const foraDesde = {}; eventos.filter(e => e.pagamento_extra_tipo && e.pagamento_extra_tipo !== 'ADIANTAMENTO').forEach(e => { foraDesde[String(e.codigo_evento)] = e.pagamento_extra_desde || ''; });
+        const foraDoHolerite = it => { const c = (String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1]; return (c in foraDesde) && (!foraDesde[c] || ordCompFH(it.competencia) >= ordCompFH(foraDesde[c])); };
         itensFolha.forEach(item => {
           if (foraDoHolerite(item)) return;
           const fId = item.funcionario_id;
