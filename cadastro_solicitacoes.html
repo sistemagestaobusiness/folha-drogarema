@@ -15,7 +15,7 @@
     <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">👤 SOLICITAÇÕES DE CADASTRO</h1>
-        <p id="subtitulo" class="text-xs text-slate-500">Pessoa nova na loja: o líder pede, o RH cadastra e confirma. Tudo com data e hora.</p>
+        <p id="subtitulo" class="text-xs text-slate-500">Pessoa nova na loja: pede-se o cadastro, o RH aprova e a ficha é criada automaticamente.</p>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
         <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
@@ -28,18 +28,27 @@
     <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
 
     <div id="conteudo" class="hidden grid grid-cols-1 lg:grid-cols-5 gap-4">
-      <!-- FORMULÁRIO (líder; RH/gestor/supervisor também podem) -->
+      <!-- FORMULÁRIO: líder (loja dele), supervisor (lojas da estrutura), RH/Gestor (qualquer loja) -->
       <div id="boxForm" class="hidden lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm h-fit">
         <h2 class="font-black text-sm text-slate-800">➕ PEDIR CADASTRO DE PESSOA NOVA</h2>
-        <div id="boxLoja" class="hidden"><label class="lbl">Loja *</label><select id="cLoja" class="inp font-bold"></select></div>
+        <div id="boxLojaFixa" class="hidden text-[11px] text-slate-600">Loja: <b id="lblLojaFixa" class="text-slate-900"></b></div>
+        <div id="boxLoja" class="hidden"><label class="lbl">Loja / setor *</label><select id="cLoja" class="inp font-bold"></select></div>
         <div><label class="lbl">Nome completo *</label><input id="cNome" class="inp uppercase" maxlength="120" oninput="this.value=this.value.toUpperCase()"></div>
-        <div><label class="lbl">Telefone de contato (com DDD) *</label><input id="cTel" class="inp font-mono" maxlength="16" placeholder="(11) 99999-9999" oninput="mascaraTel(this)"></div>
+        <div><label class="lbl">CPF *</label><input id="cCpf" class="inp font-mono" maxlength="14" placeholder="000.000.000-00" oninput="mascaraCpf(this)" onblur="verificarCpf()">
+          <div id="infoCpf" class="text-[11px] mt-1 hidden"></div></div>
+        <div><label class="lbl">Telefone de contato (com DDD) *</label><input id="cTel" class="inp font-mono" maxlength="16" placeholder="(11) 99999-9999" oninput="mascaraTel(this); copiarPix()"></div>
         <div><label class="lbl">Função prevista *</label>
           <div class="grid grid-cols-2 gap-2" id="cFuncoes"></div></div>
-        <div><label class="lbl">Início previsto (opcional)</label><input id="cInicio" type="date" class="inp font-mono"></div>
+        <div><label class="lbl">Início previsto *</label><input id="cInicio" type="date" class="inp font-mono"></div>
+        <div class="grid grid-cols-5 gap-2">
+          <div class="col-span-2"><label class="lbl">Tipo PIX *</label>
+            <select id="cPixTipo" class="inp" onchange="copiarPix(true)"><option value="">-</option><option>CPF</option><option>CELULAR</option><option>E-MAIL</option><option>ALEATÓRIA</option><option>CNPJ</option></select></div>
+          <div class="col-span-3"><label class="lbl">Chave PIX *</label><input id="cPix" class="inp font-mono" maxlength="120"></div>
+        </div>
         <div><label class="lbl">Observação (opcional)</label><textarea id="cObs" rows="2" maxlength="500" class="inp" placeholder="Ex.: indicação, horário combinado, experiência..."></textarea></div>
-        <button id="btnEnviar" onclick="enviar()" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer">ENVIAR PARA O RH</button>
-        <p class="text-[10px] text-slate-400">O RH faz o cadastro e confirma aqui. Você recebe a resposta no histórico ao lado (cadastrado ou recusado, com data e hora).</p>
+        <button id="btnEnviar" onclick="enviar(false)" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer">ENVIAR PARA O RH</button>
+        <button id="btnEnviarCriar" onclick="enviar(true)" class="hidden w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-lg text-xs uppercase tracking-wider cursor-pointer">ENVIAR E JÁ CRIAR A FICHA</button>
+        <p id="notaForm" class="text-[10px] text-slate-400">Normalmente é freelance, sem registro: a ficha nasce com cargo FREELANCE na loja do pedido. Você recebe a resposta no histórico ao lado.</p>
       </div>
 
       <!-- LISTA -->
@@ -47,7 +56,7 @@
         <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-2 text-xs">
           <div><label class="lbl">Situação</label><select id="fStatus" onchange="render()" class="inp !py-1.5">
             <option value="">Todas</option><option value="PENDENTE">Aguardando RH</option><option value="CADASTRADO">Cadastrado</option><option value="RECUSADO">Recusado</option><option value="CANCELADO">Cancelado</option></select></div>
-          <div class="flex-1 min-w-[180px]"><label class="lbl">Busca</label><input id="fBusca" oninput="render()" class="inp !py-1.5" placeholder="nome, loja, telefone..."></div>
+          <div class="flex-1 min-w-[180px]"><label class="lbl">Busca</label><input id="fBusca" oninput="render()" class="inp !py-1.5" placeholder="nome, loja, telefone, CPF..."></div>
           <div id="lblTotais" class="text-[11px] text-slate-500 ml-auto"></div>
         </div>
         <div id="lista" class="space-y-2"></div>
@@ -66,7 +75,9 @@
     const $ = id => document.getElementById(id);
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const dig = t => String(t || '').replace(/\D/g, '');
     const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+    const dataBr = v => v ? new Date(String(v).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
     const FUNCOES = { CAIXA: '💵 Caixa', BALCONISTA: '🧴 Balconista', AUXILIAR: '📦 Auxiliar', FARMACEUTICO: '💊 Farmacêutico(a)' };
     const SIT = {
       PENDENTE:   { txt: '⏳ Aguardando RH', cls: 'bg-amber-100 text-amber-800' },
@@ -74,14 +85,40 @@
       RECUSADO:   { txt: '✕ Recusado', cls: 'bg-rose-100 text-rose-800' },
       CANCELADO:  { txt: '⊘ Cancelado', cls: 'bg-slate-200 text-slate-600' }
     };
+    const FICHA = { CRIADA: '🆕 ficha criada', VINCULADA: '🔗 ligada a ficha existente', REATIVADA: '♻ ficha reativada' };
     const ACAO = { SOLICITADO: '📝 solicitado', CADASTRADO: '✅ cadastrado pelo RH', RECUSADO: '✕ recusado pelo RH', CANCELADO: '⊘ cancelado', LIDER_CIENTE: '👁 líder ciente' };
-    let perfil = null, minhaLoja = null, meuEmail = '', lojas = [], funcs = [], pedidos = [], funcaoSel = '';
+    let perfil = null, minhaLoja = null, meuEmail = '', lojas = [], funcs = [], pedidos = [], funcaoSel = '', cpfInfo = null;
     const rh = () => ['RH', 'GESTOR'].includes(perfil);
+    const podePedir = () => ['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil);
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+    const SEM_SQL = e => /fn_cadastro_(solicitar_v2|aprovar_criar|cpf_verificar)|does not exist|Could not find the function/i.test(e && e.message || '');
+    const msgErro = e => SEM_SQL(e) ? 'O banco ainda não tem a versão nova do pedido de cadastro. Rode o SQL BJ no Supabase.' : (e && e.message || 'erro');
 
     function mascaraTel(el) {
-      const d = el.value.replace(/\D/g, '').slice(0, 11);
+      const d = dig(el.value).slice(0, 11);
       el.value = d.length <= 2 ? d : d.length <= 6 ? `(${d.slice(0, 2)}) ${d.slice(2)}` : d.length <= 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    }
+    function mascaraCpf(el) {
+      const d = dig(el.value).slice(0, 11);
+      el.value = d.length <= 3 ? d : d.length <= 6 ? `${d.slice(0, 3)}.${d.slice(3)}` : d.length <= 9 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}` : `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+      cpfInfo = null; $('infoCpf').classList.add('hidden');
+      if (d.length === 11) verificarCpf();
+      copiarPix();
+    }
+    function cpfValido(v) {
+      const d = dig(v);
+      if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+      const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += +d[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+      return dv(9) === +d[9] && dv(10) === +d[10];
+    }
+    // mostra o CPF/PIX inteiro só para o RH/Gestor; demais veem parte
+    const ocultar = v => { const s = String(v || ''); return rh() || s.length < 6 ? s : s.slice(0, 3) + '•'.repeat(Math.max(3, s.length - 6)) + s.slice(-3); };
+    // PIX tipo CPF/CELULAR: preenche a chave com o CPF/telefone digitado (sem sobrescrever o que já foi editado à mão)
+    function copiarPix(forcar) {
+      const tipo = $('cPixTipo').value, el = $('cPix');
+      const fonte = tipo === 'CPF' ? $('cCpf').value : tipo === 'CELULAR' ? dig($('cTel').value) : null;
+      if (fonte === null) { if (forcar && el.dataset.auto === '1') { el.value = ''; el.dataset.auto = ''; } return; }
+      if (forcar || !el.value || el.dataset.auto === '1') { el.value = fonte; el.dataset.auto = '1'; }
     }
 
     async function inicializar() {
@@ -90,25 +127,30 @@
       const { data: u } = await _supabase.rpc('fn_meu_usuario');
       perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null; meuEmail = (user.email || '').toLowerCase();
       $('lblUsuario').innerText = meuEmail; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!podePedir()) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
       if (perfil === 'LIDER' && !minhaLoja) { $('aviso').innerText = 'Seu usuário de líder não está ligado a uma loja. Peça ao RH.'; $('aviso').classList.remove('hidden'); return; }
       if (rh()) { $('btnPainel').classList.remove('hidden'); $('lnkFuncionarios').classList.remove('hidden'); }
       else { $('btnVoltar').href = perfil === 'LIDER' ? 'freelance_solicitacao.html' : 'supervisor_freelance.html'; $('btnVoltar').classList.remove('hidden'); }
-      $('subtitulo').innerText = perfil === 'LIDER' ? 'Peça o cadastro de uma pessoa nova da sua loja. O RH cadastra e a resposta aparece no seu histórico.'
-        : perfil === 'SUPERVISOR' ? 'Acompanhamento dos pedidos de cadastro das lojas (somente consulta).'
-        : 'Pedidos dos líderes: faça o cadastro na tela de Funcionários e confirme aqui (ou recuse com o motivo).';
+      $('subtitulo').innerText = perfil === 'LIDER' ? 'Peça o cadastro de uma pessoa nova da sua loja. O RH aprova, a ficha é criada e a resposta aparece no seu histórico.'
+        : perfil === 'SUPERVISOR' ? 'Peça o cadastro para as lojas e setores da sua estrutura e acompanhe os pedidos.'
+        : 'Aprove para criar a ficha automaticamente (ou recuse com o motivo). O RH também pode pedir e aprovar na hora, para cadastro prévio.';
       const [rl, rf] = await Promise.all([
         _supabase.from('lojas').select('*').order('nome_loja'),
-        rh() ? _supabase.from('funcionarios').select('id, nome_registro, loja_id, status').order('nome_registro') : Promise.resolve({ data: [] })
+        rh() ? _supabase.from('funcionarios').select('id, nome_registro, loja_id, status, cpf').order('nome_registro') : Promise.resolve({ data: [] })
       ]);
       lojas = (rl.data || []).filter(l => l.ativo !== false); funcs = rf.data || [];
-      // formulário: líder (loja dele) · RH/Gestor (escolhem a loja). Supervisor só acompanha.
-      if (perfil === 'LIDER' || rh()) {
-        $('boxForm').classList.remove('hidden');
-        if (rh()) { $('boxLoja').classList.remove('hidden'); $('cLoja').innerHTML = '<option value="">-- selecione --</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join(''); }
-        $('cFuncoes').innerHTML = Object.entries(FUNCOES).map(([k, t]) => `<button type="button" data-f="${k}" onclick="escolherFuncao('${k}')" class="btF p-2.5 rounded-lg border-2 text-xs font-bold cursor-pointer">${t}</button>`).join('');
-        escolherFuncao('');
-      } else { $('boxLista').className = 'lg:col-span-5 space-y-3'; }
+
+      $('boxForm').classList.remove('hidden');
+      if (perfil === 'LIDER') { $('boxLojaFixa').classList.remove('hidden'); $('lblLojaFixa').innerText = nomeLoja(minhaLoja); }
+      else {
+        const opcoes = perfil === 'SUPERVISOR' ? lojas.filter(l => l.estrutura_supervisor) : lojas;
+        $('boxLoja').classList.remove('hidden');
+        $('cLoja').innerHTML = '<option value="">-- selecione --</option>' + opcoes.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+        if (perfil === 'SUPERVISOR' && !opcoes.length) { $('cLoja').innerHTML = '<option value="">nenhuma loja na sua estrutura</option>'; $('btnEnviar').disabled = true; }
+      }
+      if (rh()) { $('btnEnviarCriar').classList.remove('hidden'); $('notaForm').innerText = 'Cadastro prévio: a ficha nasce como FREELANCE na loja escolhida. Os dados pessoais (RG, endereço, nascimento...) são completados quando a pessoa for registrada.'; }
+      $('cFuncoes').innerHTML = Object.entries(FUNCOES).map(([k, t]) => `<button type="button" data-f="${k}" onclick="escolherFuncao('${k}')" class="btF p-2.5 rounded-lg border-2 text-xs font-bold cursor-pointer">${t}</button>`).join('');
+      escolherFuncao('');
       $('conteudo').classList.remove('hidden');
       if (rh()) $('fStatus').value = 'PENDENTE';
       await carregar();
@@ -118,16 +160,34 @@
       document.querySelectorAll('.btF').forEach(b => b.className = `btF p-2.5 rounded-lg border-2 text-xs font-bold cursor-pointer ${b.dataset.f === k ? 'border-indigo-600 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white text-slate-600'}`);
     }
 
+    // CPF: confere se é válido, se já tem ficha ou pedido aguardando
+    async function verificarCpf() {
+      const v = $('cCpf').value, box = $('infoCpf');
+      cpfInfo = null;
+      if (!dig(v)) { box.classList.add('hidden'); return; }
+      const mostrar = (cls, html) => { box.className = 'text-[11px] mt-1 font-bold ' + cls; box.innerHTML = html; };
+      if (!cpfValido(v)) return mostrar('text-rose-700', '✕ CPF inválido. Confira os números.');
+      const { data, error } = await _supabase.rpc('fn_cadastro_cpf_verificar', { p_cpf: v });
+      if (error) return mostrar('text-amber-700', '⚠ ' + esc(msgErro(error)));
+      cpfInfo = data;
+      const f = data.funcionario, p = data.pedido_pendente;
+      if (f && f.ativo) return mostrar('text-rose-700', `✕ Já tem cadastro ativo: ${esc(f.nome)} (${esc(f.loja || 'sem loja')}). Não é preciso pedir.`);
+      if (p) return mostrar('text-rose-700', `✕ Já existe o pedido #${p.numero} aguardando o RH (${esc(p.nome)}, ${esc(p.loja || '')}).`);
+      if (f) return mostrar('text-amber-700', `⚠ Já trabalhou aqui: ${esc(f.nome)} (${esc(f.status)}). O RH vai reativar a ficha antiga.`);
+      mostrar('text-emerald-700', '✓ CPF sem cadastro no sistema.');
+    }
+
     async function carregar() {
       const { data, error } = await _supabase.from('cadastro_solicitacoes').select('*').order('solicitado_em', { ascending: false });
-      if (error) { $('aviso').innerText = 'Erro ao carregar (rode o SQL AM no Supabase): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      if (error) { $('aviso').innerText = 'Erro ao carregar: ' + error.message; $('aviso').classList.remove('hidden'); return; }
       pedidos = data || [];
       render();
     }
 
     function render() {
       const st = $('fStatus').value, termo = norm($('fBusca').value.trim());
-      const lista = pedidos.filter(p => (!st || p.status === st) && (!termo || termo.split(/\s+/).every(t => norm(p.nome).includes(t) || norm(nomeLoja(p.loja_id)).includes(t) || String(p.telefone).replace(/\D/g, '').includes(t.replace(/\D/g, '') || '§'))));
+      const lista = pedidos.filter(p => (!st || p.status === st) && (!termo || termo.split(/\s+/).every(t => norm(p.nome).includes(t) || norm(nomeLoja(p.loja_id)).includes(t)
+        || (dig(t) && (dig(p.telefone).includes(dig(t)) || (rh() && dig(p.cpf).includes(dig(t))))))));
       const pend = pedidos.filter(p => p.status === 'PENDENTE').length;
       $('lblTotais').innerText = `${lista.length} pedido(s) · ${pend} aguardando RH`;
       $('lista').innerHTML = lista.length ? lista.map(card).join('') : '<div class="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm">Nenhum pedido.</div>';
@@ -136,22 +196,27 @@
     function card(p) {
       const s = SIT[p.status] || { txt: p.status, cls: '' };
       const acoes = [];
-      if (rh() && p.status === 'PENDENTE') acoes.push(`<button onclick="confirmar('${p.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">✅ Cadastro realizado</button>`,
+      if (rh() && p.status === 'PENDENTE') acoes.push(`<button onclick="aprovar('${p.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">✅ Aprovar e criar ficha</button>`,
         `<button onclick="recusar('${p.id}')" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-[11px] font-bold cursor-pointer">❌ Recusar</button>`);
+      if (rh() && p.funcionario_id) acoes.push(`<a href="funcionarios.html?id=${encodeURIComponent(p.funcionario_id)}&aba=pessoal" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold">👤 abrir ficha</a>`);
       if (p.status === 'PENDENTE' && (p.solicitante_email === meuEmail)) acoes.push(`<button onclick="cancelar('${p.id}')" class="text-[10px] text-slate-500 hover:text-rose-600 underline cursor-pointer">cancelar pedido</button>`);
       if (perfil === 'LIDER' && ['CADASTRADO', 'RECUSADO'].includes(p.status) && !p.lider_ciente_em) acoes.push(`<button onclick="ciente('${p.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">👁 Ciente</button>`);
       const hist = (p.historico || []).map(h => `<div>• ${dataHora(h.em)} · <b>${ACAO[h.acao] || esc(h.acao)}</b>${h.obs ? ' · ' + esc(h.obs) : ''} <span class="text-slate-400">${esc(h.por || '')}</span></div>`).join('');
+      const docs = [p.cpf ? `CPF <span class="font-mono">${esc(ocultar(p.cpf))}</span>` : (p.status === 'PENDENTE' ? '<span class="text-amber-700 font-bold">sem CPF (pedido antigo)</span>' : ''),
+                    p.pix_chave ? `PIX ${esc(p.pix_tipo || '')} <span class="font-mono">${esc(ocultar(p.pix_chave))}</span>` : ''].filter(Boolean).join(' · ');
       return `<div class="bg-white border ${p.status === 'PENDENTE' ? 'border-amber-300' : 'border-slate-200'} rounded-xl p-4 shadow-sm">
         <div class="flex flex-col md:flex-row justify-between gap-3">
           <div class="space-y-1 text-xs min-w-0">
             <div class="flex flex-wrap items-center gap-2"><span class="font-mono font-black text-slate-500">#${p.numero}</span>
               <span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(p.loja_id))}</span>
               <span class="${s.cls} px-2 py-0.5 rounded text-[10px] font-bold">${s.txt}</span>
+              ${p.ficha_acao ? `<span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">${FICHA[p.ficha_acao] || esc(p.ficha_acao)}</span>` : ''}
               ${perfil === 'LIDER' && ['CADASTRADO', 'RECUSADO'].includes(p.status) && !p.lider_ciente_em ? '<span class="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">NOVO</span>' : ''}</div>
             <div class="text-base font-black text-slate-900">${esc(p.nome)}</div>
-            <div class="text-[11px]">${FUNCOES[p.funcao] || esc(p.funcao)} · 📞 <span class="font-mono">${esc(p.telefone)}</span>${p.inicio_previsto ? ' · início previsto ' + new Date(p.inicio_previsto + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</div>
+            <div class="text-[11px]">${FUNCOES[p.funcao] || esc(p.funcao)} · 📞 <span class="font-mono">${esc(p.telefone)}</span>${p.inicio_previsto ? ' · início previsto ' + dataBr(p.inicio_previsto) : ''}</div>
+            ${docs ? `<div class="text-[11px] text-slate-600">${docs}</div>` : ''}
             ${p.observacao ? `<div class="text-[11px] text-slate-500 italic">"${esc(p.observacao)}"</div>` : ''}
-            <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(p.solicitado_em)}</b> por ${esc(p.solicitante_email)}${p.decidido_em ? ` · ${p.status === 'CADASTRADO' ? '✅ cadastrado' : p.status === 'RECUSADO' ? '✕ recusado' : '⊘ cancelado'} em <b>${dataHora(p.decidido_em)}</b> por ${esc(p.decidido_por)}` : ''}${p.lider_ciente_em ? ` · 👁 líder ciente em ${dataHora(p.lider_ciente_em)}` : ''}</div>
+            <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(p.solicitado_em)}</b> por ${esc(p.solicitante_email)}${p.solicitante_perfil ? ' (' + esc(p.solicitante_perfil.toLowerCase()) + ')' : ''}${p.decidido_em ? ` · ${p.status === 'CADASTRADO' ? '✅ cadastrado' : p.status === 'RECUSADO' ? '✕ recusado' : '⊘ cancelado'} em <b>${dataHora(p.decidido_em)}</b> por ${esc(p.decidido_por)}` : ''}${p.lider_ciente_em ? ` · 👁 líder ciente em ${dataHora(p.lider_ciente_em)}` : ''}</div>
             ${p.decisao_obs ? `<div class="text-[11px] ${p.status === 'RECUSADO' ? 'text-rose-700 font-bold' : 'text-slate-700'}">RH: ${esc(p.decisao_obs)}</div>` : ''}
             ${hist ? `<details class="text-[10px] text-slate-500"><summary class="cursor-pointer">histórico (${(p.historico || []).length})</summary>${hist}</details>` : ''}
           </div>
@@ -159,33 +224,64 @@
         </div></div>`;
     }
 
-    async function enviar() {
-      const nome = $('cNome').value.trim(), tel = $('cTel').value.trim();
-      if (rh() && !$('cLoja').value) return alert('Selecione a loja.');
+    async function enviar(criarJa) {
+      const nome = $('cNome').value.trim(), tel = $('cTel').value.trim(), cpf = $('cCpf').value.trim();
+      if (perfil !== 'LIDER' && !$('cLoja').value) return alert('Selecione a loja.');
       if (nome.length < 5 || !nome.includes(' ')) return alert('Informe o nome completo.');
-      if (tel.replace(/\D/g, '').length < 10) return alert('Informe o telefone com DDD.');
+      if (!cpfValido(cpf)) return alert('Informe um CPF válido.');
+      if (cpfInfo && cpfInfo.funcionario && cpfInfo.funcionario.ativo) return alert(`Este CPF já tem cadastro ativo: ${cpfInfo.funcionario.nome}. Não é preciso pedir.`);
+      if (dig(tel).length < 10) return alert('Informe o telefone com DDD.');
       if (!funcaoSel) return alert('Escolha a função prevista.');
-      const btn = $('btnEnviar'); btn.disabled = true;
-      const { data, error } = await _supabase.rpc('fn_cadastro_solicitar', { p_nome: nome, p_telefone: tel, p_funcao: funcaoSel,
-        p_inicio: $('cInicio').value || null, p_obs: $('cObs').value.trim() || null, p_loja: rh() ? $('cLoja').value : null });
-      btn.disabled = false;
-      if (error) return alert('Não enviado: ' + error.message);
-      ['cNome', 'cTel', 'cInicio', 'cObs'].forEach(id => $(id).value = ''); escolherFuncao('');
-      alert(`Pedido #${data} enviado ao RH.`);
+      if (!$('cInicio').value) return alert('Informe o início previsto.');
+      if (!$('cPixTipo').value || !$('cPix').value.trim()) return alert('Informe o tipo e a chave PIX.');
+      const b1 = $('btnEnviar'), b2 = $('btnEnviarCriar'); b1.disabled = b2.disabled = true;
+      const { data: numero, error } = await _supabase.rpc('fn_cadastro_solicitar_v2', {
+        p_loja: perfil === 'LIDER' ? null : $('cLoja').value, p_nome: nome, p_cpf: cpf, p_telefone: tel, p_funcao: funcaoSel,
+        p_inicio: $('cInicio').value, p_pix_tipo: $('cPixTipo').value, p_pix_chave: $('cPix').value.trim(), p_obs: $('cObs').value.trim() || null });
+      b1.disabled = b2.disabled = false;
+      if (error) return alert('Não enviado: ' + msgErro(error));
+      ['cNome', 'cCpf', 'cTel', 'cInicio', 'cObs', 'cPix', 'cPixTipo'].forEach(id => $(id).value = ''); $('cPix').dataset.auto = '';
+      $('infoCpf').classList.add('hidden'); cpfInfo = null; escolherFuncao('');
       await carregar();
+      if (criarJa) {
+        const p = pedidos.find(x => x.numero === numero);
+        if (p) return aprovar(p.id);
+      }
+      alert(`Pedido #${numero} enviado ao RH.`);
     }
-    async function confirmar(id) {
-      const p = pedidos.find(x => x.id === id);
-      const candidatos = funcs.filter(f => norm(f.nome_registro) === norm(p.nome) || norm(f.nome_registro).split(' ')[0] === norm(p.nome).split(' ')[0] && f.loja_id === p.loja_id);
-      const sugerido = candidatos.find(f => norm(f.nome_registro) === norm(p.nome));
-      if (!confirm(`Confirmar que ${p.nome} já foi CADASTRADO(A) na tela de Funcionários?` + (sugerido ? `\n\nEncontrei no cadastro: ${sugerido.nome_registro} (será vinculado).` : '\n\n(Ainda não achei esse nome no cadastro — confira antes de confirmar.)'))) return;
-      const obs = prompt('Observação para o líder (opcional):', sugerido ? 'Cadastro feito. Matrícula liberada.' : '') ?? '';
-      const { error } = await _supabase.rpc('fn_cadastro_decidir', { p_id: id, p_cadastrado: true, p_obs: obs || null, p_funcionario: sugerido ? sugerido.id : null });
-      if (error) return alert(error.message);
+
+    // RH/Gestor: aprova criando, ligando ou reativando a ficha
+    async function aprovar(id) {
+      const p = pedidos.find(x => x.id === id); if (!p) return;
+      const loja = nomeLoja(p.loja_id), inicio = p.inicio_previsto ? dataBr(p.inicio_previsto) : 'sem data';
+      let modo = 'CRIAR', alvo = null, pergunta;
+      if (p.cpf) {
+        const { data, error } = await _supabase.rpc('fn_cadastro_cpf_verificar', { p_cpf: p.cpf });
+        if (error) return alert(msgErro(error));
+        const f = data.funcionario;
+        if (f && f.ativo) { modo = 'VINCULAR'; alvo = f.id;
+          pergunta = `O CPF ${p.cpf} já está na ficha ATIVA de ${f.nome} (${f.loja || 'sem loja'}, matrícula ${f.matricula || '-'}).\n\nLigar o pedido a essa ficha? Nenhuma ficha nova é criada; só os campos vazios (celular, PIX) são preenchidos.`; }
+        else if (f) { modo = 'REATIVAR';
+          pergunta = `O CPF ${p.cpf} é de ${f.nome}, com ficha ${f.status} (matrícula ${f.matricula || '-'}).\n\nReativar essa ficha como FREELANCE na ${loja}, com admissão em ${inicio}? A rescisão é apagada e a troca fica no histórico da ficha.`; }
+      } else {
+        // pedido antigo, sem CPF: procura pelo nome
+        const mesmo = funcs.find(f => norm(f.nome_registro) === norm(p.nome));
+        if (mesmo) { modo = 'VINCULAR'; alvo = mesmo.id;
+          pergunta = `Pedido antigo, sem CPF. Encontrei no cadastro: ${mesmo.nome_registro} (${mesmo.status || 'ATIVO'}).\n\nLigar o pedido a essa ficha?`; }
+        else pergunta = `Pedido antigo, SEM CPF. Criar a ficha de ${p.nome} como FREELANCE na ${loja}${p.inicio_previsto ? ', admissão em ' + inicio : ''}?\n\nO CPF e o PIX terão de ser preenchidos depois na ficha.`;
+      }
+      if (!pergunta) pergunta = `Criar a ficha de ${p.nome}?\n\n• Cargo: FREELANCE\n• Loja: ${loja}\n• Admissão: ${inicio}\n• CPF: ${p.cpf}\n• Celular: ${p.telefone}\n• PIX: ${p.pix_tipo || '-'} ${p.pix_chave || ''}\n\nA matrícula é gerada automaticamente.`;
+      if (!confirm(pergunta)) return;
+      const obs = prompt('Observação para quem pediu (opcional):', '') ?? null;
+      if (obs === null) return;
+      const { data: r, error } = await _supabase.rpc('fn_cadastro_aprovar_criar', { p_id: id, p_modo: modo, p_funcionario: alvo, p_obs: obs.trim() || null });
+      if (error) return alert('Não aprovado: ' + msgErro(error));
       await carregar();
+      const txt = r.acao === 'CRIADA' ? 'Ficha criada' : r.acao === 'REATIVADA' ? 'Ficha reativada' : 'Pedido ligado à ficha';
+      if (confirm(`${txt}: ${r.nome} · matrícula ${r.matricula || '-'}.\n\nAbrir a ficha agora?`)) location.href = `funcionarios.html?id=${encodeURIComponent(r.funcionario_id)}&aba=pessoal`;
     }
     async function recusar(id) {
-      const motivo = prompt('Motivo da recusa (o líder vê no histórico):'); if (!motivo) return;
+      const motivo = prompt('Motivo da recusa (quem pediu vê no histórico):'); if (!motivo) return;
       const { error } = await _supabase.rpc('fn_cadastro_decidir', { p_id: id, p_cadastrado: false, p_obs: motivo, p_funcionario: null });
       if (error) return alert(error.message);
       await carregar();

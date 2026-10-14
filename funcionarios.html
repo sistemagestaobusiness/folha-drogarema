@@ -68,6 +68,7 @@
         <div>
           <h3 id="fichaTitulo" class="font-black text-slate-900 text-base">NOVO FUNCIONÁRIO</h3>
           <p id="fichaSub" class="text-[11px] text-slate-500"></p>
+          <p id="fichaIncompleta" class="hidden mt-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1"></p>
         </div>
         <button onclick="fecharFicha()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer text-lg">✕</button>
       </div>
@@ -244,6 +245,10 @@
     const nomeEmpresa = id => { const e = empresas.find(x => x.id === id); return e ? (e.nome_fantasia || e.razao_social) : ''; };
     const nomeLoja = id => (lojas.find(x => x.id === id) || {}).nome_loja || '';
 
+    // cadastro prévio (ex.: freelance criado pelo pedido de cadastro): faltam dados pessoais
+    const PESSOAIS = [['cpf', 'CPF'], ['data_nascimento', 'nascimento'], ['rg', 'RG'], ['endereco', 'endereço']];
+    const faltaPessoal = f => PESSOAIS.filter(([c]) => !f || !f[c]).map(([, t]) => t);
+
     function mascaraCpf(v) {
       const d = String(v || '').replace(/\D/g, '').slice(0, 11);
       return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : v;
@@ -296,7 +301,8 @@
       await carregar();
       // vindo do organograma / outra tela: abre a ficha direto
       const qid = new URLSearchParams(location.search).get('id');
-      if (qid && funcs.some(f => f.id === qid)) abrirFicha(qid, 'lotacao');
+      const qaba = new URLSearchParams(location.search).get('aba');
+      if (qid && funcs.some(f => f.id === qid)) abrirFicha(qid, ['pessoal', 'contrato', 'lotacao', 'banco', 'historico', 'documentos'].includes(qaba) ? qaba : 'lotacao');
     }
 
     // ---------- cargos ----------
@@ -388,6 +394,7 @@
           <td class="p-3"><div class="font-bold text-slate-900">${esc(f.nome_registro)} ${f.lider_loja ? '<span class="text-[9px] bg-indigo-100 text-indigo-800 px-1.5 rounded font-black">LÍDER</span>' : ''}</div>
             <div class="text-[10px] text-slate-400 font-mono">${esc(f.cpf || '')}${f.data_contratacao ? ' · admissão ' + dbr(f.data_contratacao) : ''}${f.data_rescisao ? ' · rescisão ' + dbr(f.data_rescisao) : ''}</div>
             ${pend ? `<div class="text-[10px] font-bold text-amber-700">📎 ${pend} atestado(s) pendente(s)</div>` : ''}
+            ${ativo && faltaPessoal(f).length ? '<span class="text-[9px] bg-amber-100 text-amber-800 px-1.5 rounded font-black">CADASTRO INCOMPLETO</span>' : ''}
             ${faltando.length && ativo ? `<div class="text-[10px] text-slate-400">falta: ${faltando.join(', ')}</div>` : ''}</td>
           <td class="p-3"><div class="font-medium">${esc(f.cargo || '-')}</div><div class="text-[10px] text-slate-500 font-mono">${fmtR(f.salario_base)}${parseFloat(f.salario_adicional || 0) > 0 ? ' + ' + fmtR(f.salario_adicional) : ''}</div></td>
           <td class="p-3"><div>${esc(nomeEmpresa(f.empresa_id) || f.empresa_registro || '-')}</div><div class="text-[10px] text-emerald-700 font-bold">${esc(nomeLoja(f.loja_id) || f.loja_trabalha || '-')}${f.periodo_trabalho ? ' · ' + f.periodo_trabalho.toLowerCase() : ''}</div></td>
@@ -438,6 +445,9 @@
       const pend = atual ? pendencias.filter(p => p.funcionario_id === atual.id) : [];
       $('badgePendDoc').classList.toggle('hidden', pend.length === 0); $('badgePendDoc').innerText = pend.length;
       $('infoStatus').innerHTML = atual ? `Status atual: <b>${esc(atual.status || 'ATIVO')}</b>` : '';
+      const falta = atual ? faltaPessoal(atual) : [];
+      $('fichaIncompleta').classList.toggle('hidden', !falta.length);
+      $('fichaIncompleta').innerText = falta.length ? `⚠ Cadastro incompleto: falta ${falta.join(', ')}. Ao registrar a pessoa, complete também empresa, salário e admissão.` : '';
       // cadastro de sócio: o RH só consulta
       const soGestor = atual && perfil !== 'GESTOR' && todosCargos.some(c => c.restrito && (c.nome === atual.cargo || c.nome === atual.organograma_funcao));
       if (soGestor) {
