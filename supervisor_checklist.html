@@ -117,15 +117,15 @@
       const loja = $('cLoja').value, data = $('cData').value;
       atual = visitas.find(v => v.loja_id === loja && v.data_execucao === data) || null;
       const salvos = {}; ((atual && atual.itens) || []).forEach(i => salvos[i.codigo] = i);
-      $('itens').innerHTML = (!loja ? '<div class="py-2 text-[11px] font-bold text-amber-700">Escolha a loja acima para marcar e salvar as tarefas.</div>' : '')
-        + TAREFAS.map(([cod, ico, txt]) => { const s = salvos[cod] || {};
+      $('itens').innerHTML = !loja ? '<div class="py-6 text-center text-slate-400 text-sm">Escolha a loja e a data de execução.</div>'
+        : TAREFAS.map(([cod, ico, txt]) => { const s = salvos[cod] || {};
           return `<div class="py-2.5">
             <label class="flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-slate-50">
-              <input type="checkbox" class="chk w-5 h-5 accent-emerald-600 shrink-0" data-cod="${cod}" ${s.feito ? 'checked' : ''} ${loja ? '' : 'disabled'} onchange="atualizarProgresso()">
+              <input type="checkbox" class="chk w-5 h-5 accent-emerald-600 shrink-0" data-cod="${cod}" ${s.feito ? 'checked' : ''} onchange="atualizarProgresso()">
               <span class="text-xl shrink-0">${ico}</span>
               <span class="text-[13px] font-semibold text-slate-800">${esc(txt)}</span>
               <span class="st ml-auto text-[10px] font-bold uppercase whitespace-nowrap" data-cod="${cod}"></span></label>
-            <textarea class="com inp mt-1.5" data-cod="${cod}" rows="${cod === 'RESULTADO_FECHADO' ? 3 : 1}" maxlength="2000" placeholder="Comentário (opcional)" ${loja ? '' : 'disabled'}>${esc(s.comentario || '')}</textarea></div>`; }).join('');
+            <textarea class="com inp mt-1.5" data-cod="${cod}" rows="${cod === 'RESULTADO_FECHADO' ? 3 : 1}" maxlength="2000" placeholder="Comentário (opcional)">${esc(s.comentario || '')}</textarea></div>`; }).join('');
       $('cObs').value = atual ? (atual.observacao || '') : '';
       $('infoVisita').innerHTML = !loja ? '' : atual
         ? `Visita registrada em ${dataHora(atual.criado_em)} por ${esc(atual.criado_por || '')}${atual.atualizado_em ? ` · última alteração em ${dataHora(atual.atualizado_em)} por ${esc(atual.atualizado_por || '')}` : ''}`
