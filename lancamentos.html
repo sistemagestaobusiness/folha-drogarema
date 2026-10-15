@@ -953,7 +953,7 @@
       const mapa = {};
       (re.data || []).forEach(d => {
         if (!('tratamento' in d)) escalaSemTratamento = true;
-        mapa[d.funcionario_id + '|' + d.data] = { fid: d.funcionario_id, data: d.data, tipo: d.tipo, origem: 'ESCALA', trat: d.tratamento, horas: d.tratado_horas, por: d.tratado_por, obs: d.observacao };
+        mapa[d.funcionario_id + '|' + d.data] = { fid: d.funcionario_id, data: d.data, tipo: d.tipo, origem: 'ESCALA', trat: d.tratamento, horas: d.tratado_horas, por: d.tratado_por, obs: d.observacao, doc: d.documento_id };
       });
       (rf.data || []).filter(s => !['REJEITADA', 'CANCELADA'].includes(s.status)).forEach(s => {
         const k = s.funcionario_ausente_id + '|' + s.data_servico;
@@ -995,17 +995,58 @@
       const bt = (txt, fn, cls) => `<button type="button" onclick="${fn}" class="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${cls}">${txt}</button>`;
       box.innerHTML = `<div class="font-black uppercase">📅 Faltas / atestados na escala de ${competenciaRegraLancamento}</div>` + lista.map(o => {
         const s = situacaoOcorr(o), cab = `<b>${dmEscala(o.data)}</b> · ${escaparHtml(o.tipo.toLowerCase())}${o.obs ? ' · <i>' + escaparHtml(o.obs) + '</i>' : ''}`;
-        if (s === 'OK') return `<div class="text-emerald-800">✓ ${cab} → <b>${TRAT_ESCALA[o.trat] || o.trat}${o.horas ? ' (' + String(o.horas).replace('.', ',') + 'h)' : ''}</b> <span class="text-[10px] text-slate-500">${escaparHtml(o.por || '')}</span> ${bt('↩ desfazer', `tratarEscala('${o.fid}','${o.data}',null)`, 'bg-white border border-slate-300 text-slate-600')}</div>`;
+        if (s === 'OK') return `<div class="text-emerald-800">✓ ${cab} → <b>${TRAT_ESCALA[o.trat] || o.trat}${o.horas ? ' (' + String(o.horas).replace('.', ',') + 'h)' : ''}</b>${o.trat === 'ABONADO' ? (o.doc ? ' 📎' : ' <span class="text-amber-700 font-bold">(sem documento — abono anterior à regra)</span>') : ''} <span class="text-[10px] text-slate-500">${escaparHtml(o.por || '')}</span> ${bt('↩ desfazer', `tratarEscala('${o.fid}','${o.data}',null)`, 'bg-white border border-slate-300 text-slate-600')}</div>`;
         if (s === 'OK_FREELA') return `<div class="text-emerald-800">✓ ${cab} → tratado na aprovação do freelance: <b>${TRAT_FREELA[o.freela.tratamento_ausencia] || o.freela.tratamento_ausencia}</b></div>`;
         if (s === 'AGUARDA_FREELA') return `<div>⏳ ${cab} → freelance pedido para cobrir; o tratamento é definido na <a href="rh_aprovacao_freelance.html" class="underline font-bold">aprovação do freelance</a>.</div>`;
         return `<div class="bg-white border border-amber-300 rounded p-1.5">⚠ ${cab} <b>sem tratamento</b><div class="mt-1 flex flex-wrap gap-1">`
           + bt('💸 Desconto', `tratarEscala('${o.fid}','${o.data}','DESCONTO')`, 'bg-rose-600 text-white')
           + bt('⏱ Banco de horas', `tratarEscala('${o.fid}','${o.data}','BANCO_HORAS')`, 'bg-sky-600 text-white')
-          + bt('✓ Abonar' + (o.tipo === 'ATESTADO' ? ' (atestado ok)' : ''), `tratarEscala('${o.fid}','${o.data}','ABONADO')`, 'bg-emerald-600 text-white')
+          + bt('📎 Abonar com atestado', `tratarEscala('${o.fid}','${o.data}','ABONADO')`, 'bg-emerald-600 text-white')
           + '</div></div>';
       }).join('');
       box.classList.remove('hidden');
     }
+    // ABONO SÓ COM ANEXO (regra de 15/10/2026): escolhe o arquivo, envia, registra na ficha e devolve o id do documento.
+    // Se for PDF com texto, procura sinais de atestado (só um indicativo; quem confere é o supervisor).
+    function escolherArquivo() {
+      return new Promise(ok => {
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.pdf,image/*';
+        inp.onchange = () => ok(inp.files[0] || null);
+        window.addEventListener('focus', () => setTimeout(() => ok(inp.files[0] || null), 800), { once: true });
+        inp.click();
+      });
+    }
+    async function analisarAtestado(arq) {
+      if (!/pdf$/i.test(arq.type || arq.name)) return 'imagem: conferir visualmente';
+      try {
+        if (!window.pdfjsLib) await new Promise((ok, err) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'; sc.onload = ok; sc.onerror = err; document.head.appendChild(sc); });
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await arq.arrayBuffer()) }).promise;
+        let txt = '';
+        for (let i = 1; i <= Math.min(doc.numPages, 3); i++) txt += ' ' + (await (await doc.getPage(i)).getTextContent()).items.map(x => x.str).join(' ');
+        txt = removerAcentosEColocarMaiuscula(txt);
+        if (txt.replace(/\s/g, '').length < 20) return 'PDF sem texto (escaneado): conferir visualmente';
+        const achou = [['ATESTADO', /ATESTAD/], ['CRM', /\bCRM\b/], ['CID', /\bCID\b/], ['MEDICO', /MEDIC/], ['REPOUSO/AFASTAMENTO', /REPOUSO|AFASTAMENTO/]].filter(([, r]) => r.test(txt)).map(([n]) => n);
+        return achou.length ? 'encontrou: ' + achou.join(', ') : '⚠ não encontrei sinais de atestado no texto';
+      } catch (e) { return 'não foi possível ler o PDF: conferir visualmente'; }
+    }
+    async function anexarAtestadoAbono(fid, data) {
+      if (!confirm(`Abonar ${dmEscala(data)} (sem desconto e sem banco de horas)?\n\nO abono só é aceito com o documento (atestado). Escolha o arquivo (foto ou PDF) na próxima tela.`)) return null;
+      const arq = await escolherArquivo();
+      if (!arq) { alert('Abono não feito: nenhum arquivo escolhido.'); return null; }
+      const analise = await analisarAtestado(arq);
+      if (/não encontrei/.test(analise) && !confirm(`Atenção: ${analise}.\n\nO arquivo pode não ser um atestado. Abonar mesmo assim? (o supervisor vai conferir)`)) return null;
+      const nomeArq = arq.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
+      const caminho = `${fid}/${Date.now()}_${nomeArq}`;
+      const { error: e1 } = await _supabase.storage.from('documentos').upload(caminho, arq);
+      if (e1) { alert('Falha ao enviar o arquivo: ' + e1.message); return null; }
+      const { data: doc, error: e2 } = await _supabase.from('funcionarios_documentos').insert([{
+        funcionario_id: fid, tipo: 'ATESTADO', descricao: `Abono da escala ${dmEscala(data)}`, data_referencia: data, arquivo_path: caminho }]).select('id').single();
+      if (e2) { alert('Arquivo enviado, mas não foi registrado: ' + e2.message); return null; }
+      await _supabase.rpc('fn_atestado_analise', { p_id: doc.id, p_texto: analise });
+      return doc.id;
+    }
+
     async function tratarEscala(fid, data, trat) {
       if (escalaSemTratamento) return alert('Rode antes o SQL AC_escala_tratamento_faltas no Supabase.');
       let horas = null;
@@ -1029,9 +1070,13 @@
         horas = parseFloat(String(txt).replace(',', '.'));
         if (!(horas > 0)) return alert('Horas inválidas.');
       }
-      if (trat === 'ABONADO' && !confirm('Abonar este dia (sem desconto e sem banco de horas)?')) return;
+      let documento = null;
+      if (trat === 'ABONADO') {
+        documento = await anexarAtestadoAbono(fid, data);
+        if (!documento) return;
+      }
       if (trat === null && !confirm('Desfazer o tratamento deste dia? (o débito no banco de horas, se houver, é apagado; um desconto lançado continua na lista e deve ser excluído à mão)')) return;
-      const { error } = await _supabase.rpc('fn_escala_tratar', { p_funcionario: fid, p_data: data, p_tratamento: trat, p_horas: horas, p_obs: null });
+      const { error } = await _supabase.rpc('fn_escala_tratar', { p_funcionario: fid, p_data: data, p_tratamento: trat, p_horas: horas, p_obs: null, p_documento: documento });
       if (error) return alert('Não foi possível: ' + error.message);
       await carregarOcorrenciasEscala();
       renderAlertaEscala(fid);
