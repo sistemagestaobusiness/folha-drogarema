@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Avisos para os líderes - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1000px] mx-auto space-y-4">
+
+    <div class="cab-sis py-3 border-b border-slate-200">
+      <h1 class="tit-sis text-xl font-bold text-slate-900">📣 Avisos para os líderes</h1>
+      <p class="text-xs text-slate-500">A mensagem aparece para o líder quando ele abre o sistema. Ele confirma "Li e estou ciente", e você vê quem já leu.</p>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 space-y-3 h-fit">
+        <div class="font-bold text-sm text-slate-900">Novo aviso</div>
+        <div><label class="lbl">Para</label><select id="cLoja" class="inp font-bold"></select></div>
+        <div><label class="lbl">Mensagem</label><textarea id="cMsg" rows="6" maxlength="3000" class="inp" placeholder="Escreva o aviso para os líderes..."></textarea></div>
+        <button id="btnEnviar" onclick="enviar()" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider cursor-pointer">Publicar aviso</button>
+      </div>
+      <div class="lg:col-span-3 space-y-2">
+        <div class="flex items-center gap-2 text-xs"><label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="fEnc" onchange="render()"> mostrar encerrados</label><span id="lblTot" class="ml-auto text-slate-500"></span></div>
+        <div id="lista" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+    let lojas = [], avisos = [], leituras = [], lideres = [], meuEmail = '';
+    const nomeLoja = id => id ? ((lojas.find(l => l.id === id) || {}).nome_loja || '-') : 'TODAS AS LOJAS';
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      meuEmail = (user.email || '').toLowerCase();
+      if (!u || u.perfil !== 'GESTOR') { $('aviso').innerText = 'Somente o Gestor publica avisos.'; $('aviso').classList.remove('hidden'); return; }
+      const [rl, ru] = await Promise.all([_supabase.from('lojas').select('*').order('nome_loja'), _supabase.from('usuarios_sistema').select('email, perfil, loja_id, ativo')]);
+      lojas = (rl.data || []).filter(l => l.ativo !== false);
+      lideres = (ru.data || []).filter(x => x.perfil === 'LIDER' && x.ativo !== false);
+      $('cLoja').innerHTML = '<option value="">📣 Todas as lojas</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+    }
+
+    async function carregar() {
+      const [ra, rl] = await Promise.all([
+        _supabase.from('avisos_lideres').select('*').order('criado_em', { ascending: false }).limit(200),
+        _supabase.from('avisos_leitura').select('*')
+      ]);
+      if (ra.error) { $('aviso').innerText = 'Erro ao carregar (o SQL BP foi rodado?): ' + ra.error.message; $('aviso').classList.remove('hidden'); return; }
+      avisos = ra.data || []; leituras = rl.data || [];
+      render();
+    }
+
+    function render() {
+      const lista = avisos.filter(a => $('fEnc').checked || a.ativo);
+      $('lblTot').innerText = `${avisos.filter(a => a.ativo).length} ativo(s)`;
+      $('lista').innerHTML = lista.length ? lista.map(a => {
+        const alvo = lideres.filter(l => !a.loja_id || l.loja_id === a.loja_id);
+        const lidos = leituras.filter(x => x.aviso_id === a.id);
+        const leu = e => lidos.find(x => x.email === String(e).toLowerCase());
+        return `<div class="bg-white border ${a.ativo ? 'border-indigo-200' : 'border-slate-200 opacity-70'} rounded-xl p-4 text-xs space-y-2">
+          <div class="flex flex-wrap justify-between gap-2"><span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(a.loja_id))}</span>
+            <span class="text-slate-500">${dataHora(a.criado_em)} · ${esc(a.criado_por || '')}${a.ativo ? '' : ` · <b>encerrado</b> ${dataHora(a.encerrado_em)}`}</span></div>
+          <div class="text-[13px] text-slate-900 whitespace-pre-wrap">${esc(a.mensagem)}</div>
+          <div class="text-[11px]"><b>${alvo.filter(l => leu(l.email)).length} de ${alvo.length}</b> líder(es) leram:
+            ${alvo.map(l => { const x = leu(l.email); return `<span class="inline-block mr-1.5 ${x ? 'text-emerald-700' : 'text-amber-700'}">${x ? '✓' : '⏳'} ${esc(l.email)}${x ? ' ' + dataHora(x.lido_em) : ''}${!a.loja_id && l.loja_id ? ' (' + esc(nomeLoja(l.loja_id)) + ')' : ''}</span>`; }).join('')}</div>
+          ${a.ativo ? `<button onclick="encerrar('${a.id}')" class="text-[11px] text-slate-500 hover:text-rose-600 underline cursor-pointer">encerrar aviso (deixa de aparecer)</button>` : ''}</div>`;
+      }).join('') : '<div class="bg-white border border-slate-200 rounded-xl p-6 text-center text-slate-400 text-sm">Nenhum aviso.</div>';
+    }
+
+    async function enviar() {
+      const msg = $('cMsg').value.trim();
+      if (msg.length < 3) return alert('Escreva a mensagem.');
+      const para = $('cLoja').value || null;
+      if (!confirm(`Publicar este aviso para ${para ? nomeLoja(para) : 'TODAS AS LOJAS'}?`)) return;
+      $('btnEnviar').disabled = true;
+      const { error } = await _supabase.from('avisos_lideres').insert([{ mensagem: msg, loja_id: para }]);
+      $('btnEnviar').disabled = false;
+      if (error) return alert('Não foi publicado: ' + error.message);
+      $('cMsg').value = '';
+      await carregar();
+    }
+    async function encerrar(id) {
+      if (!confirm('Encerrar este aviso? Ele deixa de aparecer para os líderes (o histórico fica).')) return;
+      const { error } = await _supabase.from('avisos_lideres').update({ ativo: false, encerrado_em: new Date().toISOString(), encerrado_por: meuEmail }).eq('id', id);
+      if (error) return alert(error.message);
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

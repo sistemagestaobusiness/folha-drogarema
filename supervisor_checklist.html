@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check list do supervisor - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1100px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">✅ Check list do supervisor</h1>
+        <p class="text-xs text-slate-500">O que já foi feito e o que está pendente em cada loja, por data de execução.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <!-- texto fixo, só informativo -->
+      <div class="bg-white border border-slate-200 rounded-xl p-4 text-[13px] text-slate-700">
+        <div class="font-bold text-slate-900 mb-1">Papel do supervisor nas lojas</div>
+        <ul class="list-disc pl-5 space-y-0.5">
+          <li><b>Visitas orientativas:</b> desenvolvimento dos líderes e da equipe;</li>
+          <li><b>Cuidado contínuo</b> com a estrutura das lojas em geral;</li>
+          <li><b>Acompanhamento dos resultados:</b> avaliação semanal de indicadores de cada colaborador;</li>
+          <li><b>Ajustes de escalas</b> em parceria com os líderes;</li>
+          <li><b>Treinar toda equipe</b> com as dificuldades de sistema com paciência e dedicação!</li>
+        </ul>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <!-- visita (formulário) -->
+        <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-4 space-y-3 h-fit">
+          <div class="flex flex-wrap items-end gap-2">
+            <div class="flex-1 min-w-[160px]"><label class="lbl">Loja</label><select id="cLoja" class="inp font-bold" onchange="abrirVisita()"></select></div>
+            <div><label class="lbl">Data de execução</label><input id="cData" type="date" class="inp font-mono" onchange="abrirVisita()"></div>
+          </div>
+          <div id="infoVisita" class="text-[11px] text-slate-500"></div>
+          <div id="itens" class="divide-y divide-slate-100"></div>
+          <div><label class="lbl">Observação geral da visita (opcional)</label><textarea id="cObs" rows="2" maxlength="2000" class="inp"></textarea></div>
+          <div class="flex items-center gap-3">
+            <button id="btnSalvar" onclick="salvar()" class="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-2.5 px-5 rounded-lg text-xs uppercase tracking-wider cursor-pointer">Salvar check list</button>
+            <span id="progresso" class="text-[12px] font-bold text-slate-600"></span>
+          </div>
+        </div>
+
+        <!-- histórico -->
+        <div class="lg:col-span-2 space-y-2">
+          <div class="bg-white border border-slate-200 rounded-xl p-3 text-xs flex flex-wrap items-end gap-2">
+            <div class="flex-1"><label class="lbl">Histórico · loja</label><select id="fLoja" onchange="renderHistorico()" class="inp !py-1.5"><option value="">Todas</option></select></div>
+          </div>
+          <div id="historico" class="space-y-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+    const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+
+    // tarefas do check list (regra de 15/10/2026). Para incluir outra: acrescentar aqui (o código não pode mudar depois).
+    const TAREFAS = [
+      ['DESCONTOS_PRECOS', 'Treinamento do sistema de descontos e preços praticados na loja'],
+      ['ESTOQUE_OUTRAS_LOJAS', 'Treinamento do sistema para verificar produtos/estoque em outras lojas para transferência'],
+      ['METAS_CATEGORIAS', 'Treinar a equipe sobre as metas de vendas de todas as categorias'],
+      ['RESULTADO_DIARIO', 'Olhar com o líder o resultado diário e analisar a performance dos funcionários'],
+      ['RESULTADO_FECHADO', 'Olhar o resultado fechado da loja com o líder: analisar os indicadores, discutir melhorias e comprometimento'],
+      ['CANETAS_PBM', 'Verificar canetas PBMs']
+    ];
+    let perfil = null, lojas = [], visitas = [], atual = null;
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['SUPERVISOR', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      const { data: l } = await _supabase.from('lojas').select('*').order('nome_loja');
+      lojas = (l || []).filter(x => x.ativo !== false);
+      const opts = lojas.map(x => `<option value="${x.id}">${esc(x.nome_loja)}</option>`).join('');
+      $('cLoja').innerHTML = '<option value="">-- selecione a loja --</option>' + opts;
+      $('fLoja').innerHTML = '<option value="">Todas</option>' + opts;
+      $('cData').value = hoje();
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+      abrirVisita();
+    }
+
+    async function carregar() {
+      const { data, error } = await _supabase.from('supervisor_checklist').select('*').order('data_execucao', { ascending: false }).limit(500);
+      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL BP foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      visitas = data || [];
+      renderHistorico();
+    }
+
+    // abre a visita da loja/data escolhida (existente ou nova)
+    function abrirVisita() {
+      const loja = $('cLoja').value, data = $('cData').value;
+      atual = visitas.find(v => v.loja_id === loja && v.data_execucao === data) || null;
+      const salvos = {}; ((atual && atual.itens) || []).forEach(i => salvos[i.codigo] = i);
+      $('itens').innerHTML = !loja ? '<div class="py-6 text-center text-slate-400 text-sm">Escolha a loja e a data de execução.</div>'
+        : TAREFAS.map(([cod, txt]) => { const s = salvos[cod] || {};
+          return `<div class="py-2.5">
+            <label class="flex items-start gap-2 cursor-pointer"><input type="checkbox" class="chk mt-0.5 w-4 h-4" data-cod="${cod}" ${s.feito ? 'checked' : ''} onchange="atualizarProgresso()">
+              <span class="text-[13px] font-semibold text-slate-800">${esc(txt)}</span></label>
+            <textarea class="com inp mt-1.5" data-cod="${cod}" rows="${cod === 'RESULTADO_FECHADO' ? 3 : 1}" maxlength="2000" placeholder="Comentário (opcional)">${esc(s.comentario || '')}</textarea></div>`; }).join('');
+      $('cObs').value = atual ? (atual.observacao || '') : '';
+      $('infoVisita').innerHTML = !loja ? '' : atual
+        ? `Visita registrada em ${dataHora(atual.criado_em)} por ${esc(atual.criado_por || '')}${atual.atualizado_em ? ` · última alteração em ${dataHora(atual.atualizado_em)} por ${esc(atual.atualizado_por || '')}` : ''}`
+        : 'Nova visita: marque o que foi feito e salve.';
+      atualizarProgresso();
+    }
+    function atualizarProgresso() {
+      const chks = [...document.querySelectorAll('.chk')];
+      $('progresso').innerText = chks.length ? `${chks.filter(c => c.checked).length} de ${chks.length} feitas` : '';
+    }
+
+    async function salvar() {
+      const loja = $('cLoja').value, data = $('cData').value;
+      if (!loja) return alert('Escolha a loja.');
+      if (!data) return alert('Informe a data de execução.');
+      const itens = TAREFAS.map(([cod, txt]) => ({
+        codigo: cod, texto: txt,
+        feito: document.querySelector(`.chk[data-cod="${cod}"]`).checked,
+        comentario: document.querySelector(`.com[data-cod="${cod}"]`).value.trim() || null }));
+      const reg = { loja_id: loja, data_execucao: data, itens, observacao: $('cObs').value.trim() || null };
+      const btn = $('btnSalvar'); btn.disabled = true;
+      const { error } = atual
+        ? await _supabase.from('supervisor_checklist').update(reg).eq('id', atual.id)
+        : await _supabase.from('supervisor_checklist').insert([reg]);
+      btn.disabled = false;
+      if (error) return alert('Não foi salvo: ' + error.message);
+      await carregar();
+      abrirVisita();
+      alert('Check list salvo.');
+    }
+
+    function renderHistorico() {
+      const f = $('fLoja').value;
+      const lista = visitas.filter(v => !f || v.loja_id === f);
+      $('historico').innerHTML = lista.length ? lista.map(v => {
+        const feitos = (v.itens || []).filter(i => i.feito).length, tot = TAREFAS.length;
+        const pend = TAREFAS.filter(([c]) => !(v.itens || []).some(i => i.codigo === c && i.feito)).map(([, t]) => t);
+        return `<div class="bg-white border ${feitos === tot ? 'border-emerald-300' : 'border-amber-300'} rounded-xl p-3 text-xs cursor-pointer hover:bg-slate-50" onclick="irPara('${v.loja_id}','${v.data_execucao}')">
+          <div class="flex justify-between gap-2"><b class="text-slate-900">${esc(nomeLoja(v.loja_id))}</b><span class="font-mono">${dbr(v.data_execucao)}</span></div>
+          <div class="mt-0.5 font-bold ${feitos === tot ? 'text-emerald-700' : 'text-amber-700'}">${feitos === tot ? '✓ tudo feito' : `${feitos} de ${tot} feitas`}</div>
+          ${pend.length && feitos < tot ? `<div class="text-[10px] text-slate-500 mt-0.5">Pendente: ${pend.map(esc).join(' · ')}</div>` : ''}
+          <div class="text-[10px] text-slate-400 mt-0.5">${esc(v.atualizado_por || v.criado_por || '')}</div></div>`;
+      }).join('') : '<div class="bg-white border border-slate-200 rounded-xl p-6 text-center text-slate-400 text-sm">Nenhuma visita registrada.</div>';
+    }
+    function irPara(loja, data) { $('cLoja').value = loja; $('cData').value = data; abrirVisita(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+    inicializar();
+  </script>
+</body>
+</html>

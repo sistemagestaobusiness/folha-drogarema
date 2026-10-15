@@ -12,10 +12,10 @@
   const PAGINA = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
   const MARCA = 'Business';   // nome exibido no topo do menu (o logo entra aqui)
   const GRUPOS = [
-    ['', [['index.html', 'Painel', '▦']]],
+    ['', [['index.html', 'Painel', '▦'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
     ['Folha do mês', [['lancamentos.html', 'Lançamentos', '✎'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
       ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Importar consumo farmácia', '⇪']]],
-    ['Loja e jornada', [['freelance_solicitacao.html', 'Solicitações da loja', '✚'], ['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'],
+    ['Loja e jornada', [['freelance_solicitacao.html', 'Solicitações da loja', '✚'], ['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'],
       ['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['cadastro_solicitacoes.html', 'Solicitações de cadastro', '☰'], ['organograma.html', 'Organograma', '⌂']]],
     ['Financeiro', [['financeiro.html', 'Pagamentos', '$']]],
     ['Relatórios', [['resumo_folha.html', 'Resumo da competência', '≡'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['recibo_pagamento.html', 'Recibos', '▯']]],
@@ -197,6 +197,38 @@
     ver(); window.addEventListener('resize', ver); document.addEventListener('fullscreenchange', ver); setInterval(ver, 1500);
   }
 
-  const iniciar = () => { montar(); padronizar(); setTimeout(padronizar, 700); telaCheia(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+  // avisos do Gestor para o líder: aparecem ao abrir o sistema até ele confirmar "Li e estou ciente" (regra de 15/10/2026)
+  async function avisosLider() {
+    if (String(window.ACESSO.perfil || '').toUpperCase() !== 'LIDER' || !window.ACESSO_CLI || document.getElementById('avisoLiderModal')) return;
+    const cli = window.ACESSO_CLI, email = String(window.ACESSO.email || '').toLowerCase();
+    try {
+      const [ra, rl] = await Promise.all([cli.from('avisos_lideres').select('id, mensagem, criado_em, criado_por, loja_id').order('criado_em'), cli.from('avisos_leitura').select('aviso_id').eq('email', email)]);
+      if (ra.error) return;
+      const lidos = new Set((rl.data || []).map(x => x.aviso_id));
+      const pend = (ra.data || []).filter(a => !lidos.has(a.id));
+      if (!pend.length) return;
+      const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const m = document.createElement('div'); m.id = 'avisoLiderModal';
+      m.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+      let i = 0;
+      const mostrar = () => {
+        const a = pend[i];
+        m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
+          <div style="font-size:12px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:.04em">📣 Aviso da gestão${pend.length > 1 ? ` · ${i + 1} de ${pend.length}` : ''}</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px">${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
+          <div style="font-size:15px;color:#0f172a;margin:14px 0 18px;white-space:pre-wrap;line-height:1.5">${esc(a.mensagem)}</div>
+          <button type="button" style="width:100%;background:#4f46e5;color:#fff;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">✓ Li e estou ciente</button></div>`;
+        m.querySelector('button').onclick = async () => {
+          const b = m.querySelector('button'); b.disabled = true; b.textContent = 'Registrando...';
+          const { error } = await cli.rpc('fn_aviso_ciente', { p_id: a.id });
+          if (error) { b.disabled = false; b.textContent = '✓ Li e estou ciente'; alert('Não foi possível registrar: ' + error.message); return; }
+          i++; if (i < pend.length) mostrar(); else m.remove();
+        };
+      };
+      mostrar(); document.body.appendChild(m);
+    } catch (e) { console.warn('avisos', e); }
+  }
+
+  const iniciar = () => { montar(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
