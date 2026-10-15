@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatório de faltas - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1200px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">📋 Relatório de faltas</h1>
+        <p id="subtitulo" class="text-xs text-slate-500">Todas as faltas e atestados do mês (escala e coberturas de freelance), em que etapa estão e quem fez cada passo.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-3">
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-2 text-xs">
+        <div><label class="lbl">Mês</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="carregar()"></div>
+        <div><label class="lbl">Loja / setor</label><select id="fLoja" onchange="render()" class="inp !py-1.5"><option value="">Todas</option></select></div>
+        <div><label class="lbl">Etapa</label><select id="fEtapa" onchange="render()" class="inp !py-1.5">
+          <option value="">Todas</option><option value="A_LANCAR">⏳ A lançar (sem tratamento)</option><option value="AGUARDA">⏳ Aguardando aprovação</option>
+          <option value="DESCONTO">💸 Desconto</option><option value="BANCO_HORAS">⏱ Banco de horas</option><option value="ABONADO">✓ Abonado / atestado</option>
+          <option value="SEM_DESCONTO">Sem desconto</option><option value="ALERTA">⚠ Com alerta</option></select></div>
+        <div class="flex-1 min-w-[160px]"><label class="lbl">Funcionário</label><input id="fBusca" oninput="render()" class="inp !py-1.5" placeholder="nome"></div>
+        <button onclick="exportarCsv()" class="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg font-bold cursor-pointer">⬇ CSV</button>
+      </div>
+      <div id="resumo" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2"></div>
+      <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-slate-50 text-[10px] uppercase text-slate-500 text-left"><tr>
+            <th class="px-3 py-2">Data</th><th class="px-3 py-2">Funcionário</th><th class="px-3 py-2">Ocorrência</th><th class="px-3 py-2">Etapa atual</th><th class="px-3 py-2">Rastreabilidade</th></tr></thead>
+          <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-slate-500">Fontes: escala (falta / atestado marcados no dia) e pedidos de freelance/hora extra com "quem faltou". O tratamento da escala é feito em Lançamentos; o da cobertura, na aprovação do RH. O atestado anexado é conferido pelo supervisor (Conferência de atestados).</p>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+    .chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 9999px; white-space: nowrap; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const fmtR = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let perfil = null, lojas = [], funcs = {}, linhas = [];
+    const comValores = () => ['RH', 'GESTOR'].includes(perfil);   // supervisor não vê valores
+    const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
+
+    const ETAPA = {
+      A_LANCAR:     { txt: '⏳ A lançar', cls: 'bg-amber-100 text-amber-800' },
+      AGUARDA:      { txt: '⏳ Aguardando aprovação', cls: 'bg-sky-100 text-sky-800' },
+      DESCONTO:     { txt: '💸 Desconto', cls: 'bg-rose-100 text-rose-800' },
+      BANCO_HORAS:  { txt: '⏱ Banco de horas', cls: 'bg-indigo-100 text-indigo-800' },
+      ABONADO:      { txt: '✓ Abonado / atestado', cls: 'bg-emerald-100 text-emerald-800' },
+      SEM_DESCONTO: { txt: 'Sem desconto', cls: 'bg-slate-200 text-slate-700' },
+      CANCELADO:    { txt: '⊘ Pedido cancelado/recusado', cls: 'bg-slate-100 text-slate-500' }
+    };
+    const MOTIVO = { FALTA_DIA: 'falta', FALTA_PARCIAL: 'falta parcial', ATESTADO: 'atestado', AUSENCIA: 'ausência' };
+    const CONF = { VALIDO: '✅ atestado conferido', INVALIDO: '✕ supervisor: não é atestado / ilegível' };
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR', 'SUPERVISOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!comValores()) $('subtitulo').innerText += ' (sem valores)';
+      const [rl, rf] = await Promise.all([_supabase.from('lojas').select('*').order('nome_loja'), _supabase.from('vw_funcionarios_basico').select('id, nome_registro, loja_id')]);
+      lojas = rl.data || []; (rf.data || []).forEach(f => funcs[f.id] = f);
+      $('fLoja').innerHTML = '<option value="">Todas</option>' + lojas.filter(l => l.ativo !== false).map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      const d = new Date(); $('fMes').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+    }
+
+    async function carregar() {
+      const [a, m] = $('fMes').value.split('-').map(Number);
+      if (!a) return;
+      const ini = `${a}-${String(m).padStart(2, '0')}-01`, fim = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10), comp = `${String(m).padStart(2, '0')}/${a}`;
+      const [re, rs, rd] = await Promise.all([
+        _supabase.from('escala_dias').select('*').in('tipo', ['FALTA', 'ATESTADO']).gte('data', ini).lte('data', fim),
+        _supabase.from('freelance_solicitacoes').select('id, funcionario_id, funcionario_ausente_id, data_servico, motivo, status, tratamento_ausencia, loja_id, loja_solicitante, solicitante_email, created_at, supervisor_por, supervisor_em, rh_por, rh_em, folha_item_falta_id, cancelado_por, cancelado_em, cancelado_motivo')
+          .not('funcionario_ausente_id', 'is', null).gte('data_servico', ini).lte('data_servico', fim),
+        _supabase.from('vw_atestados_conferencia').select('id, funcionario_id, data_referencia, solicitacao_id, conferencia_status, conferido_por, conferido_em, enviado_por, enviado_em')
+      ]);
+      if (re.error) { $('aviso').innerText = 'Erro ao ler a escala: ' + re.error.message; $('aviso').classList.remove('hidden'); return; }
+      const docs = rd.data || [];
+      // valores (só RH/Gestor): desconto da cobertura e descontos de falta lançados no mês
+      let itensFalta = {}, descMes = {};
+      if (comValores()) {
+        const ids = (rs.data || []).map(s => s.folha_item_falta_id).filter(Boolean);
+        const [ri, rm] = await Promise.all([
+          ids.length ? _supabase.from('folha_itens').select('id, rubrica, valor').in('id', ids) : Promise.resolve({ data: [] }),
+          _supabase.from('folha_itens').select('funcionario_id, rubrica, valor, tipo').eq('competencia', comp).eq('tipo', 'DESCONTO').or('rubrica.ilike.%FALTA%,rubrica.ilike.%DSR%')
+        ]);
+        (ri.data || []).forEach(i => itensFalta[i.id] = i);
+        (rm.data || []).forEach(i => (descMes[i.funcionario_id] = descMes[i.funcionario_id] || []).push(i));
+      }
+      const mapa = {};
+      (re.data || []).forEach(d => {
+        const k = d.funcionario_id + '|' + d.data;
+        const doc = d.documento_id ? docs.find(x => x.id === d.documento_id) : null;
+        mapa[k] = { fid: d.funcionario_id, data: d.data, loja: d.loja_id || (funcs[d.funcionario_id] || {}).loja_id, tipo: d.tipo.toLowerCase(), passos: [], alertas: [] };
+        const o = mapa[k];
+        o.passos.push(`📅 marcado na escala${d.criado_por ? ' por ' + esc(d.criado_por) : ''}${d.criado_em ? ' em ' + dh(d.criado_em) : ''}${d.observacao ? ' · <i>' + esc(d.observacao) + '</i>' : ''}`);
+        if (!d.tratamento) o.etapa = 'A_LANCAR';
+        else {
+          o.etapa = d.tratamento === 'ABONADO' ? 'ABONADO' : d.tratamento;
+          o.passos.push(`RH: <b>${{ DESCONTO: 'desconto', BANCO_HORAS: 'banco de horas' + (d.tratado_horas ? ' (' + String(d.tratado_horas).replace('.', ',') + 'h)' : ''), ABONADO: 'abonado' }[d.tratamento] || d.tratamento}</b> por ${esc(d.tratado_por || '')} em ${dh(d.tratado_em)}`);
+          if (d.tratamento === 'ABONADO') {
+            if (!doc) o.alertas.push('abonado sem documento (antes da regra)');
+            else { o.passos.push(`📎 atestado anexado por ${esc(doc.enviado_por || '')} em ${dh(doc.enviado_em)}`);
+              if (doc.conferencia_status) { o.passos.push(`${CONF[doc.conferencia_status]} por ${esc(doc.conferido_por || '')} em ${dh(doc.conferido_em)}`); if (doc.conferencia_status === 'INVALIDO') o.alertas.push('supervisor: documento não é atestado / ilegível'); }
+              else o.alertas.push('aguardando conferência do supervisor'); }
+          }
+          if (d.tratamento === 'DESCONTO' && comValores()) {
+            const ds = descMes[d.funcionario_id] || [];
+            o.passos.push(ds.length ? `💸 descontos de falta no mês: ${ds.map(i => esc(i.rubrica) + ' ' + fmtR(i.valor)).join(' · ')}` : '⚠ nenhum desconto de falta lançado no mês');
+            if (!ds.length) o.alertas.push('marcado como desconto, mas sem desconto de falta lançado no mês');
+          }
+        }
+      });
+      (rs.data || []).forEach(s => {
+        const k = s.funcionario_ausente_id + '|' + s.data_servico;
+        const o = mapa[k] || (mapa[k] = { fid: s.funcionario_ausente_id, data: s.data_servico, loja: s.loja_id || (funcs[s.funcionario_ausente_id] || {}).loja_id, tipo: MOTIVO[s.motivo] || 'falta', passos: [], alertas: [] });
+        o.passos.push(`✚ cobertura pedida por ${esc(s.solicitante_email || '')} em ${dh(s.created_at)} (${esc(s.loja_solicitante || '')}) · freelance: ${esc((funcs[s.funcionario_id] || {}).nome_registro || '-')}`);
+        if (s.supervisor_em) o.passos.push(`supervisor: ${esc(s.supervisor_por || '')} em ${dh(s.supervisor_em)}`);
+        if (['REJEITADA', 'CANCELADA'].includes(s.status)) {
+          o.passos.push(`⊘ pedido ${s.status === 'REJEITADA' ? 'recusado' : 'cancelado'}${s.cancelado_motivo ? ': ' + esc(s.cancelado_motivo) : ''}`);
+          if (!o.etapa) o.etapa = 'CANCELADO';
+          return;
+        }
+        if (['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH'].includes(s.status)) { if (!o.etapa || o.etapa === 'A_LANCAR') o.etapa = 'AGUARDA'; o.passos.push(`⏳ ${s.status === 'PENDENTE_SUPERVISOR' ? 'aguardando o supervisor' : 'aguardando o RH'}`); return; }
+        const t = s.tratamento_ausencia;
+        o.passos.push(`RH (aprovação do freelance): <b>${{ DESCONTO: 'desconto', BANCO_HORAS: 'banco de horas', ATESTADO: 'atestado', NENHUM: 'sem desconto' }[t] || t || '-'}</b> por ${esc(s.rh_por || '')} em ${dh(s.rh_em)}`);
+        if (t === 'DESCONTO') { o.etapa = 'DESCONTO'; if (comValores() && s.folha_item_falta_id && itensFalta[s.folha_item_falta_id]) o.passos.push(`💸 ${esc(itensFalta[s.folha_item_falta_id].rubrica)} ${fmtR(itensFalta[s.folha_item_falta_id].valor)}`); }
+        else if (t === 'BANCO_HORAS') o.etapa = 'BANCO_HORAS';
+        else if (t === 'ATESTADO') { o.etapa = 'ABONADO';
+          const doc = docs.find(x => x.solicitacao_id === s.id);
+          if (!doc) o.alertas.push('atestado ainda não anexado na ficha');
+          else if (doc.conferencia_status) { o.passos.push(`${CONF[doc.conferencia_status]} por ${esc(doc.conferido_por || '')}`); if (doc.conferencia_status === 'INVALIDO') o.alertas.push('supervisor: documento não é atestado / ilegível'); }
+          else o.alertas.push('aguardando conferência do supervisor'); }
+        else if (t === 'NENHUM') o.etapa = 'SEM_DESCONTO';
+      });
+      linhas = Object.values(mapa).sort((x, y) => x.data.localeCompare(y.data) || nomeF(x.fid).localeCompare(nomeF(y.fid)));
+      render();
+    }
+    const nomeF = id => (funcs[id] || {}).nome_registro || '—';
+
+    function filtradas() {
+      const loja = $('fLoja').value, et = $('fEtapa').value, termo = norm($('fBusca').value.trim());
+      return linhas.filter(o => (!loja || o.loja === loja) && (!termo || termo.split(/\s+/).every(t => norm(nomeF(o.fid)).includes(t)))
+        && (!et || (et === 'ALERTA' ? o.alertas.length : o.etapa === et)));
+    }
+    function render() {
+      const lista = filtradas(), base = linhas.filter(o => !$('fLoja').value || o.loja === $('fLoja').value);
+      const cont = k => base.filter(o => o.etapa === k).length;
+      const card = (t, n, cls) => `<div class="bg-white border border-slate-200 rounded-xl p-3"><div class="text-[10px] uppercase font-bold text-slate-500">${t}</div><div class="text-xl font-black ${cls}">${n}</div></div>`;
+      $('resumo').innerHTML = card('Ocorrências', base.length, 'text-slate-900') + card('A lançar', cont('A_LANCAR'), cont('A_LANCAR') ? 'text-amber-700' : 'text-slate-400')
+        + card('Aguardando aprovação', cont('AGUARDA'), 'text-sky-700') + card('Desconto', cont('DESCONTO'), 'text-rose-700')
+        + card('Banco de horas', cont('BANCO_HORAS'), 'text-indigo-700') + card('⚠ Com alerta', base.filter(o => o.alertas.length).length, base.some(o => o.alertas.length) ? 'text-rose-700' : 'text-slate-400');
+      $('tabela').innerHTML = lista.length ? lista.map(o => {
+        const e = ETAPA[o.etapa] || { txt: o.etapa || '-', cls: '' };
+        return `<tr class="align-top ${o.alertas.length ? 'bg-amber-50/50' : ''}">
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${dbr(o.data)}</td>
+          <td class="px-3 py-2"><div class="font-bold text-slate-900">${esc(nomeF(o.fid))}</div><div class="text-[10px] text-slate-500">${esc(nomeLoja(o.loja))}</div></td>
+          <td class="px-3 py-2">${esc(o.tipo)}</td>
+          <td class="px-3 py-2"><span class="chip ${e.cls}">${e.txt}</span>${o.alertas.map(a => `<div class="text-[10px] font-bold text-rose-700 mt-0.5">⚠ ${esc(a)}</div>`).join('')}</td>
+          <td class="px-3 py-2 text-[11px] text-slate-600 space-y-0.5">${o.passos.map(p => `<div>${p}</div>`).join('')}</td></tr>`;
+      }).join('') : '<tr><td colspan="5" class="p-8 text-center text-slate-400">Nenhuma falta ou atestado neste filtro.</td></tr>';
+    }
+
+    function exportarCsv() {
+      const txt = h => String(h).replace(/<[^>]+>/g, '').replace(/"/g, '""');
+      const rows = [['Data', 'Funcionário', 'Loja', 'Ocorrência', 'Etapa', 'Alertas', 'Rastreabilidade']].concat(filtradas().map(o => [dbr(o.data), nomeF(o.fid), nomeLoja(o.loja), o.tipo,
+        (ETAPA[o.etapa] || {}).txt || o.etapa || '', o.alertas.join(' | '), o.passos.map(txt).join(' | ')]));
+      const csv = '﻿' + rows.map(r => r.map(c => `"${txt(c)}"`).join(';')).join('\r\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `faltas_${$('fMes').value}.csv`; a.click();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
