@@ -93,13 +93,9 @@
               <div id="listaSugestoes" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 divide-y divide-slate-100"></div>
             </div>
 
-            <div>
-              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Lançamento *</label>
-              <select id="tipoLancamento" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600">
-                <option value="PROVENTO">PROVENTO / CRÉDITO (+)</option>
-                <option value="DESCONTO">DESCONTO / DÉBITO (-)</option>
-              </select>
-            </div>
+            <!-- Tipo (crédito/débito): vem do cadastro do evento, sem escolha manual (regra de 15/10/2026) -->
+            <input type="hidden" id="tipoLancamento" value="">
+            <div id="infoTipoEvento" class="hidden -mt-2 text-[11px] font-bold"></div>
 
             <!-- Evento pago fora do 5º dia útil: vai para a tela do Financeiro -->
             <div id="boxVencimentoPag" class="hidden bg-sky-50 border border-sky-300 p-3 rounded-lg space-y-1">
@@ -713,9 +709,19 @@
       divSugestoes.classList.remove('hidden');
     }
 
+    // tipo do lançamento = tipo do evento no cadastro (informativo, não editável)
+    function aplicarTipoDoEvento() {
+      const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
+      const t = ev && ['PROVENTO', 'DESCONTO'].includes(ev.tipo_evento) ? ev.tipo_evento : '';
+      document.getElementById('tipoLancamento').value = t;
+      const box = document.getElementById('infoTipoEvento');
+      box.classList.toggle('hidden', !t);
+      box.className = `-mt-2 text-[11px] font-bold ${t ? '' : 'hidden'} ${t === 'DESCONTO' ? 'text-rose-700' : 'text-emerald-700'}`;
+      box.innerHTML = t ? `${t === 'DESCONTO' ? '➖ DÉBITO (desconto)' : '➕ CRÉDITO (provento)'} <span class="font-normal text-slate-400">· definido no cadastro do evento</span>` : '';
+    }
+
     function selecionarEvento(codigo, descricao, tipo) {
       document.getElementById('inputRubrica').value = `${codigo} - ${descricao}`;
-      document.getElementById('tipoLancamento').value = tipo === 'DESCONTO' ? 'DESCONTO' : 'PROVENTO';
       document.getElementById('listaSugestoes').classList.add('hidden');
       atualizarBoxVencimento();
     }
@@ -786,7 +792,6 @@
       const fixo = document.getElementById('checkFixo');
       fixo.disabled = ativo; if (ativo) fixo.checked = false;
       if (ativo) {
-        document.getElementById('tipoLancamento').value = 'PROVENTO';
         document.getElementById('containerAbatimento').classList.add('hidden');
         document.getElementById('containerAbatimento2').classList.add('hidden');
         carregarSugestoesTrajeto();
@@ -797,11 +802,11 @@
         document.getElementById('listaDiasReembolso').innerHTML = '';
         if (valor.readOnly === false && estava) valor.value = '';
       }
-      document.getElementById('tipoLancamento').disabled = ativo;
     }
 
     function atualizarBoxVencimento() {
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
+      aplicarTipoDoEvento();
       const extra = catPagExtra(ev, competenciaRegraLancamento);
       document.getElementById('boxVencimentoPag').classList.toggle('hidden', !extra);
       document.getElementById('info13').classList.add('hidden');
@@ -1558,7 +1563,7 @@
     function prepararEdicao(item) {
       document.getElementById('editLancamentoId').value = item.id;
       document.getElementById('inputRubrica').value = item.rubrica || '';
-      document.getElementById('tipoLancamento').value = item.tipo || 'PROVENTO';
+      document.getElementById('tipoLancamento').value = item.tipo || '';
 
       // Itens importados (Alpha7/Farmácia) têm valor_bruto = 0: usa o valor gravado para não abrir zerado
       const bruto = parseFloat(item.valor_bruto);
@@ -1598,6 +1603,8 @@
       aplicarTravaEdicao(false);
       document.getElementById('editLancamentoId').value = '';
       modoReembolso(false);
+      document.getElementById('tipoLancamento').value = '';
+      document.getElementById('infoTipoEvento').classList.add('hidden');
       document.getElementById('inputVencimentoPag').value = '';
       document.getElementById('boxVencimentoPag').classList.add('hidden');
       document.getElementById('editLancamentoId').value = '';
@@ -1623,7 +1630,7 @@
       const idEdicao = document.getElementById('editLancamentoId').value;
       const funcionario_id = document.getElementById('selectFuncionarioNovo').value;
       let rubrica = removerAcentosEColocarMaiuscula(document.getElementById('inputRubrica').value);
-      const tipo = document.getElementById('tipoLancamento').value;
+      let tipo = document.getElementById('tipoLancamento').value;
       let valorBruto = parseFloat(document.getElementById('valorLancamento').value) || 0;
       let fixo = document.getElementById('checkFixo').checked;
 
@@ -1638,6 +1645,11 @@
         alert(`O evento "${rubrica}" não existe no cadastro de eventos.\n\nEscolha um evento da lista (digite o código ou parte do nome e clique na sugestão). Se o evento for novo, cadastre primeiro na tela de Eventos.`);
         document.getElementById('inputRubrica').focus();
         return;
+      }
+      // tipo do lançamento = tipo do evento (não há escolha manual)
+      if (!idEdicao || !itemTravado(idEdicao)) {
+        if (!['PROVENTO', 'DESCONTO'].includes(eventoSel.tipo_evento)) { alert(`O evento ${eventoSel.codigo_evento} está sem tipo (crédito/débito) no cadastro de eventos. Corrija o cadastro antes de lançar.`); return; }
+        tipo = eventoSel.tipo_evento;
       }
       const catSel = catPagExtra(eventoSel, competenciaRegraLancamento);
       const ehPagExtra = !!catSel;
@@ -1835,7 +1847,7 @@
           const { error: errIns } = await _supabase.from('folha_itens').insert([{
             funcionario_id: item.funcionario_id,
             rubrica: novaRubrica,
-            tipo: item.tipo,
+            tipo: (eventoDaRubrica(novaRubrica) || {}).tipo_evento || item.tipo,
             valor: item.valor,
             valor_bruto: item.valor_bruto || item.valor,
             abatimento_sigiloso: item.abatimento_sigiloso || 0,
