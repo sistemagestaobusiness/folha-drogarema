@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrega de holerites - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1000px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">🧾 Entrega de holerites</h1>
+        <p class="text-xs text-slate-500">Registre a data em que cada funcionário recebeu o holerite contábil do mês.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-3">
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-2 text-xs">
+        <div><label class="lbl">Holerite do mês</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="carregar()"></div>
+        <div id="boxLoja" class="hidden"><label class="lbl">Loja / setor</label><select id="fLoja" onchange="carregar()" class="inp !py-1.5"><option value="">Todas</option></select></div>
+        <div><label class="lbl">Situação</label><select id="fSit" onchange="render()" class="inp !py-1.5"><option value="">Todos</option><option value="PEND">⏳ Ainda não recebeu</option><option value="OK">✓ Já recebeu</option></select></div>
+        <div id="lblTotais" class="ml-auto text-[12px] font-bold text-slate-700"></div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-center gap-2 text-xs">
+        <span class="font-bold text-slate-700">Marcar os selecionados como recebidos em</span>
+        <input id="dLote" type="date" class="inp !py-1.5 !w-auto font-mono">
+        <button onclick="registrarLote()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">✓ Confirmar recebimento</button>
+        <span class="text-[10px] text-slate-400">Selecione na lista quem recebeu nesta data. Quem recebeu em outro dia: use a data da própria linha.</span>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-slate-50 text-[10px] uppercase text-slate-500 text-left"><tr>
+            <th class="px-3 py-2 w-8"><input type="checkbox" id="chkTodos" onchange="marcarTodos(this.checked)" title="Selecionar todos que ainda não receberam"></th>
+            <th class="px-3 py-2">Funcionário</th><th class="px-3 py-2">Situação</th><th class="px-3 py-2">Data de recebimento</th><th class="px-3 py-2">Histórico</th></tr></thead>
+          <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    let perfil = null, lista = [], sel = new Set();
+    const comp = () => { const [a, m] = $('fMes').value.split('-'); return `${m}/${a}`; };
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (perfil !== 'LIDER') {
+        const { data: l } = await _supabase.from('lojas').select('*').order('nome_loja');
+        $('fLoja').innerHTML = '<option value="">Todas</option>' + (l || []).filter(x => x.ativo !== false).map(x => `<option value="${x.id}">${esc(x.nome_loja)}</option>`).join('');
+        $('boxLoja').classList.remove('hidden');
+      }
+      // padrão: holerite do mês anterior (é o que se entrega no começo do mês)
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+      $('fMes').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      $('dLote').value = hoje(); $('dLote').max = hoje();
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+    }
+
+    async function carregar() {
+      sel.clear();
+      const { data, error } = await _supabase.rpc('fn_holerite_lista', { p_competencia: comp(), p_loja: $('fLoja').value || null });
+      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL BR foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      $('aviso').classList.add('hidden');
+      lista = data || [];
+      render();
+    }
+
+    function render() {
+      const sit = $('fSit').value;
+      const vis = lista.filter(f => !sit || (sit === 'OK' ? f.recebido_em : !f.recebido_em));
+      const ok = lista.filter(f => f.recebido_em).length;
+      $('lblTotais').innerText = `${ok} de ${lista.length} receberam · ${lista.length - ok} pendente(s)`;
+      let lojaAnt = null;
+      $('tabela').innerHTML = vis.length ? vis.map(f => {
+        const cab = perfil !== 'LIDER' && f.nome_loja !== lojaAnt ? (lojaAnt = f.nome_loja, `<tr class="bg-slate-50"><td colspan="5" class="px-3 py-1 text-[10px] font-bold uppercase text-slate-500">${esc(f.nome_loja || 'sem loja')}</td></tr>`) : '';
+        const hist = (f.historico || []).map(h => `<div>• ${dh(h.em)} · ${esc(h.por || '')} → ${dbr(h.data)}${h.antes ? ' (antes ' + dbr(h.antes) + ')' : ''}</div>`).join('');
+        return cab + `<tr class="${f.recebido_em ? '' : 'bg-amber-50/40'}">
+          <td class="px-3 py-2">${f.recebido_em ? '' : `<input type="checkbox" ${sel.has(f.funcionario_id) ? 'checked' : ''} onchange="this.checked ? sel.add('${f.funcionario_id}') : sel.delete('${f.funcionario_id}')">`}</td>
+          <td class="px-3 py-2"><div class="font-bold text-slate-900">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}</div></td>
+          <td class="px-3 py-2">${f.recebido_em ? '<span class="text-emerald-700 font-bold">✓ recebeu</span>' : '<span class="text-amber-700 font-bold">⏳ não recebeu</span>'}</td>
+          <td class="px-3 py-2 whitespace-nowrap"><input type="date" value="${f.recebido_em || ''}" max="${hoje()}" class="inp !py-1 !w-auto font-mono" onchange="registrar('${f.funcionario_id}', this.value)">
+            ${f.recebido_em ? `<button onclick="registrar('${f.funcionario_id}', '')" class="ml-1 text-[10px] text-slate-400 hover:text-rose-600 underline cursor-pointer" title="Desfazer">desfazer</button>` : ''}</td>
+          <td class="px-3 py-2 text-[10px] text-slate-500">${f.registrado_por ? `${esc(f.registrado_por)} em ${dh(f.registrado_em)}` : ''}${hist && (f.historico || []).length > 1 ? `<details><summary class="cursor-pointer">alterações (${f.historico.length})</summary>${hist}</details>` : ''}</td></tr>`;
+      }).join('') : '<tr><td colspan="5" class="p-8 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
+      $('chkTodos').checked = false;
+    }
+
+    function marcarTodos(on) { lista.filter(f => !f.recebido_em).forEach(f => on ? sel.add(f.funcionario_id) : sel.delete(f.funcionario_id)); render(); $('chkTodos').checked = on; }
+
+    async function registrar(fid, data) {
+      const f = lista.find(x => x.funcionario_id === fid);
+      if (!data && !confirm(`Desfazer o recebimento do holerite de ${f.nome}?`)) return render();
+      const { error } = await _supabase.rpc('fn_holerite_registrar', { p_funcionario: fid, p_competencia: comp(), p_data: data || null });
+      if (error) { alert(error.message); return render(); }
+      await carregar();
+    }
+    async function registrarLote() {
+      const data = $('dLote').value, ids = [...sel];
+      if (!ids.length) return alert('Selecione na lista quem recebeu o holerite.');
+      if (!data) return alert('Informe a data de recebimento.');
+      if (!confirm(`Confirmar que ${ids.length} funcionário(s) receberam o holerite de ${comp()} em ${dbr(data)}?`)) return;
+      const falhas = [];
+      for (const id of ids) { const { error } = await _supabase.rpc('fn_holerite_registrar', { p_funcionario: id, p_competencia: comp(), p_data: data }); if (error) falhas.push(error.message); }
+      if (falhas.length) alert('Alguns não foram registrados:\n' + falhas.join('\n'));
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
