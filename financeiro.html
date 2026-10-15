@@ -529,6 +529,15 @@
       if (!document.getElementById('pgBanco').value.trim()) return alert('Informe a conta pagadora.');
       const repetidos = separacao.filter(s => s.id).map(s => s.id).filter((v, i, a) => a.indexOf(v) !== i);
       if (repetidos.length) return alert('O mesmo pagamento foi escolhido para dois comprovantes. Ajuste a coluna "Anexar em".');
+      // aviso: pagamento confirmado sem comprovante anexado
+      const comAnexo = new Set(separacao.filter(s => s.id && s.bloco).map(s => s.id));
+      document.querySelectorAll('.pgArqItem').forEach(inp => { if (inp.files[0]) comAnexo.add(inp.dataset.id); });
+      const pdfInteiro = separacao.length && document.getElementById('pgInteiro').checked && document.getElementById('pgPdfs').files.length;
+      const semAnexo = pdfInteiro ? [] : ids.filter(id => !comAnexo.has(id));
+      if (semAnexo.length) {
+        const lista = semAnexo.map(id => { const i = itens.find(x => x.id === id) || {}; return `• ${nome(i.funcionario_id)} · ${fmtR(i.valor)}`; });
+        if (!confirm(`⚠ ATENÇÃO: ${semAnexo.length} de ${ids.length} pagamento(s) SEM COMPROVANTE ANEXADO:\n\n${lista.slice(0, 15).join('\n')}${lista.length > 15 ? `\n... e mais ${lista.length - 15}` : ''}\n\nO correto é confirmar o pagamento junto com o comprovante.\nConfirmar mesmo assim? (eles ficam marcados como "sem comprovante" na aba Pagos)`)) return;
+      }
       btn.disabled = true; btn.innerText = 'Enviando comprovantes...';
       const anexos = {};
       try {
