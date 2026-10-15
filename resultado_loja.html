@@ -117,7 +117,17 @@
       const NOME_ITEM = { '2018': 'SIMILAR E GENÉRICO', '2019': 'PERFUMARIA', '2020': 'SIDNEY OLIVEIRA', '2021': 'PRODUTOS COM VALOR FIXO', '2022': 'VITAMINAS', '2023': 'QUARENTENA' };
       const nomeItem = i => NOME_ITEM[i.codigo] || i.descricao || i.codigo;
       const PLANO = [['2018', 'simgen', 'SIMILAR E GENÉRICO'], ['2019', 'perf', 'PERFUMARIA'], ['2020', 'sidney', 'SIDNEY OLIVEIRA'], ['2022', 'vit', 'VITAMINAS']];
-      const linhasP = !p ? [] : p.itens.concat(PLANO.filter(([c, k]) => p.venda && Number(p.venda[k] || 0) > 0 && !p.itens.some(i => i.codigo === c)).map(([c, k, d]) => ({ codigo: c, descricao: d, venda: Number(p.venda[k]), zero: true })))
+      // um item por tipo (regra de 15/10/2026): soma as linhas do mesmo tipo de todas as lojas (ex.: SM e GN de duas lojas);
+      // "Valor da venda" = venda total do mês naquela linha (todas as lojas), publicada no fechamento; sem ela, soma a venda das linhas
+      const CHAVE_VENDA = { '2018': 'simgen', '2019': 'perf', '2020': 'sidney', '2022': 'vit' };
+      const agrup = {};
+      (p ? p.itens : []).forEach(i => {
+        const g = agrup[i.codigo] || (agrup[i.codigo] = { codigo: i.codigo, descricao: i.descricao, valor: 0, venda_base: null });
+        g.valor += Number(i.valor || 0);
+        if (i.venda_base != null) g.venda_base = (g.venda_base || 0) + Number(i.venda_base);
+      });
+      Object.values(agrup).forEach(g => { const k = CHAVE_VENDA[g.codigo]; if (k && p.venda && Number(p.venda[k] || 0) > 0) g.venda_base = Number(p.venda[k]); });
+      const linhasP = !p ? [] : Object.values(agrup).concat(PLANO.filter(([c, k]) => p.venda && Number(p.venda[k] || 0) > 0 && !agrup[c]).map(([c, k, d]) => ({ codigo: c, descricao: d, venda: Number(p.venda[k]), zero: true })))
         .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
       box.className = 'cartao';
       box.innerHTML = `<div class="flex flex-wrap items-center gap-3"><label class="text-[13px] text-slate-600">Funcionário</label>
@@ -130,7 +140,7 @@
           ${!linhasP.length ? '<div class="text-[13px] text-slate-600">Sem venda nem valor lançado neste mês.</div>' : `<table class="t w-full text-[13px]" style="max-width:760px"><thead><tr><th class="text-left">Item</th><th class="num">Valor da venda</th><th class="num">%</th><th class="num">Valor</th></tr></thead><tbody>
           ${linhasP.map(i => i.zero ? `<tr class="text-slate-500"><td>${esc(nomeItem(i))}</td><td class="num mono">${v2(i.venda)}</td><td class="num">–</td><td class="num mono">R$ 0,00 <span class="rot">não atingiu a faixa</span></td></tr>` : `<tr><td>${esc(nomeItem(i))}</td><td class="num mono text-slate-600">${i.venda_base != null ? v2(i.venda_base) : '–'}</td><td class="num mono text-slate-500">${i.venda_base > 0 ? pc(i.valor / i.venda_base) : '–'}</td><td class="num mono font-semibold">${v2(i.valor)}</td></tr>`).join('')}
           <tr><td class="font-semibold">Total</td><td></td><td></td><td class="num mono font-bold text-slate-900">${v2(tot)}</td></tr></tbody></table>`}
-          <p class="rot mt-3">Venda no mês: tudo o que a pessoa vendeu em cada linha, em qualquer loja. "Valor da venda": a venda informada no relatório de comissão do Alpha7 para aquele item. R$ 0,00: houve venda na linha, mas a loja não atingiu a faixa mínima do plano. Valores lançados na folha de ${M.nomeMes(mesSel)}, calculados pelo Alpha7.</p></div>`
+          <p class="rot mt-3">Venda no mês: tudo o que a pessoa vendeu em cada linha, em qualquer loja. "Valor da venda": tudo o que a pessoa vendeu naquela linha no mês, somando todas as lojas (o valor também é a soma de todas as lojas). R$ 0,00: houve venda na linha, mas a loja não atingiu a faixa mínima do plano. Valores lançados na folha de ${M.nomeMes(mesSel)}, calculados pelo Alpha7.</p></div>`
         : '<p class="rot mt-3">Escolha um funcionário para ver os valores dele. A tela mostra uma pessoa por vez.</p>'}`;
     }
     let faixasLoja = [];
