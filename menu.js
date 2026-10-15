@@ -13,7 +13,7 @@
   const MARCA = 'Business';   // nome exibido no topo do menu (o logo entra aqui)
   const GRUPOS = [
     ['', [['index.html', 'Painel', '▦'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
-    ['Folha do mês', [['lancamentos.html', 'Lançamentos', '✎'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
+    ['Folha do mês', [['lancamentos.html', 'Lançamentos', '✎'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
       ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Importar consumo farmácia', '⇪']]],
     ['Loja e jornada', [['freelance_solicitacao.html', 'Solicitações da loja', '✚'], ['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑'], ['holerite_entrega.html', 'Entrega de holerites', '✉'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'],
       ['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['cadastro_solicitacoes.html', 'Solicitações de cadastro', '☰'], ['organograma.html', 'Organograma', '⌂']]],
@@ -229,6 +229,36 @@
     } catch (e) { console.warn('avisos', e); }
   }
 
-  const iniciar = () => { montar(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+  // adiantamento salarial aguardando o Gestor (regra de 15/10/2026): janela ao entrar (1x por sessão) + bolha vermelha no menu
+  async function adiantamentoGestor() {
+    if (String(window.ACESSO.perfil || '').toUpperCase() !== 'GESTOR' || !window.ACESSO_CLI) return;
+    try {
+      const { data, error } = await window.ACESSO_CLI.rpc('fn_adiant_pendentes');
+      const r = !error && data && data[0]; if (!r || !r.qtd) return;
+      const item = document.querySelector('#menuSistema a.it[data-menu="adiantamento.html"]');
+      if (item && !item.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = r.qtd; item.appendChild(b);
+        const sec = item.closest('.sec'); if (sec) sec.classList.add('aberto'); }
+      if (PAGINA === 'adiantamento.html') return;
+      let visto = ''; try { visto = sessionStorage.getItem('adiant_aviso_visto') || ''; } catch (e) {}
+      const chave = r.qtd + '|' + r.total; if (visto === chave) return;
+      const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const m = document.createElement('div'); m.id = 'adiantGestorModal';
+      m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+      m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.35);font-family:inherit">
+        <div style="background:#dc2626;color:#fff;padding:16px 22px;font-weight:800;font-size:16px">⚠️ Adiantamento salarial aguardando a sua aprovação</div>
+        <div style="padding:18px 22px;font-size:14px;color:#0f172a;line-height:1.5">
+          <b>${r.qtd} funcionário(s)</b> com valor diferente do mês anterior (competência ${r.competencia}), total de <b>${brl(r.total)}</b>.<br>
+          <span style="color:#b91c1c;font-weight:700">Enquanto não for aprovado, o Financeiro não recebe esses pagamentos.</span>
+          <div style="margin-top:12px;font-size:12px;color:#475569;background:#f8fafc;border-radius:8px;padding:10px">Se fechar agora, o caminho é: <b>Painel → faixa vermelha no topo "Aprovar adiantamento"</b> ou <b>menu Folha do mês → Adiantamento salarial → aba "Aprovação do Gestor"</b>.</div>
+        </div>
+        <div style="display:flex;gap:8px;padding:0 22px 20px">
+          <a href="adiantamento.html?aba=aprovacao" style="flex:2;text-align:center;background:#dc2626;color:#fff;border-radius:10px;padding:12px;font-weight:800;font-size:13px;text-decoration:none">Aprovar agora →</a>
+          <button type="button" style="flex:1;background:#f1f5f9;color:#334155;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">Depois</button></div></div>`;
+      m.querySelector('button').onclick = () => { try { sessionStorage.setItem('adiant_aviso_visto', chave); } catch (e) {} m.remove(); };
+      document.body.appendChild(m);
+    } catch (e) { console.warn('adiantamento', e); }
+  }
+
+  const iniciar = () => { montar(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

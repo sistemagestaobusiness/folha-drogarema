@@ -403,6 +403,8 @@
     let listaGlobalEmpresas = [];
     let listaGlobalFuncionarios = [];
     let listaGlobalEventos = [];
+    // adiantamento salarial (regra de 15/10/2026): lançado só pela tela adiantamento.html
+    const EVENTOS_ADIANTAMENTO_TELA = [2025, 3001, 3002];
     let abaAtiva = 'novo';
     let competenciaEstaFechada = false;
     let periodoForcadoDesbloqueado = false; 
@@ -674,13 +676,16 @@
       }
 
       const resultados = listaGlobalEventos.filter(ev => {
+        if (EVENTOS_ADIANTAMENTO_TELA.includes(Number(ev.codigo_evento))) return false;   // só pela tela Adiantamento salarial
         const codigoStr = String(ev.codigo_evento || '');
         const descStr = String(ev.descricao_do_evento || '').toUpperCase();
         return codigoStr.includes(termoLimpo) || descStr.includes(termoLimpo);
       });
 
       if (resultados.length === 0) {
-        divSugestoes.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">Nenhum evento encontrado</div>`;
+        divSugestoes.innerHTML = /^(2025|3001|3002)$|ADIANT/.test(termoLimpo) && !/FERIAS|ERRADO/.test(termoLimpo)
+          ? `<div class="p-3 text-xs text-amber-800 bg-amber-50 text-center font-bold">Adiantamento salarial é lançado só pela tela <a href="adiantamento.html" class="underline">Adiantamento salarial</a>.</div>`
+          : `<div class="p-3 text-xs text-slate-400 text-center">Nenhum evento encontrado</div>`;
         divSugestoes.classList.remove('hidden');
         return;
       }
@@ -1909,6 +1914,7 @@
       let inseridosCount = 0;
       const falhasImport = [];
       for (const item of itensFixos) {
+        if (EVENTOS_ADIANTAMENTO_TELA.includes(parseInt(String(item.rubrica || ''), 10))) continue;   // adiantamento: tela própria
         let novaParcela = item.parcela_atual || 1;
         let totalP = item.total_parcelas || 1;
 

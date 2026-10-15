@@ -20,6 +20,13 @@
   </script>
 
   <div class="max-w-[1720px] mx-auto space-y-5">
+
+    <!-- ADIANTAMENTO AGUARDANDO O GESTOR (fica fixo até aprovar) -->
+    <a id="faixaAdiant" href="adiantamento.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
+      <span class="text-2xl">⚠️</span>
+      <span class="flex-1 min-w-[220px]"><b class="block text-base">Adiantamento salarial aguardando a sua aprovação</b><span id="faixaAdiantTxt" class="text-sm text-red-50"></span></span>
+      <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar adiantamento →</span>
+    </a>
     
     <!-- TOPO / HEADER EXECUTIVO -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm gap-4">
@@ -347,6 +354,14 @@
         if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
         else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');
         else if (perfil === 'FINANCEIRO') window.location.replace('financeiro.html');
+        if (perfil === 'GESTOR') {
+          const { data: pa } = await _supabase.rpc('fn_adiant_pendentes');
+          const r = pa && pa[0];
+          if (r && r.qtd) {
+            document.getElementById('faixaAdiantTxt').innerText = `${r.qtd} funcionário(s) com valor diferente do mês anterior (${r.competencia}) · ${Number(r.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · o Financeiro só paga depois da sua aprovação`;
+            document.getElementById('faixaAdiant').classList.remove('hidden');
+          }
+        }
       } catch (err) { console.error(err); }
     })();
 

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adiantamento salarial - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">◐ Adiantamento salarial</h1>
+        <p class="text-xs text-slate-500">Lançamento do adiantamento do dia 15. Ao confirmar, vai para os lançamentos e para o Financeiro. Valor diferente do mês anterior passa antes pelo Gestor.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-3">
+      <!-- abas -->
+      <div class="flex gap-1 border-b border-slate-300">
+        <button id="tabLanc" onclick="trocarAba('lanc')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Lançamento do mês</button>
+        <button id="tabApr" onclick="trocarAba('aprovacao')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Aprovação do Gestor <span id="qtdApr" class="hidden ml-1 bg-red-600 text-white rounded-full px-2 py-0.5 text-[10px]"></span></button>
+      </div>
+
+      <!-- filtros -->
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-3 text-xs">
+        <div><label class="lbl">Competência</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="mudouMes()"></div>
+        <div id="boxVenc"><label class="lbl">Data do pagamento</label><input id="fVenc" type="date" class="inp !py-1.5 font-mono"></div>
+        <div><label class="lbl">Loja / setor</label><select id="fLoja" onchange="render()" class="inp !py-1.5"><option value="">Todas</option></select></div>
+        <div class="flex-1 min-w-[160px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fOcultarNao" onchange="render()"> ocultar quem não recebe</label>
+      </div>
+
+      <!-- ABA LANÇAMENTO -->
+      <div id="pLanc" class="space-y-3">
+        <div id="resumo" class="grid grid-cols-2 md:grid-cols-6 gap-2"></div>
+        <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead class="bg-slate-50 text-[10px] uppercase text-slate-500 text-left"><tr>
+              <th class="px-3 py-2">Funcionário</th>
+              <th class="px-2 py-2 text-center">Recebe</th>
+              <th class="px-2 py-2 text-right">Mês anterior</th>
+              <th class="px-2 py-2">Contábil <span class="normal-case font-normal">(ref. 40%)</span></th>
+              <th class="px-2 py-2">Não contábil</th>
+              <th class="px-2 py-2">Motivo da diferença</th>
+              <th class="px-3 py-2">Situação</th></tr></thead>
+            <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div class="sticky bottom-0 bg-white/95 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center gap-3 shadow">
+          <span id="lblConfirma" class="text-[12px] font-bold text-slate-700 flex-1"></span>
+          <button id="btnConfirmar" onclick="confirmar()" class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-2.5 px-6 rounded-lg text-xs uppercase tracking-wider cursor-pointer">✓ Confirmar adiantamento</button>
+        </div>
+      </div>
+
+      <!-- ABA APROVAÇÃO -->
+      <div id="pApr" class="hidden space-y-3">
+        <div id="aprInfo" class="text-[12px] text-slate-600"></div>
+        <div id="aprLista" class="space-y-2"></div>
+        <div id="aprHist" class="space-y-1"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+    .val { width: 96px; text-align: right; font-family: ui-monospace, monospace; }
+    .aba { color: #64748b; } .aba.on { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-bottom-color: #fff; margin-bottom: -1px; }
+    tr.nao td { color: #94a3b8; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const num = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const r2 = v => Math.round(Number(v || 0) * 100) / 100;
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const lerNum = t => { t = String(t ?? '').trim(); if (!t) return 0; t = t.replace(/\s|R\$/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? NaN : r2(n); };
+
+    let perfil = null, lista = [], ed = {}, aba = 'lanc';
+    const comp = () => { const [a, m] = $('fMes').value.split('-'); return `${m}/${a}`; };
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      const d = new Date();
+      $('fMes').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      $('conteudo').classList.remove('hidden');
+      aba = new URLSearchParams(location.search).get('aba') === 'aprovacao' ? 'aprovacao' : 'lanc';
+      if (aba === 'aprovacao') {   // vem da janela/faixa do Gestor: abre na competência que tem pendência
+        const { data: p } = await _supabase.rpc('fn_adiant_pendentes');
+        const c = p && p[0] && p[0].competencia; if (c) { const [m, a] = c.split('/'); $('fMes').value = `${a}-${m}`; }
+      }
+      await mudouMes();
+    }
+
+    async function mudouMes() {
+      const [a, m] = $('fMes').value.split('-'); $('fVenc').value = `${a}-${m}-15`;
+      await carregar();
+    }
+
+    async function carregar() {
+      const { data, error } = await _supabase.rpc('fn_adiant_lista', { p_comp: comp() });
+      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL BV foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      $('aviso').classList.add('hidden');
+      lista = data || []; ed = {};
+      const venc = lista.find(f => f.vencimento); if (venc) $('fVenc').value = venc.vencimento;
+      lista.forEach(f => {
+        f.fora = !f.reg_id && (Number(f.lanc_contabil) !== 0 || Number(f.lanc_nao_contabil) !== 0);   // lançado antes da tela
+        f.trava = f.pago || f.fora;
+        const base = f.reg_id && f.status !== 'NAO_RECEBE'
+          ? { c: f.valor_contabil, n: f.valor_nao_contabil, meio: f.reg_meio }
+          : f.fora ? { c: f.lanc_contabil, n: f.lanc_nao_contabil, meio: f.meio }
+          : { c: f.ant_contabil, n: f.ant_nao_contabil, meio: f.meio };
+        const recebe = f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe;
+        ed[f.funcionario_id] = { recebe, c: r2(base.c), n: r2(base.n), meio: base.meio || 'BANCO', motivo: f.motivo_rh || '' };
+      });
+      const lojas = [...new Map(lista.map(f => [f.loja_id || '', f.nome_loja || 'sem loja'])).entries()];
+      const sel = $('fLoja').value;
+      $('fLoja').innerHTML = '<option value="">Todas</option>' + lojas.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('');
+      $('fLoja').value = lojas.some(([id]) => id === sel) ? sel : '';
+      trocarAba(aba);
+    }
+
+    function trocarAba(a) {
+      aba = a;
+      $('tabLanc').classList.toggle('on', a === 'lanc'); $('tabApr').classList.toggle('on', a === 'aprovacao');
+      $('pLanc').classList.toggle('hidden', a !== 'lanc'); $('pApr').classList.toggle('hidden', a !== 'aprovacao');
+      $('boxVenc').classList.toggle('hidden', a !== 'lanc');
+      const q = lista.filter(f => f.status === 'AGUARDANDO_GESTOR').length;
+      $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q);
+      if (a === 'lanc') render(); else renderAprovacao();
+    }
+
+    // ------------------------------------------------------------------ lançamento
+    const difere = f => { const e = ed[f.funcionario_id]; return e.recebe && (r2(e.c) !== r2(f.ant_contabil) || r2(e.n) !== r2(f.ant_nao_contabil)); };
+    const mudou = f => { const e = ed[f.funcionario_id];
+      if (!f.reg_id) return true;
+      const recebeReg = f.status !== 'NAO_RECEBE';
+      return recebeReg !== e.recebe || (e.recebe && (r2(e.c) !== r2(f.valor_contabil) || r2(e.n) !== r2(f.valor_nao_contabil) || e.meio !== f.reg_meio)) || f.status === 'RECUSADO'; };
+
+    function situacao(f) {
+      if (f.pago) return '<span class="px-2 py-0.5 rounded bg-slate-800 text-white font-bold">🔒 Pago pelo Financeiro</span>';
+      if (f.fora) return '<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-bold">Lançado antes da tela</span>';
+      const s = { LANCADO: '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">✓ Lançado · no Financeiro</span>',
+        AGUARDANDO_GESTOR: '<span class="px-2 py-0.5 rounded bg-red-100 text-red-700 font-bold">⏳ Aguardando Gestor</span>',
+        RECUSADO: `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">✕ Recusado pelo Gestor</span>${f.gestor_obs ? `<div class="text-[10px] text-rose-700 mt-0.5">${esc(f.gestor_obs)}</div>` : ''}`,
+        NAO_RECEBE: '<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-bold">Não recebe</span>' }[f.status];
+      return s || '<span class="text-slate-400">a confirmar</span>';
+    }
+
+    function render() {
+      const fl = $('fLoja').value, fn = $('fNome').value.trim().toUpperCase(), ocultar = $('fOcultarNao').checked;
+      const vis = lista.filter(f => (!fl || (f.loja_id || '') === fl) && (!fn || String(f.nome).toUpperCase().includes(fn)) && (!ocultar || ed[f.funcionario_id].recebe));
+      let lojaAnt = null;
+      $('tabela').innerHTML = vis.length ? vis.map(f => {
+        const e = ed[f.funcionario_id], id = f.funcionario_id, dis = f.trava ? 'disabled' : '';
+        const ref = r2(Number(f.salario_base) * 0.4);
+        const cab = f.nome_loja !== lojaAnt ? (lojaAnt = f.nome_loja, `<tr class="bg-slate-100"><td colspan="7" class="px-3 py-1.5 text-[11px] font-black uppercase text-slate-600">${esc(f.nome_loja || 'sem loja')}</td></tr>`) : '';
+        const dif = difere(f);
+        if (!e.recebe) return cab + `<tr class="nao bg-slate-50/60">
+          <td class="px-3 py-2"><div class="font-bold line-through decoration-slate-300">${esc(f.nome)}</div><div class="text-[10px]">${esc(f.cargo || '')}</div></td>
+          <td class="px-2 py-2 text-center"><input type="checkbox" class="w-4 h-4" ${dis} onchange="setRecebe('${id}', this.checked)"></td>
+          <td colspan="4" class="px-2 py-2"><span class="inline-block px-2 py-1 rounded bg-slate-200 text-slate-600 font-bold text-[11px]">🚫 Não recebe adiantamento</span>
+            ${Number(f.ant_contabil) + Number(f.ant_nao_contabil) > 0 ? `<span class="ml-2 text-[10px] text-amber-700">recebeu ${brl(Number(f.ant_contabil) + Number(f.ant_nao_contabil))} no mês anterior</span>` : ''}</td>
+          <td class="px-3 py-2">${situacao(f)}</td></tr>`;
+        const acima = ref > 0 && e.c > ref + 0.005;
+        return cab + `<tr class="${dif ? 'bg-amber-50/60' : ''}">
+          <td class="px-3 py-2"><div class="font-bold text-slate-900">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.registrado ? '' : ' · sem registro'}</div></td>
+          <td class="px-2 py-2 text-center"><input type="checkbox" class="w-4 h-4 accent-emerald-600" checked ${dis} onchange="setRecebe('${id}', this.checked)" title="Desmarque se este funcionário não recebe adiantamento"></td>
+          <td class="px-2 py-2 text-right font-mono text-[11px] text-slate-500 whitespace-nowrap">${num(f.ant_contabil)}<br>${num(f.ant_nao_contabil)}</td>
+          <td class="px-2 py-2 whitespace-nowrap"><input class="inp val !py-1" value="${num(e.c)}" ${dis} onchange="setVal('${id}','c',this)">
+            <div class="text-[10px] ${acima ? 'text-amber-700 font-bold' : 'text-slate-400'}">${ref > 0 ? `40% = ${num(ref)}${acima ? ' · acima' : ''}` : 'sem salário'}</div></td>
+          <td class="px-2 py-2 whitespace-nowrap"><input class="inp val !py-1" value="${num(e.n)}" ${dis} onchange="setVal('${id}','n',this)">
+            <select class="inp !py-0.5 !w-auto text-[10px] mt-0.5" ${dis} onchange="setMeio('${id}', this.value)"><option value="BANCO" ${e.meio !== 'DINHEIRO' ? 'selected' : ''}>🏦 Banco</option><option value="DINHEIRO" ${e.meio === 'DINHEIRO' ? 'selected' : ''}>💵 Dinheiro</option></select></td>
+          <td class="px-2 py-2">${dif && !f.trava ? `<div class="text-[10px] font-bold text-amber-800 mb-0.5">Diferente do mês anterior (${brl(e.c + e.n - Number(f.ant_contabil) - Number(f.ant_nao_contabil))}) → Gestor</div>
+            ${perfil === 'GESTOR' ? '<div class="text-[10px] text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 text-[11px]" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value">`}` : ''}</td>
+          <td class="px-3 py-2">${situacao(f)}${f.gestor_por && f.status === 'LANCADO' ? `<div class="text-[10px] text-slate-400 mt-0.5">aprovado por ${esc(f.gestor_por)}</div>` : ''}</td></tr>`;
+      }).join('') : '<tr><td colspan="7" class="p-8 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
+      resumo();
+    }
+
+    function setRecebe(id, v) { ed[id].recebe = v; render(); }
+    function setMeio(id, v) { ed[id].meio = v; resumo(); }
+    function setVal(id, k, el) { const n = lerNum(el.value); if (isNaN(n) || n < 0) { alert('Valor inválido.'); el.value = num(ed[id][k]); return; } ed[id][k] = n; render(); }
+
+    function resumo() {
+      const rec = lista.filter(f => ed[f.funcionario_id].recebe);
+      const sum = fn => rec.reduce((s, f) => s + fn(ed[f.funcionario_id]), 0);
+      const card = (t, v, c = 'text-slate-900') => `<div class="bg-white border border-slate-200 rounded-xl p-3"><div class="text-[10px] font-bold uppercase text-slate-500">${t}</div><div class="text-base font-black ${c}">${v}</div></div>`;
+      const pend = lista.filter(f => !f.trava && mudou(f)), difs = pend.filter(f => difere(f));
+      $('resumo').innerHTML = card('Recebem', `${rec.length} de ${lista.length}`) + card('Contábil (2025)', brl(sum(e => e.c)))
+        + card('Não contábil banco', brl(sum(e => e.meio !== 'DINHEIRO' ? e.n : 0))) + card('💵 Dinheiro', brl(sum(e => e.meio === 'DINHEIRO' ? e.n : 0)), 'text-amber-700')
+        + card('Total', brl(sum(e => e.c + e.n)), 'text-emerald-700') + card('Diferença p/ mês ant.', `${difs.length} pessoa(s)`, difs.length ? 'text-red-600' : 'text-slate-400');
+      $('lblConfirma').innerText = pend.length
+        ? `${pend.length} alteração(ões) a confirmar · ${pend.length - difs.length} vão direto para o Financeiro${difs.length ? ` · ${difs.length} ${perfil === 'GESTOR' ? 'com diferença (você é Gestor: lança direto)' : 'vão para o Gestor aprovar'}` : ''}`
+        : 'Nada a confirmar: tudo já está lançado.';
+      $('btnConfirmar').disabled = !pend.length;
+    }
+
+    async function confirmar() {
+      const venc = $('fVenc').value;
+      if (!venc) return alert('Informe a data do pagamento.');
+      const pend = lista.filter(f => !f.trava && mudou(f));
+      if (perfil !== 'GESTOR') {
+        const semMotivo = pend.filter(f => difere(f) && (ed[f.funcionario_id].motivo || '').trim().length < 5);
+        if (semMotivo.length) return alert('Informe o motivo da diferença (mínimo 5 letras) para:\n' + semMotivo.map(f => '• ' + f.nome).join('\n'));
+      }
+      if (!confirm(`Confirmar o adiantamento de ${comp()} com pagamento em ${dbr(venc)}?\n\n${$('lblConfirma').innerText}`)) return;
+      const itens = pend.map(f => { const e = ed[f.funcionario_id]; return { funcionario_id: f.funcionario_id, recebe: e.recebe, contabil: e.c, nao_contabil: e.n, meio: e.meio, motivo: e.motivo || null }; });
+      const b = $('btnConfirmar'); b.disabled = true; b.innerText = 'Gravando...';
+      const { data, error } = await _supabase.rpc('fn_adiant_confirmar', { p_comp: comp(), p_venc: venc, p_itens: itens });
+      b.innerText = '✓ Confirmar adiantamento';
+      if (error) { b.disabled = false; return alert('Não foi gravado: ' + error.message); }
+      let msg = `Lançados (foram para o Financeiro): ${data.lancados}\nAguardando o Gestor: ${data.aguardando_gestor}\nNão recebe: ${data.nao_recebe}`;
+      if ((data.erros || []).length) msg += '\n\nNão gravados:\n' + data.erros.map(x => `• ${x.nome}: ${x.erro}`).join('\n');
+      alert(msg);
+      await carregar();
+    }
+
+    // ------------------------------------------------------------------ aprovação do Gestor
+    function renderAprovacao() {
+      const pend = lista.filter(f => f.status === 'AGUARDANDO_GESTOR');
+      const g = perfil === 'GESTOR';
+      $('aprInfo').innerHTML = pend.length
+        ? `<div class="bg-red-50 border border-red-300 text-red-800 rounded-xl p-3 font-bold flex flex-wrap items-center gap-3"><span class="flex-1">⚠️ ${pend.length} adiantamento(s) de ${comp()} com valor diferente do mês anterior. O Financeiro só recebe depois da aprovação.</span>
+           ${g ? `<button onclick="aprovarTodos()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs cursor-pointer">✓ Aprovar todos (${pend.length})</button>` : '<span class="text-[11px] font-normal">Só o Gestor aprova.</span>'}</div>`
+        : `<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 font-bold">✓ Nenhum adiantamento aguardando aprovação em ${comp()}.</div>`;
+      $('aprLista').innerHTML = pend.map(f => {
+        const antes = Number(f.ant_contabil) + Number(f.ant_nao_contabil), agora = Number(f.valor_contabil) + Number(f.valor_nao_contabil), d = agora - antes;
+        return `<div class="bg-white border border-slate-200 rounded-xl p-3 text-xs flex flex-wrap gap-4 items-center">
+          <div class="min-w-[200px] flex-1"><div class="font-bold text-slate-900 text-sm">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.nome_loja || '')} · ${esc(f.cargo || '')}</div>
+            <div class="mt-1 text-[11px] text-slate-700"><b>Motivo do RH:</b> ${esc(f.motivo_rh || '-')}</div><div class="text-[10px] text-slate-400">${esc(f.enviado_por || '')} · ${dh(f.enviado_em)}</div></div>
+          <table class="text-[11px] font-mono"><tr class="text-[9px] uppercase text-slate-400 font-sans"><td></td><td class="px-2 text-right">mês anterior</td><td class="px-2 text-right">agora</td></tr>
+            <tr><td class="font-sans text-slate-500">Contábil</td><td class="px-2 text-right">${num(f.ant_contabil)}</td><td class="px-2 text-right font-bold">${num(f.valor_contabil)}</td></tr>
+            <tr><td class="font-sans text-slate-500">Não contábil${f.reg_meio === 'DINHEIRO' ? ' 💵' : ''}</td><td class="px-2 text-right">${num(f.ant_nao_contabil)}</td><td class="px-2 text-right font-bold">${num(f.valor_nao_contabil)}</td></tr>
+            <tr class="border-t"><td class="font-sans font-bold">Total</td><td class="px-2 text-right">${num(antes)}</td><td class="px-2 text-right font-black">${num(agora)}</td></tr></table>
+          <div class="text-center min-w-[90px]"><div class="text-[9px] uppercase text-slate-400">diferença</div><div class="text-base font-black ${d > 0 ? 'text-red-600' : 'text-emerald-700'}">${d > 0 ? '+' : ''}${brl(d)}</div>${antes === 0 ? '<div class="text-[10px] font-bold text-red-600">passa a receber</div>' : ''}</div>
+          ${g ? `<div class="flex flex-col gap-1.5 min-w-[200px]">
+            <button onclick="decidir('${f.reg_id}', true)" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 font-bold cursor-pointer">✓ Aprovar</button>
+            <div class="flex gap-1"><input id="rec_${f.reg_id}" class="inp !py-1 text-[11px]" placeholder="motivo da recusa"><button onclick="decidir('${f.reg_id}', false)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg px-3 font-bold cursor-pointer">Recusar</button></div></div>` : ''}
+        </div>`; }).join('');
+      const dec = lista.filter(f => f.gestor_em && f.status !== 'AGUARDANDO_GESTOR').sort((a, b) => String(b.gestor_em).localeCompare(String(a.gestor_em)));
+      $('aprHist').innerHTML = dec.length ? `<div class="text-[10px] font-bold uppercase text-slate-500 mt-3">Decididos em ${comp()}</div>` + dec.map(f =>
+        `<div class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] flex gap-3"><b class="flex-1">${esc(f.nome)}</b><span>${brl(Number(f.valor_contabil) + Number(f.valor_nao_contabil))}</span>
+          <span class="${f.status === 'RECUSADO' ? 'text-rose-700' : 'text-emerald-700'} font-bold">${f.status === 'RECUSADO' ? '✕ recusado' : '✓ aprovado'}</span><span class="text-slate-400">${esc(f.gestor_por || '')} · ${dh(f.gestor_em)}</span></div>`).join('') : '';
+    }
+
+    async function decidir(id, aprovar) {
+      const obs = aprovar ? null : ($('rec_' + id).value || '').trim();
+      if (!aprovar && obs.length < 5) return alert('Escreva o motivo da recusa (mínimo 5 letras).');
+      const { error } = await _supabase.rpc('fn_adiant_decidir', { p_id: id, p_aprovar: aprovar, p_obs: obs });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+    async function aprovarTodos() {
+      const pend = lista.filter(f => f.status === 'AGUARDANDO_GESTOR');
+      if (!confirm(`Aprovar os ${pend.length} adiantamento(s) com diferença? Eles vão para o Financeiro.`)) return;
+      const falhas = [];
+      for (const f of pend) { const { error } = await _supabase.rpc('fn_adiant_decidir', { p_id: f.reg_id, p_aprovar: true, p_obs: null }); if (error) falhas.push(`${f.nome}: ${error.message}`); }
+      if (falhas.length) alert('Não aprovados:\n' + falhas.join('\n'));
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
