@@ -35,7 +35,7 @@
     </div>
 
     <div id="avisoForcado" class="hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs">
-      ⚠️ Você não é o supervisor. Aqui você decide <b>no lugar dele</b> (ausência): a observação é obrigatória e a decisão fica marcada como <b>"decidida pelo RH/Gestor"</b> nos relatórios.
+      <span id="txtForcado">⚠️ Você não é o supervisor. Como <b>Gestor</b>, aqui você decide <b>no lugar dele</b>: a observação é obrigatória e a decisão fica marcada nos relatórios.</span>
     </div>
     <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold">
       Seu perfil não tem acesso a esta tela.
@@ -128,6 +128,7 @@
         av.classList.remove('hidden'); return;
       }
       if (perfil !== 'SUPERVISOR') document.getElementById('avisoForcado').classList.remove('hidden');
+      if (perfil === 'RH') document.getElementById('txtForcado').innerHTML = 'ℹ️ Tela só de consulta para o RH. A aprovação desta etapa é do <b>supervisor</b> (ou do Gestor). O RH aprova depois, na tela <b>Aprovação do RH</b>.';
 
       const { data: f } = await _supabase.from('vw_funcionarios_basico').select('id, nome_registro');
       (f || []).forEach(x => funcs[x.id] = x.nome_registro);
@@ -202,7 +203,8 @@
 
     function card(r) {
       const st = STATUS[r.status];
-      const acoes = aba === 'pend' ? `
+      const acoes = aba === 'pend' && perfil === 'RH' ? `
+          <div class="text-right text-[10px] font-bold text-amber-700">⏳ Aguardando o supervisor<br><span class="font-normal text-slate-500">o RH aprova depois dele</span></div>` : aba === 'pend' ? `
           <div class="flex gap-2">
             <button onclick="abrirDecisao('${r.id}', true)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">✅ APROVAR</button>
             <button onclick="abrirDecisao('${r.id}', false)" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-[11px] font-bold cursor-pointer">❌ RECUSAR</button>

@@ -175,7 +175,7 @@
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
       const email = (user.email || '').toLowerCase();
       const { data: p, error: errPerfil } = await _supabase.rpc('fn_meu_usuario');
-      const perfil = p ? p.perfil : null;
+      const perfil = p ? p.perfil : null; window.perfilAtual = perfil;
       document.getElementById('lblUsuario').innerText = email;
       document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
       if (!['RH', 'GESTOR'].includes(perfil)) {
@@ -290,7 +290,7 @@
       if (aba === 'sup') acoes = `
         <div class="flex flex-col gap-2 items-end">
           <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded">⏳ Falta aprovação do supervisor</span>
-          <button onclick="abrirNoLugarSupervisor('${r.id}')" class="px-3 py-1.5 bg-white border border-amber-400 text-amber-800 hover:bg-amber-50 rounded-lg text-[11px] font-bold cursor-pointer">Decidir no lugar do supervisor</button>
+          ${window.perfilAtual === 'GESTOR' ? `<button onclick="abrirNoLugarSupervisor('${r.id}')" class="px-3 py-1.5 bg-white border border-amber-400 text-amber-800 hover:bg-amber-50 rounded-lg text-[11px] font-bold cursor-pointer">Decidir no lugar do supervisor</button>` : '<span class="text-[10px] text-slate-500">O RH aprova depois do supervisor</span>'}
         </div>`;
       if (aba === 'hist' && r.status === 'APROVADA' && r.pagamento_status !== 'PAGO') acoes = `
         <div class="flex flex-col gap-2 items-end">
@@ -515,7 +515,7 @@
       fechar('modalTexto'); carregar();
     }
     function abrirNoLugarSupervisor(id) {
-      abrirTexto('DECIDIR NO LUGAR DO SUPERVISOR', 'Use só na ausência do supervisor. A decisão fica registrada com o seu usuário e marcada nos relatórios.',
+      abrirTexto('DECIDIR NO LUGAR DO SUPERVISOR', 'Só o Gestor pode decidir no lugar do supervisor. A decisão fica registrada com o seu usuário e marcada nos relatórios.',
         `<button onclick="executarNoLugar('${id}', true)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">APROVAR (segue p/ RH)</button>
          <button onclick="executarNoLugar('${id}', false)" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg text-xs cursor-pointer">RECUSAR</button>`);
     }
