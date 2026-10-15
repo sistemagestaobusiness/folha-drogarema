@@ -77,12 +77,12 @@
 
     // tarefas do check list (regra de 15/10/2026). Para incluir outra: acrescentar aqui (o código não pode mudar depois).
     const TAREFAS = [
-      ['DESCONTOS_PRECOS', 'Treinamento do sistema de descontos e preços praticados na loja'],
-      ['ESTOQUE_OUTRAS_LOJAS', 'Treinamento do sistema para verificar produtos/estoque em outras lojas para transferência'],
-      ['METAS_CATEGORIAS', 'Treinar a equipe sobre as metas de vendas de todas as categorias'],
-      ['RESULTADO_DIARIO', 'Olhar com o líder o resultado diário e analisar a performance dos funcionários'],
-      ['RESULTADO_FECHADO', 'Olhar o resultado fechado da loja com o líder: analisar os indicadores, discutir melhorias e comprometimento'],
-      ['CANETAS_PBM', 'Verificar canetas PBMs']
+      ['DESCONTOS_PRECOS', '💲', 'Treinamento do sistema de descontos e preços praticados na loja'],
+      ['ESTOQUE_OUTRAS_LOJAS', '📦', 'Treinamento do sistema para verificar produtos/estoque em outras lojas para transferência'],
+      ['METAS_CATEGORIAS', '🎯', 'Treinar a equipe sobre as metas de vendas de todas as categorias'],
+      ['RESULTADO_DIARIO', '📊', 'Olhar com o líder o resultado diário e analisar a performance dos funcionários'],
+      ['RESULTADO_FECHADO', '📈', 'Olhar o resultado fechado da loja com o líder: analisar os indicadores, discutir melhorias e comprometimento'],
+      ['CANETAS_PBM', '🖊️', 'Verificar canetas PBMs']
     ];
     let perfil = null, lojas = [], visitas = [], atual = null;
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
@@ -107,7 +107,7 @@
 
     async function carregar() {
       const { data, error } = await _supabase.from('supervisor_checklist').select('*').order('data_execucao', { ascending: false }).limit(500);
-      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL BP foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      if (error) { $('aviso').innerText = 'Erro ao carregar o histórico: ' + error.message; $('aviso').classList.remove('hidden'); visitas = []; renderHistorico(); return; }
       visitas = data || [];
       renderHistorico();
     }
@@ -117,12 +117,15 @@
       const loja = $('cLoja').value, data = $('cData').value;
       atual = visitas.find(v => v.loja_id === loja && v.data_execucao === data) || null;
       const salvos = {}; ((atual && atual.itens) || []).forEach(i => salvos[i.codigo] = i);
-      $('itens').innerHTML = !loja ? '<div class="py-6 text-center text-slate-400 text-sm">Escolha a loja e a data de execução.</div>'
-        : TAREFAS.map(([cod, txt]) => { const s = salvos[cod] || {};
+      $('itens').innerHTML = (!loja ? '<div class="py-2 text-[11px] font-bold text-amber-700">Escolha a loja acima para marcar e salvar as tarefas.</div>' : '')
+        + TAREFAS.map(([cod, ico, txt]) => { const s = salvos[cod] || {};
           return `<div class="py-2.5">
-            <label class="flex items-start gap-2 cursor-pointer"><input type="checkbox" class="chk mt-0.5 w-4 h-4" data-cod="${cod}" ${s.feito ? 'checked' : ''} onchange="atualizarProgresso()">
-              <span class="text-[13px] font-semibold text-slate-800">${esc(txt)}</span></label>
-            <textarea class="com inp mt-1.5" data-cod="${cod}" rows="${cod === 'RESULTADO_FECHADO' ? 3 : 1}" maxlength="2000" placeholder="Comentário (opcional)">${esc(s.comentario || '')}</textarea></div>`; }).join('');
+            <label class="flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-slate-50">
+              <input type="checkbox" class="chk w-5 h-5 accent-emerald-600 shrink-0" data-cod="${cod}" ${s.feito ? 'checked' : ''} ${loja ? '' : 'disabled'} onchange="atualizarProgresso()">
+              <span class="text-xl shrink-0">${ico}</span>
+              <span class="text-[13px] font-semibold text-slate-800">${esc(txt)}</span>
+              <span class="st ml-auto text-[10px] font-bold uppercase whitespace-nowrap" data-cod="${cod}"></span></label>
+            <textarea class="com inp mt-1.5" data-cod="${cod}" rows="${cod === 'RESULTADO_FECHADO' ? 3 : 1}" maxlength="2000" placeholder="Comentário (opcional)" ${loja ? '' : 'disabled'}>${esc(s.comentario || '')}</textarea></div>`; }).join('');
       $('cObs').value = atual ? (atual.observacao || '') : '';
       $('infoVisita').innerHTML = !loja ? '' : atual
         ? `Visita registrada em ${dataHora(atual.criado_em)} por ${esc(atual.criado_por || '')}${atual.atualizado_em ? ` · última alteração em ${dataHora(atual.atualizado_em)} por ${esc(atual.atualizado_por || '')}` : ''}`
@@ -131,14 +134,17 @@
     }
     function atualizarProgresso() {
       const chks = [...document.querySelectorAll('.chk')];
-      $('progresso').innerText = chks.length ? `${chks.filter(c => c.checked).length} de ${chks.length} feitas` : '';
+      $('progresso').innerText = $('cLoja').value ? `${chks.filter(c => c.checked).length} de ${chks.length} feitas` : '';
+      chks.forEach(c => { const st = document.querySelector(`.st[data-cod="${c.dataset.cod}"]`);
+        st.innerText = !$('cLoja').value ? '' : c.checked ? '✓ feito' : '⏳ pendente';
+        st.className = 'st ml-auto text-[10px] font-bold uppercase whitespace-nowrap ' + (c.checked ? 'text-emerald-700' : 'text-amber-700'); });
     }
 
     async function salvar() {
       const loja = $('cLoja').value, data = $('cData').value;
       if (!loja) return alert('Escolha a loja.');
       if (!data) return alert('Informe a data de execução.');
-      const itens = TAREFAS.map(([cod, txt]) => ({
+      const itens = TAREFAS.map(([cod, , txt]) => ({
         codigo: cod, texto: txt,
         feito: document.querySelector(`.chk[data-cod="${cod}"]`).checked,
         comentario: document.querySelector(`.com[data-cod="${cod}"]`).value.trim() || null }));
@@ -159,7 +165,7 @@
       const lista = visitas.filter(v => !f || v.loja_id === f);
       $('historico').innerHTML = lista.length ? lista.map(v => {
         const feitos = (v.itens || []).filter(i => i.feito).length, tot = TAREFAS.length;
-        const pend = TAREFAS.filter(([c]) => !(v.itens || []).some(i => i.codigo === c && i.feito)).map(([, t]) => t);
+        const pend = TAREFAS.filter(([c]) => !(v.itens || []).some(i => i.codigo === c && i.feito)).map(([, i, t]) => i + ' ' + t);
         return `<div class="bg-white border ${feitos === tot ? 'border-emerald-300' : 'border-amber-300'} rounded-xl p-3 text-xs cursor-pointer hover:bg-slate-50" onclick="irPara('${v.loja_id}','${v.data_execucao}')">
           <div class="flex justify-between gap-2"><b class="text-slate-900">${esc(nomeLoja(v.loja_id))}</b><span class="font-mono">${dbr(v.data_execucao)}</span></div>
           <div class="mt-0.5 font-bold ${feitos === tot ? 'text-emerald-700' : 'text-amber-700'}">${feitos === tot ? '✓ tudo feito' : `${feitos} de ${tot} feitas`}</div>
