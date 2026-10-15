@@ -86,9 +86,12 @@
 
             <div class="relative">
               <label class="block text-xs font-bold text-slate-600 uppercase mb-1">3. Evento / Rubrica (Busca por Código ou Nome) *</label>
-              <input type="text" id="inputRubrica" required autocomplete="off" placeholder="Digite código ou min. 3 letras (ex: 2001)..." 
-                class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase"
-                oninput="buscarEventosInteligente(this.value)" onchange="atualizarBoxVencimento()">
+              <div class="relative">
+                <input type="text" id="inputRubrica" required autocomplete="off" placeholder="Busque pelo código ou nome e escolha na lista (ex: 2001)..." 
+                  class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 pr-9 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 uppercase"
+                  oninput="buscarEventosInteligente(this.value)">
+                <button type="button" id="btnTrocarEvento" onclick="trocarEvento()" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 font-bold text-sm cursor-pointer" title="Trocar o evento">✕</button>
+              </div>
               
               <div id="listaSugestoes" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 divide-y divide-slate-100"></div>
             </div>
@@ -720,8 +723,26 @@
       box.innerHTML = t ? `${t === 'DESCONTO' ? '➖ DÉBITO (desconto)' : '➕ CRÉDITO (provento)'} <span class="font-normal text-slate-400">· definido no cadastro do evento</span>` : '';
     }
 
+    // Evento: o campo só busca; o nome gravado vem do cadastro (não editável na tela de lançamento — regra de 15/10/2026)
+    const SUFIXO_SISTEMA = /\s*\((\d{2}\/\d{2}|SALDO RESIDUAL)\)\s*$/;
+    const nomeDoCadastro = ev => `${ev.codigo_evento} - ${ev.descricao_do_evento}`;
+    function travarCampoEvento(travar) {
+      const el = document.getElementById('inputRubrica');
+      el.readOnly = travar;
+      el.classList.toggle('bg-emerald-50', travar); el.classList.toggle('font-bold', travar);
+      document.getElementById('btnTrocarEvento').classList.toggle('hidden', !travar);
+    }
+    function trocarEvento() {
+      document.getElementById('inputRubrica').value = '';
+      travarCampoEvento(false);
+      atualizarBoxVencimento();
+      document.getElementById('inputRubrica').focus();
+    }
+
     function selecionarEvento(codigo, descricao, tipo) {
-      document.getElementById('inputRubrica').value = `${codigo} - ${descricao}`;
+      const ev = listaGlobalEventos.find(e => String(e.codigo_evento) === String(codigo));
+      document.getElementById('inputRubrica').value = ev ? nomeDoCadastro(ev) : `${codigo} - ${descricao}`;
+      travarCampoEvento(true);
       document.getElementById('listaSugestoes').classList.add('hidden');
       atualizarBoxVencimento();
     }
@@ -1562,7 +1583,9 @@
 
     function prepararEdicao(item) {
       document.getElementById('editLancamentoId').value = item.id;
-      document.getElementById('inputRubrica').value = item.rubrica || '';
+      { const evE = eventoDaRubrica(item.rubrica); const suf = (String(item.rubrica || '').match(SUFIXO_SISTEMA) || [''])[0];
+        document.getElementById('inputRubrica').value = evE ? nomeDoCadastro(evE) + (suf ? ' ' + suf.trim() : '') : (item.rubrica || '');
+        travarCampoEvento(!!evE); }
       document.getElementById('tipoLancamento').value = item.tipo || '';
 
       // Itens importados (Alpha7/Farmácia) têm valor_bruto = 0: usa o valor gravado para não abrir zerado
@@ -1609,6 +1632,7 @@
       document.getElementById('boxVencimentoPag').classList.add('hidden');
       document.getElementById('editLancamentoId').value = '';
       document.getElementById('inputRubrica').value = '';
+      travarCampoEvento(false);
       document.getElementById('valorLancamento').value = '';
       preencherPainelAjuste(1, null);
       preencherPainelAjuste(2, null);
@@ -1653,6 +1677,12 @@
       }
       const catSel = catPagExtra(eventoSel, competenciaRegraLancamento);
       const ehPagExtra = !!catSel;
+      if (!document.getElementById('inputRubrica').readOnly) {
+        alert('Escolha o evento na lista de sugestões (busque pelo código ou pelo nome e clique no evento).');
+        document.getElementById('inputRubrica').focus();
+        return;
+      }
+      { const suf = (rubrica.match(SUFIXO_SISTEMA) || [''])[0]; rubrica = nomeDoCadastro(eventoSel) + (suf ? ' ' + suf.trim() : ''); }
       const ehReembolso = catSel === 'REEMBOLSO';
 
       // Lançamento já PAGO pelo Financeiro: grava somente a troca do evento
