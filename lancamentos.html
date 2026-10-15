@@ -720,7 +720,8 @@
       const box = document.getElementById('infoTipoEvento');
       box.classList.toggle('hidden', !t);
       box.className = `-mt-2 text-[11px] font-bold ${t ? '' : 'hidden'} ${t === 'DESCONTO' ? 'text-rose-700' : 'text-emerald-700'}`;
-      box.innerHTML = t ? `${t === 'DESCONTO' ? '➖ DÉBITO (desconto)' : '➕ CRÉDITO (provento)'} <span class="font-normal text-slate-400">· definido no cadastro do evento</span>` : '';
+      box.innerHTML = t ? `${t === 'DESCONTO' ? '➖ DÉBITO (desconto)' : '➕ CRÉDITO (provento)'} <span class="font-normal text-slate-400">· definido no cadastro do evento</span>`
+        + (ev && ev.pagamento_meio === 'DINHEIRO' ? ' <span class="ml-1 px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-black">💵 PAGO EM DINHEIRO (espécie)</span>' : '') : '';
     }
 
     // Evento: o campo só busca; o nome gravado vem do cadastro (não editável na tela de lançamento — regra de 15/10/2026)
@@ -1076,6 +1077,18 @@
 
     const itemTravado = id => (mapaPagExtras[id] || {}).status === 'PAGO';
 
+    // mesma cor por tipo de pagamento da tela do Financeiro (regra de 15/10/2026)
+    const COR_PAG = { ADIANTAMENTO: 'bg-sky-600 text-white', VALE_TRANSPORTE: 'bg-indigo-600 text-white', FERIAS: 'bg-teal-600 text-white',
+      DECIMO_TERCEIRO: 'bg-violet-600 text-white', RESCISAO: 'bg-rose-700 text-white', REEMBOLSO: 'bg-purple-600 text-white', OUTROS: 'bg-slate-400 text-white' };
+    function chipPagamento(item) {
+      const ev = eventoDaRubrica(item.rubrica);
+      const cat = catPagExtra(ev, item.competencia || competenciaRegraLancamento);
+      if (!cat) return '';
+      const din = ev && ev.pagamento_meio === 'DINHEIRO';
+      return `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded mr-1 ${COR_PAG[cat] || COR_PAG.OUTROS}">${escaparHtml(ROTULO_PAG_EXTRA[cat] || cat)}</span>`
+        + (din ? '<span class="text-[9px] font-black px-1.5 py-0.5 rounded mr-1 bg-amber-400 text-amber-950">💵 DINHEIRO</span>' : '');
+    }
+
     function badgePagExtra(item) {
       const p = mapaPagExtras[item.id];
       if (!p) return '';
@@ -1368,7 +1381,7 @@
             <button type="button" onclick="prepararEdicaoPorId('${item.id}')" class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
             ${itemTravado(item.id) || exclusaoBloqueada ? `<span class="text-slate-300 px-1">🔒</span>` : `<button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>`}`;
         return `<tr class="hover:bg-slate-50">
-          <td class="py-1 px-2 text-slate-700 font-medium"><span class="text-[9px] font-bold text-sky-800 bg-sky-100 px-1 rounded mr-1">${ROTULO_PAG_EXTRA[item.catPag] || ''}</span>${escaparHtml(item.rubrica)} ${badgePagExtra(item)}
+          <td class="py-1 px-2 text-slate-700 font-medium">${chipPagamento(item)}${escaparHtml(item.rubrica)} ${badgePagExtra(item)}
             ${Array.isArray(item.reembolso_dias) && item.reembolso_dias.length ? `<div class="text-[10px] text-violet-700 font-normal">🚌 ${item.reembolso_dias.map(d => `${escaparHtml(String(d.data || '').slice(8, 10) + '/' + String(d.data || '').slice(5, 7))}${d.trajeto ? ' ' + escaparHtml(d.trajeto) : ''} (${parseFloat(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join(' · ')}</div>` : ''}
             <span onclick="abrirDetalhesItem('${item.id}')" class="text-slate-300 hover:text-slate-600 cursor-pointer ml-1 text-[10px] select-none" title="Histórico do lançamento">🕘</span></td>
           <td class="py-1 px-2 text-right font-mono font-bold w-24 ${item.tipo === 'DESCONTO' ? 'text-rose-700' : 'text-emerald-700'}">${item.tipo === 'DESCONTO' ? '- ' : ''}${fmt(item.valor)}</td>
@@ -1454,7 +1467,7 @@
           return `
             <tr class="hover:bg-slate-50">
               <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
-                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
+                ${chipPagamento(item)}${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
               </td>
               <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
@@ -1502,7 +1515,7 @@
           return `
             <tr class="hover:bg-slate-50">
               <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
-                ${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
+                ${chipPagamento(item)}${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
               </td>
               <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>

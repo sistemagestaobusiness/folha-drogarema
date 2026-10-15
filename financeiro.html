@@ -171,6 +171,44 @@
       FERIAS: 'Férias', DECIMO_TERCEIRO: '13º salário', RESCISAO: 'Rescisão', FREELANCE: 'Freelance',
       HORA_EXTRA: 'Hora extra', REEMBOLSO: 'Reembolso', OUTROS: 'Outros'
     };
+    // categorias visuais: cada tipo com sua cor; dinheiro sempre num bloco à parte (regra de 15/10/2026)
+    const CAT = {
+      QUINTO_DIA:      { rot: 'Salário 5º dia útil', cls: 'bg-slate-700 text-white' },
+      ADIANTAMENTO:    { rot: 'Adiantamento salarial', cls: 'bg-sky-600 text-white' },
+      VALE_TRANSPORTE: { rot: 'Vale-transporte', cls: 'bg-indigo-600 text-white' },
+      FERIAS:          { rot: 'Férias', cls: 'bg-teal-600 text-white' },
+      DECIMO_TERCEIRO: { rot: '13º salário', cls: 'bg-violet-600 text-white' },
+      RESCISAO:        { rot: 'Rescisão', cls: 'bg-rose-700 text-white' },
+      FREELANCE:       { rot: 'Freelance', cls: 'bg-orange-500 text-white' },
+      HORA_EXTRA:      { rot: 'Hora extra', cls: 'bg-orange-700 text-white' },
+      REEMBOLSO:       { rot: 'Reembolso', cls: 'bg-purple-600 text-white' },
+      OUTROS:          { rot: 'Outros', cls: 'bg-slate-400 text-white' },
+      DINHEIRO:        { rot: '💵 EM DINHEIRO (espécie) · não transferir', cls: 'bg-amber-400 text-amber-950' }
+    };
+    const ORDEM_CAT = ['QUINTO_DIA', 'ADIANTAMENTO', 'VALE_TRANSPORTE', 'FERIAS', 'DECIMO_TERCEIRO', 'RESCISAO', 'FREELANCE', 'HORA_EXTRA', 'REEMBOLSO', 'OUTROS', 'DINHEIRO'];
+    const catDe = i => i.meio === 'DINHEIRO' ? 'DINHEIRO' : (CAT[i.tipo] ? i.tipo : 'OUTROS');
+    const chipCat = i => { const c = CAT[i.tipo] || CAT.OUTROS; return `<span class="chip ${c.cls}">${esc(c.rot)}</span>${i.meio === 'DINHEIRO' ? ' <span class="chip bg-amber-400 text-amber-950">💵 DINHEIRO</span>' : ''}`; };
+    // pagamentos que se repetem todo mês: compara com o mês anterior (mesma pessoa, tipo e meio)
+    const RECORRENTES = ['ADIANTAMENTO', 'QUINTO_DIA', 'VALE_TRANSPORTE'];
+    let mesAnterior = {};   // 'fid|tipo|meio|MM/AAAA' -> soma paga/prevista
+    const compAnterior = c => { const m = String(c || '').match(/^(\d{2})\/(\d{4})$/); if (!m) return ''; let mm = +m[1] - 1, aa = +m[2]; if (mm === 0) { mm = 12; aa--; } return `${String(mm).padStart(2, '0')}/${aa}`; };
+    const chaveMes = (i, comp) => `${i.funcionario_id}|${i.tipo}|${i.meio === 'DINHEIRO' ? 'DINHEIRO' : 'BANCO'}|${comp}`;
+    function comparaMesAnterior(i) {
+      if (!RECORRENTES.includes(i.tipo) || !i.competencia) return '';
+      const ant = compAnterior(i.competencia), v = mesAnterior[chaveMes(i, ant)];
+      if (v === undefined) return `<div class="text-[10px] font-semibold text-amber-700">⚠ não teve ${esc((CAT[i.tipo] || {}).rot || '').toLowerCase()}${i.meio === 'DINHEIRO' ? ' em dinheiro' : ''} em ${ant}</div>`;
+      const dif = Math.round((parseFloat(i.valor) - v) * 100) / 100;
+      if (Math.abs(dif) < 0.005) return `<div class="text-[10px] text-slate-400">igual a ${ant}</div>`;
+      return `<div class="text-[10px] font-semibold text-amber-700">⚠ ${ant}: ${fmtR(v)} · diferença ${dif > 0 ? '+' : ''}${fmtR(dif)}</div>`;
+    }
+    async function carregarMesAnterior(lista) {
+      mesAnterior = {};
+      const comps = [...new Set(lista.filter(i => RECORRENTES.includes(i.tipo)).map(i => compAnterior(i.competencia)).filter(Boolean))];
+      if (!comps.length) return;
+      const { data } = await _supabase.from('pagamentos_extras').select('funcionario_id, tipo, meio, competencia, valor').in('competencia', comps).in('tipo', RECORRENTES).neq('status', 'CANCELADO');
+      (data || []).forEach(x => { const k = chaveMes(x, x.competencia); mesAnterior[k] = (mesAnterior[k] || 0) + parseFloat(x.valor || 0); });
+    }
+
     const ABA_ROTULO = { PENDENTE: 'a pagar', PAGO: 'pagos', PROBLEMA: 'devolvidos ao RH', CANCELADO: 'cancelados' };
     let contasEmpresas = [], perfil = null, aba = 'PENDENTE', itens = [], funcs = {}, empresas = [], selecionados = new Set(), selPagos = new Set(), lote = [], itemProblema = null, atual = null;
     let separacao = [];   // recortes do PDF do banco: { bloco, analise, id (pagamento), blob }
@@ -274,6 +312,7 @@
       ]);
       if (rLista.error) { document.getElementById('lista').innerHTML = `<div class="p-4 text-rose-600">${esc(rLista.error.message)}</div>`; return; }
       itens = rLista.data || [];
+      await carregarMesAnterior(itens);
 
       // aviso importante: vencidos e de hoje (sempre sobre tudo que está a pagar)
       const pend = rPend.data || [], h = hoje();
@@ -321,7 +360,7 @@
       const g = new Map();
       lista.forEach(i => { const e = empresaDoItem(i); if (!g.has(e.id)) g.set(e.id, { emp: e, itens: [] }); g.get(e.id).itens.push(i); });
       const grupos = [...g.values()].sort((a, b) => a.emp.nome.localeCompare(b.emp.nome));
-      grupos.forEach(x => x.itens.sort((a, b) => nome(a.funcionario_id).localeCompare(nome(b.funcionario_id)) || String(a.vencimento).localeCompare(String(b.vencimento))));
+      grupos.forEach(x => x.itens.sort((a, b) => ORDEM_CAT.indexOf(catDe(a)) - ORDEM_CAT.indexOf(catDe(b)) || nome(a.funcionario_id).localeCompare(nome(b.funcionario_id)) || String(a.vencimento).localeCompare(String(b.vencimento))));
       return grupos;
     }
 
@@ -336,7 +375,21 @@
       box.innerHTML = barraPagos(lista) + grupos.map(g => {
         const sub = g.itens.reduce((a, i) => a + parseFloat(i.valor), 0);
         const todos = g.itens.every(i => selecionados.has(i.id));
-        const linhas = g.itens.map(i => aba === 'PENDENTE' ? linhaAPagar(i, h, comSelecao) : linhaHistorico(i)).join('');
+        let catAtual = null;
+        const linhas = g.itens.map(i => {
+          let cab = '';
+          const c = catDe(i);
+          if (c !== catAtual) {
+            catAtual = c;
+            const doGrupo = g.itens.filter(x => catDe(x) === c), sub = doGrupo.reduce((a, x) => a + parseFloat(x.valor), 0);
+            const din = c === 'DINHEIRO';
+            cab = `<tr class="${din ? 'bg-amber-50 border-t-2 border-amber-400' : 'bg-white border-t-2 border-slate-200'}"><td colspan="6" class="px-4 py-1.5">
+              <span class="chip ${CAT[c].cls}">${esc(CAT[c].rot)}</span>
+              <span class="text-[11px] text-slate-500 ml-2">${doGrupo.length} pagamento(s) · <b class="font-mono text-slate-800">${fmtR(sub)}</b></span>
+              ${din ? '<span class="text-[11px] font-bold text-amber-800 ml-2">entregar em espécie — NÃO fazer transferência</span>' : ''}</td></tr>`;
+          }
+          return cab + (aba === 'PENDENTE' ? linhaAPagar(i, h, comSelecao) : linhaHistorico(i));
+        }).join('');
         return `<div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
           <div class="flex flex-wrap justify-between items-center gap-2 px-4 py-2 bg-slate-50 border-b border-slate-200">
             <label class="flex items-center gap-2 text-xs font-semibold text-slate-800">${comSelecao ? `<input type="checkbox" ${todos ? 'checked' : ''} onchange="marcarEmpresa('${g.emp.id}', this.checked)" title="Selecionar todos desta empresa">` : ''}
@@ -389,8 +442,9 @@
       return `<tr class="hover:bg-slate-50 ${selecionados.has(i.id) ? 'bg-emerald-50/60' : ''}">
         ${comSelecao ? `<td class="pl-4 py-2 w-6"><input type="checkbox" ${selecionados.has(i.id) ? 'checked' : ''} onchange="marcar('${i.id}', this.checked)"></td>` : '<td class="w-2"></td>'}
         <td class="px-2 py-2"><div class="font-semibold text-slate-900">${esc(nome(i.funcionario_id))}</div>
-          <div class="text-[10px] text-slate-500">${TIPOS[i.tipo] || i.tipo}${i.meio === 'DINHEIRO' ? ' · em dinheiro' : ''} · ${origemTxt(i)}</div>
+          <div class="text-[10px] text-slate-500">${chipCat(i)} ${origemTxt(i)}</div>
           <div class="text-[10px] text-slate-400">${dadosBancarios(i)}</div>
+          ${comparaMesAnterior(i)}
           ${i.resolucao_obs ? `<div class="text-[10px] text-sky-700">RH: ${esc(i.resolucao_obs)}</div>` : ''}</td>
         <td class="px-2 py-2 whitespace-nowrap"><div class="text-[10px] text-slate-400">pagar em</div><div class="font-mono font-semibold ${i.vencimento < h ? 'text-rose-600' : 'text-slate-800'}">${dbr(i.vencimento)} <span class="font-sans font-normal text-[10px] text-slate-400">${diaSem(i.vencimento)}</span></div>${sit}</td>
         <td class="px-2 py-2 text-right font-mono font-bold text-sm whitespace-nowrap">${fmtR(i.valor)}</td>
@@ -411,7 +465,7 @@
       return `<tr class="hover:bg-slate-50">
         <td class="pl-3 w-6">${i.status === 'PAGO' && i.comprovante_path ? `<input type="checkbox" ${selPagos.has(i.id) ? 'checked' : ''} onchange="this.checked ? selPagos.add('${i.id}') : selPagos.delete('${i.id}'); render()" title="Selecionar para imprimir o comprovante">` : ''}</td>
         <td class="px-2 py-2"><div class="font-semibold text-slate-900">${esc(nome(i.funcionario_id))}</div>
-          <div class="text-[10px] text-slate-500">${TIPOS[i.tipo] || i.tipo}${i.meio === 'DINHEIRO' ? ' · em dinheiro' : ''} · ${origemTxt(i)}</div></td>
+          <div class="text-[10px] text-slate-500">${chipCat(i)} ${origemTxt(i)}</div>${comparaMesAnterior(i)}</td>
         <td class="px-2 py-2 whitespace-nowrap"><div class="text-[10px] text-slate-400">previsto</div><div class="font-mono">${dbr(i.vencimento)}</div></td>
         <td class="px-2 py-2">${sit}</td>
         <td class="px-2 py-2 text-right font-mono font-bold whitespace-nowrap">${fmtR(i.valor)}</td>
@@ -444,9 +498,12 @@
       const rot = c => `${(empresas.find(e => e.id === c.empresa_id) || {}).nome_fantasia || ''} · ${rotuloConta(c)}`;
       document.getElementById('listaBancos').innerHTML = contas.map(c => `<option>${esc(rot(c))}</option>`).join('') + '<option>Dinheiro (tesouraria)</option>';
       const principal = idsEmp.length === 1 ? contaPrincipal(idsEmp[0]) : null;
-      document.getElementById('pgBanco').value = principal ? rot(principal) : (sel.every(i => i.meio === 'DINHEIRO') ? 'Dinheiro (tesouraria)' : '');
-      document.getElementById('pgAvisoEmp').innerHTML = idsEmp.length > 1
-        ? `⚠ Os selecionados são de ${idsEmp.length} empresas diferentes. O ideal é confirmar por empresa, com a conta de cada uma.` : '';
+      const nDin = sel.filter(i => i.meio === 'DINHEIRO').length;
+      document.getElementById('pgBanco').value = nDin === sel.length ? 'Dinheiro (tesouraria)' : principal ? rot(principal) : '';
+      document.getElementById('pgAvisoEmp').innerHTML = [
+        idsEmp.length > 1 ? `⚠ Os selecionados são de ${idsEmp.length} empresas diferentes. O ideal é confirmar por empresa, com a conta de cada uma.` : '',
+        nDin && nDin < sel.length ? `<b class="text-amber-800">💵 ATENÇÃO: ${nDin} dos selecionados são EM DINHEIRO (espécie) e estão misturados com pagamentos por banco. Confirme o dinheiro separado, com a conta "Dinheiro (tesouraria)".</b>` : ''
+      ].filter(Boolean).join('<br>');
       document.getElementById('pgObs').value = '';
       document.getElementById('pgPdfs').value = '';
       separacao = []; renderSeparacao();
