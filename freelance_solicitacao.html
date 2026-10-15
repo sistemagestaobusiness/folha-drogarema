@@ -366,7 +366,8 @@
 
     async function carregarLojas() {
       const { data } = await _supabase.from('lojas').select('id, nome_loja, ativo').eq('ativo', true).order('nome_loja');
-      listaLojas = data || [];
+      // só LOJAS (LOJA 01, LOJA 02...): setor (RH, Compras, Estoque...) não define qual Drogarema paga (regra de 15/10/2026)
+      listaLojas = (data || []).filter(l => /^\s*LOJA\s*\d+/i.test(l.nome_loja || ''));
       const sel = document.getElementById('selectLoja');
       sel.innerHTML = '<option value="">-- SELECIONE A LOJA --</option>' + listaLojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
       if (usuario.perfil === 'LIDER' && usuario.loja_id) {
