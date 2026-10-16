@@ -584,6 +584,25 @@
       const data = document.getElementById('pgData').value;
       if (!data) return alert('Informe a data do pagamento.');
       if (!document.getElementById('pgBanco').value.trim()) return alert('Informe a conta pagadora.');
+      // banco x dinheiro (regra de 16/10/2026): o meio de pagamento tem de bater com o lançamento
+      const selPg = itens.filter(i => selecionados.has(i.id));
+      const contaDin = /dinheiro|tesouraria|esp[eé]cie/i.test(document.getElementById('pgBanco').value);
+      const din = selPg.filter(i => i.meio === 'DINHEIRO'), banco = selPg.filter(i => i.meio !== 'DINHEIRO');
+      if (din.length && banco.length) return alert(`💵 Não confirme DINHEIRO junto com BANCO.
+
+${din.length} pagamento(s) em dinheiro estão misturados com ${banco.length} por banco. Confirme cada grupo separadamente.`);
+      if (din.length && !contaDin && !confirm(`💵 ATENÇÃO: PAGAMENTO EM DINHEIRO (espécie)
+
+${din.map(i => `• ${nome(i.funcionario_id)} · ${fmtR(i.valor)}`).join('\n')}
+
+Você escolheu uma conta de BANCO. Se foi pago por banco, o lançamento está errado: avise o RH para trocar o evento (ex.: 3002 → 3001).
+
+Confirmar mesmo assim como pago por banco?`)) return;
+      if (banco.length && contaDin && !confirm(`🏦 ATENÇÃO: estes pagamentos são por BANCO, mas a conta escolhida é DINHEIRO (tesouraria).
+
+Se foi pago em dinheiro, avise o RH para trocar o evento.
+
+Confirmar mesmo assim?`)) return;
       const repetidos = separacao.filter(s => s.id).map(s => s.id).filter((v, i, a) => a.indexOf(v) !== i);
       if (repetidos.length) return alert('O mesmo pagamento foi escolhido para dois comprovantes. Ajuste a coluna "Anexar em".');
       // aviso: pagamento confirmado sem comprovante anexado

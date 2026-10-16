@@ -676,7 +676,6 @@
       }
 
       const resultados = listaGlobalEventos.filter(ev => {
-        if (EVENTOS_ADIANTAMENTO_TELA.includes(Number(ev.codigo_evento))) return false;   // só pela tela Adiantamento salarial
         const codigoStr = String(ev.codigo_evento || '');
         const descStr = String(ev.descricao_do_evento || '').toUpperCase();
         return codigoStr.includes(termoLimpo) || descStr.includes(termoLimpo);
@@ -702,6 +701,11 @@
           ? `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">NÃO CONTÁBIL</span>`
           : `<span class="bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">CONTÁBIL</span>`;
 
+        if (EVENTOS_ADIANTAMENTO_TELA.includes(Number(ev.codigo_evento))) return `
+        <div class="p-2.5 bg-slate-50 text-xs flex justify-between items-center cursor-not-allowed opacity-70" title="Bloqueado: lançar na tela Adiantamento salarial">
+          <div class="flex items-center"><span class="font-mono font-bold text-slate-400 mr-2">${ev.codigo_evento}</span><span class="text-slate-500 line-through">${ev.descricao_do_evento}</span>${badgeNatureza}</div>
+          <a href="adiantamento.html" class="text-[10px] font-bold text-amber-700 underline whitespace-nowrap">🔒 só na tela Adiantamento salarial</a>
+        </div>`;
         return `
         <div onclick="selecionarEvento('${ev.codigo_evento}', '${ev.descricao_do_evento}', '${ev.tipo_evento}')" 
           class="p-2.5 hover:bg-slate-50 cursor-pointer text-xs flex justify-between items-center transition">
@@ -1727,6 +1731,10 @@
       }
 
       const eventoSel = eventoDaRubrica(rubrica);
+      if (eventoSel && EVENTOS_ADIANTAMENTO_TELA.includes(Number(eventoSel.codigo_evento))) {
+        alert('🔒 Adiantamento salarial (2025, 3001, 3002) é lançado e alterado só na tela "Adiantamento salarial".');
+        return;
+      }
       // só aceita evento que existe no cadastro de eventos (escolhido na lista)
       if (!eventoSel) {
         alert(`O evento "${rubrica}" não existe no cadastro de eventos.\n\nEscolha um evento da lista (digite o código ou parte do nome e clique na sugestão). Se o evento for novo, cadastre primeiro na tela de Eventos.`);
@@ -1848,6 +1856,11 @@
       if (idEdicao) {
         ({ error } = await _supabase.from('folha_itens').update(payload).eq('id', idEdicao));
       } else {
+        // alerta de duplicidade: mesmo evento já lançado para a pessoa nesta competência (regra de 16/10/2026)
+        const codNovo = parseInt(String(rubrica), 10);
+        const { data: jaTem } = await _supabase.from('folha_itens').select('rubrica, valor, tipo').eq('funcionario_id', funcionario_id).eq('competencia', competenciaRegraLancamento);
+        const iguais = (jaTem || []).filter(x => parseInt(String(x.rubrica), 10) === codNovo);
+        if (iguais.length && !confirm(`⚠ POSSÍVEL DUPLICIDADE\n\nEste funcionário já tem ${iguais.length} lançamento(s) do evento ${codNovo} em ${competenciaRegraLancamento}:\n${iguais.map(x => `• ${x.rubrica} · R$ ${Number(x.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join('\n')}\n\nLançar mais um mesmo assim?`)) return;
         ({ error } = await _supabase.from('folha_itens').insert([{ ...payload, funcionario_id, competencia: competenciaRegraLancamento }]));
       }
 
