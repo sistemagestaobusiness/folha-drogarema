@@ -148,7 +148,9 @@
     }
 
     // ------------------------------------------------------------------ lançamento
-    const difere = f => { const e = ed[f.funcionario_id]; return e.recebe && (r2(e.c) !== r2(f.ant_contabil) || r2(e.n) !== r2(f.ant_nao_contabil)); };
+    // regra: vai para o Gestor só se o TOTAL (contábil + não contábil) mudar; trocar a divisão entre os dois não precisa de aprovação
+    const difere = f => { const e = ed[f.funcionario_id]; return e.recebe && r2(e.c + e.n) !== r2(Number(f.ant_contabil) + Number(f.ant_nao_contabil)); };
+    const divisaoMudou = f => { const e = ed[f.funcionario_id]; return e.recebe && !difere(f) && (r2(e.c) !== r2(f.ant_contabil) || r2(e.n) !== r2(f.ant_nao_contabil)); };
     const mudou = f => { const e = ed[f.funcionario_id];
       if (!f.reg_id) return true;
       const recebeReg = f.status !== 'NAO_RECEBE';
@@ -183,12 +185,12 @@
         return cab + `<tr class="${dif ? 'bg-amber-50/60' : ''}">
           <td class="px-3 py-2"><div class="font-bold text-slate-900">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.registrado ? '' : ' · sem registro'}</div></td>
           <td class="px-2 py-2 text-center"><input type="checkbox" class="w-4 h-4 accent-emerald-600" checked ${dis} onchange="setRecebe('${id}', this.checked)" title="Desmarque se este funcionário não recebe adiantamento"></td>
-          <td class="px-2 py-2 text-right font-mono text-[11px] text-slate-500 whitespace-nowrap">${num(f.ant_contabil)}<br>${num(f.ant_nao_contabil)}</td>
+          <td class="px-2 py-2 text-right text-[11px] text-slate-500 whitespace-nowrap"><div><span class="text-[9px] uppercase">contábil</span> <span class="font-mono">${num(f.ant_contabil)}</span></div><div><span class="text-[9px] uppercase">não contábil</span> <span class="font-mono">${num(f.ant_nao_contabil)}</span></div><div class="font-bold text-slate-700 border-t border-slate-200"><span class="text-[9px] uppercase">total</span> <span class="font-mono">${num(Number(f.ant_contabil) + Number(f.ant_nao_contabil))}</span></div></td>
           <td class="px-2 py-2 whitespace-nowrap"><input class="inp val !py-1" value="${num(e.c)}" ${dis} onchange="setVal('${id}','c',this)">
             <div class="text-[10px] ${acima ? 'text-amber-700 font-bold' : 'text-slate-400'}">${ref > 0 ? `40% = ${num(ref)}${acima ? ' · acima' : ''}` : 'sem salário'}</div></td>
           <td class="px-2 py-2 whitespace-nowrap"><input class="inp val !py-1" value="${num(e.n)}" ${dis} onchange="setVal('${id}','n',this)">
             <select class="inp !py-0.5 !w-auto text-[10px] mt-0.5" ${dis} onchange="setMeio('${id}', this.value)"><option value="BANCO" ${e.meio !== 'DINHEIRO' ? 'selected' : ''}>🏦 Banco</option><option value="DINHEIRO" ${e.meio === 'DINHEIRO' ? 'selected' : ''}>💵 Dinheiro</option></select></td>
-          <td class="px-2 py-2">${dif && !f.trava ? `<div class="text-[10px] font-bold text-amber-800 mb-0.5">Diferente do mês anterior (${brl(e.c + e.n - Number(f.ant_contabil) - Number(f.ant_nao_contabil))}) → Gestor</div>
+          <td class="px-2 py-2">${divisaoMudou(f) && !f.trava ? '<div class="text-[10px] font-bold text-sky-700">Mesmo total do mês anterior, só mudou a divisão contábil / não contábil · vai direto</div>' : ''}${dif && !f.trava ? `<div class="text-[10px] font-bold text-amber-800 mb-0.5">Total diferente do mês anterior (${e.c + e.n - Number(f.ant_contabil) - Number(f.ant_nao_contabil) > 0 ? '+' : ''}${brl(e.c + e.n - Number(f.ant_contabil) - Number(f.ant_nao_contabil))}) → Gestor</div>
             ${perfil === 'GESTOR' ? '<div class="text-[10px] text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 text-[11px]" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value">`}` : ''}</td>
           <td class="px-3 py-2">${situacao(f)}${f.gestor_por && f.status === 'LANCADO' ? `<div class="text-[10px] text-slate-400 mt-0.5">aprovado por ${esc(f.gestor_por)}</div>` : ''}</td></tr>`;
       }).join('') : '<tr><td colspan="7" class="p-8 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
@@ -197,7 +199,7 @@
 
     function setRecebe(id, v) { ed[id].recebe = v; render(); }
     function setMeio(id, v) { ed[id].meio = v; resumo(); }
-    function setVal(id, k, el) { const n = lerNum(el.value); if (isNaN(n) || n < 0) { alert('Valor inválido.'); el.value = num(ed[id][k]); return; } ed[id][k] = n; render(); }
+    function setVal(id, k, el) { const n = lerNum(el.value); if (isNaN(n) || n < 0) { alert('Valor inválido: adiantamento não tem valor negativo. Informe o valor a pagar (ex.: 1.888,92).'); el.value = num(ed[id][k]); return; } ed[id][k] = n; render(); }
 
     function resumo() {
       const rec = lista.filter(f => ed[f.funcionario_id].recebe);
