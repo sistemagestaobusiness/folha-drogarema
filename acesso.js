@@ -15,14 +15,14 @@
   (async () => {
     try {
       const { data: { user } } = await cli.auth.getUser();
-      if (!user) { location.replace('login.html'); return; }
+      if (!user) { (window.top !== window ? window.top : window).location.replace('login.html'); return; }   // dentro de uma aba: volta o sistema inteiro para o login
       const { data, error } = await cli.rpc('fn_minhas_telas');
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }
       window.ACESSO = data; window.ACESSO.email = user.email; window.ACESSO_CLI = cli;
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {
-        const sm = document.createElement('script'); sm.src = 'menu.js?v=13'; (document.head || document.documentElement).appendChild(sm);
+        const sm = document.createElement('script'); sm.src = 'menu.js?v=14'; (document.head || document.documentElement).appendChild(sm);
       }
       const telas = new Set((data.telas || []).map(t => String(t).toLowerCase()));
       if (!telas.has(PAGINA)) {

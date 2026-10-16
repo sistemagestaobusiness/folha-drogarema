@@ -10,6 +10,8 @@
 (function () {
   if (window.__menuSistema || !window.ACESSO) return; window.__menuSistema = true;
   const PAGINA = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  // tela aberta dentro de uma aba do sistema (regra de 16/10/2026): sem menu próprio; links abrem nova aba no topo
+  const EM_ABA = (() => { try { return window.top !== window && !!window.top.__abasSistema; } catch (e) { return false; } })();
   const MARCA = 'Business';   // nome exibido no topo do menu (o logo entra aqui)
   const GRUPOS = [
     ['', [['index.html', 'Painel', '▦'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
@@ -259,6 +261,113 @@
     } catch (e) { console.warn('adiantamento', e); }
   }
 
-  const iniciar = () => { montar(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+  // ---------------------------------------------------------------- abas (várias telas abertas ao mesmo tempo)
+  // Cada tela aberta pelo menu ou por um link vira uma aba no topo; trocar de aba não perde o que estava na tela.
+  // Fecha no "x". A tela em que o sistema foi aberto é a primeira aba. Celular: navegação normal, sem abas.
+  const MAX_ABAS = 8;
+  const nomeTela = arq => { for (const [, itens] of GRUPOS) for (const [a, n] of itens) if (a === arq) return n; return null; };
+  const chaveUrl = u => { try { const x = new URL(u, location.href); return (x.pathname.split('/').pop() || 'index.html').toLowerCase() + x.search; } catch (e) { return String(u); } };
+  const linkInterno = a => {
+    if (!a || a.target || a.hasAttribute('download')) return null;
+    const h = a.getAttribute('href') || ''; if (!h || h.startsWith('#') || /^(javascript|mailto|tel):/i.test(h)) return null;
+    let x; try { x = new URL(h, location.href); } catch (e) { return null; }
+    if (x.origin !== location.origin) return null;
+    const arq = (x.pathname.split('/').pop() || 'index.html').toLowerCase();
+    if (!arq.endsWith('.html') || arq === 'login.html') return null;
+    return arq + x.search;
+  };
+
+  function abasNoFrame() {
+    document.documentElement.classList.add('em-aba');
+    document.addEventListener('click', e => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+      const a = e.target.closest && e.target.closest('a[href]'); const url = linkInterno(a); if (!url) return;
+      e.preventDefault(); try { window.top.__abasSistema.abrir(url, (a.textContent || '').trim()); } catch (er) { location.href = url; }
+    }, true);
+    const avisar = () => { try { window.top.__abasSistema.titulo(window, document.title); } catch (e) {} };
+    avisar(); setTimeout(avisar, 1500);
+  }
+
+  function abas() {
+    const css2 = document.createElement('style');
+    css2.textContent = `
+      #abasBar { position: fixed; top: 0; left: ${L}px; right: 0; height: 34px; z-index: 44; background: #e2e8f0; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; overflow-x: auto; overflow-y: hidden; font-family: inherit; }
+      html.menu-oculto #abasBar, html.menu-oculto #abasArea { left: 54px; }
+      #abasBar .aba { display: flex; align-items: center; gap: 6px; max-width: 220px; height: 28px; padding: 0 6px 0 12px; border-radius: 8px 8px 0 0; background: #cbd5e1; color: #334155; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; user-select: none; }
+      #abasBar .aba span { overflow: hidden; text-overflow: ellipsis; }
+      #abasBar .aba:hover { background: #d7dee8; }
+      #abasBar .aba.on { background: #fff; color: #0f172a; box-shadow: inset 0 2px 0 #c69560; }
+      #abasBar .aba b { width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 5px; color: #64748b; font-weight: 700; font-size: 13px; }
+      #abasBar .aba b:hover { background: #fecaca; color: #b91c1c; }
+      #abasArea { position: fixed; top: 34px; left: ${L}px; right: 0; bottom: 0; z-index: 43; background: #f1f5f9; display: none; }
+      #abasArea iframe { width: 100%; height: 100%; border: 0; display: none; background: #f1f5f9; }
+      html.com-abas body { margin-top: 34px !important; }
+      @media print { #abasBar, #abasArea { display: none !important; } html.com-abas body { margin-top: 0 !important; } }`;
+    document.head.appendChild(css2);
+    const bar = document.createElement('div'); bar.id = 'abasBar';
+    const area = document.createElement('div'); area.id = 'abasArea';
+    document.body.appendChild(bar); document.body.appendChild(area);
+    document.documentElement.classList.add('com-abas');
+
+    const nativa = { chave: PAGINA + location.search, url: PAGINA + location.search, titulo: nomeTela(PAGINA) || document.title.replace(/\s*-\s*Business\s*$/, ''), nativa: true };
+    let lista = [nativa], ativa = nativa;
+    try { (JSON.parse(sessionStorage.getItem('abas_sistema') || '[]') || []).forEach(t => { if (t && t.url && chaveUrl(t.url) !== nativa.chave && lista.length < MAX_ABAS) lista.push({ chave: chaveUrl(t.url), url: t.url, titulo: t.titulo }); }); } catch (e) {}
+    const salvar = () => { try { sessionStorage.setItem('abas_sistema', JSON.stringify(lista.filter(t => !t.nativa).map(t => ({ url: t.url, titulo: t.titulo })))); } catch (e) {} };
+    const esc2 = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    function desenhar() {
+      bar.innerHTML = lista.map((t, k) => `<div class="aba ${t === ativa ? 'on' : ''}" data-k="${k}" title="${esc2(t.titulo)}"><span>${esc2(t.titulo)}</span>${lista.length > 1 ? `<b data-x="${k}" title="Fechar">×</b>` : ''}</div>`).join('');
+      const arqAtivo = ativa.chave.split('?')[0];
+      document.querySelectorAll('#menuSistema a.it').forEach(a => a.classList.toggle('on', a.dataset.menu === arqAtivo));
+      area.style.display = ativa.nativa ? 'none' : 'block';
+      lista.forEach(t => { if (t.frame) t.frame.style.display = t === ativa ? 'block' : 'none'; });
+      document.title = ativa.titulo + ' - Business';
+    }
+    function ativar(t) {
+      ativa = t;
+      if (!t.nativa && !t.frame) { t.frame = document.createElement('iframe'); t.frame.src = t.url; t.frame.title = t.titulo; area.appendChild(t.frame); }
+      desenhar();
+    }
+    function abrir(url, titulo) {
+      const chave = chaveUrl(url), arq = chave.split('?')[0];
+      let t = lista.find(x => x.chave === chave);
+      if (!t) {
+        if (lista.length >= MAX_ABAS) { alert(`Já tem ${MAX_ABAS} telas abertas. Feche alguma aba (no "×") para abrir outra.`); return; }
+        t = { chave, url: chave, titulo: nomeTela(arq) || titulo || arq.replace('.html', '') };
+        lista.push(t); salvar();
+      }
+      ativar(t);
+    }
+    function fechar(t) {
+      if (t.nativa) {   // a primeira aba é a própria página: a próxima aba assume o lugar dela
+        const prox = lista.find(x => !x.nativa); if (!prox) return;
+        lista = lista.filter(x => x !== t && x !== prox); salvar(); location.href = prox.url; return;
+      }
+      const i = lista.indexOf(t); if (t.frame) t.frame.remove();
+      lista = lista.filter(x => x !== t); salvar();
+      if (ativa === t) ativar(lista[Math.max(0, i - 1)]); else desenhar();
+    }
+    bar.addEventListener('click', e => {
+      const x = e.target.closest('b[data-x]'); if (x) { e.stopPropagation(); fechar(lista[+x.dataset.x]); return; }
+      const a = e.target.closest('.aba'); if (a) ativar(lista[+a.dataset.k]);
+    });
+    bar.addEventListener('auxclick', e => { const a = e.target.closest('.aba'); if (a && e.button === 1) fechar(lista[+a.dataset.k]); });
+    // menu e links da própria página abrem em aba
+    document.addEventListener('click', e => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+      const a = e.target.closest && e.target.closest('a[href]'); if (!a || a.closest('#abasBar')) return;
+      const url = linkInterno(a); if (!url) return;
+      e.preventDefault(); abrir(url, (a.textContent || '').trim());
+    }, true);
+    window.__abasSistema = {
+      abrir,
+      titulo: (win, tit) => { const t = lista.find(x => x.frame && x.frame.contentWindow === win); if (t && !nomeTela(t.chave.split('?')[0]) && tit) { t.titulo = tit.replace(/\s*-\s*Business\s*$/, ''); salvar(); desenhar(); } }
+    };
+    desenhar();
+  }
+
+  const iniciar = () => {
+    if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); return; }
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
