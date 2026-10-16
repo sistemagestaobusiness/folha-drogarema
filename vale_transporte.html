@@ -15,7 +15,7 @@
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
       <div>
         <h1 class="tit-sis text-xl font-bold text-slate-900">🚌 Vale transporte</h1>
-        <p class="text-xs text-slate-500">Pago no último dia do mês para uso no mês seguinte. Fica no 3º quadro do mês do pagamento e vai para o Financeiro. Cada VT tem o desconto vinculado (3% do salário, contábil).</p>
+        <p class="text-xs text-slate-500">Pago no último dia do mês para uso no mês seguinte. Fica no 3º quadro do mês do pagamento e vai para o Financeiro. Cada VT tem o desconto vinculado na folha do mesmo mês (3% do salário, contábil).</p>
       </div>
       <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
     </div>
@@ -31,7 +31,6 @@
       <div class="flex flex-wrap items-end gap-3 text-xs">
         <div><label class="lbl">Mês do pagamento</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="mudouMes()"></div>
         <div id="boxVenc"><label class="lbl">Data do pagamento</label><input id="fVenc" type="date" class="inp !py-1.5 font-mono"></div>
-        <div id="boxDesc"><label class="lbl">Desconto na folha de</label><select id="fDesc" class="inp !py-1.5"></select></div>
         <div><label class="lbl">Loja / setor</label><select id="fLoja" onchange="render()" class="inp !py-1.5"><option value="">Todas</option></select></div>
         <div class="flex-1 min-w-[150px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
         <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fOcultarNao" checked onchange="render()"> ocultar quem não recebe</label>
@@ -120,8 +119,6 @@
     async function mudouMes() {
       const [a, m] = $('fMes').value.split('-');
       $('fVenc').value = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);   // último dia do mês
-      const c = mes();
-      $('fDesc').innerHTML = `<option value="${somaMes(c, 1)}">${somaMes(c, 1)} (mês de uso)</option><option value="${c}">${c} (mês do pagamento)</option>`;
       await carregar();
     }
 
@@ -131,7 +128,6 @@
       $('aviso').classList.add('hidden');
       lista = data || []; ed = {};
       const r = lista.find(f => f.vencimento && f.status !== 'PAGO_FORA'); if (r) $('fVenc').value = r.vencimento;
-      const rd = lista.find(f => f.desconto_comp); if (rd) $('fDesc').value = rd.desconto_comp;
       lista.forEach(f => {
         f.trava = !!f.pago; f.fora = f.status === 'PAGO_FORA';
         const tem = f.reg_id && f.status !== 'NAO_RECEBE';
@@ -139,7 +135,9 @@
           recebe: f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe,
           vd: tem ? (f.valor_dia != null ? r2(f.valor_dia) : null) : (f.valor_dia_cfg != null ? r2(f.valor_dia_cfg) : null),
           jvd: f.justif_valor_dia || '', dias: tem && f.dias != null ? f.dias : null, motivo: f.motivo_rh || '',
-          dv: f.desconto_valor != null ? r2(f.desconto_valor) : null, dt: f.desconto_tipo || 'CONTABIL', dj: f.desconto_justif || ''
+          dv: f.desconto_valor != null ? r2(f.desconto_valor) : null,
+          dt: f.desconto_tipo || (f.isento_cfg ? 'ISENTO' : 'CONTABIL'),          // "sem desconto" repete todo mês, vindo do cadastro
+          dj: f.desconto_justif || (f.isento_cfg ? (f.isento_justif_cfg || '') : '')
         };
       });
       const lojas = [...new Map(lista.map(f => [f.loja_id || '', f.nome_loja || 'sem loja'])).entries()];
@@ -153,7 +151,7 @@
       aba = a;
       $('tabLanc').classList.toggle('on', a === 'lanc'); $('tabApr').classList.toggle('on', a === 'aprovacao');
       $('pLanc').classList.toggle('hidden', a !== 'lanc'); $('pApr').classList.toggle('hidden', a !== 'aprovacao');
-      $('boxVenc').classList.toggle('hidden', a !== 'lanc'); $('boxDesc').classList.toggle('hidden', a !== 'lanc');
+      $('boxVenc').classList.toggle('hidden', a !== 'lanc');
       const q = lista.filter(f => f.status === 'AGUARDANDO_GESTOR').length;
       $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q);
       if (a === 'lanc') render(); else renderAprovacao();
@@ -162,17 +160,18 @@
     // ------------------------------------------------------------------ regras
     const valorVT = (f, e) => f.trava ? r2(f.valor) : (e.recebe && e.vd != null && e.dias != null ? r2(e.vd * e.dias) : null);
     const calcDesc = (f, e) => { const v = valorVT(f, e); return v == null ? null : Math.min(r2(Number(f.salario_base) * 0.03), v); };
-    const descEfetivo = (f, e) => e.dv != null ? e.dv : calcDesc(f, e);
-    const precisaJustDesc = (f, e) => { const c = calcDesc(f, e), d = descEfetivo(f, e); return c != null && c > 0 && (r2(d) !== r2(c) || e.dt === 'NAO_CONTABIL'); };
+    const descEfetivo = (f, e) => e.dt === 'ISENTO' ? 0 : (e.dv != null ? e.dv : calcDesc(f, e));
+    const precisaJustDesc = (f, e) => { const c = calcDesc(f, e), d = descEfetivo(f, e); return c != null && c > 0 && (e.dt === 'ISENTO' || r2(d) !== r2(c) || e.dt === 'NAO_CONTABIL'); };
     const vdMudou = (f, e) => !f.trava && f.valor_dia_cfg != null && e.vd != null && r2(e.vd) !== r2(f.valor_dia_cfg);
     const difere = f => { const e = ed[f.funcionario_id]; const v = valorVT(f, e); return !f.trava && e.recebe && v != null && r2(v) !== r2(f.ant_valor); };
     const falta = f => { const e = ed[f.funcionario_id]; return !f.trava && e.recebe && (e.vd == null || e.dias == null); };
-    const descPendente = f => f.trava && Number(f.valor) > 0 && !f.desconto_lancado;
+    const descPendente = f => f.trava && !f.fora && Number(f.valor) > 0 && !f.desconto_lancado && f.desconto_tipo !== 'ISENTO';
     const mudou = f => { const e = ed[f.funcionario_id];
-      if (f.trava) return descPendente(f) || (f.desconto_lancado && (r2(descEfetivo(f, e)) !== r2(f.desconto_valor) || e.dt !== f.desconto_tipo || $('fDesc').value !== f.desconto_comp));
+      if (f.fora) return false;   // pago fora do sistema (folha já fechada): só consulta
+      if (f.trava) return descPendente(f) || (f.desconto_lancado && (r2(descEfetivo(f, e)) !== r2(f.desconto_valor) || e.dt !== f.desconto_tipo));
       if (!f.reg_id) return e.recebe || f.recebe;
       if ((f.status !== 'NAO_RECEBE') !== e.recebe || f.status === 'RECUSADO') return true;
-      return e.recebe && (r2(e.vd) !== r2(f.valor_dia) || e.dias !== f.dias || r2(descEfetivo(f, e)) !== r2(f.desconto_valor) || e.dt !== f.desconto_tipo || $('fDesc').value !== f.desconto_comp);
+      return e.recebe && (r2(e.vd) !== r2(f.valor_dia) || e.dias !== f.dias || r2(descEfetivo(f, e)) !== r2(f.desconto_valor) || e.dt !== f.desconto_tipo);
     };
 
     function alertas(f, e) {
@@ -187,6 +186,8 @@
       const dFolha = Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil);
       if (!e.recebe && dFolha > 0) a.push(`<span class="al bg-red-100 text-red-700">tem desconto de VT na folha (${num(dFolha)}) sem receber VT</span>`);
       if (Number(f.desc_folha_nao_contabil) > 0) a.push(`<span class="al bg-amber-100 text-amber-800">desconto não contábil na folha (${num(f.desc_folha_nao_contabil)})</span>`);
+      if (e.recebe && e.dt === 'ISENTO') a.push(`<span class="al bg-red-100 text-red-700" title="${esc(e.dj)}">SEM DESCONTO de VT${e.dj ? ': ' + esc(e.dj.slice(0, 40)) : ''}</span>`);
+      if (f.fora && e.recebe && !f.desconto_lancado) a.push('<span class="al bg-red-100 text-red-700">VT pago sem desconto na folha</span>');
       if (vdMudou(f, e)) a.push(`<span class="al bg-amber-100 text-amber-800">valor/dia mudou (era ${num(f.valor_dia_cfg)})</span>`);
       return a.join('');
     }
@@ -221,16 +222,15 @@
           : `<td class="px-2 py-1.5"><input class="inp val !py-1" value="${e.vd == null ? '' : num(e.vd)}" placeholder="informar" onchange="setNum('${id}','vd',this)">
               ${vdMudou(f, e) ? `<input class="inp !py-1 mt-1 text-[10px] !w-40" placeholder="Justificativa (mín. 10) *" value="${esc(e.jvd)}" oninput="ed['${id}'].jvd=this.value">` : ''}</td>
             <td class="px-2 py-1.5"><input class="inp val !py-1 !w-14" value="${e.dias ?? ''}" placeholder="dias" onchange="setDias('${id}',this)"></td>`;
-        const travaDesc = f.trava && f.desconto_lancado && false;
         return cab + `<tr class="lin ${dif ? 'bg-red-50/40' : ''}">${nomeTd}${chk}${ant}${vdTd}
           <td class="px-2 py-1.5 text-right font-mono font-bold ${dif ? 'text-red-700' : 'text-slate-800'}">${v == null ? '-' : num(v)}
             ${dif ? `<div class="text-[10px] font-sans font-bold text-red-700">${v - f.ant_valor > 0 ? '+' : ''}${brl(v - f.ant_valor)} → Gestor</div>${perfil === 'GESTOR' ? '<div class="text-[10px] font-sans font-normal text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 mt-1 text-[10px] !w-40 font-sans" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value">`}` : ''}</td>
-          <td class="px-2 py-1.5 whitespace-nowrap ${travaDesc ? 'opacity-60' : ''}">
-            <input class="inp val !py-1" value="${d == null ? '' : num(d)}" placeholder="3%" onchange="setNum('${id}','dv',this)">
-            <select class="inp !py-0.5 !w-auto text-[10px] ${e.dt === 'NAO_CONTABIL' ? '!bg-amber-200 font-bold' : ''}" onchange="ed['${id}'].dt=this.value; render()"><option value="CONTABIL" ${e.dt !== 'NAO_CONTABIL' ? 'selected' : ''}>contábil 3019</option><option value="NAO_CONTABIL" ${e.dt === 'NAO_CONTABIL' ? 'selected' : ''}>não contábil 3032</option></select>
+          <td class="px-2 py-1.5 whitespace-nowrap">${f.fora ? `<span class="font-mono text-[11px]">${num(f.desconto_valor)}</span> <span class="text-[10px] text-slate-500">${f.desconto_tipo === 'NAO_CONTABIL' ? 'não contábil' : 'contábil'} · folha ${esc(f.desconto_comp || '')}</span>` : `
+            <input class="inp val !py-1 ${e.dt === 'ISENTO' ? 'hidden' : ''}" value="${d == null ? '' : num(d)}" placeholder="3%" onchange="setNum('${id}','dv',this)">
+            <select class="inp !py-0.5 !w-auto text-[10px] ${e.dt === 'NAO_CONTABIL' ? '!bg-amber-200 font-bold' : e.dt === 'ISENTO' ? '!bg-red-200 font-bold' : ''}" onchange="ed['${id}'].dt=this.value; render()"><option value="CONTABIL" ${e.dt === 'CONTABIL' ? 'selected' : ''}>contábil 3019</option><option value="NAO_CONTABIL" ${e.dt === 'NAO_CONTABIL' ? 'selected' : ''}>não contábil 3032</option><option value="ISENTO" ${e.dt === 'ISENTO' ? 'selected' : ''}>sem desconto</option></select>`}
             <div class="text-[10px] text-slate-400">3% = ${num(Number(f.salario_base) * 0.03)}${c != null && c < r2(Number(f.salario_base) * 0.03) ? ' (limitado ao VT)' : ''}</div>
-            ${pj ? `<input class="inp !py-1 mt-1 text-[10px] !w-44" placeholder="Justificativa do desconto (mín. 10) *" value="${esc(e.dj)}" oninput="ed['${id}'].dj=this.value">` : ''}</td>
-          <td class="px-2 py-1.5 text-[10px]">${f.desconto_lancado ? `<span class="font-bold text-emerald-700">✓ lançado ${esc(f.desconto_comp)}</span>` : (f.trava ? '<span class="font-bold text-red-700">⚠ desconto a lançar</span>' : '<span class="text-slate-400">lança junto</span>')}
+            ${pj && !f.fora ? `<input class="inp !py-1 mt-1 text-[10px] !w-44" placeholder="${e.dt === 'ISENTO' ? 'Por que não desconta? (mín. 10) *' : 'Justificativa do desconto (mín. 10) *'}" value="${esc(e.dj)}" oninput="ed['${id}'].dj=this.value">` : ''}</td>
+          <td class="px-2 py-1.5 text-[10px]">${f.desconto_lancado ? `<span class="font-bold text-emerald-700">✓ na folha ${esc(f.desconto_comp)}</span>` : e.dt === 'ISENTO' ? '<span class="font-bold text-red-700">sem desconto</span>' : f.fora ? '<span class="font-bold text-red-700">⚠ não teve desconto</span>' : (f.trava ? '<span class="font-bold text-red-700">⚠ desconto a lançar</span>' : `<span class="text-slate-400">lança na folha ${mes()}</span>`)}
             ${Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil) > 0 ? `<div class="text-slate-500">na folha: ${num(Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil))}</div>` : ''}</td>
           <td class="px-2 py-1.5">${alertas(f, e)}</td>
           <td class="px-3 py-1.5">${situacao(f)}</td></tr>`;
@@ -266,7 +266,7 @@
     }
 
     async function confirmar() {
-      const venc = $('fVenc').value, dComp = $('fDesc').value;
+      const venc = $('fVenc').value, dComp = mes();
       const pend = lista.filter(mudou);
       if (perfil !== 'GESTOR') { const sm = pend.filter(f => difere(f) && (ed[f.funcionario_id].motivo || '').trim().length < 5);
         if (sm.length) return alert('Informe o motivo da diferença (mínimo 5 letras) para:\n' + sm.map(f => '• ' + f.nome).join('\n')); }
@@ -274,7 +274,7 @@
       const itens = pend.map(f => { const e = ed[f.funcionario_id]; return { funcionario_id: f.funcionario_id, recebe: e.recebe, valor_dia: e.vd, dias: e.dias,
         justif_valor_dia: e.jvd || null, motivo: e.motivo || null, desconto_valor: descEfetivo(f, e), desconto_tipo: e.dt, desconto_justif: e.dj || null }; });
       const b = $('btnConfirmar'); b.disabled = true; b.innerText = 'Gravando...';
-      const { data, error } = await _supabase.rpc('fn_vt_confirmar', { p_mes: mes(), p_venc: venc, p_desc_comp: dComp, p_itens: itens });
+      const { data, error } = await _supabase.rpc('fn_vt_confirmar', { p_mes: mes(), p_venc: venc, p_itens: itens });
       b.innerText = '✓ Confirmar vale transporte';
       if (error) { b.disabled = false; return alert('Não foi gravado: ' + error.message); }
       let msg = `VT lançados (foram para o Financeiro): ${data.lancados}\nAguardando o Gestor: ${data.aguardando_gestor}\nNão recebe: ${data.nao_recebe}\nDescontos lançados/ajustados (VT já pago): ${data.descontos}`;
@@ -294,7 +294,7 @@
         return `<div class="bg-white border border-slate-200 rounded-xl p-3 text-xs flex flex-wrap gap-4 items-center">
           <div class="min-w-[220px] flex-1"><div class="font-bold text-slate-900 text-sm">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.nome_loja || '')} · ${esc(f.cargo || '')}</div>
             <div class="mt-1 text-[11px] text-slate-700"><b>Motivo do RH:</b> ${esc(f.motivo_rh || '-')}</div>
-            <div class="text-[11px] text-slate-600">${f.dias ?? '?'} dias × ${num(f.valor_dia)} · desconto ${num(f.desconto_valor)} ${f.desconto_tipo === 'NAO_CONTABIL' ? '(não contábil)' : '(contábil)'}${f.desconto_justif ? ' · ' + esc(f.desconto_justif) : ''}</div>
+            <div class="text-[11px] text-slate-600">${f.dias ?? '?'} dias × ${num(f.valor_dia)} · desconto ${f.desconto_tipo === 'ISENTO' ? '<b class="text-red-700">SEM DESCONTO</b>' : num(f.desconto_valor) + (f.desconto_tipo === 'NAO_CONTABIL' ? ' (não contábil)' : ' (contábil)')}${f.desconto_justif ? ' · ' + esc(f.desconto_justif) : ''}</div>
             <div class="mt-1">${alertas(f, ed[f.funcionario_id])}</div>
             <div class="text-[10px] text-slate-400">${esc(f.enviado_por || '')} · ${dh(f.enviado_em)}</div></div>
           <div class="text-right font-mono text-[11px]"><div class="text-[9px] uppercase text-slate-400 font-sans">mês anterior → agora</div>${num(f.ant_valor)} → <b>${num(f.valor)}</b></div>
