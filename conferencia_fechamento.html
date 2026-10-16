@@ -59,15 +59,16 @@
 
     const CATS = {
       FIXOS:        ['Fixos do mês anterior não lançados', 'Quem tinha lançamento fixo no mês anterior e ainda não tem neste mês.', 'lancamentos.html'],
-      SALARIO:      ['Salário diferente do cadastro', 'Salário (2000) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html'],
+      SALARIO:      ['Salário diferente do cadastro', 'Salário (2024 dias normais) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html'],
       DUPLICADO:    ['Evento lançado mais de uma vez', 'Evento que só pode existir uma vez no mês (salário, INSS, IRPF, plano, alimentação, combustível, adicionais).', 'lancamentos.html'],
       FALTA:        ['Falta na escala sem desconto nem abono', 'Falta registrada na escala do mês sem desconto de falta/DSR e sem abono.', 'relatorio_faltas.html'],
       VT:           ['Vale transporte × desconto', 'VT pago sem desconto, desconto sem VT, ou "sem desconto" por acordo.', 'vale_transporte.html'],
       NOTURNO:      ['Adicional noturno × escala', 'Escala com horário depois das 22h sem adicional noturno, ou adicional lançado sem horário noturno na escala.', 'escala.html'],
       RESCISAO:     ['Lançamento de desligado', 'Funcionário inativo ou desligado antes do mês com lançamento na folha.', 'lancamentos.html'],
       VARIACAO:     ['Valor fixo com variação acima de 20%', 'Evento fixo com valor bem diferente do mês anterior.', 'lancamentos.html'],
+      PLANOS:       ['Plano do mês anterior que sumiu', 'Tinha desconto de odontológico, saúde ou Mogi Care no mês anterior e não tem neste mês (esquecido ou tirado fora da tela de Planos).', 'planos.html'],
       PROPRIA_FICHA:['Lançamentos do RH na própria ficha', 'Para o Gestor conferir.', 'lancamentos.html'],
-      PENDENCIA:    ['Pendências de aprovação', 'Adiantamento, VT, alterações e freelance que ainda não foram decididos.', 'index.html'],
+      PENDENCIA:    ['Pendências de aprovação', 'Adiantamento, VT, planos, alterações e freelance que ainda não foram decididos.', 'index.html'],
       EXCLUSAO:     ['Exclusões feitas no mês', 'Tudo o que foi excluído, com o motivo e quem excluiu.', 'auditoria.html']
     };
     let perfil = null, linhas = [], alts = [], aba = 'conf';

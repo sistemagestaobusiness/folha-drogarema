@@ -125,6 +125,19 @@
               <datalist id="dlTrajetos"></datalist>
             </div>
 
+            <!-- Adicional noturno (2027 contábil / 2004 não contábil): RH informa as horas; o valor e o DSR (2037 / 2032) saem calculados (regra de 16/10/2026) -->
+            <div id="boxNoturno" class="hidden bg-indigo-50 border border-indigo-300 p-3 rounded-lg space-y-2">
+              <label class="block text-xs font-bold text-indigo-800 uppercase">🌙 Horas noturnas no mês *</label>
+              <input type="number" step="0.01" min="0" id="inputHorasNoturno" oninput="calcularNoturno(true)" placeholder="ex.: 22,5"
+                class="w-full bg-white border border-indigo-300 rounded-lg p-2 text-slate-800 text-sm font-mono focus:outline-none focus:border-indigo-600">
+              <div id="txtCalcNoturno" class="text-[10px] text-indigo-900 leading-snug"></div>
+              <div id="boxJustNoturno" class="hidden">
+                <label class="block text-[11px] font-bold text-rose-700 uppercase mb-1">Valor diferente do cálculo · justificativa *</label>
+                <input type="text" id="inputJustNoturno" maxlength="200" placeholder="Por que o valor é diferente do calculado?"
+                  class="w-full bg-white border border-rose-300 rounded-lg p-2 text-slate-800 text-xs uppercase focus:outline-none focus:border-rose-600">
+              </div>
+            </div>
+
             <div id="avisoItemTravado" class="hidden bg-emerald-50 border border-emerald-300 text-emerald-800 p-2.5 rounded-lg text-[11px] font-bold">
               🔒 Pagamento já confirmado pelo Financeiro. Este lançamento não pode ser excluído e só o EVENTO pode ser trocado.
             </div>
@@ -134,7 +147,7 @@
                 <label class="block text-xs font-bold text-slate-600 uppercase">4. Valor do Lançamento (R$) *</label>
                 <button type="button" onclick="alternarCampoAbatimento()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-1.5 py-0.5 rounded cursor-pointer" title="">+</button>
               </div>
-              <input type="number" step="0.01" id="valorLancamento" required placeholder="0.00" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+              <input type="number" step="0.01" id="valorLancamento" required placeholder="0.00" oninput="calcularNoturno(false)" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
             </div>
 
             <!-- Painel Oculto 1 -->
@@ -407,6 +420,14 @@
     const EVENTOS_ADIANTAMENTO_TELA = [2025, 3001, 3002, 2065, 3019, 3032, 3013];
     // tela própria de cada evento bloqueado (adiantamento 15/10/2026; vale transporte 16/10/2026)
     const TELA_DO_EVENTO = c => [2065, 3019, 3032, 3013].includes(Number(c)) ? ['vale_transporte.html', 'Vale transporte'] : ['adiantamento.html', 'Adiantamento salarial'];
+    // evento com tela própria (cadastro de eventos → tela_propria "arquivo|nome"; regra de 16/10/2026):
+    // planos, freelance, empréstimos, comissões, farmácia, adiantamento e VT não se lançam aqui
+    function telaPropria(cod) {
+      const ev = listaGlobalEventos.find(e => Number(e.codigo_evento) === Number(cod));
+      if (ev && ev.tela_propria) { const [a, n] = String(ev.tela_propria).split('|'); return [a, n || a]; }
+      return EVENTOS_ADIANTAMENTO_TELA.includes(Number(cod)) ? TELA_DO_EVENTO(cod) : null;
+    }
+    const eventoAtivo = ev => !ev.status || ev.status === 'Ativo';
     let abaAtiva = 'novo';
     let competenciaEstaFechada = false;
     let periodoForcadoDesbloqueado = false; 
@@ -624,7 +645,7 @@
 
    async function carregarFuncionariosGeral() {
       // Adicionado o campo salario_base na consulta
-      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base, salario_adicional, adicional_caixa, cargo').order('nome_registro');
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base, salario_adicional, adicional_caixa, cargo, loja_id').order('nome_registro');
       if (!error) {
         listaGlobalFuncionarios = data || [];
       }
@@ -691,7 +712,7 @@
       const resultados = listaGlobalEventos.filter(ev => {
         const codigoStr = String(ev.codigo_evento || '');
         const descStr = String(ev.descricao_do_evento || '').toUpperCase();
-        return codigoStr.includes(termoLimpo) || descStr.includes(termoLimpo);
+        return eventoAtivo(ev) && (codigoStr.includes(termoLimpo) || descStr.includes(termoLimpo));
       });
 
       if (resultados.length === 0) {
@@ -714,10 +735,11 @@
           ? `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">NÃO CONTÁBIL</span>`
           : `<span class="bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">CONTÁBIL</span>`;
 
-        if (EVENTOS_ADIANTAMENTO_TELA.includes(Number(ev.codigo_evento))) return `
-        <div class="p-2.5 bg-slate-50 text-xs flex justify-between items-center cursor-not-allowed opacity-70" title="Bloqueado: lançar na tela ${TELA_DO_EVENTO(ev.codigo_evento)[1]}">
+        const tp = telaPropria(ev.codigo_evento);
+        if (tp) return `
+        <div class="p-2.5 bg-slate-50 text-xs flex justify-between items-center cursor-not-allowed opacity-70" title="Bloqueado: lançar na tela ${tp[1]}">
           <div class="flex items-center"><span class="font-mono font-bold text-slate-400 mr-2">${ev.codigo_evento}</span><span class="text-slate-500 line-through">${ev.descricao_do_evento}</span>${badgeNatureza}</div>
-          <a href="${TELA_DO_EVENTO(ev.codigo_evento)[0]}" class="text-[10px] font-bold text-amber-700 underline whitespace-nowrap">🔒 só na tela ${TELA_DO_EVENTO(ev.codigo_evento)[1]}</a>
+          <a href="${tp[0]}" class="text-[10px] font-bold text-amber-700 underline whitespace-nowrap">🔒 só na tela ${tp[1]}</a>
         </div>`;
         return `
         <div onclick="selecionarEvento('${ev.codigo_evento}', '${ev.descricao_do_evento}', '${ev.tipo_evento}')" 
@@ -778,6 +800,66 @@
     const ROTULO_PAG_EXTRA = { ADIANTAMENTO: 'Adiantamento', VALE_TRANSPORTE: 'Vale-transporte', FERIAS: 'Férias',
       DECIMO_TERCEIRO: '13º salário', RESCISAO: 'Rescisão', REEMBOLSO: 'Reembolso', OUTROS: 'Outros' };
     let mapaPagExtras = {};
+
+    // ---------------- ADICIONAL NOTURNO: horas → valor + DSR (regra de 16/10/2026) ----------------
+    // adicional = horas × salário base / 220 × 30%  ·  DSR = adicional × (domingos + feriados) / dias úteis do mês
+    const PAR_NOTURNO = { 2027: 2037, 2004: 2032 };
+    let cacheFeriados = {};
+    let calcNoturno = null;   // { horas, adicional, dsr, dsrDias, uteis, codDsr }
+    async function diasDsrDoMes(comp, lojaId) {
+      const [mm, aa] = comp.split('/').map(Number);
+      const ini = `${aa}-${String(mm).padStart(2, '0')}-01`, ultimo = new Date(aa, mm, 0).getDate();
+      const fim = `${aa}-${String(mm).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`;
+      if (!cacheFeriados[comp]) {
+        try { const { data } = await _supabase.from('feriados').select('data, loja_id, nome').gte('data', ini).lte('data', fim); cacheFeriados[comp] = data || []; }
+        catch (e) { cacheFeriados[comp] = []; }
+      }
+      const dias = new Set();
+      for (let d = 1; d <= ultimo; d++) if (new Date(aa, mm - 1, d).getDay() === 0) dias.add(d);
+      const domingos = dias.size;
+      const fer = cacheFeriados[comp].filter(f => !f.loja_id || f.loja_id === lojaId);
+      fer.forEach(f => dias.add(Number(String(f.data).slice(8, 10))));
+      return { dsrDias: dias.size, uteis: ultimo - dias.size, domingos, feriados: dias.size - domingos };
+    }
+    function horasDoMotivo(m) { const x = String(m || '').match(/NOTURNO ([\d.,]+)\s*H/i); return x ? x[1].replace(',', '.') : ''; }
+    async function atualizarBoxNoturno() {
+      const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
+      const ehNot = ev && PAR_NOTURNO[ev.codigo_evento];
+      const box = document.getElementById('boxNoturno');
+      box.classList.toggle('hidden', !ehNot);
+      calcNoturno = null;
+      if (!ehNot) { document.getElementById('inputHorasNoturno').value = ''; document.getElementById('inputJustNoturno').value = ''; document.getElementById('boxJustNoturno').classList.add('hidden'); return; }
+      const idEd = document.getElementById('editLancamentoId').value;
+      if (idEd) document.getElementById('inputHorasNoturno').value = horasDoMotivo((mapaItensRenderizados[idEd] || {}).motivo_ajuste);
+      await calcularNoturno(!idEd);
+    }
+    async function calcularNoturno(preencherValor) {
+      const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
+      if (!ev || !PAR_NOTURNO[ev.codigo_evento]) return;
+      const func = listaGlobalFuncionarios.find(f => String(f.id) === String(document.getElementById('selectFuncionarioNovo').value));
+      const sal = func ? parseFloat(func.salario_base || 0) : 0;
+      const h = parseFloat(document.getElementById('inputHorasNoturno').value) || 0;
+      const txt = document.getElementById('txtCalcNoturno');
+      const valorEl = document.getElementById('valorLancamento');
+      if (!func) { txt.innerHTML = 'Selecione o colaborador.'; return; }
+      if (!(sal > 1)) { txt.innerHTML = '<b class="text-rose-700">Colaborador sem salário base no cadastro: não dá para calcular.</b>'; calcNoturno = null; return; }
+      const d = await diasDsrDoMes(competenciaRegraLancamento, func.loja_id);
+      const adicional = Math.round(h * sal / 220 * 0.30 * 100) / 100;
+      const codDsr = PAR_NOTURNO[ev.codigo_evento];
+      calcNoturno = { horas: h, adicional, dsrDias: d.dsrDias, uteis: d.uteis, codDsr };
+      if (preencherValor && h > 0) valorEl.value = adicional.toFixed(2);
+      const valorDig = parseFloat(valorEl.value) || 0;
+      calcNoturno.dsr = Math.round(valorDig * d.dsrDias / d.uteis * 100) / 100;
+      const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const evDsr = listaGlobalEventos.find(e => Number(e.codigo_evento) === codDsr);
+      txt.innerHTML = h > 0
+        ? `${h.toLocaleString('pt-BR')} h × ${brl(sal)} / 220 × 30% = <b>${brl(adicional)}</b><br>`
+          + `DSR (${codDsr}${evDsr ? ' ' + escaparHtml(evDsr.descricao_do_evento) : ''}) = valor × ${d.dsrDias} / ${d.uteis} `
+          + `<span class="text-indigo-500">(${d.domingos} domingo(s) + ${d.feriados} feriado(s) / dias úteis de ${competenciaRegraLancamento})</span> = <b>${brl(calcNoturno.dsr)}</b> · lançado junto, automático`
+        : 'Informe as horas noturnas do mês: o valor e o DSR são calculados.';
+      const difere = h > 0 && Math.abs(valorDig - adicional) > 0.009;
+      document.getElementById('boxJustNoturno').classList.toggle('hidden', !difere);
+    }
 
     function eventoDaRubrica(rubrica) {
       const m = String(rubrica || '').match(/^\s*(\d+)/);
@@ -852,6 +934,7 @@
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
       aplicarTipoDoEvento();
       const extra = catPagExtra(ev, competenciaRegraLancamento);
+      atualizarBoxNoturno();
       document.getElementById('boxVencimentoPag').classList.toggle('hidden', !extra);
       document.getElementById('info13').classList.add('hidden');
       const idEd = document.getElementById('editLancamentoId').value;
@@ -1195,19 +1278,18 @@
     async function sincronizarSalarioBase(funcionarioId, competencia, salarioBase) {
       if (!salarioBase || salarioBase < 1) return; // Ignora se não houver salário cadastrado (centavos = campo preenchido só para passar)
 
-      // Confere se já existe um lançamento do tipo SALARIO (código 2000) neste mês
+      // Salário contábil = 2024 DIAS NORMAIS (o 2000 SALARIO foi inativado em 16/10/2026)
       const { data: lancamentosExistentes } = await _supabase
         .from('folha_itens')
         .select('id')
         .eq('funcionario_id', funcionarioId)
         .eq('competencia', competencia)
-        .ilike('rubrica', '2000%'); 
+        .or('rubrica.ilike.2000 %,rubrica.ilike.2024 %');
 
       if (!lancamentosExistentes || lancamentosExistentes.length === 0) {
-        // Busca o nome exato do evento 2000
-        const eventoSalario = listaGlobalEventos.find(ev => String(ev.codigo_evento) === '2000');
-        const descEvento = eventoSalario ? eventoSalario.descricao_do_evento : 'SALARIO';
-        const rubricaExata = `2000 - ${descEvento}`;
+        const eventoSalario = listaGlobalEventos.find(ev => String(ev.codigo_evento) === '2024');
+        const descEvento = eventoSalario ? eventoSalario.descricao_do_evento : 'DIAS NORMAIS';
+        const rubricaExata = `2024 - ${descEvento}`;
 
         await _supabase.from('folha_itens').insert([{
           funcionario_id: funcionarioId,
@@ -1717,6 +1799,9 @@
       preencherPainelAjuste(1, null);
       preencherPainelAjuste(2, null);
       document.getElementById('checkFixo').checked = false;
+      document.getElementById('boxNoturno').classList.add('hidden');
+      document.getElementById('inputHorasNoturno').value = ''; document.getElementById('inputJustNoturno').value = '';
+      document.getElementById('boxJustNoturno').classList.add('hidden'); calcNoturno = null;
 
       const btnSalvar = document.getElementById('btnSalvar');
       btnSalvar.innerText = '✓ CONFIRMAR LANÇAMENTO';
@@ -1744,8 +1829,12 @@
       }
 
       const eventoSel = eventoDaRubrica(rubrica);
-      if (eventoSel && EVENTOS_ADIANTAMENTO_TELA.includes(Number(eventoSel.codigo_evento))) {
-        alert(`🔒 Este evento é lançado e alterado só na tela "${TELA_DO_EVENTO(eventoSel.codigo_evento)[1]}".`);
+      if (eventoSel && telaPropria(eventoSel.codigo_evento) && !(idEdicao && itemTravado(idEdicao))) {
+        alert(`🔒 Este evento é lançado e alterado só na tela "${telaPropria(eventoSel.codigo_evento)[1]}".`);
+        return;
+      }
+      if (eventoSel && !eventoAtivo(eventoSel) && !idEdicao) {
+        alert(`O evento ${eventoSel.codigo_evento} está INATIVO no cadastro de eventos e não aceita lançamento novo.`);
         return;
       }
       // só aceita evento que existe no cadastro de eventos (escolhido na lista)
@@ -1782,6 +1871,21 @@
         cancelarEdicao();
         carregarLancamentosNovo();
         return;
+      }
+
+      // adicional noturno: horas obrigatórias; valor diferente do cálculo exige justificativa
+      let noturno = null;
+      if (PAR_NOTURNO[eventoSel.codigo_evento]) {
+        await calcularNoturno(false);
+        if (!calcNoturno || !(calcNoturno.horas > 0)) { alert('Adicional noturno: informe as HORAS noturnas do mês (o valor e o DSR são calculados).'); document.getElementById('inputHorasNoturno').focus(); return; }
+        const just = removerAcentosEColocarMaiuscula(document.getElementById('inputJustNoturno').value).trim();
+        const editado = Math.abs(valorBruto - calcNoturno.adicional) > 0.009;
+        if (editado && just.length < 10) {
+          alert(`O valor (R$ ${valorBruto.toFixed(2)}) é diferente do calculado (R$ ${calcNoturno.adicional.toFixed(2)}).\n\nInforme a justificativa (mínimo 10 letras) ou volte ao valor calculado.`);
+          document.getElementById('boxJustNoturno').classList.remove('hidden'); document.getElementById('inputJustNoturno').focus(); return;
+        }
+        noturno = { ...calcNoturno, valor: valorBruto,
+          motivo: `NOTURNO ${String(calcNoturno.horas).replace('.', ',')}H (CALCULO R$ ${calcNoturno.adicional.toFixed(2)})` + (editado ? ` · VALOR EDITADO: ${just}` : '') };
       }
 
       const vencimentoPag = document.getElementById('inputVencimentoPag').value || null;
@@ -1834,6 +1938,8 @@
       if (String(itemOriginal.motivo_ajuste || '').startsWith('Automação Empréstimo #')) {
         motivo_ajuste = itemOriginal.motivo_ajuste;
       }
+
+      if (noturno) motivo_ajuste = noturno.motivo + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
 
       const parcela_atual = aj1 ? aj1.parcela_atual : (itemOriginal.parcela_atual || 1);
       const total_parcelas = aj1 ? aj1.total_parcelas : (itemOriginal.total_parcelas || 1);
@@ -1890,8 +1996,30 @@
         return;
       }
       if (!idEdicao) await oferecerDesconto13(eventoSel, valorFinal, funcionario_id, vencimentoPag);
+      if (noturno) await lancarDsrNoturno(funcionario_id, valorFinal, noturno);
       cancelarEdicao();
       carregarLancamentosNovo();
+    }
+
+    // DSR do adicional noturno (2037 contábil / 2032 não contábil): lançado/atualizado junto com o adicional
+    async function lancarDsrNoturno(funcionario_id, valorAdicional, n) {
+      const evDsr = listaGlobalEventos.find(e => Number(e.codigo_evento) === n.codDsr);
+      if (!evDsr) { alert(`Evento de DSR ${n.codDsr} não encontrado no cadastro: lance o DSR manualmente.`); return; }
+      const dsr = Math.round(valorAdicional * n.dsrDias / n.uteis * 100) / 100;
+      const motivo = `DSR AUTOMATICO: R$ ${valorAdicional.toFixed(2)} × ${n.dsrDias} / ${n.uteis} DIAS UTEIS`;
+      const { data: ja } = await _supabase.from('folha_itens').select('id, valor').eq('funcionario_id', funcionario_id)
+        .eq('competencia', competenciaRegraLancamento).ilike('rubrica', `${n.codDsr} %`);
+      let error;
+      if (ja && ja.length) {
+        if (ja.length === 1 && Math.abs(parseFloat(ja[0].valor) - dsr) < 0.01) return;
+        if (ja.length > 1) { alert(`Há ${ja.length} lançamentos do DSR ${n.codDsr} neste mês: confira e ajuste manualmente (calculado: R$ ${dsr.toFixed(2)}).`); return; }
+        ({ error } = await _supabase.from('folha_itens').update({ valor: dsr, valor_bruto: dsr, abatimento_sigiloso: 0, ajustes: null, motivo_ajuste: motivo }).eq('id', ja[0].id));
+      } else {
+        ({ error } = await _supabase.from('folha_itens').insert([{ funcionario_id, competencia: competenciaRegraLancamento,
+          rubrica: nomeDoCadastro(evDsr), tipo: evDsr.tipo_evento || 'PROVENTO', valor: dsr, valor_bruto: dsr, abatimento_sigiloso: 0,
+          motivo_ajuste: motivo, parcela_atual: 1, total_parcelas: 1, fixo: false }]));
+      }
+      if (error) alert(`O adicional foi salvo, mas o DSR (${n.codDsr}) não: ${error.message}\nLance o DSR de R$ ${dsr.toFixed(2)} manualmente.`);
     }
 
     function somarUmMes(dataIso) {
@@ -1950,7 +2078,7 @@
       let inseridosCount = 0;
       const falhasImport = [];
       for (const item of itensFixos) {
-        if (EVENTOS_ADIANTAMENTO_TELA.includes(parseInt(String(item.rubrica || ''), 10))) continue;   // adiantamento e VT: tela própria
+        if (telaPropria(parseInt(String(item.rubrica || ''), 10))) continue;   // adiantamento, VT, planos...: tela própria
         let novaParcela = item.parcela_atual || 1;
         let totalP = item.total_parcelas || 1;
 
