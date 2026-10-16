@@ -474,13 +474,24 @@
     }
 
     // Perfil do usuário logado (tabela usuarios_sistema). Substitui a antiga senha fixa no código.
-    let perfilUsuarioLogado = null;
+    let perfilUsuarioLogado = null, minhaFicha = null;
+    // RH: alterar/excluir item da própria ficha vira solicitação para o Gestor (regra de 16/10/2026)
+    const ehPropriaFicha = fid => perfilUsuarioLogado === 'RH' && minhaFicha && fid === minhaFicha;
+    async function solicitarAoGestor(itemId, acao, dados) {
+      const motivo = (prompt(`Este lançamento é da SUA ficha: ${acao === 'DELETE' ? 'a exclusão' : 'a alteração'} vai para o Gestor aprovar.\n\nMotivo (obrigatório):`) || '').trim();
+      if (motivo.length < 5) { alert('Motivo obrigatório (mínimo 5 letras). Nada foi enviado.'); return false; }
+      const { error } = await _supabase.rpc('fn_alteracao_solicitar', { p_item: itemId, p_acao: acao, p_dados: dados, p_motivo: motivo });
+      if (error) { alert('Não foi enviado: ' + error.message); return false; }
+      alert('Solicitação enviada ao Gestor. O lançamento só muda depois da aprovação.');
+      return true;
+    }
     async function carregarPerfilUsuario() {
       try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user || !user.email) return;
         const { data } = await _supabase.rpc('fn_meu_usuario');
         perfilUsuarioLogado = data ? String(data.perfil || '').toUpperCase() : null;
+        const { data: mf } = await _supabase.rpc('fn_minha_ficha'); minhaFicha = mf || null;
       } catch (err) {
         console.error('Erro ao carregar perfil:', err);
       }
@@ -1765,6 +1776,7 @@
           alert(`Este lançamento é ${orig.tipo} e já foi pago. Escolha um evento do mesmo tipo (${orig.tipo}).`);
           return;
         }
+        if (ehPropriaFicha(funcionario_id)) { if (await solicitarAoGestor(idEdicao, 'UPDATE', { rubrica })) { cancelarEdicao(); carregarLancamentosNovo(); } return; }
         const { error: errTroca } = await _supabase.from('folha_itens').update({ rubrica }).eq('id', idEdicao);
         if (errTroca) { alert('Erro ao trocar o evento: ' + errTroca.message); return; }
         cancelarEdicao();
@@ -1856,13 +1868,20 @@
 
       let error;
       if (idEdicao) {
+        if (ehPropriaFicha(funcionario_id)) { if (await solicitarAoGestor(idEdicao, 'UPDATE', payload)) { cancelarEdicao(); carregarLancamentosNovo(); } return; }
         ({ error } = await _supabase.from('folha_itens').update(payload).eq('id', idEdicao));
       } else {
         // alerta de duplicidade: mesmo evento já lançado para a pessoa nesta competência (regra de 16/10/2026)
         const codNovo = parseInt(String(rubrica), 10);
         const { data: jaTem } = await _supabase.from('folha_itens').select('rubrica, valor, tipo').eq('funcionario_id', funcionario_id).eq('competencia', competenciaRegraLancamento);
         const iguais = (jaTem || []).filter(x => parseInt(String(x.rubrica), 10) === codNovo);
-        if (iguais.length && !confirm(`⚠ POSSÍVEL DUPLICIDADE\n\nEste funcionário já tem ${iguais.length} lançamento(s) do evento ${codNovo} em ${competenciaRegraLancamento}:\n${iguais.map(x => `• ${x.rubrica} · R$ ${Number(x.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join('\n')}\n\nLançar mais um mesmo assim?`)) return;
+        const listaIg = iguais.map(x => `• ${x.rubrica} · R$ ${Number(x.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join('\n');
+        if (iguais.length && eventoSel && eventoSel.unico_no_mes) {
+          // evento que só pode existir uma vez no mês: bloqueia, a não ser com justificativa
+          const j = (prompt(`🚫 DUPLICIDADE BLOQUEADA\n\nO evento ${codNovo} só pode ser lançado uma vez por mês e já existe em ${competenciaRegraLancamento}:\n${listaIg}\n\nSe for mesmo outro lançamento, escreva a justificativa (mínimo 10 letras). Para cancelar, deixe em branco.`) || '').trim();
+          if (j.length < 10) { alert('Não foi lançado (duplicidade sem justificativa).'); return; }
+          payload.motivo_ajuste = 'DUPLICIDADE JUSTIFICADA: ' + j + (payload.motivo_ajuste ? ' · ' + payload.motivo_ajuste : '');
+        } else if (iguais.length && !confirm(`⚠ POSSÍVEL DUPLICIDADE\n\nEste funcionário já tem ${iguais.length} lançamento(s) do evento ${codNovo} em ${competenciaRegraLancamento}:\n${listaIg}\n\nLançar mais um mesmo assim?`)) return;
         ({ error } = await _supabase.from('folha_itens').insert([{ ...payload, funcionario_id, competencia: competenciaRegraLancamento }]));
       }
 
@@ -1997,8 +2016,12 @@
       const pagPend = mapaPagExtras[id];
       const msgConf = pagPend ? 'Este lançamento está na fila do Financeiro. Ao remover, o pagamento será cancelado. Confirmar?'
                               : 'Deseja realmente remover este lançamento?';
-      if (confirm(msgConf)) {
-        const { error } = await _supabase.from('folha_itens').delete().eq('id', id);
+      const itemExc = mapaItensRenderizados[id] || {};
+      if (ehPropriaFicha(itemExc.funcionario_id)) { if (await solicitarAoGestor(id, 'DELETE', null)) { if (abaAtiva === 'novo') carregarLancamentosNovo(); else dispararConsultaHistorico(); } return; }
+      const motivoExc = (prompt(msgConf + '\n\nMotivo da exclusão (obrigatório, fica registrado):') || '').trim();
+      if (motivoExc) {
+        if (motivoExc.length < 5) return alert('Motivo obrigatório (mínimo 5 letras). Nada foi excluído.');
+        const { error } = await _supabase.rpc('fn_folha_excluir', { p_id: id, p_motivo: motivoExc });
         if (error) {
           alert('Erro ao excluir: ' + error.message);
         } else {

@@ -427,8 +427,26 @@
         document.getElementById('mesFormGestor').classList.remove('hidden');
         return;
       }
-      if (acao === 'FECHAR' && !confirm('Fechar a competência? Depois de fechada, nenhum lançamento pode ser excluído e só o GESTOR libera correções.\n\nO backup completo será feito em seguida.')) return;
+      if (acao === 'FECHAR') return fecharComConferencia();
       executarAcaoCompetencia(acao);
+    }
+
+    // só fecha com a Conferência do fechamento sem vermelho (regra de 16/10/2026); o Gestor pode fechar com justificativa
+    async function fecharComConferencia() {
+      const { ano, mesNum } = mesSelecionadoContexto;
+      const comp = `${String(mesNum).padStart(2, '0')}/${ano}`;
+      const { data, error } = await _supabase.rpc('fn_conferencia', { p_comp: comp });
+      const verm = error ? [] : (data || []).filter(l => l.gravidade === 'VERMELHO');
+      if (verm.length) {
+        const cats = [...new Set(verm.map(l => l.categoria))].join(', ');
+        if (perfilIndex !== 'GESTOR') return alert(`🚫 A folha de ${comp} ainda tem ${verm.length} item(ns) vermelho(s) na Conferência do fechamento (${cats}).\n\nResolva ou justifique na tela "Conferência do fechamento" antes de fechar.`);
+        const j = (prompt(`⚠ A Conferência do fechamento de ${comp} tem ${verm.length} item(ns) vermelho(s) (${cats}).\n\nPara fechar mesmo assim, escreva a justificativa (mínimo 10 letras):`) || '').trim();
+        if (j.length < 10) return alert('Não foi fechado.');
+        const { error: ej } = await _supabase.rpc('fn_conferencia_fechar_com_pendencia', { p_comp: comp, p_texto: j, p_qtd: verm.length, p_categorias: cats });
+        if (ej) return alert('Não foi possível registrar a justificativa: ' + ej.message);
+      }
+      if (!confirm('Fechar a competência? Depois de fechada, nenhum lançamento pode ser excluído e só o GESTOR libera correções.\n\nO backup completo será feito em seguida.')) return;
+      executarAcaoCompetencia('FECHAR');
     }
 
     function fecharModalMes() {

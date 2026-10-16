@@ -468,7 +468,7 @@
             aviso = r.error ? `\n\nNÃO consegui corrigir o lançamento de ${comp} na folha (${r.error.message}). Corrija o valor para ${linha.valor.toFixed(2)} na tela de lançamentos.` : `\n\nO lançamento de ${comp} na folha foi corrigido para R$ ${linha.valor.toFixed(2).replace('.', ',')}.`;
           }
         } else {
-          const r = await _supabase.from('folha_itens').delete().eq('id', it.id);
+          const r = await _supabase.rpc('fn_folha_excluir', { p_id: it.id, p_motivo: `Empréstimo #${emp.id}: parcela de ${comp} pulada/zerada na tela de Empréstimos` });   // exclusão sempre com motivo (16/10/2026)
           aviso = r.error ? `\n\nNÃO consegui tirar o lançamento de ${comp} da folha (${r.error.message}). Exclua pela tela de lançamentos.` : `\n\nO lançamento de ${comp} foi retirado da folha.`;
         }
       }

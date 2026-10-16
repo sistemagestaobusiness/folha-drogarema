@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conferência do fechamento - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">☑ Conferência do fechamento</h1>
+        <p class="text-xs text-slate-500">Tudo o que precisa ser resolvido ou justificado antes de fechar a folha do mês. Vermelho bloqueia o fechamento pelo RH.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-3">
+      <div class="flex gap-1 border-b border-slate-300">
+        <button id="tabConf" onclick="trocarAba('conf')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Conferência</button>
+        <button id="tabApr" onclick="trocarAba('aprovacao')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Alterações da própria ficha (Gestor) <span id="qtdApr" class="hidden ml-1 bg-red-600 text-white rounded-full px-2 py-0.5 text-[10px]"></span></button>
+      </div>
+
+      <div class="flex flex-wrap items-end gap-3 text-xs">
+        <div><label class="lbl">Competência</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="carregar()"></div>
+        <div class="flex-1 min-w-[160px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fSoPend" checked onchange="render()"> só o que falta resolver</label>
+      </div>
+
+      <div id="pConf" class="space-y-3">
+        <div id="resumo" class="rounded-xl px-4 py-3 text-sm font-bold"></div>
+        <div id="secoes" class="space-y-3"></div>
+      </div>
+
+      <div id="pApr" class="hidden space-y-2"></div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+    .aba { color: #64748b; } .aba.on { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-bottom-color: #fff; margin-bottom: -1px; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const num = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const comp = () => { const [a, m] = $('fMes').value.split('-'); return `${m}/${a}`; };
+
+    const CATS = {
+      FIXOS:        ['Fixos do mês anterior não lançados', 'Quem tinha lançamento fixo no mês anterior e ainda não tem neste mês.', 'lancamentos.html'],
+      SALARIO:      ['Salário diferente do cadastro', 'Salário (2000) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html'],
+      DUPLICADO:    ['Evento lançado mais de uma vez', 'Evento que só pode existir uma vez no mês (salário, INSS, IRPF, plano, alimentação, combustível, adicionais).', 'lancamentos.html'],
+      FALTA:        ['Falta na escala sem desconto nem abono', 'Falta registrada na escala do mês sem desconto de falta/DSR e sem abono.', 'relatorio_faltas.html'],
+      VT:           ['Vale transporte × desconto', 'VT pago sem desconto, desconto sem VT, ou "sem desconto" por acordo.', 'vale_transporte.html'],
+      RESCISAO:     ['Lançamento de desligado', 'Funcionário inativo ou desligado antes do mês com lançamento na folha.', 'lancamentos.html'],
+      VARIACAO:     ['Valor fixo com variação acima de 20%', 'Evento fixo com valor bem diferente do mês anterior.', 'lancamentos.html'],
+      PROPRIA_FICHA:['Lançamentos do RH na própria ficha', 'Para o Gestor conferir.', 'lancamentos.html'],
+      PENDENCIA:    ['Pendências de aprovação', 'Adiantamento, VT, alterações e freelance que ainda não foram decididos.', 'index.html'],
+      EXCLUSAO:     ['Exclusões feitas no mês', 'Tudo o que foi excluído, com o motivo e quem excluiu.', 'auditoria.html']
+    };
+    let perfil = null, linhas = [], alts = [], aba = 'conf';
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      const { data: c } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1);
+      const d = new Date(), ab = c && c[0];
+      $('fMes').value = ab ? `${ab.ano}-${String(ab.mes).padStart(2, '0')}` : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      aba = new URLSearchParams(location.search).get('aba') === 'aprovacao' ? 'aprovacao' : 'conf';
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+    }
+
+    async function carregar() {
+      const [r1, r2] = await Promise.all([
+        _supabase.rpc('fn_conferencia', { p_comp: comp() }),
+        _supabase.from('alteracoes_pendentes').select('*').order('solicitado_em', { ascending: false }).limit(200)
+      ]);
+      if (r1.error) { $('aviso').innerText = 'Erro ao carregar (o SQL BZ foi rodado?): ' + r1.error.message; $('aviso').classList.remove('hidden'); return; }
+      $('aviso').classList.add('hidden');
+      linhas = r1.data || []; alts = r2.data || [];
+      const ids = [...new Set(alts.map(a => a.funcionario_id))];
+      if (ids.length) { const { data: f } = await _supabase.from('funcionarios').select('id, nome_registro').in('id', ids); alts.forEach(a => a.nome = ((f || []).find(x => x.id === a.funcionario_id) || {}).nome_registro || ''); }
+      trocarAba(aba);
+    }
+
+    function trocarAba(a) {
+      aba = a;
+      $('tabConf').classList.toggle('on', a === 'conf'); $('tabApr').classList.toggle('on', a === 'aprovacao');
+      $('pConf').classList.toggle('hidden', a !== 'conf'); $('pApr').classList.toggle('hidden', a !== 'aprovacao');
+      const q = alts.filter(x => x.status === 'PENDENTE').length; $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q);
+      if (a === 'conf') render(); else renderAprov();
+    }
+
+    const cor = g => ({ VERMELHO: 'bg-red-100 text-red-700', AMARELO: 'bg-amber-100 text-amber-800', JUSTIFICADO: 'bg-emerald-100 text-emerald-800', INFO: 'bg-slate-100 text-slate-600' }[g] || '');
+    const rot = g => ({ VERMELHO: 'resolver', AMARELO: 'conferir', JUSTIFICADO: '✓ justificado', INFO: 'info' }[g] || g);
+
+    function render() {
+      const fn = $('fNome').value.trim().toUpperCase(), so = $('fSoPend').checked;
+      const vis = linhas.filter(l => (!fn || String(l.nome || '').toUpperCase().includes(fn)) && (!so || ['VERMELHO', 'AMARELO'].includes(l.gravidade)));
+      const verm = linhas.filter(l => l.gravidade === 'VERMELHO').length, amar = linhas.filter(l => l.gravidade === 'AMARELO').length, just = linhas.filter(l => l.gravidade === 'JUSTIFICADO').length;
+      $('resumo').className = 'rounded-xl px-4 py-3 text-sm font-bold ' + (verm ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200');
+      $('resumo').innerHTML = verm ? `⚠ ${verm} item(ns) vermelho(s) para resolver ou justificar antes de fechar ${comp()} · ${amar} para conferir · ${just} justificado(s)`
+        : `✓ Nenhum vermelho em ${comp()}. ${amar} item(ns) para conferir · ${just} justificado(s). A folha pode ser fechada.`;
+      $('secoes').innerHTML = Object.keys(CATS).map(cat => {
+        const ls = vis.filter(l => l.categoria === cat), todas = linhas.filter(l => l.categoria === cat);
+        if (!todas.length) return '';
+        const v = todas.filter(l => l.gravidade === 'VERMELHO').length;
+        const [tit, desc, tela] = CATS[cat];
+        const extra = cat === 'FIXOS' && v ? `<button onclick="importarFixos()" class="ml-auto bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer">📥 Importar fixos de todos (${v})</button>` : `<a href="${tela}" class="ml-auto text-[11px] font-bold text-sky-700 underline">abrir tela</a>`;
+        return `<div class="bg-white rounded-xl overflow-hidden">
+          <div class="px-4 py-2.5 flex flex-wrap items-center gap-2 border-b border-slate-100">
+            <b class="text-slate-900 text-[13px]">${tit}</b><span class="text-[11px] font-bold ${v ? 'text-red-600' : 'text-slate-400'}">${todas.length} · ${v} vermelho(s)</span>${extra}
+            <div class="w-full text-[11px] text-slate-500">${desc}</div></div>
+          ${ls.length ? `<table class="w-full text-xs">${ls.map(l => {
+            const k = btoa(unescape(encodeURIComponent([l.categoria, l.funcionario_id, l.chave].join('|')))).replace(/=/g, '');
+            return `<tr class="border-b border-slate-50 align-top"><td class="px-4 py-1.5 w-56"><div class="font-bold text-slate-800">${esc(l.nome || '-')}</div><div class="text-[10px] text-slate-400">${esc(l.nome_loja || '')}</div></td>
+              <td class="px-2 py-1.5 text-[11px] text-slate-700">${esc(l.detalhe)}${l.justificativa ? `<div class="text-[10px] text-emerald-700 mt-0.5">✓ ${esc(l.justificativa)} · ${esc(l.justificado_por || '')}</div>` : ''}</td>
+              <td class="px-2 py-1.5 w-24"><span class="px-2 py-0.5 rounded font-bold text-[10px] ${cor(l.gravidade)}">${rot(l.gravidade)}</span></td>
+              <td class="px-4 py-1.5 w-72">${['VERMELHO', 'JUSTIFICADO'].includes(l.gravidade) && l.categoria !== 'PENDENCIA' ? `<div class="flex gap-1"><input id="j_${k}" class="inp !py-1 text-[11px]" placeholder="justificativa (mín. 10)" value="${esc(l.justificativa || '')}">
+                <button onclick="justificar('${l.categoria}','${l.funcionario_id}','${esc(l.chave || '')}','j_${k}')" class="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-2 text-[10px] font-bold cursor-pointer">ok</button></div>` : ''}</td></tr>`; }).join('')}</table>`
+            : '<div class="px-4 py-2 text-[11px] text-slate-400">Nada pendente nesta categoria.</div>'}
+        </div>`;
+      }).join('') || '<div class="bg-white rounded-xl p-8 text-center text-slate-400">Nenhum alerta neste mês.</div>';
+    }
+
+    async function justificar(cat, fid, chave, inp) {
+      const t = ($(inp).value || '').trim();
+      if (t.length < 10) return alert('Justificativa com no mínimo 10 letras.');
+      const { error } = await _supabase.rpc('fn_conferencia_justificar', { p_comp: comp(), p_categoria: cat, p_func: fid, p_chave: chave, p_texto: t });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+
+    async function importarFixos() {
+      if (!confirm(`Importar os lançamentos fixos de ${comp()} do mês anterior para todos que ainda não têm?\n\nAdiantamento e vale transporte não entram (têm tela própria). Parcelas avançam uma.`)) return;
+      const { data, error } = await _supabase.rpc('fn_importar_fixos_todos', { p_comp: comp() });
+      if (error) return alert('Não foi possível: ' + error.message);
+      alert(`${data} lançamento(s) fixo(s) importado(s). Os que sobrarem precisam de ajuste na tela de Lançamentos (ex.: data de pagamento).`);
+      await carregar();
+    }
+
+    // ------------------------------------------------------------------ alterações da própria ficha (Gestor)
+    function renderAprov() {
+      const g = perfil === 'GESTOR', pend = alts.filter(a => a.status === 'PENDENTE'), dec = alts.filter(a => a.status !== 'PENDENTE').slice(0, 30);
+      const linha = a => { const an = a.antes || {}, de = a.depois || {};
+        const mud = a.acao === 'DELETE' ? `<b class="text-red-700">EXCLUIR</b> ${esc(an.rubrica)} · ${num(an.valor)}`
+          : Object.keys(de).filter(k => ['rubrica', 'valor', 'tipo', 'motivo_ajuste', 'fixo', 'parcela_atual', 'total_parcelas', 'vencimento_pagamento'].includes(k) && String(de[k] ?? '') !== String(an[k] ?? ''))
+              .map(k => `${k}: <s class="text-slate-400">${esc(an[k])}</s> → <b>${esc(de[k])}</b>`).join('<br>') || `${esc(an.rubrica)} (sem mudança visível)`;
+        return `<div class="bg-white rounded-xl p-3 text-xs flex flex-wrap gap-4 items-center">
+          <div class="flex-1 min-w-[260px]"><div class="font-bold text-slate-900 text-sm">${esc(a.nome)} · ${esc(a.competencia || '')}</div>
+            <div class="text-[11px] mt-1">${mud}</div><div class="text-[11px] text-slate-700 mt-1"><b>Motivo:</b> ${esc(a.motivo)}</div>
+            <div class="text-[10px] text-slate-400">${esc(a.solicitado_por || '')} · ${dh(a.solicitado_em)}</div></div>
+          ${a.status === 'PENDENTE' ? (g ? `<div class="flex flex-col gap-1.5 min-w-[200px]"><button onclick="decidir('${a.id}', true)" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 font-bold cursor-pointer">✓ Aprovar</button>
+            <div class="flex gap-1"><input id="rec_${a.id}" class="inp !py-1 text-[11px]" placeholder="motivo da recusa"><button onclick="decidir('${a.id}', false)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg px-3 font-bold cursor-pointer">Recusar</button></div></div>` : '<span class="text-[11px] font-bold text-red-700">⏳ aguardando o Gestor</span>')
+            : `<span class="text-[11px] font-bold ${a.status === 'APROVADA' ? 'text-emerald-700' : 'text-rose-700'}">${a.status === 'APROVADA' ? '✓ aprovada' : '✕ recusada'} · ${esc(a.gestor_por || '')} ${dh(a.gestor_em)}${a.gestor_obs ? ' · ' + esc(a.gestor_obs) : ''}</span>`}
+        </div>`; };
+      $('pApr').innerHTML = (pend.length ? `<div class="bg-red-50 border border-red-300 text-red-800 rounded-xl p-3 font-bold">⚠️ ${pend.length} alteração(ões) na própria ficha do RH aguardando aprovação. O lançamento só muda depois da aprovação.</div>` : '<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 font-bold">✓ Nenhuma alteração aguardando aprovação.</div>')
+        + pend.map(linha).join('') + (dec.length ? '<div class="text-[10px] font-bold uppercase text-slate-500 mt-3">Decididas</div>' + dec.map(linha).join('') : '');
+    }
+    async function decidir(id, aprovar) {
+      const obs = aprovar ? null : ($('rec_' + id).value || '').trim();
+      if (!aprovar && obs.length < 5) return alert('Escreva o motivo da recusa (mínimo 5 letras).');
+      const { error } = await _supabase.rpc('fn_alteracao_decidir', { p_id: id, p_aprovar: aprovar, p_obs: obs });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
