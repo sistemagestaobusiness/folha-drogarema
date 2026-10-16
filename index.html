@@ -22,6 +22,11 @@
   <div class="max-w-[1720px] mx-auto space-y-5">
 
     <!-- ADIANTAMENTO AGUARDANDO O GESTOR (fica fixo até aprovar) -->
+    <a id="faixaVT" href="vale_transporte.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
+      <span class="text-2xl">⚠️</span>
+      <span class="flex-1 min-w-[220px]"><b class="block text-base">Vale transporte aguardando a sua aprovação</b><span id="faixaVTTxt" class="text-sm text-red-50"></span></span>
+      <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar vale transporte →</span>
+    </a>
     <a id="faixaAdiant" href="adiantamento.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
       <span class="text-2xl">⚠️</span>
       <span class="flex-1 min-w-[220px]"><b class="block text-base">Adiantamento salarial aguardando a sua aprovação</b><span id="faixaAdiantTxt" class="text-sm text-red-50"></span></span>
@@ -360,6 +365,12 @@
           if (r && r.qtd) {
             document.getElementById('faixaAdiantTxt').innerText = `${r.qtd} funcionário(s) com valor diferente do mês anterior (${r.competencia}) · ${Number(r.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · o Financeiro só paga depois da sua aprovação`;
             document.getElementById('faixaAdiant').classList.remove('hidden');
+          }
+          const { data: pv } = await _supabase.rpc('fn_vt_pendentes');
+          const v = pv && pv[0];
+          if (v && v.qtd) {
+            document.getElementById('faixaVTTxt').innerText = `${v.qtd} funcionário(s) com valor diferente do mês anterior (pago em ${v.mes}) · ${Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · o Financeiro só paga depois da sua aprovação`;
+            document.getElementById('faixaVT').classList.remove('hidden');
           }
         }
       } catch (err) { console.error(err); }

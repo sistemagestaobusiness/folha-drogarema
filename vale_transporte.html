@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vale transporte - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1400px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">🚌 Vale transporte</h1>
+        <p class="text-xs text-slate-500">Pago no último dia do mês para uso no mês seguinte. Fica no 3º quadro do mês do pagamento e vai para o Financeiro. Cada VT tem o desconto vinculado (3% do salário, contábil).</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-3">
+      <div class="flex gap-1 border-b border-slate-300">
+        <button id="tabLanc" onclick="trocarAba('lanc')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Pagamento do mês</button>
+        <button id="tabApr" onclick="trocarAba('aprovacao')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Aprovação do Gestor <span id="qtdApr" class="hidden ml-1 bg-red-600 text-white rounded-full px-2 py-0.5 text-[10px]"></span></button>
+      </div>
+
+      <div class="flex flex-wrap items-end gap-3 text-xs">
+        <div><label class="lbl">Mês do pagamento</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="mudouMes()"></div>
+        <div id="boxVenc"><label class="lbl">Data do pagamento</label><input id="fVenc" type="date" class="inp !py-1.5 font-mono"></div>
+        <div id="boxDesc"><label class="lbl">Desconto na folha de</label><select id="fDesc" class="inp !py-1.5"></select></div>
+        <div><label class="lbl">Loja / setor</label><select id="fLoja" onchange="render()" class="inp !py-1.5"><option value="">Todas</option></select></div>
+        <div class="flex-1 min-w-[150px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fOcultarNao" checked onchange="render()"> ocultar quem não recebe</label>
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-red-700 pb-2 cursor-pointer"><input type="checkbox" id="fAlertas" onchange="render()"> só com alerta</label>
+      </div>
+
+      <div id="pLanc" class="space-y-2">
+        <div id="resumo" class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600 bg-white rounded-lg px-3 py-2"></div>
+        <div id="grade" class="bg-white rounded-lg overflow-auto" style="max-height: calc(100vh - 300px)">
+          <table class="w-full text-xs">
+            <thead class="text-[10px] uppercase text-slate-500 text-left">
+              <tr class="th1">
+                <th rowspan="2" class="px-3">Funcionário</th>
+                <th rowspan="2" class="px-2 text-center">Recebe</th>
+                <th rowspan="2" class="px-2 text-right bg-slate-100">Mês anterior</th>
+                <th colspan="3" class="px-2 text-center bg-emerald-50 border-l border-white">VT deste mês</th>
+                <th colspan="2" class="px-2 text-center bg-sky-50 border-l border-white">Desconto vinculado</th>
+                <th rowspan="2" class="px-2">Alertas (escala, faltas, férias)</th>
+                <th rowspan="2" class="px-3">Situação</th></tr>
+              <tr class="th2">
+                <th class="px-2 bg-emerald-50 border-l border-white">Valor/dia</th><th class="px-2 bg-emerald-50">Dias</th><th class="px-2 text-right bg-emerald-50">Total</th>
+                <th class="px-2 bg-sky-50 border-l border-white">Valor e tipo</th><th class="px-2 bg-sky-50">Na folha</th></tr>
+            </thead>
+            <tbody id="tabela"></tbody>
+          </table>
+        </div>
+        <div class="sticky bottom-0 bg-white/95 rounded-lg px-3 py-2 flex flex-wrap items-center gap-3 shadow-sm">
+          <span id="lblConfirma" class="text-[12px] font-bold text-slate-700 flex-1"></span>
+          <button id="btnConfirmar" onclick="confirmar()" class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-2 px-5 rounded-lg text-xs uppercase tracking-wider cursor-pointer">✓ Confirmar vale transporte</button>
+        </div>
+      </div>
+
+      <div id="pApr" class="hidden space-y-3">
+        <div id="aprInfo"></div>
+        <div id="aprLista" class="space-y-2"></div>
+        <div id="aprHist" class="space-y-1"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 12px; }
+    .val { width: 82px; text-align: right; font-family: ui-monospace, monospace; }
+    .val::placeholder { color: #f59e0b; font-weight: 700; }
+    .aba { color: #64748b; } .aba.on { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-bottom-color: #fff; margin-bottom: -1px; }
+    tr.nao td { color: #94a3b8; }
+    #grade thead th { position: sticky; background: #fff; z-index: 2; padding-top: 6px; padding-bottom: 6px; }
+    #grade thead tr.th1 th { top: 0; } #grade thead tr.th2 th { top: 27px; }
+    #grade thead th.bg-slate-100 { background: #f1f5f9; } #grade thead th.bg-emerald-50 { background: #ecfdf5; } #grade thead th.bg-sky-50 { background: #f0f9ff; }
+    #tabela tr.lin td { border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    .al { display: inline-block; margin: 0 3px 3px 0; padding: 1px 6px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const num = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const r2 = v => Math.round(Number(v || 0) * 100) / 100;
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const ddm = d => d ? String(d).slice(8, 10) + '/' + String(d).slice(5, 7) : '';
+    const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const lerNum = t => { t = String(t ?? '').trim(); if (!t) return null; t = t.replace(/\s|R\$/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); const n = parseFloat(t); return isNaN(n) ? NaN : r2(n); };
+    const compDe = ym => { const [a, m] = ym.split('-'); return `${m}/${a}`; };
+    const somaMes = (c, n) => { const [m, a] = c.split('/').map(Number); const d = new Date(a, m - 1 + n, 1); return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
+
+    let perfil = null, lista = [], ed = {}, aba = 'lanc';
+    const mes = () => compDe($('fMes').value);
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      const d = new Date(); $('fMes').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      $('conteudo').classList.remove('hidden');
+      aba = new URLSearchParams(location.search).get('aba') === 'aprovacao' ? 'aprovacao' : 'lanc';
+      if (aba === 'aprovacao') { const { data: p } = await _supabase.rpc('fn_vt_pendentes'); const c = p && p[0] && p[0].mes; if (c) { const [m, a] = c.split('/'); $('fMes').value = `${a}-${m}`; } }
+      await mudouMes();
+    }
+
+    async function mudouMes() {
+      const [a, m] = $('fMes').value.split('-');
+      $('fVenc').value = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);   // último dia do mês
+      const c = mes();
+      $('fDesc').innerHTML = `<option value="${somaMes(c, 1)}">${somaMes(c, 1)} (mês de uso)</option><option value="${c}">${c} (mês do pagamento)</option>`;
+      await carregar();
+    }
+
+    async function carregar() {
+      const { data, error } = await _supabase.rpc('fn_vt_lista', { p_mes: mes() });
+      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL BY foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      $('aviso').classList.add('hidden');
+      lista = data || []; ed = {};
+      const r = lista.find(f => f.vencimento && f.status !== 'PAGO_FORA'); if (r) $('fVenc').value = r.vencimento;
+      const rd = lista.find(f => f.desconto_comp); if (rd) $('fDesc').value = rd.desconto_comp;
+      lista.forEach(f => {
+        f.trava = !!f.pago; f.fora = f.status === 'PAGO_FORA';
+        const tem = f.reg_id && f.status !== 'NAO_RECEBE';
+        ed[f.funcionario_id] = {
+          recebe: f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe,
+          vd: tem ? (f.valor_dia != null ? r2(f.valor_dia) : null) : (f.valor_dia_cfg != null ? r2(f.valor_dia_cfg) : null),
+          jvd: f.justif_valor_dia || '', dias: tem && f.dias != null ? f.dias : null, motivo: f.motivo_rh || '',
+          dv: f.desconto_valor != null ? r2(f.desconto_valor) : null, dt: f.desconto_tipo || 'CONTABIL', dj: f.desconto_justif || ''
+        };
+      });
+      const lojas = [...new Map(lista.map(f => [f.loja_id || '', f.nome_loja || 'sem loja'])).entries()];
+      const sel = $('fLoja').value;
+      $('fLoja').innerHTML = '<option value="">Todas</option>' + lojas.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('');
+      $('fLoja').value = lojas.some(([id]) => id === sel) ? sel : '';
+      trocarAba(aba);
+    }
+
+    function trocarAba(a) {
+      aba = a;
+      $('tabLanc').classList.toggle('on', a === 'lanc'); $('tabApr').classList.toggle('on', a === 'aprovacao');
+      $('pLanc').classList.toggle('hidden', a !== 'lanc'); $('pApr').classList.toggle('hidden', a !== 'aprovacao');
+      $('boxVenc').classList.toggle('hidden', a !== 'lanc'); $('boxDesc').classList.toggle('hidden', a !== 'lanc');
+      const q = lista.filter(f => f.status === 'AGUARDANDO_GESTOR').length;
+      $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q);
+      if (a === 'lanc') render(); else renderAprovacao();
+    }
+
+    // ------------------------------------------------------------------ regras
+    const valorVT = (f, e) => f.trava ? r2(f.valor) : (e.recebe && e.vd != null && e.dias != null ? r2(e.vd * e.dias) : null);
+    const calcDesc = (f, e) => { const v = valorVT(f, e); return v == null ? null : Math.min(r2(Number(f.salario_base) * 0.03), v); };
+    const descEfetivo = (f, e) => e.dv != null ? e.dv : calcDesc(f, e);
+    const precisaJustDesc = (f, e) => { const c = calcDesc(f, e), d = descEfetivo(f, e); return c != null && c > 0 && (r2(d) !== r2(c) || e.dt === 'NAO_CONTABIL'); };
+    const vdMudou = (f, e) => !f.trava && f.valor_dia_cfg != null && e.vd != null && r2(e.vd) !== r2(f.valor_dia_cfg);
+    const difere = f => { const e = ed[f.funcionario_id]; const v = valorVT(f, e); return !f.trava && e.recebe && v != null && r2(v) !== r2(f.ant_valor); };
+    const falta = f => { const e = ed[f.funcionario_id]; return !f.trava && e.recebe && (e.vd == null || e.dias == null); };
+    const descPendente = f => f.trava && Number(f.valor) > 0 && !f.desconto_lancado;
+    const mudou = f => { const e = ed[f.funcionario_id];
+      if (f.trava) return descPendente(f) || (f.desconto_lancado && (r2(descEfetivo(f, e)) !== r2(f.desconto_valor) || e.dt !== f.desconto_tipo || $('fDesc').value !== f.desconto_comp));
+      if (!f.reg_id) return e.recebe || f.recebe;
+      if ((f.status !== 'NAO_RECEBE') !== e.recebe || f.status === 'RECUSADO') return true;
+      return e.recebe && (r2(e.vd) !== r2(f.valor_dia) || e.dias !== f.dias || r2(descEfetivo(f, e)) !== r2(f.desconto_valor) || e.dt !== f.desconto_tipo || $('fDesc').value !== f.desconto_comp);
+    };
+
+    function alertas(f, e) {
+      const a = [];
+      const fal = f.faltas_mes || [], fer = f.ferias_uso || [];
+      if (fal.length) a.push(`<span class="al bg-red-100 text-red-700" title="${fal.map(x => ddm(x.data) + ' ' + x.tipo).join(', ')}">⚠ ${fal.length} falta/atestado em ${mes()} (${fal.slice(0, 4).map(x => ddm(x.data)).join(', ')}${fal.length > 4 ? '…' : ''})</span>`);
+      if (fer.length) a.push(`<span class="al bg-amber-100 text-amber-800">☼ férias ${fer.map(x => ddm(x.inicio) + '–' + ddm(x.fim)).join(', ')}</span>`);
+      if (f.escala_uso) a.push(`<span class="al bg-slate-100 text-slate-600">escala ${somaMes(mes(), 1)}: ${f.trabalho_uso} trabalho · ${f.folgas_uso} folga</span>`);
+      else if (e.recebe) a.push(`<span class="al bg-slate-100 text-slate-500">escala de ${somaMes(mes(), 1)} não lançada</span>`);
+      if (f.escala_uso && e.recebe && e.dias != null && e.dias > f.trabalho_uso) a.push(`<span class="al bg-red-100 text-red-700">dias (${e.dias}) > dias de trabalho na escala (${f.trabalho_uso})</span>`);
+      if (f.data_rescisao || String(f.status_func || '').toUpperCase() !== 'ATIVO') a.push(`<span class="al bg-red-600 text-white">desligado${f.data_rescisao ? ' em ' + dbr(f.data_rescisao) : ''}: descontar VT não usado na rescisão</span>`);
+      const dFolha = Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil);
+      if (!e.recebe && dFolha > 0) a.push(`<span class="al bg-red-100 text-red-700">tem desconto de VT na folha (${num(dFolha)}) sem receber VT</span>`);
+      if (Number(f.desc_folha_nao_contabil) > 0) a.push(`<span class="al bg-amber-100 text-amber-800">desconto não contábil na folha (${num(f.desc_folha_nao_contabil)})</span>`);
+      if (vdMudou(f, e)) a.push(`<span class="al bg-amber-100 text-amber-800">valor/dia mudou (era ${num(f.valor_dia_cfg)})</span>`);
+      return a.join('');
+    }
+
+    function situacao(f) {
+      if (f.fora) return `<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-bold">Pago ${dbr(f.vencimento)} (fora do sistema)</span>`;
+      if (f.pago) return '<span class="px-2 py-0.5 rounded bg-slate-800 text-white font-bold">🔒 Pago pelo Financeiro</span>';
+      const s = { LANCADO: '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">✓ Lançado · no Financeiro</span>',
+        AGUARDANDO_GESTOR: '<span class="px-2 py-0.5 rounded bg-red-100 text-red-700 font-bold">⏳ Aguardando Gestor</span>',
+        RECUSADO: `<span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">✕ Recusado pelo Gestor</span>${f.gestor_obs ? `<div class="text-[10px] text-rose-700 mt-0.5">${esc(f.gestor_obs)}</div>` : ''}`,
+        NAO_RECEBE: '<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-bold">Não recebe</span>' }[f.status];
+      return s || '<span class="text-slate-400">a confirmar</span>';
+    }
+
+    function render() {
+      const fl = $('fLoja').value, fn = $('fNome').value.trim().toUpperCase(), ocultar = $('fOcultarNao').checked, soAl = $('fAlertas').checked;
+      const vis = lista.filter(f => { const e = ed[f.funcionario_id];
+        return (!fl || (f.loja_id || '') === fl) && (!fn || String(f.nome).toUpperCase().includes(fn))
+          && (!ocultar || e.recebe || Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil) > 0)
+          && (!soAl || alertas(f, e).includes('bg-red')); });
+      let lojaAnt = null;
+      $('tabela').innerHTML = vis.length ? vis.map(f => {
+        const e = ed[f.funcionario_id], id = f.funcionario_id, dis = f.trava ? 'disabled' : '';
+        const cab = f.nome_loja !== lojaAnt ? (lojaAnt = f.nome_loja, `<tr><td colspan="10" class="px-3 pt-3 pb-1 text-[11px] font-black uppercase text-slate-500">${esc(f.nome_loja || 'sem loja')}</td></tr>`) : '';
+        const ant = `<td class="px-2 py-1.5 text-right font-mono text-[11px] text-slate-600 bg-slate-50">${num(f.ant_valor)}</td>`;
+        const nomeTd = `<td class="px-3 py-1.5"><div class="font-bold ${e.recebe ? 'text-slate-900' : 'line-through decoration-slate-300'}">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')} · salário ${num(f.salario_base)}</div>${f.observacao ? `<div class="text-[10px] text-slate-400">${esc(f.observacao)}</div>` : ''}</td>`;
+        const chk = `<td class="px-2 py-1.5 text-center"><input type="checkbox" class="w-4 h-4 accent-emerald-600" ${e.recebe ? 'checked' : ''} ${dis} onchange="setRecebe('${id}', this.checked)"></td>`;
+        if (!e.recebe) return cab + `<tr class="lin nao">${nomeTd}${chk}${ant}<td colspan="5" class="px-2 py-1.5"><span class="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-bold text-[11px]">🚫 Não recebe VT</span></td>
+          <td class="px-2 py-1.5">${alertas(f, e)}</td><td class="px-3 py-1.5">${situacao(f)}</td></tr>`;
+        const v = valorVT(f, e), dif = difere(f), c = calcDesc(f, e), d = descEfetivo(f, e), pj = precisaJustDesc(f, e);
+        const vdTd = f.trava ? `<td class="px-2 py-1.5 font-mono text-[11px] text-slate-500">${f.valor_dia != null ? num(f.valor_dia) : '-'}</td><td class="px-2 py-1.5 font-mono text-[11px] text-slate-500">${f.dias ?? '-'}</td>`
+          : `<td class="px-2 py-1.5"><input class="inp val !py-1" value="${e.vd == null ? '' : num(e.vd)}" placeholder="informar" onchange="setNum('${id}','vd',this)">
+              ${vdMudou(f, e) ? `<input class="inp !py-1 mt-1 text-[10px] !w-40" placeholder="Justificativa (mín. 10) *" value="${esc(e.jvd)}" oninput="ed['${id}'].jvd=this.value">` : ''}</td>
+            <td class="px-2 py-1.5"><input class="inp val !py-1 !w-14" value="${e.dias ?? ''}" placeholder="dias" onchange="setDias('${id}',this)"></td>`;
+        const travaDesc = f.trava && f.desconto_lancado && false;
+        return cab + `<tr class="lin ${dif ? 'bg-red-50/40' : ''}">${nomeTd}${chk}${ant}${vdTd}
+          <td class="px-2 py-1.5 text-right font-mono font-bold ${dif ? 'text-red-700' : 'text-slate-800'}">${v == null ? '-' : num(v)}
+            ${dif ? `<div class="text-[10px] font-sans font-bold text-red-700">${v - f.ant_valor > 0 ? '+' : ''}${brl(v - f.ant_valor)} → Gestor</div>${perfil === 'GESTOR' ? '<div class="text-[10px] font-sans font-normal text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 mt-1 text-[10px] !w-40 font-sans" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value">`}` : ''}</td>
+          <td class="px-2 py-1.5 whitespace-nowrap ${travaDesc ? 'opacity-60' : ''}">
+            <input class="inp val !py-1" value="${d == null ? '' : num(d)}" placeholder="3%" onchange="setNum('${id}','dv',this)">
+            <select class="inp !py-0.5 !w-auto text-[10px] ${e.dt === 'NAO_CONTABIL' ? '!bg-amber-200 font-bold' : ''}" onchange="ed['${id}'].dt=this.value; render()"><option value="CONTABIL" ${e.dt !== 'NAO_CONTABIL' ? 'selected' : ''}>contábil 3019</option><option value="NAO_CONTABIL" ${e.dt === 'NAO_CONTABIL' ? 'selected' : ''}>não contábil 3032</option></select>
+            <div class="text-[10px] text-slate-400">3% = ${num(Number(f.salario_base) * 0.03)}${c != null && c < r2(Number(f.salario_base) * 0.03) ? ' (limitado ao VT)' : ''}</div>
+            ${pj ? `<input class="inp !py-1 mt-1 text-[10px] !w-44" placeholder="Justificativa do desconto (mín. 10) *" value="${esc(e.dj)}" oninput="ed['${id}'].dj=this.value">` : ''}</td>
+          <td class="px-2 py-1.5 text-[10px]">${f.desconto_lancado ? `<span class="font-bold text-emerald-700">✓ lançado ${esc(f.desconto_comp)}</span>` : (f.trava ? '<span class="font-bold text-red-700">⚠ desconto a lançar</span>' : '<span class="text-slate-400">lança junto</span>')}
+            ${Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil) > 0 ? `<div class="text-slate-500">na folha: ${num(Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil))}</div>` : ''}</td>
+          <td class="px-2 py-1.5">${alertas(f, e)}</td>
+          <td class="px-3 py-1.5">${situacao(f)}</td></tr>`;
+      }).join('') : '<tr><td colspan="10" class="p-8 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
+      resumo();
+    }
+
+    function setRecebe(id, v) { ed[id].recebe = v; render(); }
+    function setNum(id, k, el) {
+      const n = lerNum(el.value);
+      if (n !== null && (isNaN(n) || n < 0)) { alert('Valor inválido (não pode ser negativo).'); el.value = ed[id][k] == null ? '' : num(ed[id][k]); return; }
+      ed[id][k] = n; render();
+    }
+    function setDias(id, el) { const t = String(el.value).trim(); if (!t) { ed[id].dias = null; render(); return; }
+      const n = parseInt(t, 10); if (isNaN(n) || n < 0 || n > 31) { alert('Dias: de 0 a 31.'); el.value = ed[id].dias ?? ''; return; } ed[id].dias = n; render(); }
+
+    function resumo() {
+      const rec = lista.filter(f => ed[f.funcionario_id].recebe);
+      const tot = rec.reduce((s, f) => s + (valorVT(f, ed[f.funcionario_id]) || 0), 0), ant = lista.reduce((s, f) => s + Number(f.ant_valor || 0), 0);
+      const desc = rec.reduce((s, f) => s + (descEfetivo(f, ed[f.funcionario_id]) || 0), 0);
+      const pend = lista.filter(mudou), difs = pend.filter(difere), faltam = lista.filter(falta);
+      const semJust = pend.filter(f => { const e = ed[f.funcionario_id]; return (vdMudou(f, e) && e.jvd.trim().length < 10) || (precisaJustDesc(f, e) && e.dj.trim().length < 10); });
+      const comAlerta = lista.filter(f => alertas(f, ed[f.funcionario_id]).includes('bg-red')).length;
+      const it = (t, v, c = 'text-slate-900') => `<span>${t} <b class="${c}">${v}</b></span>`;
+      $('resumo').innerHTML = it('Recebem', `${rec.length}`) + it('VT do mês', brl(tot), 'text-emerald-700') + it('Mês anterior', brl(ant), 'text-slate-500')
+        + it('Descontos vinculados', brl(desc), 'text-sky-700') + it('Diferença', `${difs.length} pessoa(s)`, difs.length ? 'text-red-600' : 'text-slate-400')
+        + it('A preencher', `${faltam.length}`, faltam.length ? 'text-amber-600' : 'text-slate-400') + it('Com alerta', `${comAlerta}`, comAlerta ? 'text-red-600' : 'text-slate-400');
+      $('lblConfirma').innerText = faltam.length ? `Faltam ${faltam.length} funcionário(s) sem valor/dia ou dias (preencha ou desmarque "Recebe").`
+        : semJust.length ? `Falta justificativa para ${semJust.length} funcionário(s) (valor/dia ou desconto diferente).`
+        : pend.length ? `${pend.length} alteração(ões) a confirmar${difs.length ? ` · ${difs.length} ${perfil === 'GESTOR' ? 'com diferença (você é Gestor: lança direto)' : 'vão para o Gestor aprovar'}` : ''}`
+        : 'Nada a confirmar.';
+      $('btnConfirmar').disabled = !pend.length || faltam.length > 0 || semJust.length > 0;
+    }
+
+    async function confirmar() {
+      const venc = $('fVenc').value, dComp = $('fDesc').value;
+      const pend = lista.filter(mudou);
+      if (perfil !== 'GESTOR') { const sm = pend.filter(f => difere(f) && (ed[f.funcionario_id].motivo || '').trim().length < 5);
+        if (sm.length) return alert('Informe o motivo da diferença (mínimo 5 letras) para:\n' + sm.map(f => '• ' + f.nome).join('\n')); }
+      if (!confirm(`Confirmar o VT pago em ${dbr(venc)} com desconto na folha de ${dComp}?\n\n${$('lblConfirma').innerText}`)) return;
+      const itens = pend.map(f => { const e = ed[f.funcionario_id]; return { funcionario_id: f.funcionario_id, recebe: e.recebe, valor_dia: e.vd, dias: e.dias,
+        justif_valor_dia: e.jvd || null, motivo: e.motivo || null, desconto_valor: descEfetivo(f, e), desconto_tipo: e.dt, desconto_justif: e.dj || null }; });
+      const b = $('btnConfirmar'); b.disabled = true; b.innerText = 'Gravando...';
+      const { data, error } = await _supabase.rpc('fn_vt_confirmar', { p_mes: mes(), p_venc: venc, p_desc_comp: dComp, p_itens: itens });
+      b.innerText = '✓ Confirmar vale transporte';
+      if (error) { b.disabled = false; return alert('Não foi gravado: ' + error.message); }
+      let msg = `VT lançados (foram para o Financeiro): ${data.lancados}\nAguardando o Gestor: ${data.aguardando_gestor}\nNão recebe: ${data.nao_recebe}\nDescontos lançados/ajustados (VT já pago): ${data.descontos}`;
+      if ((data.erros || []).length) msg += '\n\nNão gravados:\n' + data.erros.map(x => `• ${x.nome}: ${x.erro}`).join('\n');
+      alert(msg);
+      await carregar();
+    }
+
+    // ------------------------------------------------------------------ aprovação do Gestor
+    function renderAprovacao() {
+      const pend = lista.filter(f => f.status === 'AGUARDANDO_GESTOR'), g = perfil === 'GESTOR';
+      $('aprInfo').innerHTML = pend.length
+        ? `<div class="bg-red-50 border border-red-300 text-red-800 rounded-xl p-3 font-bold flex flex-wrap items-center gap-3"><span class="flex-1">⚠️ ${pend.length} vale(s) transporte de ${mes()} com valor diferente do mês anterior. O Financeiro só recebe depois da aprovação.</span>
+           ${g ? `<button onclick="aprovarTodos()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs cursor-pointer">✓ Aprovar todos (${pend.length})</button>` : '<span class="text-[11px] font-normal">Só o Gestor aprova.</span>'}</div>`
+        : `<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 font-bold">✓ Nenhum vale transporte aguardando aprovação em ${mes()}.</div>`;
+      $('aprLista').innerHTML = pend.map(f => { const d = Number(f.valor) - Number(f.ant_valor);
+        return `<div class="bg-white border border-slate-200 rounded-xl p-3 text-xs flex flex-wrap gap-4 items-center">
+          <div class="min-w-[220px] flex-1"><div class="font-bold text-slate-900 text-sm">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.nome_loja || '')} · ${esc(f.cargo || '')}</div>
+            <div class="mt-1 text-[11px] text-slate-700"><b>Motivo do RH:</b> ${esc(f.motivo_rh || '-')}</div>
+            <div class="text-[11px] text-slate-600">${f.dias ?? '?'} dias × ${num(f.valor_dia)} · desconto ${num(f.desconto_valor)} ${f.desconto_tipo === 'NAO_CONTABIL' ? '(não contábil)' : '(contábil)'}${f.desconto_justif ? ' · ' + esc(f.desconto_justif) : ''}</div>
+            <div class="mt-1">${alertas(f, ed[f.funcionario_id])}</div>
+            <div class="text-[10px] text-slate-400">${esc(f.enviado_por || '')} · ${dh(f.enviado_em)}</div></div>
+          <div class="text-right font-mono text-[11px]"><div class="text-[9px] uppercase text-slate-400 font-sans">mês anterior → agora</div>${num(f.ant_valor)} → <b>${num(f.valor)}</b></div>
+          <div class="text-center min-w-[90px]"><div class="text-[9px] uppercase text-slate-400">diferença</div><div class="text-base font-black ${d > 0 ? 'text-red-600' : 'text-emerald-700'}">${d > 0 ? '+' : ''}${brl(d)}</div>${Number(f.ant_valor) === 0 ? '<div class="text-[10px] font-bold text-red-600">passa a receber</div>' : ''}</div>
+          ${g ? `<div class="flex flex-col gap-1.5 min-w-[200px]"><button onclick="decidir('${f.reg_id}', true)" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 font-bold cursor-pointer">✓ Aprovar</button>
+            <div class="flex gap-1"><input id="rec_${f.reg_id}" class="inp !py-1 text-[11px]" placeholder="motivo da recusa"><button onclick="decidir('${f.reg_id}', false)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg px-3 font-bold cursor-pointer">Recusar</button></div></div>` : ''}
+        </div>`; }).join('');
+      const dec = lista.filter(f => f.gestor_em && f.status !== 'AGUARDANDO_GESTOR');
+      $('aprHist').innerHTML = dec.length ? `<div class="text-[10px] font-bold uppercase text-slate-500 mt-3">Decididos em ${mes()}</div>` + dec.map(f =>
+        `<div class="bg-white rounded-lg px-3 py-1.5 text-[11px] flex gap-3"><b class="flex-1">${esc(f.nome)}</b><span>${brl(f.valor)}</span><span class="${f.status === 'RECUSADO' ? 'text-rose-700' : 'text-emerald-700'} font-bold">${f.status === 'RECUSADO' ? '✕ recusado' : '✓ aprovado'}</span><span class="text-slate-400">${esc(f.gestor_por || '')} · ${dh(f.gestor_em)}</span></div>`).join('') : '';
+    }
+    async function decidir(id, aprovar) {
+      const obs = aprovar ? null : ($('rec_' + id).value || '').trim();
+      if (!aprovar && obs.length < 5) return alert('Escreva o motivo da recusa (mínimo 5 letras).');
+      const { error } = await _supabase.rpc('fn_vt_decidir', { p_id: id, p_aprovar: aprovar, p_obs: obs });
+      if (error) return alert(error.message);
+      await carregar();
+    }
+    async function aprovarTodos() {
+      const pend = lista.filter(f => f.status === 'AGUARDANDO_GESTOR');
+      if (!confirm(`Aprovar os ${pend.length} vale(s) transporte com diferença? Eles vão para o Financeiro.`)) return;
+      const falhas = [];
+      for (const f of pend) { const { error } = await _supabase.rpc('fn_vt_decidir', { p_id: f.reg_id, p_aprovar: true, p_obs: null }); if (error) falhas.push(`${f.nome}: ${error.message}`); }
+      if (falhas.length) alert('Não aprovados:\n' + falhas.join('\n'));
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

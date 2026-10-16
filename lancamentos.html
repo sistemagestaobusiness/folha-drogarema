@@ -404,7 +404,9 @@
     let listaGlobalFuncionarios = [];
     let listaGlobalEventos = [];
     // adiantamento salarial (regra de 15/10/2026): lançado só pela tela adiantamento.html
-    const EVENTOS_ADIANTAMENTO_TELA = [2025, 3001, 3002];
+    const EVENTOS_ADIANTAMENTO_TELA = [2025, 3001, 3002, 2065, 3019, 3032, 3013];
+    // tela própria de cada evento bloqueado (adiantamento 15/10/2026; vale transporte 16/10/2026)
+    const TELA_DO_EVENTO = c => [2065, 3019, 3032, 3013].includes(Number(c)) ? ['vale_transporte.html', 'Vale transporte'] : ['adiantamento.html', 'Adiantamento salarial'];
     let abaAtiva = 'novo';
     let competenciaEstaFechada = false;
     let periodoForcadoDesbloqueado = false; 
@@ -702,9 +704,9 @@
           : `<span class="bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-bold ml-2">CONTÁBIL</span>`;
 
         if (EVENTOS_ADIANTAMENTO_TELA.includes(Number(ev.codigo_evento))) return `
-        <div class="p-2.5 bg-slate-50 text-xs flex justify-between items-center cursor-not-allowed opacity-70" title="Bloqueado: lançar na tela Adiantamento salarial">
+        <div class="p-2.5 bg-slate-50 text-xs flex justify-between items-center cursor-not-allowed opacity-70" title="Bloqueado: lançar na tela ${TELA_DO_EVENTO(ev.codigo_evento)[1]}">
           <div class="flex items-center"><span class="font-mono font-bold text-slate-400 mr-2">${ev.codigo_evento}</span><span class="text-slate-500 line-through">${ev.descricao_do_evento}</span>${badgeNatureza}</div>
-          <a href="adiantamento.html" class="text-[10px] font-bold text-amber-700 underline whitespace-nowrap">🔒 só na tela Adiantamento salarial</a>
+          <a href="${TELA_DO_EVENTO(ev.codigo_evento)[0]}" class="text-[10px] font-bold text-amber-700 underline whitespace-nowrap">🔒 só na tela ${TELA_DO_EVENTO(ev.codigo_evento)[1]}</a>
         </div>`;
         return `
         <div onclick="selecionarEvento('${ev.codigo_evento}', '${ev.descricao_do_evento}', '${ev.tipo_evento}')" 
@@ -1732,7 +1734,7 @@
 
       const eventoSel = eventoDaRubrica(rubrica);
       if (eventoSel && EVENTOS_ADIANTAMENTO_TELA.includes(Number(eventoSel.codigo_evento))) {
-        alert('🔒 Adiantamento salarial (2025, 3001, 3002) é lançado e alterado só na tela "Adiantamento salarial".');
+        alert(`🔒 Este evento é lançado e alterado só na tela "${TELA_DO_EVENTO(eventoSel.codigo_evento)[1]}".`);
         return;
       }
       // só aceita evento que existe no cadastro de eventos (escolhido na lista)
@@ -1927,7 +1929,7 @@
       let inseridosCount = 0;
       const falhasImport = [];
       for (const item of itensFixos) {
-        if (EVENTOS_ADIANTAMENTO_TELA.includes(parseInt(String(item.rubrica || ''), 10))) continue;   // adiantamento: tela própria
+        if (EVENTOS_ADIANTAMENTO_TELA.includes(parseInt(String(item.rubrica || ''), 10))) continue;   // adiantamento e VT: tela própria
         let novaParcela = item.parcela_atual || 1;
         let totalP = item.total_parcelas || 1;
 
