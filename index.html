@@ -27,6 +27,11 @@
       <span class="flex-1 min-w-[220px]"><b class="block text-base">Vale transporte aguardando a sua aprovação</b><span id="faixaVTTxt" class="text-sm text-red-50"></span></span>
       <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar vale transporte →</span>
     </a>
+    <a id="faixaDecimo" href="decimo_terceiro.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
+      <span class="text-2xl">⚠️</span>
+      <span class="flex-1 min-w-[220px]"><b class="block text-base">13º antecipado aguardando a sua aprovação</b><span id="faixaDecimoTxt" class="text-sm text-red-50"></span></span>
+      <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar 13º →</span>
+    </a>
     <a id="faixaPlano" href="planos.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
       <span class="text-2xl">⚠️</span>
       <span class="flex-1 min-w-[220px]"><b class="block text-base">Planos aguardando a sua aprovação</b><span id="faixaPlanoTxt" class="text-sm text-red-50"></span></span>
@@ -376,6 +381,12 @@
           if (v && v.qtd) {
             document.getElementById('faixaVTTxt').innerText = `${v.qtd} funcionário(s) com valor diferente do mês anterior (pago em ${v.mes}) · ${Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · o Financeiro só paga depois da sua aprovação`;
             document.getElementById('faixaVT').classList.remove('hidden');
+          }
+          const { data: pd } = await _supabase.rpc('fn_decimo_antecip_pendentes');
+          const dc = pd && pd[0];
+          if (dc && dc.qtd) {
+            document.getElementById('faixaDecimoTxt').innerText = `${dc.qtd} antecipação(ões) de 13º acima do saldo ou na própria ficha do RH · ${Number(dc.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · o Financeiro só paga depois da sua aprovação`;
+            document.getElementById('faixaDecimo').classList.remove('hidden');
           }
           const { data: pp } = await _supabase.rpc('fn_plano_pendentes');
           const pl = pp && pp[0];

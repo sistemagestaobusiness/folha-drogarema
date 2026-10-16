@@ -15,7 +15,7 @@
     <div class="noprint sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">🎄 CONTROLE DO 13º SALÁRIO</h1>
-        <p class="text-xs text-slate-500">Antecipações × parcelas de novembro/dezembro × rescisões — para nunca pagar duas vezes</p>
+        <p class="text-xs text-slate-500">Quanto cada um tem de 13º, quanto já recebeu (cada antecipação separada) e o saldo que falta pagar</p>
       </div>
       <div class="flex items-center gap-2">
         <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
@@ -31,12 +31,21 @@
       <details class="noprint bg-white rounded-xl border border-slate-200 p-3 text-xs text-slate-600">
         <summary class="font-bold text-slate-800 cursor-pointer">ℹ Como funciona (clique para ver)</summary>
         <ol class="list-decimal ml-5 mt-2 space-y-1">
-          <li><b>Antecipação</b> (pedido do funcionário ao longo do ano): o RH lança o evento <b id="evAnt">-</b> na tela de Lançamentos. Fica fora do holerite (3º quadro) e vai para o Financeiro.</li>
+          <li><b>Antecipação</b> (pedido do funcionário ao longo do ano): o RH lança <b>nesta tela</b> (botão "+ antecipar"). Até o saldo vai direto para o Financeiro; <b>acima do saldo</b> (ou na própria ficha do RH) passa antes pelo Gestor. Depois que o Financeiro paga, o evento <b id="evAnt">-</b> entra sozinho em Lançamentos (3º quadro).</li>
+          <li><b>13º esperado</b> = (salário base + acordo de férias/13º do cadastro) × avos ÷ 12. Avos: mês com 15 dias ou mais trabalhados (regra contábil). <b>Saldo a pagar</b> = esperado − o que já foi pago − antecipações ainda no Gestor/Financeiro.</li>
+          <li>Antecipações de abr–set/2026 vêm da planilha do RH (só registro, já pagas).</li>
           <li><b>Novembro/dezembro</b>: a contabilidade manda o holerite do 13º; o RH lança <b id="evParc">-</b> (e INSS/IRRF). Quem recebeu antecipação: lançar junto o desconto <b id="evComp">-</b> — o sistema oferece isso sozinho ao salvar a parcela.</li>
           <li><b>Rescisão</b> com antecipação em aberto: lançar o desconto <b id="evCompResc">-</b> junto do pagamento da rescisão.</li>
           <li><b>Trava</b>: enquanto houver antecipação sem desconto, o Financeiro <b>não consegue</b> marcar como pago o 13º nem a rescisão desse funcionário. Exceção só pelo Gestor (baixa com motivo).</li>
         </ol>
       </details>
+
+      <!-- ABAS -->
+      <div class="noprint flex gap-1 border-b border-slate-300">
+        <button id="tab_saldo" onclick="trocarAba('saldo')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Saldo do 13º</button>
+        <button id="tab_mensal" onclick="trocarAba('mensal')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Mês a mês (realizado)</button>
+        <button id="tab_aprovacao" onclick="trocarAba('aprovacao')" class="aba px-4 py-2 text-xs font-bold rounded-t-lg cursor-pointer">Aprovação do Gestor <span id="qtdApr" class="hidden ml-1 bg-red-600 text-white rounded-full px-2 py-0.5 text-[10px]"></span></button>
+      </div>
 
       <!-- FILTROS -->
       <div class="noprint bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3 text-xs">
@@ -61,31 +70,65 @@
       </div>
 
       <!-- RESUMO -->
-      <div id="cards" class="grid grid-cols-2 md:grid-cols-5 gap-3"></div>
+      <div id="cards" class="noprint grid grid-cols-2 md:grid-cols-5 gap-3"></div>
 
       <!-- ALERTAS -->
       <div id="alertas"></div>
 
-      <!-- TABELA -->
+      <!-- TABELA: SALDO -->
+      <div id="pSaldo" class="space-y-1">
       <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table class="w-full text-xs">
           <thead class="bg-slate-50 text-[10px] uppercase text-slate-500">
             <tr>
               <th class="p-2 text-left">Funcionário</th>
-              <th class="p-2 text-center" title="meses com 15 dias ou mais trabalhados no ano">Avos</th>
-              <th class="p-2 text-right" title="salário base × avos ÷ 12 — só referência; o valor oficial vem da contabilidade">Estimativa</th>
-              <th class="p-2 text-right">Antecipado</th>
-              <th class="p-2 text-right">Descontado</th>
-              <th class="p-2 text-right">A descontar</th>
+              <th class="p-2 text-center" title="meses com 15 dias ou mais trabalhados no ano (regra contábil)">Avos</th>
+              <th class="p-2 text-right" title="(salário base + acordo) × avos ÷ 12">13º esperado</th>
+              <th class="p-2 text-left">Antecipações (uma por linha)</th>
               <th class="p-2 text-center">1ª parcela</th>
               <th class="p-2 text-center">2ª parcela</th>
+              <th class="p-2 text-right" title="esperado − já pago − antecipações no Gestor/Financeiro">Saldo a pagar</th>
               <th class="p-2 text-left">Situação</th>
+              <th class="p-2 noprint"></th>
             </tr>
           </thead>
           <tbody id="tabela" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
-      <p class="text-[10px] text-slate-400">Estimativa = salário base × avos ÷ 12 (apenas referência; o valor oficial é o do holerite da contabilidade). Clique no funcionário para ver o extrato.</p>
+      <p class="text-[10px] text-slate-400">13º esperado = (salário base + acordo) × avos ÷ 12 — referência; o valor oficial do contábil é o do holerite da contabilidade. Clique no nome para ver o extrato.</p>
+      </div>
+
+      <!-- MÊS A MÊS -->
+      <div id="pMensal" class="hidden bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table class="w-full text-[11px]">
+          <thead class="bg-slate-50 text-[10px] uppercase text-slate-500"><tr id="cabMensal"></tr></thead>
+          <tbody id="tabMensal" class="divide-y divide-slate-100"></tbody>
+          <tfoot id="rodMensal" class="bg-slate-50 font-bold"></tfoot>
+        </table>
+        <p class="text-[10px] text-slate-400 p-2">Valor realizado (pago) em cada mês: antecipações, parcelas e diferença; o desconto da antecipação entra negativo. Em amarelo: lançado e ainda não pago (Gestor/Financeiro).</p>
+      </div>
+
+      <!-- APROVAÇÃO -->
+      <div id="pApr" class="hidden space-y-2"><div id="aprInfo"></div><div id="aprLista" class="space-y-2"></div><div id="aprHist" class="space-y-1"></div></div>
+    </div>
+  </div>
+
+  <!-- MODAL: ANTECIPAR -->
+  <div id="mAnt" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-auto my-16 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 id="aTitulo" class="font-black text-sm">ANTECIPAR 13º</h3><button onclick="fechar('mAnt')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <div id="aInfo" class="bg-slate-50 rounded-lg p-2 space-y-0.5"></div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Valor (R$) *</label><input type="number" step="0.01" min="0" id="aValor" oninput="checarAnt()" class="inp font-mono"></div>
+        <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Data do pagamento *</label><input type="date" id="aVenc" class="inp font-mono"></div>
+        <div class="col-span-2"><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Pagamento</label>
+          <select id="aMeio" class="inp"><option value="BANCO">🏦 Banco</option><option value="DINHEIRO">💵 Dinheiro</option></select></div>
+      </div>
+      <div id="aAviso" class="hidden bg-red-50 border border-red-300 text-red-800 rounded-lg p-2 font-bold"></div>
+      <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Justificativa <span id="aObrig" class="text-red-600 hidden">* (acima do saldo)</span></label>
+        <input id="aMotivo" maxlength="300" class="inp" placeholder="motivo / pedido do funcionário"></div>
+      <button onclick="salvarAnt()" id="aBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">✓ Lançar antecipação</button>
+      <p class="text-[10px] text-slate-400">Vai para o Financeiro pagar na data informada. O evento 2066 só entra em Lançamentos depois do pagamento confirmado.</p>
     </div>
   </div>
 
@@ -107,13 +150,16 @@
   </div>
 
   <style>
+    .aba { color: #64748b; } .aba.on { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-bottom-color: #fff; margin-bottom: -1px; }
     .inp { width:100%; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:7px; font-size:12px; color:#1e293b; }
     @media print { .noprint { display:none !important; } body { background:#fff !important; padding:0 !important; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 
   <script>
     const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
-    let perfil = null, ano = new Date().getFullYear(), linhas = [], lojas = [], eventos = {}, atual = null;
+    let perfil = null, ano = new Date().getFullYear(), linhas = [], lojas = [], eventos = {}, atual = null, movs = [], aba = 'saldo';
+    const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
     const $ = id => document.getElementById(id);
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const fmtR = v => 'R$ ' + parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -141,14 +187,24 @@
       $('evCompResc').innerText = eventos.COMPENSACAO_RESCISAO || '-';
       $('fLoja').innerHTML = '<option value="">Todas as lojas/setores</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
       $('conteudo').classList.remove('hidden');
+      aba = new URLSearchParams(location.search).get('aba') === 'aprovacao' ? 'aprovacao' : 'saldo';
       await carregar();
     }
 
     async function carregar() {
       $('lblAno').innerText = ano;
-      const { data, error } = await _supabase.rpc('fn_decimo_resumo', { p_ano: ano });
-      if (error) { $('aviso').innerText = 'Erro ao carregar: ' + error.message; $('aviso').classList.remove('hidden'); return; }
-      linhas = data || [];
+      const [{ data, error }, rm] = await Promise.all([_supabase.rpc('fn_decimo_resumo', { p_ano: ano }), _supabase.rpc('fn_decimo_movimentos', { p_ano: ano })]);
+      if (error || rm.error) { $('aviso').innerText = 'Erro ao carregar (o SQL CB foi rodado?): ' + (error || rm.error).message; $('aviso').classList.remove('hidden'); return; }
+      $('aviso').classList.add('hidden');
+      linhas = data || []; movs = rm.data || [];
+      trocarAba(aba);
+    }
+    function trocarAba(a) {
+      aba = a;
+      ['saldo', 'mensal', 'aprovacao'].forEach(x => $('tab_' + x).classList.toggle('on', x === a));
+      $('pSaldo').classList.toggle('hidden', a !== 'saldo'); $('pMensal').classList.toggle('hidden', a !== 'mensal'); $('pApr').classList.toggle('hidden', a !== 'aprovacao');
+      const q = movs.filter(m => m.status === 'AGUARDANDO_GESTOR').length;
+      $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q);
       renderizar();
     }
     function mudarAno(n) { ano += n; carregar(); }
@@ -181,25 +237,137 @@
         + card('A descontar', fmtR(soma(aDesc, 'saldo_antecipacao')), `${aDesc.length} funcionário(s)`, aDesc.length ? 'border-rose-400 ring-2 ring-rose-100' : '')
         + card('1ª parcela lançada', linhas.filter(l => num(l.parcela1) > 0).length + ' / ' + linhas.length, fmtR(soma(linhas, 'parcela1')))
         + card('2ª parcela lançada', linhas.filter(l => num(l.parcela2) > 0).length + ' / ' + linhas.length, fmtR(soma(linhas, 'parcela2')))
-        + card('Estimativa total (base)', fmtR(soma(linhas, 'estimativa')), 'salário base × avos ÷ 12');
+        + card('Saldo a pagar (total)', fmtR(soma(linhas, 'saldo_a_pagar')), `esperado ${fmtR(soma(linhas, 'esperado'))} · (salário + acordo) × avos ÷ 12`);
       const resc = aDesc.filter(l => l.data_rescisao);
       $('alertas').innerHTML = aDesc.length ? `<div class="bg-rose-50 border border-rose-300 rounded-xl p-3 text-xs space-y-1">
           <div class="font-black text-rose-800">⚠ ${aDesc.length} funcionário(s) já receberam antecipação e AINDA NÃO TÊM o desconto lançado</div>
           <div class="text-rose-700">Eles não têm direito de receber esse valor de novo. Ao lançar a parcela do 13º (ou a rescisão), lance também o desconto. O Financeiro fica travado até isso ser feito.</div>
           ${resc.length ? `<div class="font-bold text-rose-900">Rescisões com antecipação em aberto: ${resc.map(l => esc(l.nome) + ' (' + fmtR(l.saldo_antecipacao) + ')').join(', ')}</div>` : ''}</div>` : '';
+      if (aba === 'mensal') return renderMensal(ls);
+      if (aba === 'aprovacao') return renderAprovacao();
       $('tabela').innerHTML = ls.map(l => {
         const parc = (v, pago) => num(v) > 0 ? `<span class="font-mono font-bold ${pago ? 'text-emerald-700' : 'text-sky-700'}">${fmtR(v)}</span><div class="text-[9px] ${pago ? 'text-emerald-600' : 'text-amber-600'}">${pago ? 'PAGO' : 'a pagar'}</div>` : '<span class="text-slate-300">—</span>';
-        return `<tr class="hover:bg-slate-50 cursor-pointer ${num(l.saldo_antecipacao) > 0.009 ? 'bg-rose-50/40' : ''}" onclick="abrirDetalhe('${l.funcionario_id}')">
-          <td class="p-2"><div class="font-bold">${esc(l.nome)}</div><div class="text-[10px] text-slate-400">${esc(nomeLoja(l.loja_id))} · ${esc(l.cargo || '')} · adm. ${dbr(l.data_contratacao)}${l.data_rescisao ? ' · <b class="text-rose-700">rescisão ' + dbr(l.data_rescisao) + '</b>' : ''}</div></td>
+        const ants = movs.filter(m => m.funcionario_id === l.funcionario_id && m.papel === 'ANTECIPACAO' && !['RECUSADO', 'CANCELADO'].includes(m.status)).sort((x, y) => String(x.data).localeCompare(String(y.data)));
+        const listaAnt = ants.length ? ants.map(m => `<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="font-mono text-slate-500 w-14">${MESES[m.mes - 1]}/${String(ano).slice(2)}</span>
+            <span class="font-mono font-bold w-20 text-right">${fmtR(m.valor)}</span>${chipStatus(m)}
+            ${['AGUARDANDO_GESTOR', 'NO_FINANCEIRO'].includes(m.status) && m.antecip_id ? `<button onclick="event.stopPropagation(); cancelarAnt('${m.antecip_id}')" class="noprint text-[10px] text-rose-500 hover:text-rose-700 font-bold cursor-pointer" title="Cancelar (ainda não pago)">✕</button>` : ''}</div>`).join('')
+          + (ants.length > 1 ? `<div class="text-[10px] text-slate-500 border-t border-slate-100 mt-0.5 pt-0.5">${ants.length} antecipações · total <b>${fmtR(ants.reduce((t, m) => t + num(m.valor), 0))}</b></div>` : '')
+          : '<span class="text-slate-300">—</span>';
+        const saldo = num(l.saldo_a_pagar), esp = num(l.esperado);
+        return `<tr class="hover:bg-slate-50 align-top ${num(l.saldo_antecipacao) > 0.009 ? 'bg-rose-50/40' : ''}">
+          <td class="p-2 cursor-pointer" onclick="abrirDetalhe('${l.funcionario_id}')"><div class="font-bold">${esc(l.nome)}</div><div class="text-[10px] text-slate-400">${esc(nomeLoja(l.loja_id))} · ${esc(l.cargo || '')} · adm. ${dbr(l.data_contratacao)}${l.data_rescisao ? ' · <b class="text-rose-700">rescisão ' + dbr(l.data_rescisao) + '</b>' : ''}</div></td>
           <td class="p-2 text-center font-mono">${l.avos}/12</td>
-          <td class="p-2 text-right font-mono text-slate-500">${num(l.estimativa) ? fmtR(l.estimativa) : '<span class="text-slate-300" title="sem salário base no cadastro">—</span>'}</td>
-          <td class="p-2 text-right font-mono">${num(l.antecipado) ? fmtR(l.antecipado) + (num(l.antecipado_pago) < num(l.antecipado) ? '<div class="text-[9px] text-amber-600">a pagar ' + fmtR(num(l.antecipado) - num(l.antecipado_pago)) + '</div>' : '') : '<span class="text-slate-300">—</span>'}</td>
-          <td class="p-2 text-right font-mono">${num(l.compensado) + num(l.baixado) ? fmtR(num(l.compensado) + num(l.baixado)) : '<span class="text-slate-300">—</span>'}</td>
-          <td class="p-2 text-right font-mono font-black ${num(l.saldo_antecipacao) > 0.009 ? 'text-rose-700' : 'text-slate-300'}">${num(l.saldo_antecipacao) > 0.009 ? fmtR(l.saldo_antecipacao) : '—'}</td>
+          <td class="p-2 text-right font-mono">${esp ? `<b>${fmtR(esp)}</b>${num(l.estimativa_acordo) ? `<div class="text-[9px] text-slate-400">contábil ${fmtR(l.estimativa)}<br>acordo ${fmtR(l.estimativa_acordo)}</div>` : ''}` : '<span class="text-slate-300" title="sem salário base nem acordo no cadastro">—</span>'}</td>
+          <td class="p-2 text-[11px]">${listaAnt}</td>
           <td class="p-2 text-center">${parc(l.parcela1, l.parcela1_pago)}</td>
           <td class="p-2 text-center">${parc(l.parcela2, l.parcela2_pago)}</td>
-          <td class="p-2"><span class="px-2 py-1 rounded-lg text-[10px] font-bold ${l.s.cls}">${l.s.txt}</span></td></tr>`;
+          <td class="p-2 text-right font-mono font-black ${saldo < -0.009 ? 'text-red-700' : saldo > 0.009 ? 'text-slate-900' : 'text-slate-300'}">${esp || num(l.pago) ? fmtR(saldo) : '—'}${saldo < -0.009 ? '<div class="text-[9px]">pago acima do esperado</div>' : ''}${num(l.pendente) ? `<div class="text-[9px] text-amber-600 font-normal">${fmtR(l.pendente)} em aprovação/pagamento</div>` : ''}</td>
+          <td class="p-2"><span class="px-2 py-1 rounded-lg text-[10px] font-bold ${l.s.cls}">${l.s.txt}</span></td>
+          <td class="p-2 noprint">${['RH', 'GESTOR'].includes(perfil) && !l.data_rescisao ? `<button onclick="abrirAnt('${l.funcionario_id}')" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded font-bold text-[10px] whitespace-nowrap cursor-pointer">+ antecipar</button>` : ''}</td></tr>`;
       }).join('') || '<tr><td colspan="9" class="p-6 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
+    }
+
+    function chipStatus(m) {
+      const c = { PAGO: ['bg-emerald-100 text-emerald-800', m.origem === 'PLANILHA' ? 'pago · planilha' : 'pago'], NO_HOLERITE: ['bg-slate-100 text-slate-600', 'no holerite'],
+        NO_FINANCEIRO: ['bg-sky-100 text-sky-800', 'no Financeiro'], PENDENTE: ['bg-sky-100 text-sky-800', 'no Financeiro'], PROBLEMA: ['bg-rose-100 text-rose-800', 'problema no pagamento'],
+        AGUARDANDO_GESTOR: ['bg-red-100 text-red-700', '⏳ Gestor'], RECUSADO: ['bg-rose-100 text-rose-800', 'recusado'], CANCELADO: ['bg-slate-100 text-slate-400', 'cancelado'] }[m.status] || ['bg-slate-100 text-slate-500', m.status];
+      return `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${c[0]}" title="${esc(m.motivo || '')}">${c[1]}${m.acima_do_saldo ? ' · acima do saldo' : ''}</span>`;
+    }
+
+    function renderMensal(ls) {
+      $('cabMensal').innerHTML = '<th class="p-2 text-left">Funcionário</th>' + MESES.map(m => `<th class="p-2 text-right">${m}</th>`).join('')
+        + '<th class="p-2 text-right">Realizado</th><th class="p-2 text-right">Esperado</th><th class="p-2 text-right">Saldo</th>';
+      const tot = Array(12).fill(0); let tReal = 0, tEsp = 0, tSaldo = 0;
+      const comMov = ls.filter(l => movs.some(m => m.funcionario_id === l.funcionario_id) || num(l.esperado));
+      $('tabMensal').innerHTML = comMov.map(l => {
+        const ms = movs.filter(m => m.funcionario_id === l.funcionario_id && !['RECUSADO', 'CANCELADO'].includes(m.status));
+        let real = 0;
+        const cels = MESES.map((_, i) => {
+          const doMes = ms.filter(m => m.mes === i + 1);
+          const pago = doMes.filter(m => ['PAGO', 'NO_HOLERITE'].includes(m.status)).reduce((t, m) => t + num(m.valor), 0);
+          const pend = doMes.filter(m => !['PAGO', 'NO_HOLERITE'].includes(m.status)).reduce((t, m) => t + num(m.valor), 0);
+          real += pago; tot[i] += pago;
+          const tip = doMes.map(m => `${m.papel} ${fmtR(m.valor)} (${m.status})`).join('\n');
+          return `<td class="p-2 text-right font-mono" title="${esc(tip)}">${pago ? fmtR(pago) : ''}${pend ? `<div class="text-amber-600 italic">${fmtR(pend)}</div>` : ''}${!pago && !pend ? '<span class="text-slate-200">·</span>' : ''}</td>`;
+        }).join('');
+        tReal += real; tEsp += num(l.esperado); tSaldo += num(l.saldo_a_pagar);
+        return `<tr class="hover:bg-slate-50"><td class="p-2 cursor-pointer" onclick="abrirDetalhe('${l.funcionario_id}')"><div class="font-bold">${esc(l.nome)}</div><div class="text-[10px] text-slate-400">${esc(nomeLoja(l.loja_id))}</div></td>${cels}
+          <td class="p-2 text-right font-mono font-bold">${fmtR(real)}</td><td class="p-2 text-right font-mono text-slate-500">${fmtR(l.esperado)}</td>
+          <td class="p-2 text-right font-mono font-black ${num(l.saldo_a_pagar) < -0.009 ? 'text-red-700' : ''}">${fmtR(l.saldo_a_pagar)}</td></tr>`;
+      }).join('') || '<tr><td colspan="16" class="p-6 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
+      $('rodMensal').innerHTML = `<tr><td class="p-2">Total</td>${tot.map(v => `<td class="p-2 text-right font-mono">${v ? fmtR(v) : ''}</td>`).join('')}<td class="p-2 text-right font-mono">${fmtR(tReal)}</td><td class="p-2 text-right font-mono">${fmtR(tEsp)}</td><td class="p-2 text-right font-mono">${fmtR(tSaldo)}</td></tr>`;
+    }
+
+    // ---------------- antecipação pela tela ----------------
+    function abrirAnt(fid) {
+      atual = linhas.find(x => x.funcionario_id === fid);
+      $('aTitulo').innerText = 'ANTECIPAR 13º · ' + atual.nome;
+      const ants = movs.filter(m => m.funcionario_id === fid && m.papel === 'ANTECIPACAO' && !['RECUSADO', 'CANCELADO'].includes(m.status));
+      $('aInfo').innerHTML = `<div class="flex justify-between"><span>13º esperado (${atual.avos}/12)</span><b class="font-mono">${fmtR(atual.esperado)}</b></div>
+        ${ants.map(m => `<div class="flex justify-between text-slate-600"><span>Antecipação ${MESES[m.mes - 1]}/${String(ano).slice(2)} ${chipStatus(m)}</span><span class="font-mono">− ${fmtR(m.valor)}</span></div>`).join('')}
+        ${num(atual.parcela1) + num(atual.parcela2) ? `<div class="flex justify-between text-slate-600"><span>Parcelas</span><span class="font-mono">− ${fmtR(num(atual.parcela1) + num(atual.parcela2))}</span></div>` : ''}
+        <div class="flex justify-between border-t border-slate-200 pt-1 font-black"><span>Saldo disponível</span><span class="font-mono">${fmtR(atual.saldo_a_pagar)}</span></div>`;
+      $('aValor').value = ''; $('aMotivo').value = ''; $('aMeio').value = 'BANCO';
+      const d = new Date(); $('aVenc').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      checarAnt();
+      $('mAnt').classList.remove('hidden'); $('aValor').focus();
+    }
+    function checarAnt() {
+      const v = num($('aValor').value), saldo = num(atual.saldo_a_pagar), acima = v > saldo + 0.005;
+      $('aAviso').classList.toggle('hidden', !acima); $('aObrig').classList.toggle('hidden', !acima);
+      $('aAviso').innerHTML = acima ? `Valor acima do saldo do 13º em ${fmtR(v - Math.max(saldo, 0))}. ${perfil === 'GESTOR' ? 'Você é Gestor: lança direto (justifique).' : 'Vai para o Gestor aprovar antes do Financeiro — informe a justificativa.'}` : '';
+    }
+    async function salvarAnt() {
+      const v = num($('aValor').value), venc = $('aVenc').value, mot = $('aMotivo').value.trim();
+      if (!(v > 0)) return alert('Informe o valor.');
+      if (!venc) return alert('Informe a data do pagamento.');
+      if (v > num(atual.saldo_a_pagar) + 0.005 && mot.length < 10) return alert('Valor acima do saldo: informe a justificativa (mínimo 10 letras).');
+      if (!confirm(`Lançar antecipação de 13º de ${fmtR(v)} para ${atual.nome}, pagamento em ${dbr(venc)}?`)) return;
+      $('aBtn').disabled = true;
+      const { data, error } = await _supabase.rpc('fn_decimo_antecipar', { p_func: atual.funcionario_id, p_valor: v, p_vencimento: venc, p_meio: $('aMeio').value, p_motivo: mot || null });
+      $('aBtn').disabled = false;
+      if (error) return alert('Não foi lançado: ' + error.message);
+      alert(data === 'AGUARDANDO_GESTOR' ? 'Lançado. Aguardando a aprovação do Gestor (depois vai para o Financeiro).' : 'Lançado e enviado ao Financeiro. Após o pagamento, entra sozinho em Lançamentos (2066).');
+      fechar('mAnt'); carregar();
+    }
+    async function cancelarAnt(id) {
+      const mot = (prompt('Cancelar esta antecipação (ainda não paga)? Informe o motivo (mínimo 10 letras):') || '').trim();
+      if (!mot) return;
+      const { error } = await _supabase.rpc('fn_decimo_antecip_cancelar', { p_id: id, p_motivo: mot });
+      if (error) return alert(error.message);
+      carregar();
+    }
+
+    // ---------------- aprovação do Gestor ----------------
+    function renderAprovacao() {
+      const pend = movs.filter(m => m.status === 'AGUARDANDO_GESTOR');
+      const nomeF = id => (linhas.find(l => l.funcionario_id === id) || {}).nome || '-';
+      const g = perfil === 'GESTOR';
+      $('aprInfo').innerHTML = pend.length
+        ? `<div class="bg-red-50 border border-red-300 text-red-800 rounded-xl p-3 font-bold text-xs">⚠️ ${pend.length} antecipação(ões) de 13º aguardando aprovação. O Financeiro só recebe depois. ${g ? '' : '<span class="font-normal">Só o Gestor aprova.</span>'}</div>`
+        : `<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 font-bold text-xs">✓ Nenhuma antecipação de 13º aguardando aprovação em ${ano}.</div>`;
+      $('aprLista').innerHTML = pend.map(m => { const l = linhas.find(x => x.funcionario_id === m.funcionario_id) || {};
+        return `<div class="bg-white border border-slate-200 rounded-xl p-3 text-xs flex flex-wrap gap-4 items-center">
+          <div class="min-w-[220px] flex-1"><div class="font-bold text-slate-900 text-sm">${esc(nomeF(m.funcionario_id))}</div>
+            <div class="mt-1 text-[11px] text-slate-700"><b>Justificativa do RH:</b> ${esc(m.motivo || '-')}</div><div class="text-[10px] text-slate-400">${esc(m.enviado_por || '')} · ${dh(m.enviado_em)} · pagamento em ${dbr(m.vencimento)}</div></div>
+          <table class="text-[11px] font-mono"><tr><td class="font-sans text-slate-500 pr-2">13º esperado</td><td class="text-right">${fmtR(l.esperado)}</td></tr>
+            <tr><td class="font-sans text-slate-500 pr-2">saldo antes</td><td class="text-right">${fmtR(m.saldo_antes)}</td></tr>
+            <tr class="border-t"><td class="font-sans font-bold pr-2">pedido</td><td class="text-right font-black ${m.acima_do_saldo ? 'text-red-700' : ''}">${fmtR(m.valor)}</td></tr></table>
+          ${m.acima_do_saldo ? `<div class="text-center"><div class="text-[9px] uppercase text-slate-400">acima do saldo</div><div class="text-base font-black text-red-600">${fmtR(num(m.valor) - Math.max(num(m.saldo_antes), 0))}</div></div>` : '<div class="text-[11px] font-bold text-amber-700">na própria ficha do RH</div>'}
+          ${g ? `<div class="flex flex-col gap-1.5 min-w-[200px]"><button onclick="decidirAnt('${m.antecip_id}', true)" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 font-bold cursor-pointer">✓ Aprovar</button>
+            <div class="flex gap-1"><input id="rec_${m.antecip_id}" class="inp !py-1 text-[11px]" placeholder="motivo da recusa"><button onclick="decidirAnt('${m.antecip_id}', false)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg px-3 font-bold cursor-pointer">Recusar</button></div></div>` : ''}
+        </div>`; }).join('');
+      const dec = movs.filter(m => m.origem === 'TELA' && m.gestor_em && m.gestor_obs !== 'Lançado pelo Gestor').sort((a, b) => String(b.gestor_em).localeCompare(String(a.gestor_em)));
+      $('aprHist').innerHTML = dec.length ? '<div class="text-[10px] font-bold uppercase text-slate-500 mt-3">Decididos</div>' + dec.map(m =>
+        `<div class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] flex gap-3"><b class="flex-1">${esc(nomeF(m.funcionario_id))}</b><span>${fmtR(m.valor)}</span>
+          <span class="${m.status === 'RECUSADO' ? 'text-rose-700' : 'text-emerald-700'} font-bold">${m.status === 'RECUSADO' ? '✕ recusado' : '✓ aprovado'}</span><span class="text-slate-400">${esc(m.gestor_por || '')} · ${dh(m.gestor_em)}</span></div>`).join('') : '';
+    }
+    async function decidirAnt(id, aprovar) {
+      const obs = aprovar ? null : ($('rec_' + id).value || '').trim();
+      if (!aprovar && obs.length < 5) return alert('Escreva o motivo da recusa (mínimo 5 letras).');
+      const { error } = await _supabase.rpc('fn_decimo_antecip_decidir', { p_id: id, p_aprovar: aprovar, p_obs: obs });
+      if (error) return alert(error.message);
+      carregar();
     }
 
     async function abrirDetalhe(fid) {

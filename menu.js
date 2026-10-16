@@ -236,6 +236,7 @@
   const APROVACOES_GESTOR = [
     { rpc: 'fn_adiant_pendentes', tela: 'adiantamento.html', nome: 'Adiantamento salarial', mes: r => r.competencia },
     { rpc: 'fn_vt_pendentes', tela: 'vale_transporte.html', nome: 'Vale transporte', mes: r => r.mes },
+    { rpc: 'fn_decimo_antecip_pendentes', tela: 'decimo_terceiro.html', nome: '13º antecipado (acima do saldo)', mes: r => r.mes },
     { rpc: 'fn_plano_pendentes', tela: 'planos.html', nome: 'Planos (odontológico, saúde, Mogi Care)', mes: r => r.mes },
     { rpc: 'fn_alteracao_pendentes', tela: 'conferencia_fechamento.html', nome: 'Alteração na própria ficha do RH', mes: r => r.mes }
   ];
