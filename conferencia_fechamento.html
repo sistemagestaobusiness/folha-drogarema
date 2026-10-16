@@ -63,6 +63,7 @@
       DUPLICADO:    ['Evento lançado mais de uma vez', 'Evento que só pode existir uma vez no mês (salário, INSS, IRPF, plano, alimentação, combustível, adicionais).', 'lancamentos.html'],
       FALTA:        ['Falta na escala sem desconto nem abono', 'Falta registrada na escala do mês sem desconto de falta/DSR e sem abono.', 'relatorio_faltas.html'],
       VT:           ['Vale transporte × desconto', 'VT pago sem desconto, desconto sem VT, ou "sem desconto" por acordo.', 'vale_transporte.html'],
+      NOTURNO:      ['Adicional noturno × escala', 'Escala com horário depois das 22h sem adicional noturno, ou adicional lançado sem horário noturno na escala.', 'escala.html'],
       RESCISAO:     ['Lançamento de desligado', 'Funcionário inativo ou desligado antes do mês com lançamento na folha.', 'lancamentos.html'],
       VARIACAO:     ['Valor fixo com variação acima de 20%', 'Evento fixo com valor bem diferente do mês anterior.', 'lancamentos.html'],
       PROPRIA_FICHA:['Lançamentos do RH na própria ficha', 'Para o Gestor conferir.', 'lancamentos.html'],
@@ -148,7 +149,7 @@
     }
 
     async function importarFixos() {
-      if (!confirm(`Importar os lançamentos fixos de ${comp()} do mês anterior para todos que ainda não têm?\n\nAdiantamento e vale transporte não entram (têm tela própria). Parcelas avançam uma.`)) return;
+      if (!confirm(`Importar os lançamentos fixos de ${comp()} do mês anterior para todos que ainda não têm?\n\nEntram só os eventos marcados como fixos no cadastro de eventos (feriado, bônus desempenho, alimentação, combustível, bônus liderança, contribuição, bolsa, abono, INSS, IRPF...). Parcelas avançam uma.`)) return;
       const { data, error } = await _supabase.rpc('fn_importar_fixos_todos', { p_comp: comp() });
       if (error) return alert('Não foi possível: ' + error.message);
       alert(`${data} lançamento(s) fixo(s) importado(s). Os que sobrarem precisam de ajuste na tela de Lançamentos (ex.: data de pagamento).`);

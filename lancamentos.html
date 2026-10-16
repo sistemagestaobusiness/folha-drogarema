@@ -1920,12 +1920,14 @@
         return;
       }
 
-      const { data: itensFixos, error: errBusca } = await _supabase
+      // fixo é regra do EVENTO (cadastro de eventos → fixo_mensal), não do lançamento (regra de 16/10/2026)
+      const codFixos = new Set(listaGlobalEventos.filter(ev => ev.fixo_mensal).map(ev => Number(ev.codigo_evento)));
+      const { data: itensMesAnt, error: errBusca } = await _supabase
         .from('folha_itens')
         .select('*')
         .eq('funcionario_id', funcionarioId)
-        .eq('competencia', mesAnterior)
-        .eq('fixo', true);
+        .eq('competencia', mesAnterior);
+      const itensFixos = (itensMesAnt || []).filter(it => codFixos.has(parseInt(String(it.rubrica || ''), 10)));
 
       if (errBusca) {
         alert("Erro ao buscar itens fixos do mês anterior: " + errBusca.message);

@@ -69,6 +69,11 @@
             </select>
           </div>
 
+          <label class="flex items-start gap-2 text-xs font-bold text-slate-700 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+            <input type="checkbox" id="fixoMensal" class="mt-0.5 w-4 h-4">
+            <span>Fixo mensal<span class="block font-normal text-[10px] text-slate-500">Entra no "Importar fixos do mês anterior": quem teve este evento no mês anterior recebe de novo (o valor pode ser revisado).</span></span>
+          </label>
+
           <div class="flex gap-2 pt-2">
             <button type="submit" id="btnSalvar" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-sm cursor-pointer">
               ✓ SALVAR EVENTO
@@ -269,7 +274,7 @@
             <td class="py-2 px-3 whitespace-nowrap text-center">
               <span class="inline-block px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap ${badgeNatureza}">
                 ${ev.natureza_do_evento === 'CONTABIL' ? 'CONTABIL' : 'NAO CONTABIL'}
-              </span>
+              </span>${ev.fixo_mensal ? ' <span class="inline-block px-2 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800">FIXO</span>' : ''}
             </td>
             <td class="py-2 px-3 whitespace-nowrap text-center">
               <span class="inline-block px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap ${badgeStatus}">
@@ -313,7 +318,8 @@
         tipo_evento: document.getElementById('tipoEvento').value,
         codigo_evento: parseInt(document.getElementById('codigoEvento').value, 10),
         descricao_do_evento: removerAcentosEColocarMaiuscula(document.getElementById('descricaoEvento').value),
-        natureza_do_evento: document.getElementById('naturezaEvento').value
+        natureza_do_evento: document.getElementById('naturezaEvento').value,
+        fixo_mensal: document.getElementById('fixoMensal').checked
       };
 
       if (id) {
@@ -339,6 +345,7 @@
       document.getElementById('codigoEvento').value = ev.codigo_evento;
       document.getElementById('descricaoEvento').value = ev.descricao_do_evento;
       document.getElementById('naturezaEvento').value = ev.natureza_do_evento;
+      document.getElementById('fixoMensal').checked = !!ev.fixo_mensal;
 
       document.getElementById('tituloForm').innerText = 'EDITAR EVENTO';
       document.getElementById('btnSalvar').innerText = '✓ ATUALIZAR EVENTO';
