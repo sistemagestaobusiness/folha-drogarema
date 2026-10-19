@@ -240,6 +240,28 @@
     { rpc: 'fn_plano_pendentes', tela: 'planos.html', nome: 'Planos (odontológico, saúde, Mogi Care)', mes: r => r.mes },
     { rpc: 'fn_alteracao_pendentes', tela: 'conferencia_fechamento.html', nome: 'Alteração na própria ficha do RH', mes: r => r.mes }
   ];
+  // holerites: dupla confirmação loja × RH (regra de 19/10/2026). Cada lado vê só o que falta confirmar DELE:
+  // aviso fixo no canto da tela + bolha vermelha no menu, até confirmar.
+  async function holeritePendente() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['LIDER', 'RH'].includes(pf) || !window.ACESSO_CLI || window.top !== window || document.getElementById('avisoHolerite')) return;
+    try {
+      const { data, error } = await window.ACESSO_CLI.rpc('fn_holerite_pendentes');
+      if (error || !data || !data.length) return;
+      const tot = data.reduce((t, r) => t + (r.qtd || 0), 0); if (!tot) return;
+      const item = document.querySelector('#menuSistema a.it[data-menu="holerite_entrega.html"]');
+      if (item && !item.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = tot; item.appendChild(b);
+        const sec = item.closest('.sec'); if (sec) sec.classList.add('aberto'); }
+      if (PAGINA === 'holerite_entrega.html') return;
+      const c = data[0].competencia;
+      const a = document.createElement('a'); a.id = 'avisoHolerite'; a.href = `holerite_entrega.html?comp=${encodeURIComponent(c)}&pend=1`;
+      a.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;background:#dc2626;color:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-family:inherit;font-size:13px;text-decoration:none;max-width:340px;line-height:1.35';
+      a.innerHTML = `<b style="display:block;font-size:14px">🧾 Holerites aguardando a SUA confirmação</b>${data.map(r => `${r.qtd} funcionário(s) · holerite ${r.competencia}`).join('<br>')}
+        <span style="display:block;margin-top:6px;font-weight:800;text-decoration:underline">Confirmar entrega${pf === 'RH' ? ' (lado do RH)' : ' (lado da loja)'} →</span>`;
+      document.body.appendChild(a);
+    } catch (e) { console.warn('holerites', e); }
+  }
+
   async function adiantamentoGestor() {
     if (String(window.ACESSO.perfil || '').toUpperCase() !== 'GESTOR' || !window.ACESSO_CLI) return;
     try {
@@ -381,6 +403,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
