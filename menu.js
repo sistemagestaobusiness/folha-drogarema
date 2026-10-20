@@ -326,7 +326,13 @@
   function abas() {
     const css2 = document.createElement('style');
     css2.textContent = `
-      #abasBar { position: fixed; top: 0; left: ${L}px; right: 0; height: 34px; z-index: 44; background: #e2e8f0; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; overflow-x: auto; overflow-y: hidden; font-family: inherit; }
+      #abasBar { position: fixed; top: 0; left: ${L}px; right: 0; height: 34px; z-index: 44; background: #e2e8f0; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; overflow-x: auto; overflow-y: hidden; font-family: inherit; scrollbar-width: none; }
+      #abasBar::-webkit-scrollbar { display: none; }
+      #abasBar.rola { padding: 0 30px; }
+      .abasSeta { position: fixed; top: 0; height: 34px; width: 26px; z-index: 45; border: 0; background: #cbd5e1; color: #334155; font-weight: 800; font-size: 13px; cursor: pointer; display: none; }
+      .abasSeta:hover { background: #94a3b8; color: #fff; }
+      #abasEsq { left: ${L}px; } #abasDir { right: 0; }
+      html.menu-oculto #abasEsq { left: 54px; }
       html.menu-oculto #abasBar, html.menu-oculto #abasArea { left: 54px; }
       #abasBar .aba { display: flex; align-items: center; gap: 6px; max-width: 220px; height: 28px; padding: 0 6px 0 12px; border-radius: 8px 8px 0 0; background: #cbd5e1; color: #334155; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; user-select: none; }
       #abasBar .aba span { overflow: hidden; text-overflow: ellipsis; }
@@ -342,6 +348,15 @@
     const bar = document.createElement('div'); bar.id = 'abasBar';
     const area = document.createElement('div'); area.id = 'abasArea';
     document.body.appendChild(bar); document.body.appendChild(area);
+    // muitas abas: sem barra de rolagem (cobria a tela); rola com as setas ou com a roda do mouse
+    const setaE = document.createElement('button'); setaE.id = 'abasEsq'; setaE.className = 'abasSeta'; setaE.type = 'button'; setaE.textContent = '◀'; setaE.title = 'Abas à esquerda';
+    const setaD = document.createElement('button'); setaD.id = 'abasDir'; setaD.className = 'abasSeta'; setaD.type = 'button'; setaD.textContent = '▶'; setaD.title = 'Abas à direita';
+    document.body.appendChild(setaE); document.body.appendChild(setaD);
+    const verSetas = () => { const rola = bar.scrollWidth > bar.clientWidth + 2; bar.classList.toggle('rola', rola); setaE.style.display = setaD.style.display = rola ? 'block' : 'none'; };
+    setaE.onclick = () => bar.scrollBy({ left: -300, behavior: 'smooth' });
+    setaD.onclick = () => bar.scrollBy({ left: 300, behavior: 'smooth' });
+    bar.addEventListener('wheel', e => { if (bar.scrollWidth > bar.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { bar.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+    window.addEventListener('resize', verSetas);
     document.documentElement.classList.add('com-abas');
 
     const nativa = { chave: PAGINA + location.search, url: PAGINA + location.search, titulo: nomeTela(PAGINA) || document.title.replace(/\s*-\s*Business\s*$/, ''), nativa: true };
@@ -357,6 +372,7 @@
       area.style.display = ativa.nativa ? 'none' : 'block';
       lista.forEach(t => { if (t.frame) t.frame.style.display = t === ativa ? 'block' : 'none'; });
       document.title = ativa.titulo + ' - Business';
+      verSetas();
       const on = bar.querySelector('.aba.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
     function ativar(t) {
