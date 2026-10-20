@@ -299,7 +299,7 @@
   // ---------------------------------------------------------------- abas (várias telas abertas ao mesmo tempo)
   // Cada tela aberta pelo menu ou por um link vira uma aba no topo; trocar de aba não perde o que estava na tela.
   // Fecha no "x". A tela em que o sistema foi aberto é a primeira aba. Celular: navegação normal, sem abas.
-  const MAX_ABAS = 8;
+  // sem limite de abas (pedido de 20/10/2026); a barra rola na horizontal quando não cabe
   const nomeTela = arq => { for (const [, itens] of GRUPOS) for (const [a, n] of itens) if (a === arq) return n; return null; };
   const chaveUrl = u => { try { const x = new URL(u, location.href); return (x.pathname.split('/').pop() || 'index.html').toLowerCase() + x.search; } catch (e) { return String(u); } };
   const linkInterno = a => {
@@ -346,7 +346,7 @@
 
     const nativa = { chave: PAGINA + location.search, url: PAGINA + location.search, titulo: nomeTela(PAGINA) || document.title.replace(/\s*-\s*Business\s*$/, ''), nativa: true };
     let lista = [nativa], ativa = nativa;
-    try { (JSON.parse(sessionStorage.getItem('abas_sistema') || '[]') || []).forEach(t => { if (t && t.url && chaveUrl(t.url) !== nativa.chave && lista.length < MAX_ABAS) lista.push({ chave: chaveUrl(t.url), url: t.url, titulo: t.titulo }); }); } catch (e) {}
+    try { (JSON.parse(sessionStorage.getItem('abas_sistema') || '[]') || []).forEach(t => { if (t && t.url && chaveUrl(t.url) !== nativa.chave ) lista.push({ chave: chaveUrl(t.url), url: t.url, titulo: t.titulo }); }); } catch (e) {}
     const salvar = () => { try { sessionStorage.setItem('abas_sistema', JSON.stringify(lista.filter(t => !t.nativa).map(t => ({ url: t.url, titulo: t.titulo })))); } catch (e) {} };
     const esc2 = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -357,6 +357,7 @@
       area.style.display = ativa.nativa ? 'none' : 'block';
       lista.forEach(t => { if (t.frame) t.frame.style.display = t === ativa ? 'block' : 'none'; });
       document.title = ativa.titulo + ' - Business';
+      const on = bar.querySelector('.aba.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
     function ativar(t) {
       ativa = t;
@@ -367,7 +368,6 @@
       const chave = chaveUrl(url), arq = chave.split('?')[0];
       let t = lista.find(x => x.chave === chave);
       if (!t) {
-        if (lista.length >= MAX_ABAS) { alert(`Já tem ${MAX_ABAS} telas abertas. Feche alguma aba (no "×") para abrir outra.`); return; }
         t = { chave, url: chave, titulo: nomeTela(arq) || titulo || arq.replace('.html', '') };
         lista.push(t); salvar();
       }
