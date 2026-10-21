@@ -3,7 +3,7 @@
 // Entrada: linhas de fn_fin_fluxo + cadastros. Saída: um registro por dia.
 //  - até ontem: venda e pagamentos realizados (data de pagamento no Alpha7); saldo real = partida + extrato
 //  - de hoje em diante: venda prevista (regra abaixo), contas a pagar em aberto pela data útil de vencimento,
-//    previsão manual de fornecedor e ajuste diário (desconto de cartão + Farmácia Popular na CEF)
+//    previsão manual de fornecedor; o ajuste diário (desconto de cartão + Farmácia Popular na CEF) reduz a entrada da venda
 //  - saldo previsto: parte do último saldo real; a venda entra no dia útil seguinte (a de sexta, sábado e domingo na segunda)
 // Venda prevista: dias 08 e 20 (medicamento barato) = média desses dias nos últimos 3 meses;
 //   domingo = média dos últimos 4 domingos; dias 1 a 10 e 11 em diante = média dos últimos 7 dias do mesmo período.
@@ -85,7 +85,7 @@
       const w = dow(iso);
       const projetado = !comExtrato;
       const ajuste = projetado && !passado ? (w === 1 ? e.ajusteSegunda : (w >= 2 && w <= 5 ? e.ajusteUtil : 0)) : 0;
-      const totPag = Object.values(grupos).reduce((a, g) => a + g.tot, 0) + forn + ajuste;
+      const totPag = Object.values(grupos).reduce((a, g) => a + g.tot, 0) + forn;   // o ajuste reduz a venda, não entra nos pagamentos (21/10/2026)
       // saldo
       const saldoReal = comExtrato ? contasFluxo.reduce((a, c) => a + (s[c] || 0), 0) : null;
       // a venda cai no banco no dia útil seguinte: terça recebe a de segunda; segunda recebe sexta, sábado e domingo
@@ -93,7 +93,7 @@
       if (comExtrato) { saldoProj = saldoReal; vendaFds = venda || 0; }
       else if (saldoProj !== null) {
         if (w === 0 || w === 6) { saldoProj -= totPag; vendaFds += venda || 0; }
-        else { saldoProj += vendaFds - totPag; vendaFds = venda || 0; }
+        else { saldoProj += vendaFds - ajuste - totPag; vendaFds = venda || 0; }
         saldoPrev = saldoProj;
       }
       const semCarga = passado && (venda === null || !comExtrato);

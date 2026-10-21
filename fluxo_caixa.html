@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="fluxo_core.js?v=1"></script>
+  <script src="fluxo_core.js?v=2"></script>
   <style>
     .fc { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: 100%; }
     .fc th, .fc td { padding: 4px 8px; text-align: right; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; border-bottom: 1px solid var(--linha); }
@@ -158,6 +158,8 @@
         const tip = modo === 'dia' && c.dias[0] && !c.dias[0].passado ? ` title="${esc(c.dias[0].vendaRegra)}"` : '';
         const ed = modo === 'dia' && c.dias[0] && !c.dias[0].passado && podeEditar();
         return sem ? `<td class="sem${c.hoje ? ' hoje' : ''}">–</td>` : `<td class="${classe(c)}${ed ? ' edit' : ''}"${ed ? ` data-edit="venda" data-dia="${c.id}"` : ''}${tip}>${man ? '✎ ' : ''}${fmt(v)}</td>`; }).join('')}<td class="tot">${fmt(calc.dias.reduce((a, d) => a + (d.venda || 0), 0))}</td></tr>`;
+      h += linha('(–) Ajuste diário (cartão + Farmácia Popular)', d => d.ajuste ? -d.ajuste : 0, { cls: 'cat', title: 'Desconto de cartão e Farmácia Popular que caem na CEF: reduz a entrada da venda' });
+      h += linha('Venda líquida (entrada)', d => d.venda === null ? 0 : (d.venda || 0) - (d.ajuste || 0), { cls: 'grp' });
       h += linha('Créditos no extrato', d => d.cred, { cls: 'cat' });
       // pagamentos
       h += sec('Pagamentos');
@@ -175,7 +177,6 @@
         }
       });
       h += linha('Previsão de fornecedor (manual)', d => d.forn, { cls: 'grp', edit: podeEditar() ? 'fornecedor' : '' });
-      h += linha('Ajuste diário (cartão + Farmácia Popular)', d => d.ajuste, { cls: 'cat' });
       h += linha('Total de pagamentos', d => d.totPag, { cls: 'saldo' });
       // saldo
       h += sec('Saldo');
