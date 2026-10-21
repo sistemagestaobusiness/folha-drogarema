@@ -14,7 +14,7 @@
   const EM_ABA = (() => { try { return window.top !== window && !!window.top.__abasSistema; } catch (e) { return false; } })();
   const MARCA = 'Business';   // nome exibido no topo do menu (o logo entra aqui)
   const GRUPOS = [
-    ['', [['index.html', 'Painel', '▦'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
+    ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
     ['Folha do mês', [['lancamentos.html', 'Lançamentos', '✎'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['planos.html', 'Planos', '✚'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
       ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Importar consumo farmácia', '⇪']]],
     ['Loja e jornada', [['freelance_solicitacao.html', 'Solicitações da loja', '✚'], ['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑'], ['holerite_entrega.html', 'Entrega de holerites', '✉'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'],
@@ -33,43 +33,51 @@
 
   const css = document.createElement('style');
   css.textContent = `
-    html.menu-on body { padding-left: calc(${L}px + var(--corpo-pl, 0px)); background: #f1f5f9 !important; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    html.menu-on body { padding-left: calc(${L}px + var(--corpo-pl, 0px)); background: #F4F5F7 !important; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    html.em-aba body { background: #F4F5F7 !important; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+    /* identificação do usuário no cabeçalho de cada tela: o menu já mostra */
+    html.menu-on #lblUsuario, html.menu-on #lblPerfil, html.em-aba #lblUsuario, html.em-aba #lblPerfil { display: none !important; }
     html.menu-on .fixed.inset-x-0, html.menu-on .fixed.top-0.left-0.right-0 { left: ${L}px; }
     /* cabeçalho único das telas: título, subtítulo e uma linha divisória */
     html.menu-on .cab-sis { position: static !important; background: transparent !important; border: 0 !important; border-bottom: 1px solid #cbd5e1 !important; border-radius: 0 !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; padding-top: 2px !important; padding-bottom: 14px !important; margin-top: 0 !important; margin-bottom: 18px !important; }
     html.menu-on .tit-sis { font-size: 21px !important; font-weight: 700 !important; letter-spacing: 0 !important; line-height: 1.25 !important; color: #0f172a !important; }
-    #menuFecha { position: absolute; top: 14px; right: 8px; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #94a3b8; font-size: 15px; cursor: pointer; }
-    #menuFecha:hover { background: #e2e8f0; color: #0f172a; }
+    #menuFecha { position: absolute; top: 16px; right: 8px; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #8A93A1; font-size: 15px; cursor: pointer; }
+    #menuFecha:hover { background: #1E242D; color: #fff; }
     @media (min-width: 901px) {
       html.menu-oculto #menuSistema { transform: translateX(-100%); }
       html.menu-oculto body { padding-left: calc(54px + var(--corpo-pl, 0px)); }
       html.menu-oculto .fixed.inset-x-0, html.menu-oculto .fixed.top-0.left-0.right-0 { left: 0; }
       html.menu-oculto #menuAbre { display: block; }
     }
-    #menuSistema { position: fixed; top: 0; left: 0; bottom: 0; width: ${L}px; background: #f1f5f9; z-index: 45; display: flex; flex-direction: column; font-family: inherit; border-right: 1px solid #cbd5e1; transition: transform .15s; }
-    #menuSistema .marca { padding: 18px 18px 10px; position: relative; }
+    #menuSistema { position: fixed; top: 0; left: 0; bottom: 0; width: ${L}px; background: #12161C; z-index: 45; display: flex; flex-direction: column; font-family: inherit; border-right: 0; transition: transform .15s; }
+    #menuSistema .marca { padding: 20px 18px 14px; position: relative; border-bottom: 1px solid #2E3642; }
     #menuSistema .marca b { display: block; font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: -.01em; }
-    #menuSistema .marca span { font-size: 11px; color: #94a3b8; }
-    #menuSistema nav { flex: 1; overflow-y: auto; padding: 4px 10px 12px; }
+    #menuSistema .marca span { font-size: 11px; color: #8A93A1; }
+    #menuSistema nav { flex: 1; overflow-y: auto; padding: 8px 10px 12px; scrollbar-width: thin; scrollbar-color: #2E3642 transparent; }
     #menuSistema .marca img { height: 34px; display: block; margin-bottom: 6px; }
-    #menuSistema .sec { border-top: 1px solid #cbd5e1; margin-top: 6px; padding-top: 4px; }
-    #menuSistema .grupo { display: flex; align-items: center; width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #475569; padding: 9px 10px; border-radius: 8px; text-align: left; }
-    #menuSistema .grupo:hover { background: #e2e8f0; color: #0f172a; }
-    #menuSistema .grupo::after { content: '▸'; margin-left: auto; font-size: 11px; color: #94a3b8; transition: transform .12s; }
+    #menuSistema .sec { border-top: 1px solid #2E3642; margin-top: 8px; padding-top: 6px; }
+    #menuSistema .grupo { display: flex; align-items: center; width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #8A93A1; padding: 9px 10px; border-radius: 8px; text-align: left; }
+    #menuSistema .grupo:hover { background: #1E242D; color: #fff; }
+    #menuSistema .grupo::after { content: '▸'; margin-left: auto; font-size: 11px; color: #5B6472; transition: transform .12s; }
     #menuSistema .sec.aberto .grupo::after { transform: rotate(90deg); }
     #menuSistema .sec .itens { display: none; padding-bottom: 4px; }
     #menuSistema .sec.aberto .itens { display: block; }
-    #menuSistema a.it { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: #475569; text-decoration: none; line-height: 1.2; white-space: nowrap; }
+    #menuSistema a.it { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: #C9CED6; text-decoration: none; line-height: 1.2; white-space: nowrap; }
     #menuSistema a.it span:not(.bolha) { overflow: hidden; text-overflow: ellipsis; }
-    #menuSistema a.it:hover { background: #e2e8f0; color: #0f172a; }
-    #menuSistema a.it.on { background: #0f172a; color: #fff; font-weight: 600; }
+    #menuSistema a.it:hover { background: #1E242D; color: #fff; }
+    #menuSistema a.it.on { background: #C69560; color: #12161C; font-weight: 600; }
+    #menuSistema a.it.on i { opacity: .9; }
     #menuSistema a.it i { width: 16px; text-align: center; font-style: normal; opacity: .65; font-size: 12px; }
-    #menuSistema a.it .bolha { margin-left: auto; background: #e11d48; color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; min-width: 18px; padding: 1px 5px; text-align: center; }
-    #menuSistema .pe { padding: 10px 14px 14px; border-top: 1px solid #cbd5e1; font-size: 11px; color: #64748b; }
-    #menuSistema .pe .quem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; }
-    #menuSistema .pe button { margin-top: 8px; width: 100%; padding: 7px; border-radius: 8px; background: #e2e8f0; color: #334155; font-size: 12px; font-weight: 600; cursor: pointer; border: 0; }
-    #menuSistema .pe button:hover { background: #cbd5e1; }
-    #menuAbre { display: none; position: fixed; top: 10px; left: 10px; z-index: 46; width: 36px; height: 36px; border-radius: 8px; background: #0f172a; color: #fff; border: 0; font-size: 16px; cursor: pointer; }
+    #menuSistema a.it .bolha { margin-left: auto; background: #3A4250; color: #fff; font-size: 10.5px; font-weight: 700; border-radius: 999px; min-width: 18px; padding: 1px 6px; text-align: center; }
+    #menuSistema a.it .bolha.aten { background: #B54708; }
+    #menuSistema a.it .bolha.crit { background: #D92D20; animation: bolhaPisca 1.1s ease-in-out infinite; }
+    @keyframes bolhaPisca { 0% { box-shadow: 0 0 0 0 rgba(217,45,32,.8); } 70% { box-shadow: 0 0 0 7px rgba(217,45,32,0); } 100% { box-shadow: 0 0 0 0 rgba(217,45,32,0); } }
+    #menuSistema .grupo .bolhaG { margin-left: 8px; width: 8px; height: 8px; border-radius: 999px; background: #D92D20; animation: bolhaPisca 1.1s ease-in-out infinite; }
+    #menuSistema .pe { padding: 12px 16px 14px; border-top: 1px solid #2E3642; font-size: 11px; color: #8A93A1; }
+    #menuSistema .pe .quem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #C9CED6; }
+    #menuSistema .pe button { margin-top: 8px; width: 100%; padding: 7px; border-radius: 7px; background: #1E242D; color: #C9CED6; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #2E3642; }
+    #menuSistema .pe button:hover { background: #2E3642; color: #fff; }
+    #menuAbre { display: none; position: fixed; top: 10px; left: 10px; z-index: 46; width: 36px; height: 36px; border-radius: 8px; background: #12161C; color: #fff; border: 0; font-size: 16px; cursor: pointer; }
     #menuTopo { display: none; position: fixed; top: 0; left: 0; right: 0; height: 52px; background: #fff; z-index: 44; box-shadow: 0 1px 0 #e2e8f0; align-items: center; justify-content: center; }
     #menuTopo img { height: 26px; }
     #telaCheiaAviso { position: fixed; inset: 0; z-index: 2147483000; background: #000; color: #e2e8f0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
@@ -101,13 +109,14 @@
     @media print { #menuSistema, #menuAbre, #menuTopo, #telaCheiaAviso { display: none !important; } html.menu-on body { padding-left: 0 !important; padding-top: 0 !important; background: #fff !important; } html.menu-on .fixed.inset-x-0 { left: 0; } }
   `;
   (document.head || document.documentElement).appendChild(css);
+  if (!document.querySelector('link[href*="family=Inter"]')) { const fl = document.createElement('link'); fl.rel = 'stylesheet'; fl.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'; (document.head || document.documentElement).appendChild(fl); }
 
   function montar() {
     if (document.getElementById('menuSistema')) return;
     const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     let guard = {}; try { guard = JSON.parse(localStorage.getItem('menu_grupos') || '{}') || {}; } catch (e) {}
     const corpo = GRUPOS.map(([g, itens]) => { const vis = itens.filter(i => telas.has(i[0])); if (!vis.length) return '';
-      const its = vis.map(([arq, nome, ic]) => `<a class="it ${arq === PAGINA ? 'on' : ''}" href="${arq}" data-menu="${arq}"><i>${ic}</i><span>${nome}</span></a>`).join('');
+      const its = vis.map(([arq, nome, ic]) => (arq === 'pendencias.html' && String(window.ACESSO.perfil || '').toUpperCase() === 'GESTOR' ? ['pendencias.html', 'Central de pendências', ic] : [arq, nome, ic])).map(([arq, nome, ic]) => `<a class="it ${arq === PAGINA ? 'on' : ''}" href="${arq}" data-menu="${arq}"><i>${ic}</i><span>${nome}</span></a>`).join('');
       if (!g) return its;
       const aberto = g in guard ? !!guard[g] : vis.some(i => i[0] === PAGINA);
       return `<div class="sec ${aberto ? 'aberto' : ''}" data-g="${g}"><button type="button" class="grupo">${g}</button><div class="itens">${its}</div></div>`; }).join('');
@@ -158,7 +167,8 @@
 
   // tira do cabeçalho da tela os atalhos que o menu já tem (e leva o aviso numérico para o menu)
   function limparCabecalho() {
-    const aside = document.getElementById('menuSistema'); if (!aside) return;
+    const aside = document.getElementById('menuSistema'); if (!aside && !EM_ABA) return;
+    const noMenu = arq => telas.has(arq) && GRUPOS.some(([, its]) => its.some(i => i[0] === arq));
     // botão de sair de cada tela: o menu já tem
     document.querySelectorAll('button[onclick^="sair"], button[onclick*="sairSistema"]').forEach(b => { if (!b.closest('#menuSistema')) b.style.setProperty('display', 'none', 'important'); });
     if (PAGINA === 'index.html') return;   // o painel é feito de atalhos: fica como está
@@ -169,10 +179,12 @@
       if (a.closest('#menuSistema') || a.dataset.menuVisto) return;
       const alvo = String(a.getAttribute('href') || '').toLowerCase();
       if (!/^[a-z0-9_]+\.html$/.test(alvo)) return;                    // com ?parâmetros ou externo: é atalho de contexto, fica
-      const item = aside.querySelector(`a.it[data-menu="${alvo}"]`); if (!item) return;   // não está no menu: fica
+      if (!noMenu(alvo)) return;   // não está no menu: fica
+      const item = aside ? aside.querySelector(`a.it[data-menu="${alvo}"]`) : null;
       if (!(cab && cab.contains(a))) return;                             // link no meio do conteúdo: fica
       a.dataset.menuVisto = '1';
-      const sincronizar = () => { const n = [...a.querySelectorAll('span')].find(s => /^\d+$/.test(s.textContent.trim()) && !s.classList.contains('hidden') && s.style.display !== 'none');
+      if (!item) { a.style.setProperty('display', 'none', 'important'); return; }   // dentro de uma aba: o menu fica na janela de cima
+      const sincronizar = () => { if (item.querySelector('.bolha[data-pend]')) return; const n = [...a.querySelectorAll('span')].find(s => /^\d+$/.test(s.textContent.trim()) && !s.classList.contains('hidden') && s.style.display !== 'none');
         let b = item.querySelector('.bolha'); if (n) { if (!b) { b = document.createElement('span'); b.className = 'bolha'; item.appendChild(b); } b.textContent = n.textContent.trim(); } else if (b) b.remove(); };
       sincronizar(); new MutationObserver(sincronizar).observe(a, { childList: true, subtree: true, characterData: true, attributes: true });
       a.style.setProperty('display', 'none', 'important');
@@ -296,6 +308,34 @@
     } catch (e) { console.warn('aprovações do Gestor', e); }
   }
 
+  // pendências no menu (regra de 21/10/2026): bolha com o número em cada tela onde se resolve;
+  // vermelha piscando = fora do prazo (fica até resolver), laranja = para resolver no prazo.
+  // Para o Gestor é informativo: a "Central de pendências" pisca quando alguém da equipe está fora do prazo.
+  function carregarScript(src) { return new Promise((ok, erro) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = erro; document.head.appendChild(sc); }); }
+  async function pendenciasMenu() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['RH', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || !telas.has('pendencias.html')) return;
+    try {
+      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=1');
+      const r = await window.Pendencias.carregar(window.ACESSO_CLI, pf);
+      const meus = r.itens.filter(i => i.com === pf && !i.semMenu && i.nivel !== 'info');
+      const por = {};
+      meus.forEach(i => { const t = por[i.tela] = por[i.tela] || { n: 0, crit: false }; t.n += i.contaMenu || 1; if (i.nivel === 'critico') t.crit = true; });
+      const central = { n: meus.reduce((a, i) => a + (i.contaMenu || 1), 0), crit: meus.some(i => i.nivel === 'critico') };
+      if (pf === 'GESTOR') { const eq = r.itens.filter(i => i.com !== 'GESTOR' && i.nivel === 'critico').length; central.n += eq; central.crit = central.crit || eq > 0; }
+      por['pendencias.html'] = central;
+      document.querySelectorAll('#menuSistema .bolha[data-pend]').forEach(b => b.remove());
+      Object.entries(por).forEach(([tela, x]) => {
+        if (!x.n) return;
+        const item = document.querySelector(`#menuSistema a.it[data-menu="${tela}"]`); if (!item) return;
+        item.querySelectorAll('.bolha').forEach(b => b.remove());
+        const b = document.createElement('span'); b.className = 'bolha ' + (x.crit ? 'crit' : 'aten'); b.dataset.pend = '1'; b.textContent = x.n;
+        b.title = x.crit ? 'Fora do prazo: resolver agora' : 'Para resolver'; item.appendChild(b);
+        const sec = item.closest('.sec'); if (sec && x.crit) sec.classList.add('aberto');
+      });
+    } catch (e) { console.warn('pendências no menu', e); }
+  }
+
   // ---------------------------------------------------------------- abas (várias telas abertas ao mesmo tempo)
   // Cada tela aberta pelo menu ou por um link vira uma aba no topo; trocar de aba não perde o que estava na tela.
   // Fecha no "x". A tela em que o sistema foi aberto é a primeira aba. Celular: navegação normal, sem abas.
@@ -326,7 +366,7 @@
   function abas() {
     const css2 = document.createElement('style');
     css2.textContent = `
-      #abasBar { position: fixed; top: 0; left: ${L}px; right: 0; height: 34px; z-index: 44; background: #e2e8f0; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; overflow-x: auto; overflow-y: hidden; font-family: inherit; scrollbar-width: none; }
+      #abasBar { position: fixed; top: 0; left: ${L}px; right: 0; height: 34px; z-index: 44; background: #E7E9EE; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; overflow-x: auto; overflow-y: hidden; font-family: inherit; scrollbar-width: none; }
       #abasBar::-webkit-scrollbar { display: none; }
       #abasBar.rola { padding: 0 30px; }
       .abasSeta { position: fixed; top: 0; height: 34px; width: 26px; z-index: 45; border: 0; background: #cbd5e1; color: #334155; font-weight: 800; font-size: 13px; cursor: pointer; display: none; }
@@ -334,14 +374,14 @@
       #abasEsq { left: ${L}px; } #abasDir { right: 0; }
       html.menu-oculto #abasEsq { left: 54px; }
       html.menu-oculto #abasBar, html.menu-oculto #abasArea { left: 54px; }
-      #abasBar .aba { display: flex; align-items: center; gap: 6px; max-width: 220px; height: 28px; padding: 0 6px 0 12px; border-radius: 8px 8px 0 0; background: #cbd5e1; color: #334155; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; user-select: none; }
+      #abasBar .aba { display: flex; align-items: center; gap: 6px; max-width: 220px; height: 28px; padding: 0 6px 0 12px; border-radius: 8px 8px 0 0; background: #D5D9E0; color: #364152; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; user-select: none; }
       #abasBar .aba span { overflow: hidden; text-overflow: ellipsis; }
-      #abasBar .aba:hover { background: #d7dee8; }
+      #abasBar .aba:hover { background: #DFE2E8; }
       #abasBar .aba.on { background: #fff; color: #0f172a; box-shadow: inset 0 2px 0 #c69560; }
       #abasBar .aba b { width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 5px; color: #64748b; font-weight: 700; font-size: 13px; }
       #abasBar .aba b:hover { background: #fecaca; color: #b91c1c; }
-      #abasArea { position: fixed; top: 34px; left: ${L}px; right: 0; bottom: 0; z-index: 43; background: #f1f5f9; display: none; }
-      #abasArea iframe { width: 100%; height: 100%; border: 0; display: none; background: #f1f5f9; }
+      #abasArea { position: fixed; top: 34px; left: ${L}px; right: 0; bottom: 0; z-index: 43; background: #F4F5F7; display: none; }
+      #abasArea iframe { width: 100%; height: 100%; border: 0; display: none; background: #F4F5F7; }
       html.com-abas body { margin-top: 34px !important; }
       @media print { #abasBar, #abasArea { display: none !important; } html.com-abas body { margin-top: 0 !important; } }`;
     document.head.appendChild(css2);
@@ -418,7 +458,7 @@
   }
 
   const iniciar = () => {
-    if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

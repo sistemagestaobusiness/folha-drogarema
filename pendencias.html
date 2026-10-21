@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pendências - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="pendencias_core.js?v=1"></script>
+  <style>
+    :root { --fundo: #F4F5F7; --card: #FFFFFF; --borda: #E3E6EB; --linha: #EEF0F3; --txt: #14181F; --sub: #5B6472; --escuro: #12161C; --ouro: #C69560;
+      --verm: #B42318; --verm-bg: #FEE4E2; --verm-tx: #912018; --amar-bg: #FEF0C7; --amar-tx: #93370D; --cinza-bg: #EEF2F6; --cinza-tx: #364152; --verde-bg: #E7F6EC; --verde-tx: #05603A; --azul: #1D4ED8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--fundo); color: var(--txt); font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif; font-size: 14px; padding: 28px 36px 48px; }
+    a { color: var(--azul); text-decoration: none; }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--borda); margin-bottom: 20px; }
+    .cab .data { font-size: 12px; color: var(--sub); }
+    .cab h1 { margin: 4px 0 0; font-size: 24px; font-weight: 700; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+    .p-crit { background: var(--verm-bg); color: var(--verm-tx); } .p-aten { background: var(--amar-bg); color: var(--amar-tx); }
+    .p-info { background: var(--cinza-bg); color: var(--cinza-tx); } .p-ok { background: var(--verde-bg); color: var(--verde-tx); }
+    .alerta { display: flex; align-items: center; gap: 12px; background: var(--escuro); color: #fff; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; font-size: 13.5px; }
+    .alerta span.t { color: #C9CED6; }
+    .ponto { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: #D92D20; flex-shrink: 0; }
+    .ponto.p8 { width: 8px; height: 8px; }
+    .ponto.aten { background: #B54708; } .ponto.info { background: #98A2B3; } .ponto.ok { background: #12B76A; }
+    .pisca { animation: pisca 1.1s ease-in-out infinite; }
+    @keyframes pisca { 0% { box-shadow: 0 0 0 0 rgba(217,45,32,.75); } 70% { box-shadow: 0 0 0 7px rgba(217,45,32,0); } 100% { box-shadow: 0 0 0 0 rgba(217,45,32,0); } }
+    .grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    .card { background: var(--card); border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; }
+    .card.larga { grid-column: 1 / -1; }
+    .sh { display: flex; align-items: center; gap: 10px; padding: 14px 18px; }
+    .sh h2 { margin: 0; font-size: 14.5px; font-weight: 700; flex: 1; }
+    .it { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-top: 1px solid var(--linha); color: var(--txt); }
+    a.it:hover { background: #F8F9FB; }
+    .it .tx { min-width: 0; flex: 1; }
+    .it b { font-size: 13.5px; font-weight: 600; }
+    .it .sub { color: var(--sub); }
+    .it .det { font-size: 12px; color: var(--sub); margin-top: 1px; }
+    .it .ir { font-size: 12.5px; font-weight: 600; color: var(--azul); white-space: nowrap; }
+    .mais { padding: 10px 18px; border-top: 1px solid var(--linha); font-size: 12px; color: var(--sub); }
+    .vazio { padding: 40px; text-align: center; color: var(--sub); font-size: 14px; }
+    .outros { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding: 16px 20px; margin-top: 20px; font-size: 13px; }
+    .outros h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--sub); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 10px 12px; font-weight: 600; text-align: left; color: var(--sub); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+    td { padding: 11px 12px; border-top: 1px solid var(--linha); }
+    th:first-child, td:first-child { padding-left: 20px; } th:last-child, td:last-child { padding-right: 20px; }
+    .rola { overflow-x: auto; }
+    .abas { display: flex; gap: 22px; padding: 6px 20px 0; border-bottom: 1px solid var(--borda); flex-wrap: wrap; }
+    .abas button { background: none; border: 0; border-bottom: 2px solid transparent; font: inherit; font-size: 13px; font-weight: 600; padding: 10px 2px; color: var(--sub); cursor: pointer; }
+    .abas button.on { color: var(--txt); border-bottom-color: var(--txt); }
+    .abas button.on.verm { color: var(--verm); border-bottom-color: var(--verm); }
+    .desc { font-size: 12.5px; color: var(--sub); margin-top: 3px; }
+    select.comp { height: 34px; border: 1px solid #D0D5DD; border-radius: 7px; padding: 0 8px; font: inherit; font-size: 13px; background: #fff; color: var(--txt); }
+    .bloco { margin-bottom: 20px; }
+    #aviso { display: none; background: var(--verm-bg); color: var(--verm-tx); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; font-weight: 600; }
+    @media (max-width: 900px) {
+      body { padding: 16px 12px 24px; }
+      .grade { grid-template-columns: minmax(0, 1fr); }
+      .it { padding: 14px 16px; }
+      .it .ir { font-size: 13.5px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cab">
+    <div>
+      <div class="data" id="lblData"></div>
+      <h1 id="titulo">Pendências</h1>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div id="aviso"></div>
+  <div id="conteudo"><div class="vazio">Carregando…</div></div>
+
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const MESES = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+    const ASSUNTOS = [
+      ['gestor', 'Aguardando a sua aprovação'], ['freelance', 'Freelance e hora extra'], ['ferias', 'Férias'], ['cadastro', 'Cadastro de pessoa nova'],
+      ['atestados', 'Atestados'], ['holerites', 'Holerites'], ['folha', 'Folha do mês'], ['datas', 'Próximas datas'], ['outros', 'Outros']
+    ];
+    const QUEM = { RH: 'RH', SUPERVISOR: 'Supervisor', LIDER: 'Líderes', GESTOR: 'Gestor' };
+    let perfil = null, dados = null, abaData = 'passou';
+
+    const ordem = { critico: 0, atencao: 1, info: 2, ok: 3 };
+    const ordenar = l => l.slice().sort((a, b) => ordem[a.nivel] - ordem[b.nivel] || String(a.data || '').localeCompare(String(b.data || '')));
+    const ponto = n => `<span class="ponto p8 ${n === 'critico' ? 'pisca' : n === 'atencao' ? 'aten' : n === 'ok' ? 'ok' : 'info'}"></span>`;
+    const linha = i => `<a class="it" href="${esc(i.link || i.tela)}">${ponto(i.nivel)}<div class="tx"><b>${esc(i.titulo)}</b>${i.sub ? ` <span class="sub">· ${esc(i.sub)}</span>` : ''}<div class="det">${esc(i.detalhe)}</div></div><span class="ir">${i.assunto === 'datas' ? 'Ver' : 'Resolver'} →</span></a>`;
+
+    async function iniciar() {
+      $('lblData').innerText = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      perfil = u ? String(u.perfil || '').toUpperCase() : null;
+      if (!perfil) { $('aviso').innerText = 'Seu usuário não tem perfil ativo.'; $('aviso').style.display = 'block'; return; }
+      $('titulo').innerText = perfil === 'GESTOR' ? 'Central de pendências' : 'Suas pendências';
+      document.title = (perfil === 'GESTOR' ? 'Central de pendências' : 'Pendências') + ' - Business';
+      await carregar();
+      setInterval(carregar, 120000);
+    }
+
+    async function carregar() {
+      try { dados = await Pendencias.carregar(_supabase, perfil); }
+      catch (e) { $('aviso').innerText = 'Não foi possível carregar as pendências: ' + (e.message || e); $('aviso').style.display = 'block'; return; }
+      $('aviso').style.display = 'none';
+      if (perfil === 'GESTOR') await desenharGestor(); else desenharPessoal();
+      if (perfil === 'RH') competenciaTrabalho();
+    }
+
+    // ---------------------------------------------------------- RH e Supervisor: só o que é deles, por assunto
+    function desenharPessoal() {
+      const todos = dados.itens, meus = Pendencias.meus(todos, perfil);
+      const acao = meus.filter(i => i.assunto !== 'datas');
+      const crit = acao.filter(i => i.nivel === 'critico'), aten = acao.filter(i => i.nivel === 'atencao');
+      $('chips').innerHTML = (crit.length ? `<span class="pill p-crit">${crit.length} fora do prazo</span>` : '')
+        + (aten.length ? `<span class="pill p-aten">${aten.length} para resolver</span>` : '')
+        + (!crit.length && !aten.length ? '<span class="pill p-ok">tudo em dia</span>' : '')
+        + (perfil === 'RH' ? '<span id="boxComp"></span>' : '');
+      let html = '';
+      if (crit.length) html += `<div class="alerta" role="alert"><span class="ponto pisca"></span><div style="flex:1"><b>${crit.length} pendência(s) fora do prazo.</b> <span class="t">Ficam piscando no menu até serem resolvidas, e o Gestor vê quem está com elas.</span></div>${crit.length === 1 ? `<a href="${esc(crit[0].link || crit[0].tela)}" style="color:#fff;font-weight:600">Resolver →</a>` : ''}</div>`;
+      const secoes = ASSUNTOS.map(([k, nome]) => {
+        const l = ordenar(meus.filter(i => i.assunto === k)); if (!l.length) return '';
+        const visiveis = l.filter(i => i.nivel !== 'info'), futuros = l.filter(i => i.nivel === 'info');
+        const c = l.filter(i => i.nivel === 'critico').length, a = l.filter(i => i.nivel === 'atencao').length;
+        const etq = k === 'datas' ? '<span class="pill p-info">aviso 3 dias antes</span>' : c ? `<span class="pill p-crit">${c} fora do prazo</span>` : a ? `<span class="pill p-aten">${a} para resolver</span>` : `<span class="pill p-info">${l.length} mais adiante</span>`;
+        const corpo = (k === 'datas' ? l : visiveis.slice(0, 8)).map(linha).join('');
+        const resto = k === 'datas' ? '' : (visiveis.length > 8 ? `<a class="mais" style="display:block" href="${esc(l[0].tela)}">+ ${visiveis.length - 8} na tela →</a>` : '')
+          + (futuros.length ? `<a class="mais" style="display:block;color:var(--sub)" href="${esc(futuros[0].tela)}">${futuros.length} para mais adiante${k === 'freelance' ? ' · aprove mais perto da data' : ''} →</a>` : '');
+        return `<section class="card ${k === 'datas' || k === 'folha' ? 'larga' : ''}"><div class="sh"><h2>${esc(nome)}</h2>${etq}</div>${corpo}${resto}</section>`;
+      }).join('');
+      html += secoes ? `<div class="grade">${secoes}</div>` : '<div class="card"><div class="vazio">Nenhuma pendência com você agora.</div></div>';
+      // com outras pessoas (só para saber)
+      const outros = {}; todos.filter(i => i.com !== perfil && i.assunto !== 'datas').forEach(i => { const o = outros[i.com] = outros[i.com] || { n: 0, c: 0 }; o.n++; if (i.nivel === 'critico') o.c++; });
+      const ks = Object.keys(outros).filter(q => q !== 'GESTOR' || perfil !== 'SUPERVISOR');
+      if (ks.length) html += `<section class="card outros"><h2>Com outras pessoas (só para saber)</h2>${ks.map(q => `<span>${QUEM[q] || q} <b>${outros[q].n}</b>${outros[q].c ? `, <span style="color:var(--verm)">${outros[q].c} fora do prazo</span>` : ''}</span>`).join('')}</section>`;
+      $('conteudo').innerHTML = html;
+    }
+
+    // ---------------------------------------------------------- Gestor: central (informativo)
+    async function desenharGestor() {
+      const todos = dados.itens.filter(i => i.assunto !== 'datas');
+      const meus = todos.filter(i => i.com === 'GESTOR'), equipe = todos.filter(i => i.com !== 'GESTOR');
+      const crit = equipe.filter(i => i.nivel === 'critico');
+      $('chips').innerHTML = `<span class="pill ${meus.length ? 'p-crit' : 'p-ok'}">${meus.length ? meus.length + ' aguardando você' : 'nada aguardando você'}</span>`
+        + `<span class="pill ${crit.length ? 'p-crit' : 'p-ok'}">${crit.length} fora do prazo na equipe</span>`;
+      let tempos = null; try { tempos = await Pendencias.tempos(_supabase); } catch (e) { }
+      let html = '<div class="card bloco" style="padding:16px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:14px"><h2 style="margin:0;font-size:15px;font-weight:700;flex:1">Aguardando a sua aprovação</h2>'
+        + (meus.length ? meus.map(i => `<a class="pill p-crit" href="${esc(i.link || i.tela)}">${esc(i.titulo)} · ${i.contaMenu || ''}</a>`).join('') : '<span class="pill p-ok">adiantamento, VT, planos, 13º e ficha do RH em dia</span>') + '</div>';
+      // prazos da equipe
+      const quem = ['RH', 'SUPERVISOR', 'LIDER'];
+      const linhaQ = q => {
+        const l = equipe.filter(i => i.com === q), c = l.filter(i => i.nivel === 'critico');
+        const antigo = c.slice().sort((a, b) => b.foraHa - a.foraHa)[0];
+        const t = tempos && tempos[q] && tempos[q].media != null ? `${Pendencias.tempo(tempos[q].media)} <span style="color:var(--sub);font-size:12px">(${tempos[q].n} decisões)</span>` : '-';
+        return `<tr><td><b>${QUEM[q]}</b></td><td class="mono">${l.length}</td><td><span class="pill ${c.length ? 'p-crit' : 'p-info'}">${c.length}</span></td><td>${antigo ? esc(antigo.titulo) : '-'}</td><td>${t}</td></tr>`;
+      };
+      html += `<section class="card bloco"><div style="padding:16px 20px 6px"><h2 style="margin:0;font-size:15px;font-weight:700">Prazos da equipe</h2>
+        <div class="desc">Supervisor: até ${Pendencias.PRAZO_SUP_H} h do pedido · RH: até ${Pendencias.PRAZO_RH_H} h depois do supervisor · pedido para mais de ${Pendencias.JANELA_DIAS} dias conta a partir da janela de ${Pendencias.JANELA_DIAS} dias · tempo médio de freelance/HE nos últimos 30 dias</div></div>
+        <div class="rola"><table style="min-width:700px"><thead><tr><th>Quem</th><th>Aguardando</th><th>Fora do prazo</th><th>Mais atrasado</th><th>Tempo médio</th></tr></thead><tbody>${quem.map(linhaQ).join('')}</tbody></table></div></section>`;
+      // por data
+      const grupos = { passou: [], dois: [], sete: [], depois: [] };
+      equipe.forEach(i => { const n = i.data ? Pendencias.diasAte(i.data) : (i.nivel === 'info' ? 99 : 0);
+        if (i.nivel === 'critico' && (n < 0 || i.assunto === 'cadastro' || i.assunto === 'atestados')) grupos.passou.push(i);
+        else if (n <= 2 || i.nivel === 'critico') grupos.dois.push(i); else if (n <= 7) grupos.sete.push(i); else grupos.depois.push(i); });
+      const ROT = [['passou', 'Fora do prazo / data já passou'], ['dois', 'Até 2 dias'], ['sete', 'Próximos 7 dias'], ['depois', 'Depois']];
+      if (!grupos[abaData].length) abaData = (ROT.find(([k]) => grupos[k].length) || ['passou'])[0];
+      const l = ordenar(grupos[abaData]);
+      html += `<section class="card"><div style="padding:16px 20px 0"><h2 style="margin:0;font-size:15px;font-weight:700">Pendências por data</h2></div>
+        <div class="abas" role="tablist">${ROT.map(([k, n]) => `<button type="button" role="tab" class="${k === abaData ? 'on' : ''} ${k === 'passou' ? 'verm' : ''}" onclick="abaData='${k}';desenharGestor()">${n} · ${grupos[k].length}</button>`).join('')}</div>
+        <div class="rola"><table style="min-width:760px"><thead><tr><th>Assunto</th><th>Loja</th><th>Situação</th><th>Está com</th><th></th></tr></thead><tbody>
+        ${l.length ? l.map(i => `<tr><td>${ponto(i.nivel)} <b style="margin-left:6px">${esc(i.titulo)}</b></td><td>${esc(i.sub || '-')}</td><td style="color:var(--sub);font-size:12.5px">${esc(i.detalhe)}</td><td>${QUEM[i.com] || i.com}</td><td style="text-align:right"><a href="${esc(i.link || i.tela)}">Abrir →</a></td></tr>`).join('')
+          : '<tr><td colspan="5" style="color:var(--sub)">Nada aqui.</td></tr>'}</tbody></table></div></section>`;
+      $('conteudo').innerHTML = html;
+    }
+
+    // ---------------------------------------------------------- RH: competência de trabalho (abrir e fechar continua só com o Gestor)
+    async function competenciaTrabalho() {
+      const box = $('boxComp'); if (!box) return;
+      const { data } = await _supabase.from('competencias').select('mes, ano, status').in('status', ['ABERTO', 'FECHADO']).order('ano', { ascending: false }).order('mes', { ascending: false }).limit(6);
+      const lista = data || []; if (!lista.length) return;
+      const txt = c => `${MESES[c.mes - 1]} / ${c.ano}`;
+      const aberta = lista.find(c => c.status === 'ABERTO');
+      let atual = localStorage.getItem('competencia_ativa') || '';
+      if (!lista.some(c => txt(c) === atual.toUpperCase()) && aberta) { atual = txt(aberta); localStorage.setItem('competencia_ativa', atual); }
+      box.innerHTML = `<label style="font-size:12px;color:var(--sub);margin-left:6px">Trabalhando em <select class="comp" onchange="localStorage.setItem('competencia_ativa', this.value); competenciaTrabalho()">
+        ${lista.map(c => `<option value="${txt(c)}" ${txt(c) === atual.toUpperCase() ? 'selected' : ''}>${String(c.mes).padStart(2, '0')}/${c.ano} · ${c.status === 'ABERTO' ? 'aberta' : 'fechada'}</option>`).join('')}</select></label>`;
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

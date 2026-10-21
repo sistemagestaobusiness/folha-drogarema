@@ -8,9 +8,38 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="pendencias_core.js?v=1"></script>
+  <style>
+    .cartao { background: #fff; border: 1px solid #E3E6EB; border-radius: 10px; padding: 16px; }
+    .rotulo { font-size: 12px; color: #5B6472; }
+    .valor { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 22px; font-weight: 500; margin-top: 6px; }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .linha-kpi { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #5B6472; margin-top: 8px; padding-top: 8px; border-top: 1px solid #EEF0F3; }
+    .linha-kpi.l2 { border-top: 0; padding-top: 2px; margin-top: 0; }
+    .linha-kpi .mono { color: #14181F; }
+    .btn-escuro { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border-radius: 7px; font-size: 13px; font-weight: 600; background: #12161C; color: #fff; border: 0; }
+    .btn-escuro:hover { background: #262D37; }
+    .btn-claro { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border-radius: 7px; font-size: 13px; font-weight: 600; background: #fff; color: #14181F; border: 1px solid #D0D5DD; }
+    .btn-claro:hover { background: #F8F9FB; }
+    .faixa-gestor { position: sticky; top: 8px; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; background: #12161C; color: #fff; border-radius: 10px; padding: 12px 18px; font-size: 13.5px; }
+    .faixa-gestor.hidden { display: none; }
+    .faixa-sub { color: #C9CED6; } .faixa-ir { font-weight: 600; color: #C69560; white-space: nowrap; }
+    .ponto-pisca { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: #D92D20; flex-shrink: 0; animation: pontoPisca 1.1s ease-in-out infinite; }
+    @keyframes pontoPisca { 0% { box-shadow: 0 0 0 0 rgba(217,45,32,.75); } 70% { box-shadow: 0 0 0 7px rgba(217,45,32,0); } 100% { box-shadow: 0 0 0 0 rgba(217,45,32,0); } }
+    .tab-res { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+    .tab-res th { padding: 10px 12px; font-weight: 600; color: #5B6472; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; text-align: right; white-space: nowrap; }
+    .tab-res td { padding: 9px 12px; border-top: 1px solid #EEF0F3; text-align: right; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .tab-res th:first-child, .tab-res td:first-child { text-align: left; padding-left: 20px; font-family: inherit; }
+    .tab-res th:last-child, .tab-res td:last-child { padding-right: 20px; }
+    .tab-res tr.sub td { background: #F4F5F7; font-weight: 700; font-size: 12px; }
+    .tab-res tr.sub td:first-child { text-transform: uppercase; letter-spacing: .04em; }
+    .tab-res tr.tot td { background: #12161C; color: #fff; font-weight: 700; border-top: 0; }
+    .tab-res tr.tot td:first-child { text-transform: uppercase; letter-spacing: .04em; }
+    .tab-res tr:not(.sub):not(.tot):hover td { background: #F8F9FB; }
+  </style>
   <style>.tab-sem-quebra td, .tab-sem-quebra th { white-space: nowrap; } @keyframes pulsoLento { 0%,100% { opacity: 1 } 50% { opacity: .85 } } .animate-pulse-lento { animation: pulsoLento 2.5s ease-in-out infinite; }</style>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+<body class="min-h-screen p-6 font-sans" style="background:#F4F5F7;color:#14181F">
 
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
@@ -21,258 +50,154 @@
 
   <div class="max-w-[1720px] mx-auto space-y-5">
 
-    <!-- ADIANTAMENTO AGUARDANDO O GESTOR (fica fixo até aprovar) -->
-    <a id="faixaVT" href="vale_transporte.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
-      <span class="text-2xl">⚠️</span>
-      <span class="flex-1 min-w-[220px]"><b class="block text-base">Vale transporte aguardando a sua aprovação</b><span id="faixaVTTxt" class="text-sm text-red-50"></span></span>
-      <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar vale transporte →</span>
+    <!-- APROVAÇÕES DO GESTOR (ficam fixas até aprovar) -->
+    <a id="faixaVT" href="vale_transporte.html?aba=aprovacao" class="hidden faixa-gestor">
+      <span class="ponto-pisca"></span>
+      <span class="flex-1 min-w-[220px]"><b>Vale transporte aguardando a sua aprovação</b> <span id="faixaVTTxt" class="faixa-sub"></span></span>
+      <span class="faixa-ir">Aprovar →</span>
     </a>
-    <a id="faixaDecimo" href="decimo_terceiro.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
-      <span class="text-2xl">⚠️</span>
-      <span class="flex-1 min-w-[220px]"><b class="block text-base">13º antecipado aguardando a sua aprovação</b><span id="faixaDecimoTxt" class="text-sm text-red-50"></span></span>
-      <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar 13º →</span>
+    <a id="faixaDecimo" href="decimo_terceiro.html?aba=aprovacao" class="hidden faixa-gestor">
+      <span class="ponto-pisca"></span>
+      <span class="flex-1 min-w-[220px]"><b>13º antecipado aguardando a sua aprovação</b> <span id="faixaDecimoTxt" class="faixa-sub"></span></span>
+      <span class="faixa-ir">Aprovar →</span>
     </a>
-    <a id="faixaPlano" href="planos.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
-      <span class="text-2xl">⚠️</span>
-      <span class="flex-1 min-w-[220px]"><b class="block text-base">Planos aguardando a sua aprovação</b><span id="faixaPlanoTxt" class="text-sm text-red-50"></span></span>
-      <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar planos →</span>
+    <a id="faixaPlano" href="planos.html?aba=aprovacao" class="hidden faixa-gestor">
+      <span class="ponto-pisca"></span>
+      <span class="flex-1 min-w-[220px]"><b>Planos aguardando a sua aprovação</b> <span id="faixaPlanoTxt" class="faixa-sub"></span></span>
+      <span class="faixa-ir">Aprovar →</span>
     </a>
-    <a id="faixaAdiant" href="adiantamento.html?aba=aprovacao" class="hidden sticky top-2 z-40 flex flex-wrap items-center gap-3 bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-4 shadow-lg ring-4 ring-red-300 animate-pulse no-underline">
-      <span class="text-2xl">⚠️</span>
-      <span class="flex-1 min-w-[220px]"><b class="block text-base">Adiantamento salarial aguardando a sua aprovação</b><span id="faixaAdiantTxt" class="text-sm text-red-50"></span></span>
-      <span class="bg-white text-red-700 font-black text-sm rounded-lg px-4 py-2">Aprovar adiantamento →</span>
+    <a id="faixaAdiant" href="adiantamento.html?aba=aprovacao" class="hidden faixa-gestor">
+      <span class="ponto-pisca"></span>
+      <span class="flex-1 min-w-[220px]"><b>Adiantamento salarial aguardando a sua aprovação</b> <span id="faixaAdiantTxt" class="faixa-sub"></span></span>
+      <span class="faixa-ir">Aprovar →</span>
     </a>
-    
-    <!-- TOPO / HEADER EXECUTIVO -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm gap-4">
+
+    <!-- CABEÇALHO -->
+    <div class="flex flex-wrap items-end justify-between gap-3 pb-4 border-b" style="border-color:#E3E6EB">
       <div>
-        <div class="flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-          <h1 class="text-lg font-bold text-slate-900 tracking-wide">PAINEL DE GESTÃO</h1>
-          <span class="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono border border-slate-200">Gestão de Folha</span>
-        </div>
-        <p class="text-xs text-slate-500 mt-0.5">Painel de Fechamento e Inteligência Contábil</p>
+        <div class="text-xs" style="color:#5B6472">Painel de fechamento e inteligência contábil · <span style="color:#05603A">● banco sincronizado</span></div>
+        <h1 class="text-2xl font-bold mt-1">Painel de gestão</h1>
       </div>
-
-      <div class="flex items-center gap-3">
-        <div class="text-right hidden sm:block">
-          <span class="text-[10px] text-slate-400 block uppercase font-semibold">Banco de Dados</span>
-          <span class="text-xs text-emerald-600 font-mono font-bold">● Sincronizado</span>
-        </div>
-        <a href="avisos_lideres.html" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 rounded-lg font-bold text-xs border border-indigo-300" title="Enviar aviso para os líderes (aparece quando eles abrem o sistema)">📣 Aviso aos líderes</a>
-        <button onclick="sair()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition cursor-pointer border border-slate-300">
-          SAIR
-        </button>
+      <div class="flex flex-wrap gap-2">
+        <a href="avisos_lideres.html" class="btn-claro" title="Enviar aviso para os líderes (aparece quando eles abrem o sistema)">Aviso aos líderes</a>
+        <button onclick="toggleModalLancamentos()" class="btn-escuro cursor-pointer">Realizar lançamentos</button>
+        <button onclick="sair()" class="hidden">SAIR</button>
       </div>
     </div>
 
-    <!-- APROVAÇÕES URGENTES (freelance / hora extra / férias perto da data) -->
-    <div id="boxUrgentes" class="hidden"></div>
+    <!-- PENDÊNCIAS DA EQUIPE: uma linha, o detalhe fica na Central de pendências -->
+    <a id="boxUrgentes" href="pendencias.html" class="hidden"></a>
 
-    <!-- PAINEL DE COMANDO CENTRAL (Layout em 3 Colunas) -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-      
-      <!-- ==========================================
-           COLUNA 2: PAINEL PRINCIPAL (Centro)
-           ========================================== -->
-      <div class="lg:col-span-9 space-y-5">
-        
-        <!-- Banner de Período Ativo & Ação de Alto Impacto -->
-        <div class="bg-white border border-slate-200 p-5 rounded-xl shadow-sm flex flex-col justify-between">
-          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-            <div>
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PERÍODO EM ANÁLISE</span>
-              <div class="flex items-center gap-3 mt-1">
-                <h2 id="competenciaAtivaDisplay" class="text-2xl font-black text-slate-900 font-mono">CARREGANDO...</h2>
-                <span id="badgeStatusCompetencia" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200">...</span>
-              </div>
-            </div>
-            <div id="infoFechamentoAudit" class="text-[10px] text-slate-500 font-mono bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">
-              Auditoria: -
-            </div>
-          </div>
-
-          <!-- BOTÕES EM EVIDÊNCIA -->
-          <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
-            <button onclick="toggleModalLancamentos()" class="flex-1 flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3.5 rounded-xl transition shadow-sm text-xs cursor-pointer">
-              <span class="text-lg">⚡</span>
-              <div class="text-left">
-                <div class="tracking-wide">REALIZAR LANÇAMENTOS</div>
-                <div class="text-[10px] sm:text-[11px] text-emerald-100 font-normal">Manual, Planilha ou Farmácia</div>
-              </div>
-            </button>
-            
-            <a href="resumo_folha.html" class="flex-1 flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white font-bold p-3.5 rounded-xl transition shadow-sm text-xs cursor-pointer">
-              <span class="text-lg">📊</span>
-              <div class="text-left">
-                <div class="tracking-wide">RESUMO DA COMPETÊNCIA</div>
-                <div id="subResumoComp" class="text-[10px] sm:text-[11px] text-blue-100 font-normal">Conferência final · enviar ao Financeiro</div>
-              </div>
-            </a>
-          </div>
-        </div>
-
-        <!-- ALERTA URGENTE: FINANCEIRO NÃO CONSEGUIU PAGAR -->
-        <a id="alertaPagamento" href="financeiro.html" class="hidden block bg-rose-50 border-2 border-rose-400 p-4 rounded-xl shadow-sm">
-          <div class="flex justify-between items-center">
-            <div class="flex items-center gap-2 text-rose-800 font-black text-sm uppercase"><span class="animate-pulse">🚨</span> <span id="alertaPagamentoTxt">Problemas em pagamentos</span></div>
-            <span class="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold">RESOLVER →</span>
-          </div>
-          <div id="alertaPagamentoLista" class="text-xs text-rose-900 mt-2 space-y-1"></div>
-        </a>
-
-        <!-- PAGAMENTOS AGUARDANDO O FINANCEIRO (some quando tudo foi pago) -->
-        <a id="alertaAPagar" href="financeiro.html" class="hidden block bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:bg-slate-50">
-          <div class="flex justify-between items-center gap-2">
-            <div class="text-sm font-bold text-slate-800">💳 Pagamentos aguardando o Financeiro</div>
-            <span class="text-[10px] text-slate-500 underline">ver →</span>
-          </div>
-          <div id="alertaAPagarTxt" class="text-xs text-slate-600 mt-1"></div>
-        </a>
-
-        <!-- NOVO: ALERTA DE FREELANCE PENDENTE -->
-        <div id="alertaFreelance" class="hidden bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm space-y-3">
-          <div class="flex justify-between items-center border-b border-amber-200/50 pb-2">
-            <div class="flex items-center gap-2 text-amber-800 font-bold text-sm uppercase">
-              <span class="animate-pulse">🔔</span> Plantões Pendentes de Aprovação
-            </div>
-            <a href="rh_aprovacao_freelance.html" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition shadow-sm cursor-pointer">
-              ACESSAR CENTRAL DE APROVAÇÃO →
-            </a>
-          </div>
-          
-          <ul id="listaPendenciasFreelance" class="text-xs text-amber-900 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <!-- Injetado via JS -->
-          </ul>
-        </div>
-
-        <!-- INDICADORES GERENCIAIS -->
-        <div class="space-y-4">
-          <div class="flex justify-between items-center">
-            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">INDICADORES FINANCEIROS</h3>
-            <span class="text-[10px] text-slate-400 font-mono">Tempo real</span>
-          </div>
-
-          <!-- Grid de Indicadores Principais -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <!-- Card 1: Salário Líquido -->
-            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-sm">
-              <div class="flex justify-between items-center">
-                <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">LÍQUIDO A PAGAR</span>
-                <span class="text-sm">💰</span>
-              </div>
-              <div id="valLiquidoConsolidado" class="text-2xl font-black text-emerald-600 font-mono">R$ 0,00</div>
-              <div class="pt-2 border-t border-slate-100 flex justify-between text-xs font-mono">
-                <span class="text-slate-500">Total Descontos:</span>
-                <span id="valTotalDescontos" class="text-rose-600 font-bold">R$ 0,00</span>
-              </div>
-            </div>
-
-            <!-- Card 2: Volume Bruto da Folha -->
-            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-sm">
-              <div class="flex justify-between items-center">
-                <span class="text-[10px] text-slate-500 font-bold uppercase">Volume Bruto Folha</span>
-                <span class="text-sm">📊</span>
-              </div>
-              <div id="valTotalFolha" class="text-2xl font-black text-slate-900 font-mono">R$ 0,00</div>
-              <div class="space-y-0.5 pt-2 border-t border-slate-100 text-xs font-mono">
-                <div class="flex justify-between text-slate-500">
-                  <span>Contábil:</span>
-                  <span id="valContabil" class="font-bold text-slate-700">R$ 0,00</span>
-                </div>
-                <div class="flex justify-between text-slate-500">
-                  <span>Não Contábil:</span>
-                  <span id="valNaoContabil" class="font-bold text-slate-700">R$ 0,00</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Card 3: Funcionários Ativos -->
-            <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-2 shadow-sm">
-              <div class="flex justify-between items-center">
-                <span class="text-[10px] text-slate-500 font-bold uppercase">Colaboradores Ativos</span>
-                <span class="text-sm">👔</span>
-              </div>
-              <div id="qtdFuncionariosAtivos" class="text-2xl font-black text-slate-900 font-mono">0</div>
-              <p class="text-[11px] text-slate-500 pt-2 border-t border-slate-100">Aptos para folha.</p>
-            </div>
-          </div>
-
-          <!-- Radiografia de Comissões -->
-          <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
-            <div class="flex justify-between items-baseline"><span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Detalhamento de Comissões</span>
-              <span class="text-[10px] text-slate-400">total <b id="comTotal" class="font-mono text-slate-700">R$ 0,00</b></span></div>
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
-              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
-                <span class="text-[10px] text-slate-500 block">Perfumaria</span>
-                <span id="comPerf" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
-              </div>
-              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
-                <span class="text-[10px] text-slate-500 block">Similar / Gen.</span>
-                <span id="comSim" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
-              </div>
-              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
-                <span class="text-[10px] text-slate-500 block">Vitaminas</span>
-                <span id="comVit" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
-              </div>
-              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center">
-                <span class="text-[10px] text-slate-500 block">Valor Fixo</span>
-                <span id="comFix" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
-              </div>
-              <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-center col-span-2 sm:col-span-1">
-                <span class="text-[10px] text-slate-500 block">Sidney Oliveira</span>
-                <span id="comSid" class="text-xs font-bold text-slate-900 font-mono">R$ 0,00</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Consolidado por Empresa -->
-          <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
-            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Consolidado por Empresa / Filial</span>
-            <div id="listaEmpresasResumo" class="text-xs">
-              <div class="text-slate-400 text-center py-2">Carregando dados das empresas...</div>
-            </div>
-          </div>
-
-          <!-- Admissões na Competência -->
-          <div class="bg-white border border-slate-200 p-4 rounded-xl space-y-3 shadow-sm">
-            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Novos Cadastros na Competência</span>
-            <div id="listaNovosColaboradores" class="space-y-1.5 pt-1 text-xs">
-              <div class="text-slate-400 text-center py-2 text-xs">Nenhum novo colaborador cadastrado nesta competência.</div>
-            </div>
-          </div>
-
-        </div>
+    <!-- FINANCEIRO -->
+    <a id="alertaPagamento" href="financeiro.html" class="hidden block cartao" style="border-color:#FECDCA;background:#FEF3F2">
+      <div class="flex justify-between items-center gap-2">
+        <div class="flex items-center gap-2 font-bold text-sm" style="color:#912018"><span class="ponto-pisca"></span> <span id="alertaPagamentoTxt">Problemas em pagamentos</span></div>
+        <span class="text-xs font-semibold" style="color:#912018">Resolver →</span>
       </div>
-
-      <!-- ==========================================
-           COLUNA 3: BARRA LATERAL DIREITA (Períodos)
-           ========================================== -->
-      <div class="lg:col-span-3 space-y-5">
-        
-        <!-- Gestão de Períodos da Folha -->
-        <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 sticky top-6">
-          <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-            <h3 class="font-bold text-slate-700 text-[10px] uppercase tracking-wider">SELECIONAR COMPETÊNCIA</h3>
-            <select id="anoReferencia" onchange="carregarPeriodos()" class="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-slate-800 text-xs font-mono">
-              <option value="2026">2026</option>
-              <option value="2027">2027</option>
-            </select>
-          </div>
-          <p class="text-[10px] text-slate-500">Clique no mês para analisar ou na engrenagem (⚙️) para gerenciar o status.</p>
-
-          <div id="listaPeriodos" class="grid grid-cols-2 gap-1.5 pt-1">
-            <!-- Preenchido via JS compacto -->
-          </div>
-          <button id="btnBackup" onclick="fazerBackup('manual')" class="hidden w-full mt-2 text-[11px] font-bold px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 cursor-pointer">💾 Fazer backup agora</button>
-          <p class="text-[9px] text-slate-400 leading-tight">O backup completo é feito automaticamente ao fechar o mês (cópia no Supabase + download no seu computador).</p>
-        </div>
-
+      <div id="alertaPagamentoLista" class="text-xs mt-2 space-y-1" style="color:#7A271A"></div>
+    </a>
+    <a id="alertaAPagar" href="financeiro.html" class="hidden block cartao">
+      <div class="flex justify-between items-center gap-2">
+        <div class="text-sm font-semibold">Pagamentos aguardando o Financeiro</div>
+        <span class="text-xs font-semibold" style="color:#1D4ED8">Ver →</span>
       </div>
+      <div id="alertaAPagarTxt" class="text-xs mt-1" style="color:#5B6472"></div>
+    </a>
+    <!-- plantões por loja: agora na Central de pendências -->
+    <div id="alertaFreelance" class="hidden"><ul id="listaPendenciasFreelance"></ul></div>
 
+    <!-- PERÍODO EM ANÁLISE + COMPETÊNCIAS -->
+    <div class="cartao grid grid-cols-1 lg:grid-cols-12 gap-6" style="padding:20px">
+      <div class="lg:col-span-8">
+        <div class="rotulo">Período em análise</div>
+        <div class="flex flex-wrap items-center gap-3 mt-1">
+          <h2 id="competenciaAtivaDisplay" class="text-2xl font-bold tracking-wide">CARREGANDO...</h2>
+          <span id="badgeStatusCompetencia" class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold">...</span>
+        </div>
+        <div id="infoFechamentoAudit" class="text-xs mt-1" style="color:#5B6472">Auditoria: -</div>
+        <div class="flex flex-wrap gap-2 mt-4">
+          <a href="resumo_folha.html" class="btn-escuro">
+            <span>Resumo da competência</span>
+          </a>
+          <button onclick="toggleModalLancamentos()" class="btn-claro cursor-pointer">Lançamentos</button>
+        </div>
+        <div id="subResumoComp" class="text-xs mt-2" style="color:#5B6472">Conferência final · enviar ao Financeiro</div>
+      </div>
+      <div class="lg:col-span-4">
+        <div class="flex justify-between items-center">
+          <div class="rotulo">Competências · abrir e fechar</div>
+          <select id="anoReferencia" onchange="carregarPeriodos()" class="border rounded px-2 py-0.5 text-xs" style="border-color:#D0D5DD">
+            <option value="2026">2026</option>
+            <option value="2027">2027</option>
+          </select>
+        </div>
+        <div id="listaPeriodos" class="grid grid-cols-4 gap-1.5 mt-2"></div>
+        <div class="text-[11px] mt-2" style="color:#5B6472">Clique no mês para analisar; na engrenagem, para abrir ou fechar.</div>
+        <button id="btnBackup" onclick="fazerBackup('manual')" class="hidden w-full mt-2 btn-claro cursor-pointer" style="min-height:32px;font-size:12px">Fazer backup agora</button>
+        <p class="text-[10px] mt-1 leading-tight" style="color:#5B6472">O backup completo também é feito automaticamente ao fechar o mês.</p>
+      </div>
     </div>
+
+    <!-- INDICADORES -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div class="cartao">
+        <div class="rotulo">Líquido a pagar</div>
+        <div id="valLiquidoConsolidado" class="valor" style="color:#05603A">R$ 0,00</div>
+        <div class="linha-kpi"><span>descontos</span><span id="valTotalDescontos" class="mono" style="color:#B42318">R$ 0,00</span></div>
+      </div>
+      <div class="cartao">
+        <div class="rotulo">Total bruto da folha</div>
+        <div id="valTotalFolha" class="valor">R$ 0,00</div>
+        <div class="linha-kpi"><span>contábil</span><span id="valContabil" class="mono">R$ 0,00</span></div>
+        <div class="linha-kpi" style="border-top:0;padding-top:2px;margin-top:0"><span>não contábil</span><span id="valNaoContabil" class="mono">R$ 0,00</span></div>
+      </div>
+      <div class="cartao">
+        <div class="rotulo">Colaboradores ativos</div>
+        <div id="qtdFuncionariosAtivos" class="valor">0</div>
+        <div class="linha-kpi"><span>novos na competência</span><span id="qtdNovos" class="mono">0</span></div>
+      </div>
+      <div class="cartao">
+        <div class="rotulo">Comissões</div>
+        <div id="comTotal" class="valor">R$ 0,00</div>
+        <div class="linha-kpi"><span>perfumaria</span><span id="comPerf" class="mono">R$ 0,00</span></div>
+        <div class="linha-kpi l2"><span>similar e genérico</span><span id="comSim" class="mono">R$ 0,00</span></div>
+        <div class="linha-kpi l2"><span>vitaminas</span><span id="comVit" class="mono">R$ 0,00</span></div>
+        <div class="linha-kpi l2"><span>valor fixo</span><span id="comFix" class="mono">R$ 0,00</span></div>
+        <div class="linha-kpi l2"><span>Sidney Oliveira</span><span id="comSid" class="mono">R$ 0,00</span></div>
+      </div>
+    </div>
+
+    <!-- RESUMO POR EMPRESA E LOJA (ponta a ponta) -->
+    <div class="cartao" style="padding:0;overflow:hidden">
+      <div class="flex justify-between items-baseline gap-2 px-5 pt-4 pb-1">
+        <h3 class="text-[15px] font-bold">Resumo por empresa e loja</h3>
+        <span class="text-xs" style="color:#5B6472">valores em R$</span>
+      </div>
+      <div id="listaEmpresasResumo" class="overflow-x-auto">
+        <div class="text-center py-4 text-xs" style="color:#5B6472">Carregando dados das empresas...</div>
+      </div>
+    </div>
+
+    <!-- COMISSÃO POR LOJA (ponta a ponta) -->
+    <div class="cartao" style="padding:0;overflow:hidden">
+      <div class="flex justify-between items-baseline gap-2 px-5 pt-4 pb-1">
+        <h3 class="text-[15px] font-bold">Comissão por loja · resumo</h3>
+        <button type="button" onclick="document.getElementById('listaComissaoLoja').classList.toggle('hidden'); this.innerText = document.getElementById('listaComissaoLoja').classList.contains('hidden') ? 'Abrir ▾' : 'Recolher ▴'" class="text-xs font-semibold cursor-pointer" style="color:#1D4ED8">Recolher ▴</button>
+      </div>
+      <div id="listaComissaoLoja" class="overflow-x-auto">
+        <div class="text-center py-4 text-xs" style="color:#5B6472">Carregando...</div>
+      </div>
+    </div>
+
+    <!-- NOVOS CADASTROS -->
+    <div class="cartao">
+      <div class="rotulo">Novos cadastros na competência</div>
+      <div id="listaNovosColaboradores" class="space-y-1.5 pt-2 text-xs">
+        <div class="text-center py-2 text-xs" style="color:#5B6472">Nenhum novo colaborador cadastrado nesta competência.</div>
+      </div>
+    </div>
+
   </div>
-
   <!-- MODAL DE GERENCIAMENTO DE STATUS DO MÊS -->
   <div id="modalGerenciarMes" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
     <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
@@ -367,7 +292,12 @@
         perfilIndex = perfil; emailIndex = (user.email || '').toLowerCase();
         document.getElementById('btnBackup').classList.toggle('hidden', !['RH', 'GESTOR'].includes(perfil));
         if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
-        else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');
+        else if (perfil === 'SUPERVISOR' || perfil === 'RH') {   // regra de 21/10/2026: início do RH e do Supervisor = pendências (só se a tela já estiver liberada no banco)
+          const { data: ac } = await _supabase.rpc('fn_minhas_telas');
+          const tl = ((ac && ac.telas) || []).map(t => String(t).toLowerCase());
+          if (tl.includes('pendencias.html')) window.location.replace('pendencias.html');
+          else if (perfil === 'SUPERVISOR') window.location.replace('supervisor_freelance.html');
+        }
         else if (perfil === 'FINANCEIRO') window.location.replace('financeiro.html');
         if (perfil === 'GESTOR') {
           const { data: pa } = await _supabase.rpc('fn_adiant_pendentes');
@@ -598,17 +528,18 @@
         }
 
         let statusCor = "text-slate-400";
-        if (status === 'ABERTO') statusCor = "text-emerald-600 font-bold";
+        if (status === 'ABERTO') statusCor = "text-[#05603A] font-bold";
         else if (status === 'FECHADO') statusCor = "text-slate-500";
 
-        let cardStyle = "border-slate-200 bg-white text-slate-600 hover:border-slate-300";
+        let cardStyle = "border-[#E3E6EB] bg-[#F8F9FB] text-slate-600 hover:border-slate-300";
         
         if (status === 'ABERTO') {
-          cardStyle = "border-emerald-300 bg-emerald-50/80 text-emerald-950 shadow-xs";
+          cardStyle = "border-[#C69560] bg-white text-slate-900";
         }
         
         if (isAtivaVisual) {
-          cardStyle += " ring-2 ring-slate-900 border-slate-900 font-semibold";
+          cardStyle = "border-[#12161C] bg-[#12161C] text-white font-semibold";
+          statusCor = status === 'ABERTO' ? "text-[#C69560] font-bold" : "text-slate-300";
         }
 
         container.innerHTML += `
@@ -631,10 +562,10 @@
 
       const badgeComp = document.getElementById('badgeStatusCompetencia');
       if (temMesAberto || storedComp) {
-        badgeComp.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-200";
+        badgeComp.className = "px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F6EC] text-[#05603A]";
         badgeComp.innerText = "PERÍODO ATIVO";
       } else {
-        badgeComp.className = "px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-rose-100 text-rose-800 border border-rose-200";
+        badgeComp.className = "px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#FEE4E2] text-[#912018]";
         badgeComp.innerText = "NENHUM PERÍODO";
       }
 
@@ -655,46 +586,22 @@
       if (!perfilIndex) { try { const { data } = await _supabase.rpc('fn_meu_usuario'); perfilIndex = data ? data.perfil : null; } catch (e) { } }
       if (!['RH', 'GESTOR'].includes(perfilIndex)) return;
       carregarStatusEnvio();
+      // regra de 21/10/2026: o painel do Gestor é analítico; das pendências da equipe fica só uma linha (o detalhe está na Central de pendências)
       try {
-        const hojeIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-        const dias = iso => Math.round((new Date(iso + 'T12:00:00') - new Date(hojeIso + 'T12:00:00')) / 86400000);
-        const [rf, rv, ra, rc] = await Promise.all([
-          _supabase.from('freelance_solicitacoes').select('id, funcionario_id, data_servico, hora_inicio, hora_fim, status, tipo_solicitacao, loja_solicitante')
-            .in('status', ['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH']).order('data_servico'),
-          _supabase.from('ferias_solicitacoes').select('id, funcionario_id, data_inicio, dias, status').in('status', ['SOLICITADA', 'PRE_APROVADA', 'CONTABILIDADE', 'CALCULADA']).order('data_inicio'),
-          _supabase.from('abatimentos').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE_LIDER'),
-          _supabase.from('cadastro_solicitacoes').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE')
-        ]);
-        const fl = rf.data || [], fe = rv.data || [];
-        const ids = [...new Set([...fl, ...fe].map(x => x.funcionario_id))];
-        const nomes = {};
-        if (ids.length) { const { data: fs } = await _supabase.from('funcionarios').select('id, nome_registro').in('id', ids); (fs || []).forEach(x => nomes[x.id] = x.nome_registro); }
-        const curto = n => { const p = String(n || '').split(' '); return p.length > 1 ? p[0] + ' ' + p[p.length - 1] : p[0]; };
-        const etapa = s => s === 'PENDENTE_SUPERVISOR' ? 'supervisor' : 'RH';
-        const flCrit = fl.filter(x => dias(x.data_servico) <= 2), flAten = fl.filter(x => dias(x.data_servico) >= 3 && dias(x.data_servico) <= 7), flFut = fl.filter(x => dias(x.data_servico) > 7);
-        const feCrit = fe.filter(x => dias(x.data_inicio) <= 15), feAten = fe.filter(x => dias(x.data_inicio) > 15 && dias(x.data_inicio) <= 30);
+        if (!window.Pendencias) return;
+        const r = await Pendencias.carregar(_supabase, perfilIndex);
+        const equipe = r.itens.filter(i => i.com !== 'GESTOR' && i.assunto !== 'datas');
+        const crit = equipe.filter(i => i.nivel === 'critico');
         const box = document.getElementById('boxUrgentes');
-        if (!flCrit.length && !flAten.length && !feCrit.length && !feAten.length && !flFut.length && !ra.count && !rc.count) { box.classList.add('hidden'); return; }
-        const quando = d => { const n = dias(d); return n < 0 ? `<b class="text-white bg-rose-700 px-1 rounded">JÁ PASSOU (${-n}d)</b>` : n === 0 ? '<b>HOJE</b>' : n === 1 ? '<b>AMANHÃ</b>' : `em ${n} dias`; };
-        const dbr = d => d.slice(8, 10) + '/' + d.slice(5, 7);
-        const itemFl = x => `<li>• ${x.tipo_solicitacao === 'HORA_EXTRA' ? '⏰ HE' : '🧑‍🤝‍🧑 Freela'} <b>${curto(nomes[x.funcionario_id])}</b> · ${x.loja_solicitante || ''} · ${dbr(x.data_servico)} (${quando(x.data_servico)}) · aguardando ${etapa(x.status)}</li>`;
-        const itemFe = x => `<li>• 🏖 <b>${curto(nomes[x.funcionario_id])}</b> · começa ${dbr(x.data_inicio)} (${quando(x.data_inicio)}) · ${x.dias}d · ${x.status.replace('_', ' ').toLowerCase()}</li>`;
-        const crit = [...flCrit.map(itemFl), ...feCrit.map(itemFe)], aten = [...flAten.map(itemFl), ...feAten.map(itemFe)];
-        box.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
-        box.innerHTML = `
-          <div class="${crit.length ? 'bg-rose-600 text-white border-rose-700 animate-pulse-lento' : 'bg-emerald-50 text-emerald-800 border-emerald-200'} border-2 rounded-xl p-3 text-xs">
-            <div class="font-black uppercase tracking-wide">🚨 Crítico: decidir agora (${crit.length})</div>
-            ${crit.length ? `<ul class="mt-1 space-y-0.5 max-h-40 overflow-y-auto">${crit.join('')}</ul>` : '<div class="mt-1">Nada perto da data aguardando aprovação.</div>'}
-            <div class="mt-2 flex gap-2 flex-wrap"><a href="rh_aprovacao_freelance.html" class="bg-white/90 text-rose-800 font-bold px-2 py-1 rounded">Aprovar freelance / HE →</a><a href="ferias.html" class="bg-white/90 text-rose-800 font-bold px-2 py-1 rounded">Férias →</a></div>
-          </div>
-          <div class="bg-amber-50 border-2 border-amber-300 text-amber-900 rounded-xl p-3 text-xs">
-            <div class="font-black uppercase tracking-wide">⚠ Atenção: próximos dias (${aten.length})</div>
-            ${aten.length ? `<ul class="mt-1 space-y-0.5 max-h-40 overflow-y-auto">${aten.join('')}</ul>` : '<div class="mt-1">Nada para os próximos 7 dias (freelance/HE) ou 30 dias (férias).</div>'}
-            ${flFut.length ? `<div class="mt-2 text-[11px]">⏳ ${flFut.length} freelance/HE para daqui a mais de 7 dias: <b>aprove mais perto da data</b> (se a pessoa não vier, a aprovação precisa ser estornada).</div>` : ''}
-            ${ra.count ? `<div class="mt-1 text-[11px]">💸 ${ra.count} abatimento(s) aguardando o líder da loja. <a href="abatimentos.html" class="underline font-bold">ver</a></div>` : ''}
-            ${rc.count ? `<div class="mt-1 text-[11px] font-bold">👤 ${rc.count} pedido(s) de cadastro de pessoa nova aguardando o RH. <a href="cadastro_solicitacoes.html" class="underline">cadastrar</a></div>` : ''}
-          </div>`;
-      } catch (err) { console.error('Urgentes:', err); }
+        if (!equipe.length) { box.classList.add('hidden'); return; }
+        const por = {}; crit.forEach(i => por[i.com] = (por[i.com] || 0) + 1);
+        const NOME = { RH: 'RH', SUPERVISOR: 'supervisor', LIDER: 'líderes' };
+        box.className = 'flex items-center gap-3 cartao';
+        box.style.padding = '12px 18px';
+        box.innerHTML = crit.length
+          ? `<span class="ponto-pisca"></span><span class="flex-1 text-sm"><b>${crit.length} pendência(s) da equipe fora do prazo</b> <span style="color:#5B6472">· ${Object.entries(por).map(([q, n]) => (NOME[q] || q) + ' ' + n).join(' · ')} · só para acompanhar</span></span><span class="text-sm font-semibold" style="color:#1D4ED8">Central de pendências →</span>`
+          : `<span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#12B76A"></span><span class="flex-1 text-sm"><b>Equipe em dia</b> <span style="color:#5B6472">· ${equipe.length} pendência(s) dentro do prazo</span></span><span class="text-sm font-semibold" style="color:#1D4ED8">Central de pendências →</span>`;
+      } catch (err) { console.error('Pendências:', err); }
     }
 
     // status do envio do 5º dia útil no botão "Resumo da competência"
@@ -753,6 +660,7 @@
 
     // NOVA FUNÇÃO: Busca e Agrupa Pendências de Freelance por Loja
     async function carregarPendenciasFreelance() {
+      return;   // 21/10/2026: plantões pendentes por loja estão na Central de pendências
       try {
         const { data, error } = await _supabase
           .from('freelance_solicitacoes')
@@ -798,6 +706,9 @@
         const { data: funcionarios } = await _supabase.from('funcionarios').select('*');
         const { data: itensFolha } = await buscarTudo(() => _supabase.from('folha_itens').select('*').eq('competencia', competenciaMMYYYY));
         const { data: eventos } = await _supabase.from('tipos_eventos').select('*');
+        const { data: lojasTab } = await _supabase.from('lojas').select('*');
+        const nomeLojaId = {}; (lojasTab || []).forEach(l => nomeLojaId[l.id] = l.nome_loja || l.nome || '');
+        const comLoja = {};   // comissão somada pela loja do cadastro do funcionário (21/10/2026)
 
         const emps = empresas || [];
         const funcs = (funcionarios || []).filter(f => !ehSocio(f));
@@ -868,11 +779,18 @@
             }
           }
 
-          if (rubricaStr.includes('PERFUMARIA')) cPerf += val;
-          if (rubricaStr.includes('2018') || rubricaStr.includes('SM E GN') || rubricaStr.includes('SM / GN') || rubricaStr.includes('SIMILAR') || rubricaStr.includes('GENERICO')) cSim += val;
-          if (rubricaStr.includes('VITAMINA')) cVit += val;
-          if (rubricaStr.includes('VALOR FIXO') || rubricaStr.includes('UNITÁRIO')) cFix += val;
-          if (rubricaStr.includes('SIDNEY')) cSid += val;
+          const comK = {};
+          if (rubricaStr.includes('PERFUMARIA')) { cPerf += val; comK.perf = val; }
+          if (rubricaStr.includes('2018') || rubricaStr.includes('SM E GN') || rubricaStr.includes('SM / GN') || rubricaStr.includes('SIMILAR') || rubricaStr.includes('GENERICO')) { cSim += val; comK.sim = val; }
+          if (rubricaStr.includes('VITAMINA')) { cVit += val; comK.vit = val; }
+          if (rubricaStr.includes('VALOR FIXO') || rubricaStr.includes('UNITÁRIO')) { cFix += val; comK.fix = val; }
+          if (rubricaStr.includes('SIDNEY')) { cSid += val; comK.sid = val; }
+          if (Object.keys(comK).length) {
+            const fl = funcs.find(f => String(f.id) === String(item.funcionario_id));
+            const nl = (fl && nomeLojaId[fl.loja_id]) || 'SEM LOJA NO CADASTRO';
+            const cl = comLoja[nl] = comLoja[nl] || { perf: 0, sim: 0, vit: 0, fix: 0, sid: 0 };
+            Object.entries(comK).forEach(([k, v]) => cl[k] += v);
+          }
 
           const funcObj = funcs.find(f => String(f.id) === String(item.funcionario_id));
           if (funcObj) {
@@ -915,6 +833,19 @@
         document.getElementById('comFix').innerText = 'R$ ' + cFix.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('comSid').innerText = 'R$ ' + cSid.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('comTotal').innerText = 'R$ ' + (cPerf + cSim + cVit + cFix + cSid).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        {
+          const m2 = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const numL = n => { const m = String(n || '').match(/LOJA\s*0*(\d+)/i); return m ? parseInt(m[1], 10) : 999; };
+          const ks = Object.keys(comLoja).sort((a, b) => numL(a) - numL(b) || a.localeCompare(b, 'pt-BR'));
+          const tl = o => o.perf + o.sim + o.vit + o.fix + o.sid;
+          const t = { perf: cPerf, sim: cSim, vit: cVit, fix: cFix, sid: cSid };
+          document.getElementById('listaComissaoLoja').innerHTML = ks.length ? `<table class="tab-res">
+            <thead><tr><th>Loja</th><th>Perfumaria</th><th>Similar e genérico</th><th>Vitaminas</th><th>Valor fixo</th><th>Sidney</th><th>Total</th></tr></thead>
+            <tbody>${ks.map(k => { const o = comLoja[k]; return `<tr><td><b>${k}</b></td><td>${m2(o.perf)}</td><td>${m2(o.sim)}</td><td>${m2(o.vit)}</td><td>${m2(o.fix)}</td><td>${m2(o.sid)}</td><td style="font-weight:700">${m2(tl(o))}</td></tr>`; }).join('')}
+            <tr class="tot"><td>Total</td><td>${m2(t.perf)}</td><td>${m2(t.sim)}</td><td>${m2(t.vit)}</td><td>${m2(t.fix)}</td><td>${m2(t.sid)}</td><td style="color:#C69560">${m2(tl(t))}</td></tr></tbody></table>
+            <div class="px-5 py-2 text-[11px]" style="color:#5B6472;border-top:1px solid #EEF0F3">Comissão paga ao funcionário, somada pela loja do cadastro dele.</div>`
+            : '<div class="text-center py-4 text-xs" style="color:#5B6472">Nenhuma comissão lançada nesta competência.</div>';
+        }
 
         const containerEmp = document.getElementById('listaEmpresasResumo');
         const listaEmpArr = Object.values(resumoEmpresas);
@@ -940,56 +871,46 @@
           const liq = e => e.contabil + e.naoContabil - e.descontos;
           const corLiq = v => v < 0 ? 'text-rose-600' : 'text-emerald-700';
           const linhaEmp = e => `
-                    <tr class="hover:bg-slate-50 transition text-[11px]">
-                      <td class="py-1.5 px-1.5 font-bold text-slate-800 truncate max-w-[130px]">${e.nome}</td>
-                      <td class="py-1.5 px-1.5 text-center text-slate-600 font-mono">${e.ativosCount}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-700">${moedaEmp(e.contabil)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-600">${moedaEmp(e.naoContabil)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-700">${moedaEmp(e.contabil + e.naoContabil)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-rose-600">${e.descontos ? '− ' + moedaEmp(e.descontos) : moedaEmp(0)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono font-bold ${corLiq(liq(e))}">${moedaEmp(liq(e))}</td>
+                    <tr>
+                      <td><b>${e.nome}</b></td>
+                      <td>${e.ativosCount}</td>
+                      <td>${moedaEmp(e.contabil)}</td>
+                      <td>${moedaEmp(e.naoContabil)}</td>
+                      <td>${moedaEmp(e.contabil + e.naoContabil)}</td>
+                      <td style="color:#B42318">${e.descontos ? '− ' + moedaEmp(e.descontos) : moedaEmp(0)}</td>
+                      <td style="font-weight:700;color:${liq(e) < 0 ? '#B42318' : '#05603A'}">${moedaEmp(liq(e))}</td>
                     </tr>`;
           const linhaSub = (rot, s) => `
-                    <tr class="bg-slate-100 text-[11px] font-bold">
-                      <td class="py-1.5 px-1.5 text-slate-700 uppercase text-[10px] tracking-wide">${rot}</td>
-                      <td class="py-1.5 px-1.5 text-center font-mono text-slate-700">${s.ativos}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-800">${moedaEmp(s.contabil)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-800">${moedaEmp(s.naoContabil)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-slate-800">${moedaEmp(s.contabil + s.naoContabil)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono text-rose-700">${s.descontos ? '− ' + moedaEmp(s.descontos) : moedaEmp(0)}</td>
-                      <td class="py-1.5 px-1.5 text-right font-mono ${corLiq(liq(s))}">${moedaEmp(liq(s))}</td>
+                    <tr class="sub">
+                      <td>${rot}</td>
+                      <td>${s.ativos}</td>
+                      <td>${moedaEmp(s.contabil)}</td>
+                      <td>${moedaEmp(s.naoContabil)}</td>
+                      <td>${moedaEmp(s.contabil + s.naoContabil)}</td>
+                      <td style="color:#B42318">${s.descontos ? '− ' + moedaEmp(s.descontos) : moedaEmp(0)}</td>
+                      <td>${moedaEmp(liq(s))}</td>
                     </tr>`;
           const subLojas = somar(grpLojas), subOutras = somar(grpOutras);
           const corpoEmp = (grpLojas.length ? grpLojas.map(linhaEmp).join('') + linhaSub('Subtotal lojas', subLojas) : '')
                          + (grpOutras.length ? grpOutras.map(linhaEmp).join('') + linhaSub('Subtotal empresas', subOutras) : '');
 
           containerEmp.innerHTML = `
-            <table class="w-full text-left border-collapse tab-sem-quebra">
+            <table class="tab-res">
               <thead>
-                <tr class="text-[10px] text-slate-400 uppercase border-b border-slate-200">
-                  <th class="py-1.5 px-1.5 font-semibold">Unidade (valores em R$)</th>
-                  <th class="py-1.5 px-1.5 font-semibold text-center" title="Funcionários ativos">Ativos</th>
-                  <th class="py-1.5 px-1.5 font-semibold text-right">Contábil</th>
-                  <th class="py-1.5 px-1.5 font-semibold text-right">Não Contábil</th>
-                  <th class="py-1.5 px-1.5 font-semibold text-right">Total bruto</th>
-                  <th class="py-1.5 px-1.5 font-semibold text-right">Descontos</th>
-                  <th class="py-1.5 px-1.5 font-semibold text-right">Líquido</th>
-                </tr>
+                <tr><th>Unidade</th><th title="Funcionários ativos">Ativos</th><th>Contábil</th><th>Não contábil</th><th>Total bruto</th><th>Descontos</th><th>Líquido</th></tr>
               </thead>
-              <tbody class="divide-y divide-slate-100">
+              <tbody>
                 ${corpoEmp}
-              </tbody>
-              <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-bold text-[11px]">
-                <tr>
-                  <td class="py-2 px-1.5 text-slate-900 uppercase">Total geral</td>
-                  <td class="py-2 px-1.5 text-center font-mono text-slate-800">${totalAtivosEmp}</td>
-                  <td class="py-2 px-1.5 text-right font-mono text-slate-900">${totalContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2 px-1.5 text-right font-mono text-slate-900">${totalNaoContabilEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2 px-1.5 text-right font-mono text-slate-900">${totalGeralEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2 px-1.5 text-right font-mono text-rose-700">${totalDescEmp ? '− ' : ''}${totalDescEmp.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                  <td class="py-2 px-1.5 text-right font-mono ${corLiq(totalGeralEmp - totalDescEmp)}">${(totalGeralEmp - totalDescEmp).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                <tr class="tot">
+                  <td>Total geral</td>
+                  <td>${totalAtivosEmp}</td>
+                  <td>${moedaEmp(totalContabilEmp)}</td>
+                  <td>${moedaEmp(totalNaoContabilEmp)}</td>
+                  <td>${moedaEmp(totalGeralEmp)}</td>
+                  <td>${totalDescEmp ? '− ' : ''}${moedaEmp(totalDescEmp)}</td>
+                  <td style="color:#C69560">${moedaEmp(totalGeralEmp - totalDescEmp)}</td>
                 </tr>
-              </tfoot>
+              </tbody>
             </table>
           `;
         }
@@ -1003,6 +924,7 @@
           return mC === mesAtivoNum && aC === anoAtivoStr;
         });
 
+        document.getElementById('qtdNovos').innerText = novosColab.length;
         const containerNovos = document.getElementById('listaNovosColaboradores');
         if (novosColab.length === 0) {
           containerNovos.innerHTML = `<div class="text-slate-400 text-center py-2 text-xs">Nenhum novo colaborador cadastrado nesta competência.</div>`;
