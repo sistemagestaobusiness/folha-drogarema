@@ -18,7 +18,7 @@
     .linha-kpi.l2 { border-top: 0; padding-top: 1px; margin-top: 0; }
     .kpis { align-items: start; }
     .com-grade { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #EEF0F3; }
-    .com-grade .linha-kpi { margin-top: 0; padding-top: 1px; border-top: 0; }
+    .com-grade .linha-kpi { margin-top: 0; padding-top: 1px; border-top: 0; white-space: nowrap; }
     .linha-kpi .mono { color: #14181F; }
     .btn-escuro { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border-radius: 7px; font-size: 13px; font-weight: 600; background: #12161C; color: #fff; border: 0; }
     .btn-escuro:hover { background: #262D37; }
@@ -142,7 +142,7 @@
     </div>
 
     <!-- INDICADORES -->
-    <div class="kpis grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div class="kpis grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
       <div class="cartao">
         <div class="rotulo">Líquido a pagar</div>
         <div id="valLiquidoConsolidado" class="valor" style="color:#05603A">R$ 0,00</div>
@@ -159,11 +159,11 @@
         <div id="qtdFuncionariosAtivos" class="valor">0</div>
         <div class="linha-kpi"><span>novos na competência</span><span id="qtdNovos" class="mono">0</span></div>
       </div>
-      <div class="cartao">
+      <div class="cartao md:col-span-2 xl:col-span-2">
         <div class="rotulo">Comissões</div>
         <div id="comTotal" class="valor">R$ 0,00</div>
         <div class="com-grade">
-          <div class="linha-kpi"><span>SM e GN</span><span id="comSim" class="mono">R$ 0,00</span></div>
+          <div class="linha-kpi"><span>similar e genérico</span><span id="comSim" class="mono">R$ 0,00</span></div>
           <div class="linha-kpi"><span>perfumaria</span><span id="comPerf" class="mono">R$ 0,00</span></div>
           <div class="linha-kpi"><span>Sidney</span><span id="comSid" class="mono">R$ 0,00</span></div>
           <div class="linha-kpi"><span>vitaminas</span><span id="comVit" class="mono">R$ 0,00</span></div>
