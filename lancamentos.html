@@ -140,6 +140,7 @@
 
             <div id="avisoItemTravado" class="hidden bg-emerald-50 border border-emerald-300 text-emerald-800 p-2.5 rounded-lg text-[11px] font-bold">
               🔒 Pagamento já confirmado pelo Financeiro. Este lançamento não pode ser excluído e só o EVENTO pode ser trocado.
+              <div class="font-normal mt-1">Faltou algum dia ou valor? Faça um <b>novo lançamento</b> só com a diferença (ex.: os dias que ficaram de fora).</div>
             </div>
 
             <div>
@@ -1865,7 +1866,11 @@
           alert(`Este lançamento é ${orig.tipo} e já foi pago. Escolha um evento do mesmo tipo (${orig.tipo}).`);
           return;
         }
-        if (ehPropriaFicha(funcionario_id)) { if (await solicitarAoGestor(idEdicao, 'UPDATE', { rubrica })) { cancelarEdicao(); carregarLancamentosNovo(); } return; }
+        // item pago: só troca de evento, gravada direto (fica na auditoria) — também na ficha do próprio RH (regra de 21/10/2026)
+        if (rubrica === orig.rubrica) {
+          alert('Nada mudou: o evento escolhido é o mesmo.\n\nEste lançamento já foi PAGO. Se faltou algum dia ou valor, faça um NOVO lançamento só com a diferença.');
+          return;
+        }
         const { error: errTroca } = await _supabase.from('folha_itens').update({ rubrica }).eq('id', idEdicao);
         if (errTroca) { alert('Erro ao trocar o evento: ' + errTroca.message); return; }
         cancelarEdicao();
@@ -1974,7 +1979,16 @@
 
       let error;
       if (idEdicao) {
-        if (ehPropriaFicha(funcionario_id)) { if (await solicitarAoGestor(idEdicao, 'UPDATE', payload)) { cancelarEdicao(); carregarLancamentosNovo(); } return; }
+        if (ehPropriaFicha(funcionario_id)) {
+          // pedido vazio não vai para o Gestor (regra de 21/10/2026)
+          const mesmo = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+          const n = v => v == null || v === '' ? null : Number(v);
+          const igual = Object.keys(payload).every(k => ['valor', 'valor_bruto', 'abatimento_sigiloso', 'parcela_atual', 'total_parcelas'].includes(k)
+            ? n(payload[k]) === n(itemOriginal[k]) : k === 'motivo_ajuste' ? (payload[k] || '') === (itemOriginal[k] || '') : mesmo(payload[k], itemOriginal[k]));
+          if (igual) { alert('Nada mudou neste lançamento. Nenhum pedido foi enviado ao Gestor.'); return; }
+          if (await solicitarAoGestor(idEdicao, 'UPDATE', payload)) { cancelarEdicao(); carregarLancamentosNovo(); }
+          return;
+        }
         ({ error } = await _supabase.from('folha_itens').update(payload).eq('id', idEdicao));
       } else {
         // alerta de duplicidade: mesmo evento já lançado para a pessoa nesta competência (regra de 16/10/2026)

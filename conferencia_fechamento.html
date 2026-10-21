@@ -160,13 +160,20 @@
     // ------------------------------------------------------------------ alterações da própria ficha (Gestor)
     function renderAprov() {
       const g = perfil === 'GESTOR', pend = alts.filter(a => a.status === 'PENDENTE'), dec = alts.filter(a => a.status !== 'PENDENTE').slice(0, 30);
+      const ROT = { rubrica: 'evento', valor: 'valor', tipo: 'tipo', motivo_ajuste: 'motivo do ajuste', fixo: 'fixo', parcela_atual: 'parcela', total_parcelas: 'total de parcelas', vencimento_pagamento: 'data de pagamento', reembolso_dias: 'dias do reembolso' };
+      const brData = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '-';
+      const fmtCampo = (k, v) => v == null || v === '' ? '-' : k === 'valor' ? 'R$ ' + num(v)
+        : k === 'vencimento_pagamento' ? brData(v)
+        : k === 'reembolso_dias' ? (Array.isArray(v) ? v.map(d => `${brData(d.data)} ${esc(d.trajeto || '')} (${num(d.valor)})`).join('; ') : '-') : esc(v);
       const linha = a => { const an = a.antes || {}, de = a.depois || {};
-        const mud = a.acao === 'DELETE' ? `<b class="text-red-700">EXCLUIR</b> ${esc(an.rubrica)} · ${num(an.valor)}`
-          : Object.keys(de).filter(k => ['rubrica', 'valor', 'tipo', 'motivo_ajuste', 'fixo', 'parcela_atual', 'total_parcelas', 'vencimento_pagamento'].includes(k) && String(de[k] ?? '') !== String(an[k] ?? ''))
-              .map(k => `${k}: <s class="text-slate-400">${esc(an[k])}</s> → <b>${esc(de[k])}</b>`).join('<br>') || `${esc(an.rubrica)} (sem mudança visível)`;
+        const mud = a.acao === 'DELETE' ? `<b class="text-red-700">EXCLUIR</b> ${esc(an.rubrica)} · R$ ${num(an.valor)}`
+          : Object.keys(ROT).filter(k => k in de && JSON.stringify(de[k] ?? '') !== JSON.stringify(an[k] ?? '') && !(k === 'valor' && Number(de[k]) === Number(an[k])))
+              .map(k => `${ROT[k]}: <s class="text-slate-400">${fmtCampo(k, an[k])}</s> → <b>${fmtCampo(k, de[k])}</b>`).join('<br>')
+            || `<span class="text-amber-700 font-bold">nenhuma mudança no pedido</span>`;
+        const atual = `<div class="text-[11px] text-slate-600">${esc(an.rubrica)} · <b>R$ ${num(an.valor)}</b>${an.reembolso_dias ? ' · dias: ' + fmtCampo('reembolso_dias', an.reembolso_dias) : ''}</div>`;
         return `<div class="bg-white rounded-xl p-3 text-xs flex flex-wrap gap-4 items-center">
           <div class="flex-1 min-w-[260px]"><div class="font-bold text-slate-900 text-sm">${esc(a.nome)} · ${esc(a.competencia || '')}</div>
-            <div class="text-[11px] mt-1">${mud}</div><div class="text-[11px] text-slate-700 mt-1"><b>Motivo:</b> ${esc(a.motivo)}</div>
+            ${atual}<div class="text-[11px] mt-1">${mud}</div><div class="text-[11px] text-slate-700 mt-1"><b>Motivo:</b> ${esc(a.motivo)}</div>
             <div class="text-[10px] text-slate-400">${esc(a.solicitado_por || '')} · ${dh(a.solicitado_em)}</div></div>
           ${a.status === 'PENDENTE' ? (g ? `<div class="flex flex-col gap-1.5 min-w-[200px]"><button onclick="decidir('${a.id}', true)" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 font-bold cursor-pointer">✓ Aprovar</button>
             <div class="flex gap-1"><input id="rec_${a.id}" class="inp !py-1 text-[11px]" placeholder="motivo da recusa"><button onclick="decidir('${a.id}', false)" class="bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg px-3 font-bold cursor-pointer">Recusar</button></div></div>` : '<span class="text-[11px] font-bold text-red-700">⏳ aguardando o Gestor</span>')
