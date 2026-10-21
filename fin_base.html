@@ -60,7 +60,7 @@
       <label class="desc"><input type="checkbox" id="soSem" onchange="desenharCats()"> só sem grupo</label>
       <input id="busca" class="inp busca" placeholder="procurar categoria" oninput="desenharCats()">
     </div>
-    <div class="rola" style="max-height: 480px; overflow: auto"><table class="t"><thead><tr><th>Categoria (plano de contas do Alpha7)</th><th>Nome no fluxo</th><th>Grupo</th></tr></thead><tbody id="tbCats"></tbody></table></div>
+    <div class="rola" style="max-height: 480px; overflow: auto"><table class="t"><thead><tr><th>Categoria (plano de contas do Alpha7)</th><th>Nome no fluxo</th><th>Grupo</th><th title="Não sai dinheiro (ex.: notas fiscais de despesa externas): fica fora do fluxo e da conciliação">Fora do fluxo</th></tr></thead><tbody id="tbCats"></tbody></table></div>
   </section>
 
   <section class="card" style="margin-top: 14px; overflow: hidden">
@@ -97,18 +97,20 @@
           <td><input class="inp" style="width: 110px" value="${esc(c.banco || '')}" onchange="salvarConta(${k}, 'banco', this.value.toUpperCase())"></td>
           <td><input class="inp" style="width: 70px" value="${esc(c.empresa || '')}" onchange="salvarConta(${k}, 'empresa', this.value.toUpperCase())"></td>
           <td><input type="checkbox" ${c.no_fluxo ? 'checked' : ''} onchange="salvarConta(${k}, 'no_fluxo', this.checked)"></td><td><input type="checkbox" ${c.ativa ? 'checked' : ''} onchange="salvarConta(${k}, 'ativa', this.checked)"></td></tr>`).join('');
+        if (/[?&]sem=1/.test(location.search) && !window._semAplicado) { $('soSem').checked = true; window._semAplicado = true; }
         desenharCats();
       } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); }
     }
 
     function desenharCats() {
       const so = $('soSem').checked, b = $('busca').value.trim().toUpperCase();
-      const l = cats.filter(c => (!so || !c.grupo) && (!b || String(c.plano).toUpperCase().includes(b) || String(c.nome || '').toUpperCase().includes(b)))
+      const l = cats.filter(c => (!so || (!c.grupo && !c.fora_do_fluxo)) && (!b || String(c.plano).toUpperCase().includes(b) || String(c.nome || '').toUpperCase().includes(b)))
         .sort((a, b2) => (a.grupo ? 1 : 0) - (b2.grupo ? 1 : 0));
       $('tbCats').innerHTML = l.map(c => `<tr><td title="${esc(c.plano)}">${esc(String(c.plano).split('>').slice(-2).join(' › '))}</td>
         <td><input class="inp" style="width: 220px" value="${esc(c.nome || '')}" onchange="salvarCat(${cats.indexOf(c)}, 'nome', this.value)"></td>
-        <td><select class="inp" onchange="salvarCat(${cats.indexOf(c)}, 'grupo', this.value || null)" style="${c.grupo ? '' : 'border-color: #FDA29B'}"><option value="">sem grupo</option>${grupos.map(g => `<option ${g === c.grupo ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td></tr>`).join('')
-        || '<tr><td colspan="3" class="desc">Nenhuma categoria.</td></tr>';
+        <td><select class="inp" onchange="salvarCat(${cats.indexOf(c)}, 'grupo', this.value || null)" style="${c.grupo || c.fora_do_fluxo ? '' : 'border-color: #FDA29B'}"><option value="">sem grupo</option>${grupos.map(g => `<option ${g === c.grupo ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td>
+        <td style="text-align: center"><input type="checkbox" ${c.fora_do_fluxo ? 'checked' : ''} onchange="salvarCat(${cats.indexOf(c)}, 'fora_do_fluxo', this.checked)"></td></tr>`).join('')
+        || '<tr><td colspan="4" class="desc">Nenhuma categoria.</td></tr>';
     }
 
     async function salvarCat(k, campo, valor) {

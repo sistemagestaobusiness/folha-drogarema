@@ -39,6 +39,8 @@
     .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
     .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 18px; margin-top: 2px; }
     @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      .t tr.prevforn td { background: #FFFAEB; color: #93370D; font-style: italic; }
+    .t tr.prevforn td.l { padding-left: 34px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -180,10 +182,13 @@
       // pagamentos
       h += sec('Pagamentos');
       const grupos = [...cad.grupos]; if (calc.dias.some(d => d.grupos['SEM GRUPO'])) grupos.push('SEM GRUPO');
+      const FORN = 'FORNECEDORES', temForn = grupos.includes(FORN);
       grupos.forEach(g => {
-        const tem = calc.dias.some(d => d.grupos[g]); if (!tem) return;
-        const ab = abertos.has(g);
-        h += linha(g === 'SEM GRUPO' ? 'Sem grupo (corrigir no Alpha7)' : g.charAt(0) + g.slice(1).toLowerCase(), d => d.grupos[g] && d.grupos[g].tot, { cls: 'grp', chev: ab, attr: `data-g="${esc(g)}"` });
+        const tem = calc.dias.some(d => d.grupos[g]); if (!tem && !(g === FORN)) return;
+        const ab = abertos.has(g), eForn = g === FORN;
+        h += linha(g === 'SEM GRUPO' ? 'Sem grupo (corrigir no Alpha7)' : g.charAt(0) + g.slice(1).toLowerCase(), d => ((d.grupos[g] && d.grupos[g].tot) || 0) + (eForn ? d.forn || 0 : 0), { cls: 'grp', chev: ab, attr: `data-g="${esc(g)}"` });
+        // previsão manual de fornecedor: dentro do grupo, sempre visível e com cor própria (21/10/2026)
+        if (eForn) h += linha('✎ Previsão de fornecedor (manual · não é título do Alpha7)', d => d.forn, { cls: 'prevforn', edit: podeEditar() ? 'fornecedor' : '', title: 'Valor informado à mão para os dias futuros: clique na célula para informar' });
         if (ab) {
           const cats = new Set(); calc.dias.forEach(d => d.grupos[g] && Object.keys(d.grupos[g].cats).forEach(p => cats.add(p)));
           [...cats].sort((a, b) => ((cad.categorias[a] || {}).ordem || 999) - ((cad.categorias[b] || {}).ordem || 999)).forEach(p => {
@@ -192,7 +197,7 @@
           });
         }
       });
-      h += linha('Previsão de fornecedor (manual)', d => d.forn, { cls: 'grp', edit: podeEditar() ? 'fornecedor' : '' });
+      if (!temForn) h += linha('✎ Previsão de fornecedor (manual · não é título do Alpha7)', d => d.forn, { cls: 'prevforn', edit: podeEditar() ? 'fornecedor' : '' });
       h += linha('Total de pagamentos', d => d.totPag, { cls: 'saldo' });
       // saldo
       h += sec('Saldo');
@@ -236,8 +241,11 @@
     async function alertas() {
       const { data } = await _supabase.from('fin_cargas').select('*').eq('status', 'APLICADA').order('id', { ascending: false }).limit(1);
       const c = (data || [])[0], r = (c && c.resumo) || {}; let h = '';
-      if (r.sem_grupo && r.sem_grupo.length) { const nomes = r.sem_grupo.slice(0, 3).map(x => x.credor).join(', ');
-        h += `<a href="fin_importar.html" class="alerta verm" style="flex: 1 1 360px"><span class="ponto"></span><span style="flex: 1"><b>${r.sem_grupo.length} fornecedor(es) sem grupo</b> · ${esc(nomes)}${r.sem_grupo.length > 3 ? ' e mais ' + (r.sem_grupo.length - 3) : ''} · corrigir o plano de contas no Alpha7 e subir de novo</span><b>Ver →</b></a>`; }
+      const { data: sg } = await _supabase.rpc('fn_fin_sem_grupo');
+      if (sg && (sg.sem_plano || []).length) { const l = sg.sem_plano, v = l.reduce((a, x) => a + Number(x.valor || 0), 0);
+        h += `<a href="fin_importar.html" class="alerta verm" style="flex: 1 1 360px"><span class="ponto"></span><span style="flex: 1"><b>${l.reduce((a, x) => a + x.titulos, 0)} título(s) sem plano de contas</b> · ${esc(l.slice(0, 3).map(x => x.credor).join(', '))}${l.length > 3 ? ' e mais ' + (l.length - 3) : ''} · ${brl(v)} · corrigir no Alpha7</span><b>Ver →</b></a>`; }
+      if (sg && (sg.sem_grupo || []).length) { const l = sg.sem_grupo;
+        h += `<a href="fin_base.html?sem=1" class="alerta neutro" style="flex: 1 1 320px"><span class="ponto aten"></span><span style="flex: 1"><b>${l.length} plano(s) de contas sem grupo no fluxo</b> · classificar na Base do fluxo</span><b>Classificar →</b></a>`; }
       const ate = r.extrato_ate || r.venda_ate;
       if (!c) h += `<a href="fin_importar.html" class="alerta neutro" style="flex: 1 1 300px"><span class="ponto aten"></span><span style="flex: 1">Nenhuma carga do Alpha7 ainda.</span><b>Importar →</b></a>`;
       else if (ate && ate < FluxoCore.somaDia(hoje, -1)) h += `<a href="fin_importar.html" class="alerta neutro" style="flex: 1 1 300px"><span class="ponto aten"></span><span style="flex: 1">Última carga com extrato até <b>${ate.slice(8, 10)}/${ate.slice(5, 7)}</b> · os dias seguintes até ontem aparecem como "sem carga"</span><b>Importar →</b></a>`;

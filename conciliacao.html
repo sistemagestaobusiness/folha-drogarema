@@ -86,17 +86,19 @@
       const mes = $('fMes').value; if (!mes) return;
       const ini = mes + '-01', fim = isoDe(new Date(+mes.slice(0, 4), +mes.slice(5, 7), 0));
       try {
-        const [ex, tp, tpend, cc] = await Promise.all([
+        const [ex, tp, tpend, cc, foraL] = await Promise.all([
           tudo(() => _supabase.from('fin_extrato').select('id, data, conta, valor, descricao, documento').gte('data', ini).lte('data', fim).lt('valor', 0).order('data').order('id')),
           tudo(() => _supabase.from('fin_cp').select('id, status, vencimento, venc_util, pagamento, documento, parcela, valor, credor, unidade, plano, conta_pagadora').eq('status', 'Paga').gte('pagamento', somaDia(ini, -7)).lte('pagamento', somaDia(fim, 7)).order('pagamento').order('id')),
-          tudo(() => _supabase.from('fin_cp').select('id, status, vencimento, venc_util, documento, parcela, valor, credor, unidade, conta_pagadora').eq('status', 'Pendente').gte('venc_util', somaDia(ini, -20)).lte('venc_util', somaDia(fim, 10)).order('venc_util').order('id')),
-          tudo(() => _supabase.from('fin_conc').select('*').eq('mes', mes).order('em'))]);
+          tudo(() => _supabase.from('fin_cp').select('id, status, vencimento, venc_util, documento, parcela, valor, credor, unidade, plano, conta_pagadora').eq('status', 'Pendente').gte('venc_util', somaDia(ini, -20)).lte('venc_util', somaDia(fim, 10)).order('venc_util').order('id')),
+          tudo(() => _supabase.from('fin_conc').select('*').eq('mes', mes).order('em')),
+          tudo(() => _supabase.from('fin_categorias').select('plano').eq('fora_do_fluxo', true).order('plano'))]);
+        const fora = new Set(foraL.map(c => c.plano));   // ex.: notas fiscais de despesa externas: não sai dinheiro
         // ordinal para débitos repetidos (mesmo dia, conta, valor, documento e histórico)
         const cont = {};
         saidas = ex.map(e => { const base = [e.data, e.conta, r2(-e.valor).toFixed(2), e.documento || '', String(e.descricao || '').slice(0, 40)].join('|');
           cont[base] = (cont[base] || 0) + 1; return { ...e, v: r2(-e.valor), chave: base + '#' + cont[base] }; });
-        titulos = tp.map(t => ({ ...t, v: r2(t.valor), conta: String(t.conta_pagadora || '').toUpperCase(), chave: chaveTit(t) }));
-        pendentes = tpend.map(t => ({ ...t, v: r2(t.valor), chave: chaveTit(t) }));
+        titulos = tp.filter(t => !fora.has(t.plano)).map(t => ({ ...t, v: r2(t.valor), conta: String(t.conta_pagadora || '').toUpperCase(), chave: chaveTit(t) }));
+        pendentes = tpend.filter(t => !fora.has(t.plano)).map(t => ({ ...t, v: r2(t.valor), chave: chaveTit(t) }));
         conc = cc; aberto = null;
         conciliar(ini, fim); desenhar();
       } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); $('lista').innerHTML = ''; }

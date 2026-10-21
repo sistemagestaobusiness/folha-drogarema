@@ -53,13 +53,28 @@
     </div>
   </section>
 
-  <section id="boxSem" class="card" style="display: none; margin-top: 14px; overflow: hidden">
+  <section id="boxSemPlano" class="card" style="display: none; margin-top: 14px; overflow: hidden">
     <div style="padding: 12px 16px 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
-      <span class="ponto"></span><h2 style="flex: 1">Fornecedores sem grupo no fluxo de caixa</h2>
-      <span class="desc">Corrigir o plano de contas no Alpha7 e importar de novo</span>
+      <span class="ponto"></span><h2 style="flex: 1">Títulos sem plano de contas · corrigir no Alpha7</h2>
+      <span class="desc">depois de corrigir no Alpha7, importe o arquivo de novo</span>
     </div>
-    <div class="rola"><table class="t"><thead><tr><th>Fornecedor</th><th class="n">Títulos</th><th class="n">Valor</th><th>Plano de contas no Alpha7</th></tr></thead><tbody id="tbSem"></tbody></table></div>
-    <div class="desc" style="padding: 8px 16px 12px; border-top: 1px solid var(--linha)">Títulos em aberto ou pagos no período aberto. Plano de contas novo e legítimo: o Gestor escolhe o grupo uma vez na Base do fluxo.</div>
+    <div class="rola" style="max-height: 360px; overflow: auto"><table class="t"><thead><tr><th>Fornecedor</th><th class="n">Títulos</th><th class="n">Valor</th></tr></thead><tbody id="tbSemPlano"></tbody></table></div>
+  </section>
+
+  <section id="boxSemGrupo" class="card" style="display: none; margin-top: 14px; overflow: hidden">
+    <div style="padding: 12px 16px 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+      <span class="ponto aten"></span><h2 style="flex: 1">Plano de contas novo, sem grupo no fluxo · classificar na Base do fluxo</h2>
+      <a class="btn" href="fin_base.html?sem=1">Classificar →</a>
+    </div>
+    <div class="rola"><table class="t"><thead><tr><th>Plano de contas no Alpha7</th><th>Fornecedores</th><th class="n">Títulos</th><th class="n">Valor</th></tr></thead><tbody id="tbSemGrupo"></tbody></table></div>
+    <div class="desc" style="padding: 8px 16px 12px; border-top: 1px solid var(--linha)">O plano está certo no Alpha7: só falta dizer em qual grupo do fluxo ele entra. Não precisa importar de novo.</div>
+  </section>
+
+  <section id="boxFora" class="card" style="display: none; margin-top: 14px; overflow: hidden">
+    <div style="padding: 12px 16px 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+      <h2 style="flex: 1">Fora do fluxo · sem saída de dinheiro</h2><span class="desc" id="lblFora"></span>
+    </div>
+    <div class="rola"><table class="t"><thead><tr><th>Mês (vencimento)</th><th class="n">Títulos</th><th class="n">Valor</th></tr></thead><tbody id="tbFora"></tbody></table></div>
   </section>
 
   <section class="card" style="margin-top: 14px; overflow: hidden">
@@ -193,7 +208,7 @@
         feitos = lotes.length + 1; $('barra').style.width = '100%';
         $('lblProg').innerText = `Pronto em ${Math.round((Date.now() - t0) / 1000)} s · contas a pagar ${Number(r.cp || 0).toLocaleString('pt-BR')} títulos · extrato até ${dbr(r.extrato_ate)} · venda até ${dbr(r.venda_ate)}`;
         lido = null;
-        mostrarSemGrupo(r.sem_grupo);
+        mostrarSemGrupo();
         await carregarCargas();
       } catch (e) {
         aviso('A carga não foi concluída e nada foi alterado: ' + esc(e.message || e));
@@ -201,17 +216,27 @@
       }
     }
 
-    function mostrarSemGrupo(lista) {
-      lista = lista || [];
-      $('boxSem').style.display = lista.length && veValores() ? 'block' : 'none';
-      $('tbSem').innerHTML = lista.map(x => `<tr><td><b>${esc(x.credor || '(sem fornecedor)')}</b></td><td class="n">${x.titulos}</td><td class="n">${brl(x.valor)}</td><td style="color: var(--verm-tx)">${x.plano ? esc(String(x.plano).split('>').pop().trim()) + ' · sem grupo no fluxo' : 'sem plano de contas'}</td></tr>`).join('');
+    // pendências de classificação calculadas na hora (21/10/2026): somem assim que corrigidas
+    async function mostrarSemGrupo() {
+      if (!veValores()) return;
+      const { data: r, error } = await _supabase.rpc('fn_fin_sem_grupo');
+      if (error || !r) return;
+      const sp = r.sem_plano || [], sg = r.sem_grupo || [], fo = r.fora || [];
+      $('boxSemPlano').style.display = sp.length ? 'block' : 'none';
+      $('tbSemPlano').innerHTML = sp.map(x => `<tr><td><b>${esc(x.credor || '(sem fornecedor)')}</b></td><td class="n">${x.titulos}</td><td class="n">${brl(x.valor)}</td></tr>`).join('');
+      $('boxSemGrupo').style.display = sg.length ? 'block' : 'none';
+      $('tbSemGrupo').innerHTML = sg.map(x => `<tr><td title="${esc(x.plano)}"><b>${esc(String(x.plano).split('>').pop().trim())}</b></td><td class="desc">${esc(x.fornecedores || '')}</td><td class="n">${x.titulos}</td><td class="n">${brl(x.valor)}</td></tr>`).join('');
+      $('boxFora').style.display = fo.length ? 'block' : 'none';
+      $('lblFora').innerText = (r.fora_planos || []).map(p => String(p).split('>').pop().trim()).join(' · ');
+      $('tbFora').innerHTML = fo.map(x => `<tr><td>${esc(x.mes.slice(5, 7) + '/' + x.mes.slice(0, 4))}</td><td class="n">${x.titulos}</td><td class="n">${brl(x.valor)}</td></tr>`).join('');
     }
 
     async function carregarCargas() {
+      mostrarSemGrupo();
       const { data } = await _supabase.from('fin_cargas').select('*').order('id', { ascending: false }).limit(10);
       const l = data || [];
       $('tbCargas').innerHTML = l.length ? l.map(c => { const r = c.resumo || {};
-        const sit = c.status === 'APLICADA' ? `<span class="pill p-ok">ok</span>${r.sem_grupo && r.sem_grupo.length && veValores() ? ` <span class="pill p-crit">${r.sem_grupo.length} sem grupo</span>` : ''}`
+        const sit = c.status === 'APLICADA' ? '<span class="pill p-ok">ok</span>'
           : c.status === 'ENVIANDO' ? '<span class="pill p-aten">enviando</span>' : '<span class="pill p-info">não concluída</span>';
         return `<tr><td>${new Date(c.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td><td>${esc(String(c.por || '').split('@')[0])}</td><td>${esc(c.arquivo || '')}</td>
           <td class="n">${r.cp != null ? Number(r.cp).toLocaleString('pt-BR') : '-'}</td><td class="n">${r.extrato != null ? Number(r.extrato).toLocaleString('pt-BR') : '-'}</td><td>${r.extrato_ate ? 'extrato ' + dbr(r.extrato_ate).slice(0, 5) : '-'}${r.venda_ate ? ' · venda ' + dbr(r.venda_ate).slice(0, 5) : ''}</td><td>${sit}</td></tr>`; }).join('')
@@ -223,7 +248,6 @@
         $('ultSub').innerText = `por ${String(ult.por || '').split('@')[0]} em ${new Date(ult.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
         const dias = Math.floor((Date.now() - new Date(ult.em).getTime()) / 86400000);
         $('ultPill').innerHTML = dias >= 1 ? `<span class="pill ${dias >= 2 ? 'p-crit' : 'p-aten'}">${dias} dia(s) sem carga</span>` : '<span class="pill p-ok">carga de hoje</span>';
-        if (!$('boxSem').style.display || $('boxSem').style.display === 'none') mostrarSemGrupo(r.sem_grupo);
       } else { $('ultTit').innerText = 'nenhuma ainda'; }
     }
 
