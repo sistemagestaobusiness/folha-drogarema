@@ -32,7 +32,7 @@
           </div>
           <div id="listaPerfis" class="space-y-2"></div>
           <div class="text-[10px] text-slate-500 bg-white border border-slate-200 rounded-lg p-3 leading-relaxed">
-            🔒 <b>GESTOR</b> e <b>RH</b> são perfis privilegiados e fixos: só o GESTOR atribui, altera ou remove esses perfis. O RH atribui apenas os demais perfis e não mexe em quem já é GESTOR ou RH.
+            🔒 <b>GESTOR</b> e <b>RH</b> são perfis privilegiados (as telas do RH são escolhidas aqui; o GESTOR vê todas): só o GESTOR atribui, altera ou remove esses perfis. O RH atribui apenas os demais perfis e não mexe em quem já é GESTOR ou RH.
             Ninguém altera o próprio acesso, e o último GESTOR ativo não pode ser removido.
           </div>
         </div>
@@ -161,9 +161,9 @@
       atual = cod ? perfis.find(p => p.codigo === cod) : { codigo: '', nome: '', descricao: '', pagina_inicial: '', ativo: true, novo: true };
       renderizarPerfis();
       $('edForm').classList.remove('hidden');
-      const fixo = atual.codigo === 'GESTOR' || atual.codigo === 'RH';
+      const fixo = atual.codigo === 'GESTOR';   // RH editável desde 21/10/2026
       $('edTitulo').innerText = atual.novo ? 'Novo perfil' : atual.nome;
-      $('edSub').innerText = fixo ? (atual.codigo === 'GESTOR' ? 'Acesso a todas as telas, sempre.' : 'Acesso amplo à operação (todas as telas, exceto Perfis e acessos).') : (atual.descricao || '');
+      $('edSub').innerText = fixo ? 'Acesso a todas as telas, sempre.' : (atual.descricao || '');
       $('edBadge').innerHTML = fixo ? '<span class="text-[10px] bg-rose-100 text-rose-800 px-2 py-1 rounded font-black">🔒 FIXO · NÃO EDITÁVEL</span>' : '';
       $('pNome').value = atual.nome || ''; $('pCodigo').value = atual.codigo || ''; $('pDescricao').value = atual.descricao || ''; $('pAtivo').checked = atual.ativo !== false;
       $('pCodigo').disabled = !atual.novo;

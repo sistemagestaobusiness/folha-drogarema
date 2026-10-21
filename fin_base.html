@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Base do fluxo de caixa - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fin_estilo.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <style>.sec { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center } select.inp { padding-right: 4px } .busca { width: 260px }</style>
+</head>
+<body>
+  <div class="cab">
+    <div><div class="sub">Só o Gestor · regras que alimentam o fluxo de caixa e os saldos</div><h1>Base do fluxo de caixa</h1></div>
+  </div>
+  <div id="aviso" class="alerta verm"></div>
+
+  <div class="grade2">
+    <section class="card p">
+      <h2>Período fixo</h2>
+      <div class="desc">O que está fixo não muda com novas cargas. Assim o relatório do Alpha7 pode começar no dia seguinte e fica bem menor.</div>
+      <div class="sec"><span class="pill p-esc" id="lblFixo">-</span><span class="desc">fixar até</span><input type="date" id="dFixar" class="inp"><button type="button" class="btn" onclick="previaFixar()">Conferir</button></div>
+      <div id="previa" class="desc" style="margin-top: 8px"></div>
+    </section>
+
+    <section class="card p">
+      <h2>Ajuste diário do saldo previsto</h2>
+      <div class="desc">Desconto do cartão e Farmácia Popular, que cai na CEF e fica fora do fluxo.</div>
+      <div class="sec">
+        <label class="desc">Dia útil <input id="aUtil" class="inp" style="width: 110px"></label>
+        <label class="desc">Segunda <input id="aSeg" class="inp" style="width: 110px"></label>
+        <button type="button" class="btn e" onclick="salvarAjuste()">Salvar</button>
+      </div>
+    </section>
+
+    <section class="card p">
+      <h2>Saldo de partida das contas</h2>
+      <div class="desc">Saldo real informado numa data. Dali em diante o sistema soma o extrato. Um saldo novo corrige qualquer diferença.</div>
+      <div class="sec">
+        <select id="pConta" class="inp" style="max-width: 280px"></select>
+        <input type="date" id="pData" class="inp"><input id="pValor" class="inp" placeholder="saldo" style="width: 120px">
+        <button type="button" class="btn e" onclick="salvarPartida()">Gravar</button>
+      </div>
+      <div class="rola" style="margin-top: 8px"><table class="t"><thead><tr><th>Conta</th><th>Empresa</th><th>Último saldo de partida</th><th class="n">Saldo</th></tr></thead><tbody id="tbPartida"></tbody></table></div>
+    </section>
+
+    <section class="card p">
+      <h2>Anos do fluxo</h2>
+      <div class="desc">Cada ano aberto ganha os dias e os totais do mês sozinho.</div>
+      <div class="sec" id="boxAnos"></div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top: 14px; overflow: hidden">
+    <div style="padding: 12px 16px 4px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+      <h2 style="flex: 1">Grupos e categorias</h2>
+      <label class="desc"><input type="checkbox" id="soSem" onchange="desenharCats()"> só sem grupo</label>
+      <input id="busca" class="inp busca" placeholder="procurar categoria" oninput="desenharCats()">
+    </div>
+    <div class="rola" style="max-height: 480px; overflow: auto"><table class="t"><thead><tr><th>Categoria (plano de contas do Alpha7)</th><th>Nome no fluxo</th><th>Grupo</th></tr></thead><tbody id="tbCats"></tbody></table></div>
+  </section>
+
+  <section class="card" style="margin-top: 14px; overflow: hidden">
+    <div style="padding: 12px 16px 4px"><h2>Contas bancárias</h2><div class="desc">"No fluxo" = entra no saldo do fluxo de caixa. As outras aparecem só no quadro de saldos.</div></div>
+    <div class="rola"><table class="t"><thead><tr><th>Conta (como vem no extrato)</th><th>Nome</th><th>Banco</th><th>Empresa</th><th>No fluxo</th><th>Ativa</th></tr></thead><tbody id="tbContas"></tbody></table></div>
+  </section>
+
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dbr = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '-';
+    const numBR = s => Number(String(s).trim().replace(/\./g, '').replace(',', '.'));
+    let grupos = [], cats = [], contas = [], partidas = [], config = {}, fixo = null, email = '';
+    function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
+    const ok = r => { if (r.error) throw r.error; return r.data; };
+
+    async function carregar() {
+      try {
+        const r = await Promise.all([_supabase.from('fin_grupos').select('*').order('ordem'), _supabase.from('fin_categorias').select('*').order('ordem'),
+          _supabase.from('fin_contas').select('*').order('ordem'), _supabase.from('fin_saldo_partida').select('*').order('data', { ascending: false }),
+          _supabase.from('fin_config').select('*'), _supabase.rpc('fn_fin_fixo')]);
+        grupos = ok(r[0]).map(g => g.grupo); cats = ok(r[1]); contas = ok(r[2]); partidas = ok(r[3]);
+        config = {}; ok(r[4]).forEach(c => config[c.chave] = c.valor); fixo = String(ok(r[5])).slice(0, 10);
+        $('lblFixo').innerText = 'fixo até ' + dbr(fixo);
+        $('aUtil').value = brl(config.ajuste_util); $('aSeg').value = brl(config.ajuste_segunda);
+        const anos = config.anos || []; const max = Math.max(...anos);
+        $('boxAnos').innerHTML = anos.map(a => `<span class="pill ${a < 2026 ? 'p-info' : 'p-esc'}">${a}</span>`).join('') + `<button type="button" class="btn" onclick="abrirAno(${max + 1})">Abrir ${max + 1}</button>`;
+        $('pConta').innerHTML = contas.map(c => `<option value="${esc(c.conta)}">${esc(c.nome || c.conta)}</option>`).join('');
+        $('tbPartida').innerHTML = contas.map(c => { const p = partidas.find(x => x.conta === c.conta);
+          return `<tr><td>${esc(c.nome || c.conta)}</td><td>${esc(c.empresa || '')}</td><td>${p ? dbr(p.data) + ` <span class="desc">${esc(p.origem || '')}</span>` : '<span class="desc">sem saldo de partida</span>'}</td><td class="n">${p ? brl(p.saldo) : '-'}</td></tr>`; }).join('');
+        $('tbContas').innerHTML = contas.map((c, k) => `<tr><td>${esc(c.conta)}</td><td><input class="inp" style="width: 220px" value="${esc(c.nome || '')}" onchange="salvarConta(${k}, 'nome', this.value)"></td>
+          <td><input class="inp" style="width: 110px" value="${esc(c.banco || '')}" onchange="salvarConta(${k}, 'banco', this.value.toUpperCase())"></td>
+          <td><input class="inp" style="width: 70px" value="${esc(c.empresa || '')}" onchange="salvarConta(${k}, 'empresa', this.value.toUpperCase())"></td>
+          <td><input type="checkbox" ${c.no_fluxo ? 'checked' : ''} onchange="salvarConta(${k}, 'no_fluxo', this.checked)"></td><td><input type="checkbox" ${c.ativa ? 'checked' : ''} onchange="salvarConta(${k}, 'ativa', this.checked)"></td></tr>`).join('');
+        desenharCats();
+      } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); }
+    }
+
+    function desenharCats() {
+      const so = $('soSem').checked, b = $('busca').value.trim().toUpperCase();
+      const l = cats.filter(c => (!so || !c.grupo) && (!b || String(c.plano).toUpperCase().includes(b) || String(c.nome || '').toUpperCase().includes(b)))
+        .sort((a, b2) => (a.grupo ? 1 : 0) - (b2.grupo ? 1 : 0));
+      $('tbCats').innerHTML = l.map(c => `<tr><td title="${esc(c.plano)}">${esc(String(c.plano).split('>').slice(-2).join(' › '))}</td>
+        <td><input class="inp" style="width: 220px" value="${esc(c.nome || '')}" onchange="salvarCat(${cats.indexOf(c)}, 'nome', this.value)"></td>
+        <td><select class="inp" onchange="salvarCat(${cats.indexOf(c)}, 'grupo', this.value || null)" style="${c.grupo ? '' : 'border-color: #FDA29B'}"><option value="">sem grupo</option>${grupos.map(g => `<option ${g === c.grupo ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select></td></tr>`).join('')
+        || '<tr><td colspan="3" class="desc">Nenhuma categoria.</td></tr>';
+    }
+
+    async function salvarCat(k, campo, valor) {
+      const c = cats[k];
+      const { error } = await _supabase.from('fin_categorias').update({ [campo]: valor }).eq('plano', c.plano);
+      if (error) return alert('Não foi possível gravar: ' + error.message);
+      c[campo] = valor; desenharCats();
+    }
+    async function salvarConta(k, campo, valor) {
+      const { error } = await _supabase.from('fin_contas').update({ [campo]: valor }).eq('conta', contas[k].conta);
+      if (error) { alert('Não foi possível gravar: ' + error.message); return carregar(); }
+      contas[k][campo] = valor;
+    }
+    async function salvarPartida() {
+      const conta = $('pConta').value, data = $('pData').value, v = numBR($('pValor').value);
+      if (!data || !isFinite(v) || $('pValor').value.trim() === '') return alert('Informe a data e o saldo.');
+      if (data <= fixo) return alert('A data precisa ser depois do período fixo (' + dbr(fixo) + ').');
+      const { error } = await _supabase.from('fin_saldo_partida').upsert({ conta, data, saldo: v, origem: 'informado na Base do fluxo', criado_por: email });
+      if (error) return alert('Não foi possível gravar: ' + error.message);
+      $('pValor').value = ''; carregar();
+    }
+    async function salvarAjuste() {
+      const u = numBR($('aUtil').value), s = numBR($('aSeg').value); if (!isFinite(u) || !isFinite(s)) return alert('Valores inválidos.');
+      const { error } = await _supabase.from('fin_config').upsert([{ chave: 'ajuste_util', valor: u, alterado_por: email }, { chave: 'ajuste_segunda', valor: s, alterado_por: email }]);
+      if (error) return alert('Não foi possível gravar: ' + error.message);
+      carregar();
+    }
+    async function abrirAno(a) {
+      if (!confirm(`Abrir ${a} no fluxo de caixa (previsão)?`)) return;
+      const anos = [...new Set([...(config.anos || []), a])].sort();
+      const { error } = await _supabase.from('fin_config').upsert({ chave: 'anos', valor: anos, alterado_por: email });
+      if (error) return alert('Não foi possível gravar: ' + error.message);
+      carregar();
+    }
+    async function previaFixar() {
+      const ate = $('dFixar').value; if (!ate) return;
+      if (ate <= fixo) return alert('Já está fixo até ' + dbr(fixo) + '.');
+      const ini = new Date(fixo + 'T12:00:00'); ini.setDate(ini.getDate() + 1); const de = ini.toISOString().slice(0, 10);
+      $('previa').innerText = 'Somando o período…';
+      const tudo = [];
+      for (let p = 0; ; p += 1000) { const { data, error } = await _supabase.rpc('fn_fin_fluxo', { p_ini: de, p_fim: ate }).range(p, p + 999); if (error) return aviso(esc(error.message)); tudo.push(...data); if (data.length < 1000) break; }
+      const soma = t => tudo.filter(x => x.tipo === t).reduce((a, x) => a + Number(x.valor), 0);
+      const meses = new Set(tudo.map(x => String(x.data).slice(0, 7))).size;
+      $('previa').innerHTML = `De ${dbr(de)} a ${dbr(ate)} (${meses} meses): venda <b>${brl(soma('venda'))}</b> · créditos no extrato <b>${brl(soma('cred'))}</b> · pagamentos realizados <b>${brl(soma('cat'))}</b>.
+        Confira com a sua planilha antes de fixar. <button type="button" class="btn e" style="margin-left: 8px" onclick="fixar('${ate}')">Fixar até ${dbr(ate)}</button>`;
+    }
+    async function fixar(ate) {
+      if (!confirm(`Fixar o fluxo até ${dbr(ate)}? Depois disso as cargas do Alpha7 não mudam mais esse período.`)) return;
+      const { data, error } = await _supabase.rpc('fn_fin_fixar', { p_ate: ate });
+      if (error) return alert('Não foi possível fixar: ' + error.message);
+      $('previa').innerText = 'Período fixo até ' + dbr(data.fixo_ate) + '.'; carregar();
+    }
+
+    (async () => { const { data: { user } } = await _supabase.auth.getUser(); if (!user) { location.href = 'login.html'; return; } email = user.email; carregar(); })();
+  </script>
+</body>
+</html>

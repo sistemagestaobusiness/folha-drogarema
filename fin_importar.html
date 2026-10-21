@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importar Alpha7 · Financeiro - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fin_estilo.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    .drop { display: flex; align-items: center; gap: 18px; padding: 22px; border: 2px dashed #D0D5DD; border-radius: 10px; background: #fff; cursor: pointer; }
+    .drop.sobre { border-color: var(--ouro); background: #FFFBF5; }
+    .barra { height: 8px; background: var(--linha); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+    .barra div { height: 8px; background: var(--escuro); width: 0; transition: width .2s; }
+  </style>
+</head>
+<body>
+  <div class="cab">
+    <div>
+      <div class="sub">Uma vez por dia · o arquivo "Análise Financeira" do Alpha7 com todas as abas</div>
+      <h1>Importar Alpha7 · Financeiro</h1>
+    </div>
+  </div>
+  <div id="aviso" class="alerta verm"></div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px">
+    <label id="drop" class="drop">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#364152" stroke-width="2" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>
+      <span style="flex: 1"><b style="font-size: 15px" id="dropTit">Arraste o arquivo aqui ou clique para escolher</b><br>
+        <span class="desc" id="dropSub">O sistema reconhece as abas sozinho: BASE CP, EXTRATO e VENDA A7</span></span>
+      <input type="file" id="arquivo" accept=".xlsx,.xls" style="display: none">
+    </label>
+    <div class="card p">
+      <div class="desc">Última carga</div>
+      <div id="ultTit" style="font-size: 17px; font-weight: 700; margin-top: 2px">-</div>
+      <div id="ultSub" class="desc" style="margin-top: 2px"></div>
+      <div id="ultPill" style="margin-top: 8px"></div>
+    </div>
+  </div>
+
+  <section id="boxLido" class="card" style="display: none; margin-top: 14px; overflow: hidden">
+    <div style="padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap">
+      <h2>O que foi lido no arquivo</h2><span class="desc" id="lblFixo"></span>
+    </div>
+    <div class="rola"><table class="t"><thead><tr><th>Aba</th><th class="n">Linhas</th><th>Período</th><th>Como entra no sistema</th></tr></thead><tbody id="tbLido"></tbody></table></div>
+    <div style="padding: 12px 16px; border-top: 1px solid var(--linha); display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+      <button type="button" id="btnEnviar" class="btn e" onclick="enviar()">Enviar para o sistema</button>
+      <button type="button" class="btn" onclick="limpar()">Cancelar</button>
+      <div style="flex: 1; min-width: 220px"><div id="lblProg" class="desc"></div><div class="barra"><div id="barra"></div></div></div>
+    </div>
+  </section>
+
+  <section id="boxSem" class="card" style="display: none; margin-top: 14px; overflow: hidden">
+    <div style="padding: 12px 16px 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+      <span class="ponto"></span><h2 style="flex: 1">Fornecedores sem grupo no fluxo de caixa</h2>
+      <span class="desc">Corrigir o plano de contas no Alpha7 e importar de novo</span>
+    </div>
+    <div class="rola"><table class="t"><thead><tr><th>Fornecedor</th><th class="n">Títulos</th><th class="n">Valor</th><th>Plano de contas no Alpha7</th></tr></thead><tbody id="tbSem"></tbody></table></div>
+    <div class="desc" style="padding: 8px 16px 12px; border-top: 1px solid var(--linha)">Títulos em aberto ou pagos no período aberto. Plano de contas novo e legítimo: o Gestor escolhe o grupo uma vez na Base do fluxo.</div>
+  </section>
+
+  <section class="card" style="margin-top: 14px; overflow: hidden">
+    <div style="padding: 12px 16px 4px"><h2>Últimas cargas</h2></div>
+    <div class="rola"><table class="t"><thead><tr><th>Quando</th><th>Quem</th><th>Arquivo</th><th class="n">Títulos</th><th class="n">Extrato</th><th>Dados até</th><th>Situação</th></tr></thead><tbody id="tbCargas"></tbody></table></div>
+  </section>
+
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dbr = iso => iso ? String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4) : '-';
+    const LOTE = 2000;
+    let perfil = null, fixo = '2000-01-01', lido = null, nomeArquivo = '';
+    const veValores = () => perfil !== 'SUPERVISOR';
+
+    function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
+
+    // ---------- datas do Alpha7: texto dd/mm/aaaa (com ou sem hora), data do Excel ou número de série
+    function iso(v) {
+      if (v === null || v === undefined || v === '') return null;
+      if (v instanceof Date) { if (isNaN(v)) return null; const d = new Date(v.getTime() - v.getTimezoneOffset() * 60000); return d.toISOString().slice(0, 10); }
+      if (typeof v === 'number') { const d = XLSX.SSF.parse_date_code(v); return d ? `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}` : null; }
+      const m = String(v).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+      const m2 = String(v).trim().match(/^(\d{4})-(\d{2})-(\d{2})/); return m2 ? m2[0] : null;
+    }
+    const num = v => { if (typeof v === 'number') return v; if (v === null || v === undefined || v === '') return 0; const s = String(v).trim(); return Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s) || 0; };
+    const txt = v => v === null || v === undefined ? null : String(v).trim() || null;
+    const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+
+    // acha a aba pelo cabeçalho (o nome da aba não importa)
+    function lerAbas(wb) {
+      const res = {};
+      wb.SheetNames.forEach(nome => {
+        const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: null });
+        if (!linhas.length) return;
+        const h = (linhas[0] || []).map(norm);
+        const col = n => h.indexOf(norm(n));
+        if (col('Plano de Contas') >= 0 && col('Data de Vencimento') >= 0) res.cp = { nome, h, col, linhas };
+        else if (col('Conta Bancaria') >= 0 && col('Data Hora') >= 0) res.extrato = { nome, h, col, linhas };
+        else if (col('Data') >= 0 && col('Un. Neg.') >= 0 && col('Venda') >= 0) res.venda = { nome, h, col, linhas };
+      });
+      return res;
+    }
+
+    function preparar(abas) {
+      const out = { cp: [], extrato: [], venda: [], info: {} };
+      if (abas.cp) {
+        const c = abas.cp.col, L = abas.cp.linhas;
+        const k = { origem: c('Origem'), status: c('Status'), venc: c('Data de Vencimento'), doc: c('Numero Documento'), valor: c('Valor'), credor: c('Credor'), unid: c('Unidade'),
+          vutil: c('Data Util de Vencimento'), pag: c('Data Pagamento'), cod: c('Codigo Pagamento'), ret: c('Retiradas Pagamento'), parc: c('Parcela'), descr: c('Descricao'), plano: c('Plano de Contas') };
+        for (let i = 1; i < L.length; i++) { const r = L[i]; if (!r || r[k.valor] === null) continue;
+          const ret = String(r[k.ret] || ''); const mc = ret.match(/^\s*([^()]+?)\s*\(/);
+          out.cp.push({ origem: txt(r[k.origem]), status: txt(r[k.status]), vencimento: iso(r[k.venc]), venc_util: iso(r[k.vutil]), pagamento: iso(r[k.pag]),
+            documento: txt(r[k.doc]), valor: num(r[k.valor]), credor: txt(r[k.credor]), unidade: txt(r[k.unid]), plano: txt(r[k.plano]),
+            conta_pagadora: mc ? mc[1].replace(/[,;]/g, '').trim() : null, codigo_pagamento: txt(r[k.cod]), parcela: txt(r[k.parc]), descricao: txt(r[k.descr]) }); }
+        const vs = out.cp.map(x => x.vencimento).filter(Boolean).sort();
+        out.info.cp = { linhas: out.cp.length, de: vs[0], ate: vs[vs.length - 1], pendentes: out.cp.filter(x => x.status === 'Pendente').length };
+      }
+      if (abas.extrato) {
+        const c = abas.extrato.col, L = abas.extrato.linhas;
+        const k = { data: c('Data Hora'), conta: c('Conta Bancaria'), doc: c('Numero Documento'), valor: c('Valor'), descr: c('Descricao'), tipo: c('Tipo'), infl: c('Influencia Saldo') };
+        let total = 0, fora = 0;
+        for (let i = 1; i < L.length; i++) { const r = L[i]; if (!r || r[k.conta] === null) continue; total++;
+          if (k.infl >= 0 && norm(r[k.infl]) === 'NAO') continue;
+          const d = iso(r[k.data]); if (!d) continue; if (d <= fixo) { fora++; continue; }
+          out.extrato.push({ data: d, conta: String(r[k.conta]).trim().toUpperCase(), valor: num(r[k.valor]), descricao: txt(r[k.descr]), documento: txt(r[k.doc]), tipo: txt(r[k.tipo]) }); }
+        const ds = out.extrato.map(x => x.data).sort();
+        out.info.extrato = { linhas: total, envia: out.extrato.length, fixo: fora, de: ds[0], ate: ds[ds.length - 1], contas: new Set(out.extrato.map(x => x.conta)).size };
+      }
+      if (abas.venda) {
+        const c = abas.venda.col, L = abas.venda.linhas;
+        const k = { data: c('Data'), unid: c('Un. Neg.'), itens: c('Itens'), venda: c('Venda'), desc: c('Desconto'), custo: c('Custo'), lucro: c('Lucro') };
+        for (let i = 1; i < L.length; i++) { const r = L[i]; if (!r) continue; const d = iso(r[k.data]); if (!d || r[k.unid] === null) continue;
+          out.venda.push({ data: d, unidade: String(r[k.unid]).trim(), itens: num(r[k.itens]), venda: num(r[k.venda]), desconto: num(r[k.desc]), custo: num(r[k.custo]), lucro: num(r[k.lucro]) }); }
+        const ds = out.venda.map(x => x.data).sort();
+        out.info.venda = { linhas: out.venda.length, de: ds[0], ate: ds[ds.length - 1] };
+      }
+      return out;
+    }
+
+    async function lerArquivo(f) {
+      if (!f) return;
+      aviso(''); nomeArquivo = f.name;
+      $('dropTit').innerText = 'Lendo ' + f.name + '…'; $('dropSub').innerText = 'Arquivos grandes levam alguns segundos.';
+      try {
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+        const abas = lerAbas(wb);
+        if (!abas.cp && !abas.extrato && !abas.venda) throw new Error('Não encontrei as abas BASE CP, EXTRATO ou VENDA A7 neste arquivo.');
+        lido = preparar(abas);
+        mostrarLido(abas);
+      } catch (e) { aviso('Não foi possível ler o arquivo: ' + esc(e.message || e)); lido = null; }
+      $('dropTit').innerText = 'Arraste o arquivo aqui ou clique para escolher'; $('dropSub').innerText = nomeArquivo ? 'Arquivo lido: ' + nomeArquivo : '';
+    }
+
+    function mostrarLido(abas) {
+      const i = lido.info, linhas = [];
+      if (i.cp) linhas.push(`<tr><td><b>${esc(abas.cp.nome)}</b> · contas a pagar</td><td class="n">${i.cp.linhas.toLocaleString('pt-BR')}</td><td>venc. ${dbr(i.cp.de)} a ${dbr(i.cp.ate)} · ${i.cp.pendentes.toLocaleString('pt-BR')} em aberto</td><td>troca a base inteira (o que já está fixo fica de fora)</td></tr>`);
+      else linhas.push('<tr><td><b>BASE CP</b></td><td class="n">-</td><td colspan="2" style="color: var(--verm-tx)">não veio no arquivo: o contas a pagar fica como estava</td></tr>');
+      if (i.extrato) linhas.push(`<tr><td><b>${esc(abas.extrato.nome)}</b></td><td class="n">${i.extrato.linhas.toLocaleString('pt-BR')}</td><td>${dbr(i.extrato.de)} a ${dbr(i.extrato.ate)} · ${i.extrato.contas} contas</td><td>troca só os dias que vieram, conta por conta${i.extrato.fixo ? ` · ${i.extrato.fixo.toLocaleString('pt-BR')} linhas do período fixo ignoradas` : ''}</td></tr>`);
+      if (i.venda) linhas.push(`<tr><td><b>${esc(abas.venda.nome)}</b> · venda por dia e loja</td><td class="n">${i.venda.linhas.toLocaleString('pt-BR')}</td><td>${dbr(i.venda.de)} a ${dbr(i.venda.ate)}</td><td>troca só os dias que vieram</td></tr>`);
+      $('tbLido').innerHTML = linhas.join('');
+      $('lblFixo').innerText = `Período fixo até ${dbr(fixo)}: o que for anterior não muda mais`;
+      $('boxLido').style.display = 'block'; $('btnEnviar').disabled = false; $('barra').style.width = '0'; $('lblProg').innerText = '';
+    }
+
+    function limpar() { lido = null; $('boxLido').style.display = 'none'; $('arquivo').value = ''; $('dropSub').innerText = 'O sistema reconhece as abas sozinho: BASE CP, EXTRATO e VENDA A7'; }
+
+    async function enviar() {
+      if (!lido) return;
+      $('btnEnviar').disabled = true; aviso('');
+      const t0 = Date.now();
+      try {
+        const { data: carga, error: e0 } = await _supabase.rpc('fn_fin_carga_iniciar', { p_arquivo: nomeArquivo });
+        if (e0) throw e0;
+        const lotes = [];
+        ['cp', 'extrato', 'venda'].forEach(t => { for (let k = 0; k < lido[t].length; k += LOTE) lotes.push([t, lido[t].slice(k, k + LOTE)]); });
+        let feitos = 0;
+        const prog = () => { $('barra').style.width = Math.round(feitos / (lotes.length + 1) * 100) + '%'; $('lblProg').innerText = `Enviando ${feitos} de ${lotes.length} partes…`; };
+        prog();
+        // 3 partes por vez
+        let pos = 0;
+        const trabalhar = async () => { while (pos < lotes.length) { const [t, l] = lotes[pos++];
+          const { error } = await _supabase.rpc('fn_fin_carga_lote', { p_carga: carga, p_tipo: t, p_linhas: l }); if (error) throw error; feitos++; prog(); } };
+        await Promise.all([trabalhar(), trabalhar(), trabalhar()]);
+        $('lblProg').innerText = 'Atualizando a base (contas a pagar, extrato e venda)…';
+        const { data: r, error: e2 } = await _supabase.rpc('fn_fin_carga_aplicar', { p_carga: carga });
+        if (e2) throw e2;
+        feitos = lotes.length + 1; $('barra').style.width = '100%';
+        $('lblProg').innerText = `Pronto em ${Math.round((Date.now() - t0) / 1000)} s · contas a pagar ${Number(r.cp || 0).toLocaleString('pt-BR')} títulos · extrato até ${dbr(r.extrato_ate)} · venda até ${dbr(r.venda_ate)}`;
+        lido = null;
+        mostrarSemGrupo(r.sem_grupo);
+        await carregarCargas();
+      } catch (e) {
+        aviso('A carga não foi concluída e nada foi alterado: ' + esc(e.message || e));
+        $('btnEnviar').disabled = false;
+      }
+    }
+
+    function mostrarSemGrupo(lista) {
+      lista = lista || [];
+      $('boxSem').style.display = lista.length && veValores() ? 'block' : 'none';
+      $('tbSem').innerHTML = lista.map(x => `<tr><td><b>${esc(x.credor || '(sem fornecedor)')}</b></td><td class="n">${x.titulos}</td><td class="n">${brl(x.valor)}</td><td style="color: var(--verm-tx)">${x.plano ? esc(String(x.plano).split('>').pop().trim()) + ' · sem grupo no fluxo' : 'sem plano de contas'}</td></tr>`).join('');
+    }
+
+    async function carregarCargas() {
+      const { data } = await _supabase.from('fin_cargas').select('*').order('id', { ascending: false }).limit(10);
+      const l = data || [];
+      $('tbCargas').innerHTML = l.length ? l.map(c => { const r = c.resumo || {};
+        const sit = c.status === 'APLICADA' ? `<span class="pill p-ok">ok</span>${r.sem_grupo && r.sem_grupo.length && veValores() ? ` <span class="pill p-crit">${r.sem_grupo.length} sem grupo</span>` : ''}`
+          : c.status === 'ENVIANDO' ? '<span class="pill p-aten">enviando</span>' : '<span class="pill p-info">não concluída</span>';
+        return `<tr><td>${new Date(c.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td><td>${esc(String(c.por || '').split('@')[0])}</td><td>${esc(c.arquivo || '')}</td>
+          <td class="n">${r.cp != null ? Number(r.cp).toLocaleString('pt-BR') : '-'}</td><td class="n">${r.extrato != null ? Number(r.extrato).toLocaleString('pt-BR') : '-'}</td><td>${r.extrato_ate ? 'extrato ' + dbr(r.extrato_ate).slice(0, 5) : '-'}${r.venda_ate ? ' · venda ' + dbr(r.venda_ate).slice(0, 5) : ''}</td><td>${sit}</td></tr>`; }).join('')
+        : '<tr><td colspan="7" class="desc">Nenhuma carga ainda.</td></tr>';
+      const ult = l.find(c => c.status === 'APLICADA');
+      if (ult) {
+        const r = ult.resumo || {}, ate = r.extrato_ate || r.venda_ate;
+        $('ultTit').innerText = ate ? 'dados até ' + dbr(ate).slice(0, 5) : 'carga feita';
+        $('ultSub').innerText = `por ${String(ult.por || '').split('@')[0]} em ${new Date(ult.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+        const dias = Math.floor((Date.now() - new Date(ult.em).getTime()) / 86400000);
+        $('ultPill').innerHTML = dias >= 1 ? `<span class="pill ${dias >= 2 ? 'p-crit' : 'p-aten'}">${dias} dia(s) sem carga</span>` : '<span class="pill p-ok">carga de hoje</span>';
+        if (!$('boxSem').style.display || $('boxSem').style.display === 'none') mostrarSemGrupo(r.sem_grupo);
+      } else { $('ultTit').innerText = 'nenhuma ainda'; }
+    }
+
+    async function iniciar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await _supabase.rpc('fn_meu_usuario'); perfil = u ? String(u.perfil || '').toUpperCase() : null;
+      const { data: f } = await _supabase.rpc('fn_fin_fixo'); if (f) fixo = String(f).slice(0, 10);
+      const drop = $('drop'), inp = $('arquivo');
+      inp.addEventListener('change', () => lerArquivo(inp.files[0]));
+      drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('sobre'); });
+      drop.addEventListener('dragleave', () => drop.classList.remove('sobre'));
+      drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('sobre'); lerArquivo(e.dataTransfer.files[0]); });
+      await carregarCargas();
+    }
+    iniciar();
+  </script>
+</body>
+</html>
