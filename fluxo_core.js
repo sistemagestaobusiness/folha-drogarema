@@ -20,7 +20,7 @@
   //        dos últimos 4 dias iguais da semana no mesmo período do mês (1 a 10 / 11 em diante)
   //  tendência: quanto o mês-alvo vendeu em relação às 4 semanas anteriores à data de hoje, em cada ano anterior
   //        (média dos anos, limitada entre 0,80 e 1,30) · loja a loja quando a loja tem histórico; senão, o total
-  //  fator de segurança: × fator (padrão 90%)
+  //  fator de segurança: × fator (padrão 97%)
   const mediana = l => { const o = [...l].sort((a, b) => a - b), m = o.length >> 1; return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2; };
   const anoAtras = (iso, k) => (+iso.slice(0, 4) - k) + iso.slice(4);
   function baseSerie(h, iso, hoje) {
@@ -32,49 +32,71 @@
     }
     const w = dow(iso);
     let l = dias.filter(d => dow(d) === w && (dia(d) <= 10) === ini && dia(d) !== 8 && dia(d) !== 20).slice(0, 4).map(d => h[d]);
-    let txt = `últimos ${l.length} ${NOME_DOW[w]} (dias ${ini ? '1 a 10' : '11+'})`;
-    if (l.length < 2) { l = dias.filter(d => dow(d) === w).slice(0, 4).map(d => h[d]); txt = `últimos ${l.length} ${NOME_DOW[w]}`; }
+    let txt = `últim${ART_DOW[w]} ${l.length} ${NOME_DOW[w]} (dias ${ini ? '1 a 10' : '11+'})`;
+    if (l.length < 2) { l = dias.filter(d => dow(d) === w).slice(0, 4).map(d => h[d]); txt = `últim${ART_DOW[w]} ${l.length} ${NOME_DOW[w]}`; }
     if (!l.length) return { v: 0, txt: 'sem histórico' };
     return { v: Math.min(media(l), mediana(l)), txt: 'menor entre média e mediana dos ' + txt };
   }
-  function tendencia(h, iso, hoje) {
-    const fat = [];
-    for (let k = 1; k <= 3; k++) {
-      const hj = anoAtras(hoje, k), ref = [];
-      for (let d = somaDia(hj, -28); d < hj; d = somaDia(d, 1)) if (h[d] > 0) ref.push(h[d]);
-      const alvo = anoAtras(iso, k), ini = dia(iso) <= 10, mesAlvo = alvo.slice(0, 7), tgt = [];
-      Object.keys(h).forEach(d => { if (d.slice(0, 7) === mesAlvo && (dia(d) <= 10) === ini && h[d] > 0) tgt.push(h[d]); });
-      if (ref.length >= 20 && tgt.length >= 5) fat.push({ ano: +alvo.slice(0, 4), f: media(tgt) / media(ref) });
-    }
-    if (!fat.length) return null;
-    return { f: Math.min(1.3, Math.max(0.8, media(fat.map(x => x.f)))), anos: fat };
-  }
   const NOME_DOW = ['domingos', 'segundas', 'terças', 'quartas', 'quintas', 'sextas', 'sábados'];
+  const ART_DOW = ['os', 'as', 'as', 'as', 'as', 'as', 'os'];
+  const NOME_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const pct = f => (f >= 1 ? '+' : '') + ((f - 1) * 100).toFixed(1).replace('.', ',') + '%';
-  // H: { total: {iso: v}, lojas: {loja: {iso: v}} } · fator: 0,9 = 90%
-  function vendaPrevista(iso, H, hoje, fator = 0.9) {
+  const mil = v => (v / 1000).toFixed(1).replace('.', ',') + ' mil';
+  const idLoja = u => String(parseInt(u, 10) || u);
+  const mediaJanela = (h, ini, fim) => { const l = []; for (let d = ini; d < fim; d = somaDia(d, 1)) if (h[d] > 0) l.push(h[d]); return l; };
+
+  // Venda prevista (regra de 21/10/2026, conservadora)
+  //  lojas antigas: média do mesmo período (1 a 10 / 11+) do mesmo mês nos anos anteriores
+  //                 × crescimento delas (últimas 8 semanas × as mesmas semanas do ano anterior)
+  //                 × peso do dia da semana (8 semanas recentes) · dias 08 e 20 têm peso próprio
+  //  lojas novas (sem ano anterior para comparar, ex.: loja 7): últimas 4 iguais da semana
+  //  tudo × fator de segurança (padrão 97%)
+  // H: { total: {iso: v}, lojas: {loja: {iso: v}} } · novas: {loja: 'aaaa-mm-dd' abertura}
+  function vendaPrevista(iso, H, hoje, fator = 0.97, novas = { 7: '2026-01-02' }) {
     if (!H || !H.total) H = { total: H || {}, lojas: {} };
-    const lojas = Object.keys(H.lojas || {}).filter(l => Object.keys(H.lojas[l]).some(d => d < hoje && d >= somaDia(hoje, -28) && H.lojas[l][d] > 0));
-    const tTot = tendencia(H.total, iso, hoje);
-    let total = 0, partes = [];
-    const calc = (h, rotulo) => {
-      const b = baseSerie(h, iso, hoje), t = tendencia(h, iso, hoje) || tTot;
-      const v = b.v * (t ? t.f : 1);
-      partes.push({ loja: rotulo, base: b.v, tend: t ? t.f : 1, txt: b.txt, propria: !!tendencia(h, iso, hoje) });
-      return v;
-    };
-    if (lojas.length) lojas.forEach(l => { total += calc(H.lojas[l], l); });
-    else total = calc(H.total, 'total');
-    const t = partes.length === 1 ? partes[0] : null;
-    const regra = (t ? t.txt : `soma de ${partes.length} lojas (${partes[0] ? partes[0].txt.replace(/^menor entre média e mediana dos /, '') : ''})`)
-      + (tTot ? ` · tendência ${pct(tTot.f)} (${tTot.anos.map(a => a.ano + ': ' + pct(a.f)).join(', ')})` : ' · sem tendência (falta histórico)')
-      + (partes.length > 1 ? ` · ${partes.filter(p => !p.propria).length} loja(s) sem histórico usam a tendência do total` : '')
-      + ` · × ${Math.round(fator * 100)}% de segurança`;
-    return { valor: total * fator, regra, partes };
+    const lojas = H.lojas || {}, ids = Object.keys(lojas);
+    const comparar = anoAtras(iso, 1).slice(0, 7) + '-01';
+    const ehNova = u => { const ab = novas[idLoja(u)]; return !!ab && ab > comparar; };
+    const nv = ids.filter(ehNova);
+    // série das lojas antigas = total - lojas novas
+    const ant = {}; Object.keys(H.total).forEach(d => { ant[d] = H.total[d] - nv.reduce((a, u) => a + (lojas[u][d] || 0), 0); });
+    const dd = dia(iso), ini = dd <= 10, w = dow(iso);
+    // A · lojas antigas
+    let A = 0, txtA = '';
+    const est = [];
+    for (let k = 1; k <= 3; k++) {
+      const alvo = anoAtras(iso, k), mesAlvo = alvo.slice(0, 7);
+      const lv = Object.keys(ant).filter(d => d.slice(0, 7) === mesAlvo && (dia(d) <= 10) === ini && ant[d] > 0).map(d => ant[d]);
+      const rec = mediaJanela(ant, somaDia(hoje, -56), hoje), pas = mediaJanela(ant, somaDia(anoAtras(hoje, k), -56), anoAtras(hoje, k));
+      if (lv.length >= 5 && rec.length >= 30 && pas.length >= 30) est.push({ ano: +alvo.slice(0, 4), nivel: media(lv), cresc: media(rec) / media(pas) });
+    }
+    const rec8 = Object.keys(ant).filter(d => d < hoje && d >= somaDia(hoje, -56) && ant[d] > 0);
+    const mRec = media(rec8.map(d => ant[d]));
+    let peso = 1, txtPeso = '';
+    if (dd === 8 || dd === 20) {
+      const l = Object.keys(ant).filter(d => d < hoje && d >= somaDia(hoje, -100) && dia(d) === dd && ant[d] > 0);
+      const viz = Object.keys(ant).filter(d => d < hoje && d >= somaDia(hoje, -100) && dia(d) !== 8 && dia(d) !== 20 && ant[d] > 0);
+      if (l.length && viz.length) { peso = media(l.map(d => ant[d])) / media(viz.map(d => ant[d])); txtPeso = `peso do dia ${dd} ${peso.toFixed(2).replace('.', ',')}`; }
+    } else if (mRec > 0) {
+      const l = rec8.filter(d => dow(d) === w && dia(d) !== 8 && dia(d) !== 20);
+      if (l.length >= 3) { peso = media(l.map(d => ant[d])) / mRec; txtPeso = `peso d${ART_DOW[w]} ${NOME_DOW[w]} ${peso.toFixed(2).replace('.', ',')}`; }
+    }
+    if (est.length) {
+      const base = media(est.map(e => e.nivel * Math.min(1.3, Math.max(0.8, e.cresc))));
+      A = base * peso;
+      txtA = `lojas antigas: ${NOME_MES[+iso.slice(5, 7) - 1]} ${ini ? '1 a 10' : '11+'} de ` + est.map(e => `${e.ano} (${mil(e.nivel)} × ${pct(e.cresc)})`).join(', ') + (txtPeso ? ' · ' + txtPeso : '') + ` = ${mil(A)}`;
+    } else {
+      const b = baseSerie(ant, iso, hoje); A = b.v; txtA = `lojas antigas: ${b.txt} = ${mil(A)} (sem ano anterior)`;
+    }
+    // B · lojas novas
+    let B = 0; const txtB = [];
+    nv.forEach(u => { const b = baseSerie(lojas[u], iso, hoje); B += b.v; txtB.push(`loja ${idLoja(u)}: ${b.txt.replace(/^menor entre média e mediana dos /, '')} = ${mil(b.v)}`); });
+    const regra = txtA + (txtB.length ? ' · ' + txtB.join(' · ') : '') + ` · × ${Math.round(fator * 100)}% de segurança`;
+    return { valor: (A + B) * fator, regra, lojasAntigas: A, lojasNovas: B };
   }
 
   // e: { ini, fim, hoje, linhas, categorias:{plano:{grupo,nome}}, contas:[{conta,banco,empresa,no_fluxo}], previsoes:{'venda|iso':v,'fornecedor|iso':v},
-  //      vendaHist:{total:{iso:v}, lojas:{loja:{iso:v}}}, ajusteUtil, ajusteSegunda, fatorVenda }
+  //      vendaHist:{total:{iso:v}, lojas:{loja:{iso:v}}}, ajusteUtil, ajusteSegunda, fatorVenda, lojasNovas:{loja:'aaaa-mm-dd'} }
   function montar(e) {
     const L = e.linhas || [];
     const por = {};   // iso -> acumuladores
@@ -115,7 +137,7 @@
       else {
         const m = e.previsoes['venda|' + iso];
         if (m !== undefined) { venda = m; vendaManual = true; vendaRegra = 'valor informado à mão'; }
-        else { const p = vendaPrevista(iso, e.vendaHist, e.hoje, e.fatorVenda == null ? 0.9 : e.fatorVenda); venda = p.valor; vendaRegra = p.regra; }
+        else { const p = vendaPrevista(iso, e.vendaHist, e.hoje, e.fatorVenda == null ? 0.97 : e.fatorVenda, e.lojasNovas || undefined); venda = p.valor; vendaRegra = p.regra; }
       }
       // pagamentos por grupo
       const fonte = passado ? x.cat : x.catp;

@@ -87,7 +87,7 @@
         grupos = ok(r[0]).map(g => g.grupo); cats = ok(r[1]); contas = ok(r[2]); partidas = ok(r[3]);
         config = {}; ok(r[4]).forEach(c => config[c.chave] = c.valor); fixo = String(ok(r[5])).slice(0, 10);
         $('lblFixo').innerText = 'fixo até ' + dbr(fixo);
-        $('aUtil').value = brl(config.ajuste_util); $('aSeg').value = brl(config.ajuste_segunda); $('aFator').value = String(Math.round((config.venda_fator == null ? 0.9 : Number(config.venda_fator)) * 100));
+        $('aUtil').value = brl(config.ajuste_util); $('aSeg').value = brl(config.ajuste_segunda); $('aFator').value = String(Math.round((config.venda_fator == null ? 0.97 : Number(config.venda_fator)) * 100));
         const anos = config.anos || []; const max = Math.max(...anos);
         $('boxAnos').innerHTML = anos.map(a => `<span class="pill ${a < 2026 ? 'p-info' : 'p-esc'}">${a}</span>`).join('') + `<button type="button" class="btn" onclick="abrirAno(${max + 1})">Abrir ${max + 1}</button>`;
         $('pConta').innerHTML = contas.map(c => `<option value="${esc(c.conta)}">${esc(c.nome || c.conta)}</option>`).join('');

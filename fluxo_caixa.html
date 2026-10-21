@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="fluxo_core.js?v=3"></script>
+  <script src="fluxo_core.js?v=4"></script>
   <style>
     .fc { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: 100%; }
     .fc th, .fc td { padding: 4px 8px; text-align: right; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; border-bottom: 1px solid var(--linha); }
@@ -141,7 +141,7 @@
         const linhas = await rpcTudo('fn_fin_fluxo', { p_ini: buscaIni, p_fim: fim });
         calc = FluxoCore.montar({ ini: buscaIni, fim, hoje, linhas, categorias: cad.categorias, contas: cad.contas, previsoes: cad.previsoes,
           vendaHist: cad.vendaHist, ajusteUtil: Number(cad.config.ajuste_util || 0), ajusteSegunda: Number(cad.config.ajuste_segunda || 0),
-          fatorVenda: cad.config.venda_fator == null ? 0.9 : Number(cad.config.venda_fator) });
+          fatorVenda: cad.config.venda_fator == null ? 0.97 : Number(cad.config.venda_fator), lojasNovas: cad.config.venda_lojas_novas || undefined });
         calc.dias = calc.dias.filter(d => d.iso >= ini);
         desenhar();
         resumo();
