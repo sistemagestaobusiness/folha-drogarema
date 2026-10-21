@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conciliação bancária - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fin_estilo.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <style>
+    .filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .filtros label { display: flex; flex-direction: column; gap: 4px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+    .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; margin-top: 4px; }
+    .abas { display: flex; gap: 4px; border-bottom: 1px solid var(--borda); padding: 0 12px; flex-wrap: wrap; }
+    .abas button { border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--sub); padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent; }
+    .abas button.on { color: var(--txt); border-bottom-color: var(--ouro); }
+    .abas .q { font-size: 11px; background: var(--cinza-bg); color: var(--cinza-tx); border-radius: 999px; padding: 1px 7px; margin-left: 4px; }
+    .abas .q.crit { background: var(--verm-bg); color: var(--verm-tx); }
+    .t td { vertical-align: top; }
+    .t td .mini { font-size: 11.5px; color: var(--sub); }
+    .painel { background: #FAFBFC; border-top: 1px solid var(--linha); padding: 10px 16px 12px; }
+    .painel .t td { background: #fff; }
+    .acoes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .btn.p { min-height: 28px; font-size: 12px; padding: 0 9px; }
+    .ok { color: var(--verde-tx); }
+    @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="cab">
+    <div>
+      <div class="sub">Saídas do extrato × baixas do contas a pagar do Alpha7 · todo débito precisa ter título baixado (inclusive a folha)</div>
+      <h1>Conciliação bancária</h1>
+    </div>
+    <div class="filtros">
+      <label class="desc">Mês <input id="fMes" type="month" class="inp"></label>
+      <label class="desc">Conta <select id="fConta" class="inp" style="min-width: 240px"></select></label>
+      <button class="btn e" onclick="carregar()">Atualizar</button>
+    </div>
+  </div>
+  <div id="aviso" class="alerta verm"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card" style="overflow: hidden">
+    <div class="abas" id="abas"></div>
+    <div class="rola" id="lista"></div>
+  </section>
+
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dbr = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '-';
+    const isoDe = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const somaDia = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoDe(d); };
+    const difDias = (a, b) => Math.round((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 864e5);
+    const r2 = v => Math.round(Number(v || 0) * 100) / 100;
+    const MOTIVOS = ['Tarifa bancária', 'Transferência entre contas', 'Aplicação / resgate', 'Estorno / devolução', 'Outro'];
+    const ROT = { EXATO: 'mesmo dia e valor', AGRUPADO: 'várias NFs num pagamento', DATA: 'data da baixa diferente', CONTA: 'conta diferente na baixa', MANUAL: 'vínculo manual' };
+    let contas = [], saidas = [], titulos = [], pendentes = [], conc = [], res = null, aba = 'pend', aberto = null, email = '';
+
+    function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
+    async function tudo(q) { let out = [], de = 0; for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; } }
+
+    // chaves estáveis (as tabelas são trocadas a cada carga, os ids mudam)
+    const chaveTit = t => [t.credor, t.documento, t.parcela, t.vencimento, r2(t.valor).toFixed(2)].map(x => x ?? '').join('|');
+
+    async function inicio() {
+      const { data: { user } } = await _supabase.auth.getUser(); email = (user && user.email || '').toLowerCase();
+      const hoje = isoDe(new Date()); $('fMes').value = hoje.slice(0, 7);
+      const { data, error } = await _supabase.from('fin_contas').select('*').order('ordem');
+      if (error) return aviso('Não foi possível carregar as contas: ' + esc(error.message));
+      contas = data;
+      $('fConta').innerHTML = '<option value="">Todas as contas da Drogarema</option><option value="*">Todas, inclusive outras empresas</option>'
+        + contas.map(c => `<option value="${esc(c.conta)}">${esc(c.nome || c.conta)}${c.empresa ? ' · ' + esc(c.empresa) : ''}${c.ativa === false ? ' (cancelada)' : ''}</option>`).join('');
+      carregar();
+    }
+
+    async function carregar() {
+      aviso(''); $('lista').innerHTML = '<div class="desc" style="padding: 14px 16px">Carregando…</div>';
+      const mes = $('fMes').value; if (!mes) return;
+      const ini = mes + '-01', fim = isoDe(new Date(+mes.slice(0, 4), +mes.slice(5, 7), 0));
+      try {
+        const [ex, tp, tpend, cc] = await Promise.all([
+          tudo(() => _supabase.from('fin_extrato').select('id, data, conta, valor, descricao, documento').gte('data', ini).lte('data', fim).lt('valor', 0).order('data').order('id')),
+          tudo(() => _supabase.from('fin_cp').select('id, status, vencimento, venc_util, pagamento, documento, parcela, valor, credor, unidade, plano, conta_pagadora').eq('status', 'Paga').gte('pagamento', somaDia(ini, -7)).lte('pagamento', somaDia(fim, 7)).order('pagamento').order('id')),
+          tudo(() => _supabase.from('fin_cp').select('id, status, vencimento, venc_util, documento, parcela, valor, credor, unidade, conta_pagadora').eq('status', 'Pendente').gte('venc_util', somaDia(ini, -20)).lte('venc_util', somaDia(fim, 10)).order('venc_util').order('id')),
+          tudo(() => _supabase.from('fin_conc').select('*').eq('mes', mes).order('em'))]);
+        // ordinal para débitos repetidos (mesmo dia, conta, valor, documento e histórico)
+        const cont = {};
+        saidas = ex.map(e => { const base = [e.data, e.conta, r2(-e.valor).toFixed(2), e.documento || '', String(e.descricao || '').slice(0, 40)].join('|');
+          cont[base] = (cont[base] || 0) + 1; return { ...e, v: r2(-e.valor), chave: base + '#' + cont[base] }; });
+        titulos = tp.map(t => ({ ...t, v: r2(t.valor), conta: String(t.conta_pagadora || '').toUpperCase(), chave: chaveTit(t) }));
+        pendentes = tpend.map(t => ({ ...t, v: r2(t.valor), chave: chaveTit(t) }));
+        conc = cc; aberto = null;
+        conciliar(ini, fim); desenhar();
+      } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); $('lista').innerHTML = ''; }
+    }
+
+    function conciliar(ini, fim) {
+      const f = $('fConta').value, fluxo = new Set(contas.filter(c => c.no_fluxo).map(c => c.conta));
+      const naConta = c => f === '*' ? true : f ? c === f : fluxo.has(c);
+      const usadoT = new Set(), usadoE = new Set(), pares = [];
+      const porChaveT = {}; titulos.forEach(t => (porChaveT[t.chave] = porChaveT[t.chave] || []).push(t));
+      const pegaT = ch => (porChaveT[ch] || []).find(t => !usadoT.has(t.id));
+      const S = saidas;   // conciliação é feita com todas as contas; o filtro só muda o que aparece
+      // 0. vínculos manuais e justificativas
+      const just = [];
+      conc.forEach(c => {
+        const es = (c.extrato_chaves || []).map(k => S.find(e => e.chave === k && !usadoE.has(e.id))).filter(Boolean);
+        if (c.tipo === 'SEM_TITULO') { es.forEach(e => { usadoE.add(e.id); just.push({ e, c }); }); return; }
+        const ts = (c.cp_chaves || []).map(pegaT).filter(Boolean);
+        if (!es.length) return;
+        es.forEach(e => usadoE.add(e.id)); ts.forEach(t => usadoT.add(t.id));
+        pares.push({ es, ts, tipo: 'MANUAL', c });
+      });
+      // índices
+      const idx = {}; titulos.forEach(t => { const k = t.conta + '|' + t.pagamento + '|' + t.v.toFixed(2); (idx[k] = idx[k] || []).push(t); });
+      // 1. mesmo dia, conta e valor
+      S.forEach(e => { if (usadoE.has(e.id)) return; const t = (idx[e.conta + '|' + e.data + '|' + e.v.toFixed(2)] || []).find(x => !usadoT.has(x.id));
+        if (t) { usadoE.add(e.id); usadoT.add(t.id); pares.push({ es: [e], ts: [t], tipo: 'EXATO' }); } });
+      // 2. várias NFs num pagamento: mesmo dia, conta e fornecedor
+      S.forEach(e => { if (usadoE.has(e.id)) return;
+        const grupos = {}; titulos.forEach(t => { if (!usadoT.has(t.id) && t.conta === e.conta && t.pagamento === e.data) (grupos[t.credor] = grupos[t.credor] || []).push(t); });
+        for (const cr in grupos) { const l = grupos[cr]; let achou = null;
+          if (l.length > 1 && Math.abs(l.reduce((a, t) => a + t.v, 0) - e.v) < 0.02) achou = l;
+          else if (l.length > 1 && l.length <= 12) achou = subconjunto(l, e.v);
+          if (achou) { usadoE.add(e.id); achou.forEach(t => usadoT.add(t.id)); pares.push({ es: [e], ts: achou, tipo: 'AGRUPADO' }); break; } } });
+      // 3. mesma conta e valor, baixa até 3 dias antes ou depois
+      S.forEach(e => { if (usadoE.has(e.id)) return;
+        const t = titulos.filter(x => !usadoT.has(x.id) && x.conta === e.conta && Math.abs(x.v - e.v) < 0.01 && Math.abs(difDias(x.pagamento, e.data)) <= 3)
+          .sort((a, b) => Math.abs(difDias(a.pagamento, e.data)) - Math.abs(difDias(b.pagamento, e.data)))[0];
+        if (t) { usadoE.add(e.id); usadoT.add(t.id); pares.push({ es: [e], ts: [t], tipo: 'DATA' }); } });
+      // 4. mesmo dia e valor, conta diferente na baixa
+      S.forEach(e => { if (usadoE.has(e.id)) return;
+        const t = titulos.find(x => !usadoT.has(x.id) && x.pagamento === e.data && Math.abs(x.v - e.v) < 0.01);
+        if (t) { usadoE.add(e.id); usadoT.add(t.id); pares.push({ es: [e], ts: [t], tipo: 'CONTA' }); } });
+      // pendências
+      const semTit = S.filter(e => !usadoE.has(e.id)).map(e => ({ e,
+        sugestao: pendentes.filter(p => Math.abs(p.v - e.v) < 0.01 && Math.abs(difDias(p.venc_util, e.data)) <= 15)
+          .sort((a, b) => Math.abs(difDias(a.venc_util, e.data)) - Math.abs(difDias(b.venc_util, e.data)))[0] || null }));
+      const semSaida = titulos.filter(t => !usadoT.has(t.id) && t.pagamento >= ini && t.pagamento <= fim);
+      const vis = x => naConta(x.e ? x.e.conta : x.es ? x.es[0].conta : x.conta);
+      res = { pares: pares.filter(vis), semTit: semTit.filter(vis), just: just.filter(vis),
+              semSaida: semSaida.filter(t => f === '*' || !t.conta || (f ? t.conta === f : fluxo.has(t.conta) || !contas.some(c => c.conta === t.conta))),
+              total: S.filter(e => naConta(e.conta)) };
+    }
+    function subconjunto(l, alvo) {
+      for (let n = l.length - 1; n >= 2; n--) { const r = comb(l, n, alvo); if (r) return r; }
+      return null;
+    }
+    function comb(l, n, alvo, ini = 0, acc = [], soma = 0) {
+      if (acc.length === n) return Math.abs(soma - alvo) < 0.02 ? [...acc] : null;
+      for (let i = ini; i <= l.length - (n - acc.length); i++) { acc.push(l[i]); const r = comb(l, n, alvo, i + 1, acc, soma + l[i].v); acc.pop(); if (r) return r; }
+      return null;
+    }
+
+    function desenhar() {
+      const R = res, tot = R.total.reduce((a, e) => a + e.v, 0);
+      const vConc = R.pares.reduce((a, p) => a + p.es.reduce((b, e) => b + e.v, 0), 0), vJust = R.just.reduce((a, j) => a + j.e.v, 0);
+      const vSem = R.semTit.reduce((a, x) => a + x.e.v, 0), nSug = R.semTit.filter(x => x.sugestao).length;
+      const pc = tot ? (vConc + vJust) / tot * 100 : 0;
+      $('kpis').innerHTML = `
+        <div class="card p"><div class="desc">Saídas no extrato</div><div class="v">${brl(tot)}</div><div class="desc">${R.total.length} débito(s)</div></div>
+        <div class="card p"><div class="desc">Conciliado</div><div class="v ok">${pc.toFixed(1).replace('.', ',')}%</div><div class="desc">${brl(vConc + vJust)} · ${R.pares.length + R.just.length} débito(s)</div></div>
+        <div class="card p"><div class="desc">Saídas sem título baixado</div><div class="v" style="color: var(--verm)">${brl(vSem)}</div><div class="desc">${R.semTit.length} débito(s)</div></div>
+        <div class="card p"><div class="desc">Possível baixa esquecida no Alpha7</div><div class="v">${nSug}</div><div class="desc">saída igual a um título ainda em aberto</div></div>
+        <div class="card p"><div class="desc">Títulos pagos sem saída no extrato</div><div class="v">${brl(R.semSaida.reduce((a, t) => a + t.v, 0))}</div><div class="desc">${R.semSaida.length} título(s)</div></div>`;
+      const ab = [['pend', 'Saídas sem título', R.semTit.length, true], ['semsaida', 'Títulos sem saída', R.semSaida.length, false],
+                  ['conc', 'Conciliados', R.pares.length, false], ['just', 'Justificados (sem título)', R.just.length, false]];
+      $('abas').innerHTML = ab.map(([k, n, q, crit]) => `<button class="${aba === k ? 'on' : ''}" onclick="aba='${k}'; aberto=null; desenhar()">${n}<span class="q ${crit && q ? 'crit' : ''}">${q}</span></button>`).join('');
+      $('lista').innerHTML = aba === 'pend' ? listaPend() : aba === 'semsaida' ? listaSemSaida() : aba === 'conc' ? listaConc() : listaJust();
+    }
+    const nomeConta = k => { const c = contas.find(x => x.conta === k); return esc(c ? (c.nome || c.conta) + (c.empresa ? ' · ' + c.empresa : '') : k || '(sem conta na baixa)'); };
+
+    function listaPend() {
+      const L = res.semTit; if (!L.length) return '<div class="desc" style="padding: 14px 16px">Nenhuma saída sem título neste filtro. ✓</div>';
+      return `<table class="t" style="min-width: 980px"><thead><tr><th>Dia</th><th>Conta</th><th>Histórico do extrato</th><th class="n">Valor</th><th>Situação</th><th></th></tr></thead><tbody>` + L.map((x, i) => {
+        const e = x.e, folha = /SAL[AÁ]RIO|FOLHA|FOPAG|PAGTO? FUNC|REMUNERA/i.test(e.descricao || '');
+        const sit = x.sugestao ? `<span class="pill p-aten">título em aberto no Alpha7</span><div class="mini">${esc(x.sugestao.credor)} · doc ${esc(x.sugestao.documento || '-')} · venc. ${dbr(x.sugestao.venc_util)} · dar baixa no Alpha7 e subir o arquivo</div>`
+          : folha ? `<span class="pill p-crit">folha sem título</span><div class="mini">lançar o título no Alpha7 e dar baixa</div>` : '<span class="pill p-crit">sem título</span>';
+        let h = `<tr><td>${dbr(e.data)}</td><td>${nomeConta(e.conta)}</td><td>${esc(e.descricao || '')}${e.documento ? `<div class="mini">doc ${esc(e.documento)}</div>` : ''}</td><td class="n">${brl(e.v)}</td><td>${sit}</td>
+          <td><div class="acoes"><button class="btn p" onclick="abrir(${i}, 'vinc')">Vincular títulos</button><button class="btn p" onclick="abrir(${i}, 'just')">Sem título</button></div></td></tr>`;
+        if (aberto && aberto.i === i) h += `<tr><td colspan="6" style="padding: 0">${aberto.modo === 'vinc' ? painelVinc(e) : painelJust(e, folha)}</td></tr>`;
+        return h; }).join('') + '</tbody></table>';
+    }
+    function abrir(i, modo) { aberto = aberto && aberto.i === i && aberto.modo === modo ? null : { i, modo, sel: new Set() }; desenhar(); }
+    function candidatos(e) {
+      const usados = new Set(res.pares.flatMap(p => p.ts.map(t => t.id)));
+      return titulos.filter(t => !usados.has(t.id) && Math.abs(difDias(t.pagamento, e.data)) <= 7)
+        .map(t => ({ t, nota: (t.conta === e.conta ? 0 : 2) + Math.min(Math.abs(difDias(t.pagamento, e.data)), 5) / 5 + Math.min(Math.abs(t.v - e.v) / Math.max(e.v, 1), 1) * 3 }))
+        .sort((a, b) => a.nota - b.nota).slice(0, 40).map(x => x.t);
+    }
+    function painelVinc(e) {
+      const c = candidatos(e), soma = c.filter(t => aberto.sel.has(t.id)).reduce((a, t) => a + t.v, 0), dif = r2(e.v - soma);
+      return `<div class="painel"><div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px">
+          <b>Títulos pagos até 7 dias antes ou depois · marque os que saíram neste débito</b>
+          <span class="desc">selecionado ${brl(soma)} · débito ${brl(e.v)} · <b style="color: ${Math.abs(dif) < 0.02 ? 'var(--verde-tx)' : 'var(--verm)'}">diferença ${brl(dif)}</b></span></div>
+        <table class="t"><thead><tr><th></th><th>Baixa</th><th>Fornecedor</th><th>Documento</th><th>Conta da baixa</th><th class="n">Valor</th></tr></thead><tbody>
+        ${c.map(t => `<tr><td><input type="checkbox" ${aberto.sel.has(t.id) ? 'checked' : ''} onchange="marcar(${t.id}, this.checked)"></td><td>${dbr(t.pagamento)}</td><td>${esc(t.credor)}</td><td>${esc(t.documento || '-')}${t.parcela ? ' · ' + esc(t.parcela) : ''}</td><td>${nomeConta(t.conta)}</td><td class="n">${brl(t.v)}</td></tr>`).join('') || '<tr><td colspan="6" class="desc">Nenhum título pago perto desta data.</td></tr>'}
+        </tbody></table>
+        <div class="acoes" style="margin-top: 8px"><input id="obsV" class="inp" placeholder="observação (obrigatória se o valor não fechar)" style="flex: 1; min-width: 260px">
+          <button class="btn e" onclick="salvarVinc()">Salvar vínculo</button><button class="btn" onclick="aberto=null; desenhar()">Fechar</button></div></div>`;
+    }
+    function marcar(id, on) { if (on) aberto.sel.add(id); else aberto.sel.delete(id); const obs = $('obsV') ? $('obsV').value : ''; desenhar(); if ($('obsV')) $('obsV').value = obs; }
+    async function salvarVinc() {
+      const e = res.semTit[aberto.i].e, ts = titulos.filter(t => aberto.sel.has(t.id));
+      if (!ts.length) return alert('Marque pelo menos um título.');
+      const dif = r2(e.v - ts.reduce((a, t) => a + t.v, 0)), obs = ($('obsV').value || '').trim();
+      if (Math.abs(dif) >= 0.02 && obs.length < 5) return alert(`A soma não fecha (diferença ${brl(dif)}). Explique na observação (mínimo 5 letras).`);
+      await gravar({ tipo: 'VINCULO', extrato_chaves: [e.chave], cp_chaves: ts.map(t => t.chave), valor: e.v, diferenca: dif, obs: obs || null });
+    }
+    function painelJust(e, folha) {
+      return `<div class="painel">${folha ? '<div class="alerta verm" style="margin-bottom: 8px"><span class="ponto"></span><span>Parece pagamento de <b>folha</b>: a folha precisa de título lançado e baixado no Alpha7. Justifique só se não for folha.</span></div>' : ''}
+        <div class="acoes" style="justify-content: flex-start"><select id="motJ" class="inp">${MOTIVOS.map(m => `<option>${m}</option>`).join('')}</select>
+          <input id="obsJ" class="inp" placeholder="detalhe (obrigatório em 'Outro')" style="flex: 1; min-width: 260px">
+          <button class="btn e" onclick="salvarJust()">Salvar</button><button class="btn" onclick="aberto=null; desenhar()">Fechar</button></div></div>`;
+    }
+    async function salvarJust() {
+      const e = res.semTit[aberto.i].e, mot = $('motJ').value, obs = ($('obsJ').value || '').trim();
+      if (mot === 'Outro' && obs.length < 5) return alert('Descreva o motivo (mínimo 5 letras).');
+      await gravar({ tipo: 'SEM_TITULO', extrato_chaves: [e.chave], cp_chaves: [], valor: e.v, motivo: mot, obs: obs || null });
+    }
+    async function gravar(reg) {
+      const { error } = await _supabase.from('fin_conc').insert({ ...reg, mes: $('fMes').value, por: email });
+      if (error) return alert('Não foi possível gravar: ' + error.message);
+      aberto = null; carregar();
+    }
+    async function desfazer(id) {
+      if (!confirm('Desfazer este vínculo/justificativa? O débito volta para "sem título".')) return;
+      const { error } = await _supabase.from('fin_conc').delete().eq('id', id);
+      if (error) return alert('Não foi possível desfazer: ' + error.message);
+      carregar();
+    }
+
+    function listaSemSaida() {
+      const L = res.semSaida; if (!L.length) return '<div class="desc" style="padding: 14px 16px">Todos os títulos pagos no mês têm saída no extrato. ✓</div>';
+      return `<div class="desc" style="padding: 10px 16px 0">Título baixado no Alpha7 sem débito correspondente nas contas: baixa com data ou conta errada, pagamento em dinheiro ou por conta que não está no sistema.</div>
+        <table class="t" style="min-width: 900px"><thead><tr><th>Baixa</th><th>Fornecedor</th><th>Documento</th><th>Conta da baixa</th><th>Unidade</th><th class="n">Valor</th></tr></thead><tbody>`
+        + L.map(t => `<tr><td>${dbr(t.pagamento)}</td><td>${esc(t.credor)}</td><td>${esc(t.documento || '-')}${t.parcela ? ' · ' + esc(t.parcela) : ''}</td><td>${nomeConta(t.conta)}</td><td>${esc(t.unidade || '')}</td><td class="n">${brl(t.v)}</td></tr>`).join('') + '</tbody></table>';
+    }
+    function listaConc() {
+      const L = res.pares; if (!L.length) return '<div class="desc" style="padding: 14px 16px">Nada conciliado neste filtro.</div>';
+      return `<table class="t" style="min-width: 980px"><thead><tr><th>Dia</th><th>Conta</th><th>Histórico do extrato</th><th class="n">Débito</th><th>Título(s) no Alpha7</th><th>Como</th><th></th></tr></thead><tbody>`
+        + L.map(p => { const e = p.es[0];
+          return `<tr><td>${dbr(e.data)}</td><td>${nomeConta(e.conta)}</td><td>${esc(e.descricao || '')}</td><td class="n">${brl(p.es.reduce((a, x) => a + x.v, 0))}</td>
+            <td>${p.ts.map(t => `<div>${esc(t.credor)} · ${esc(t.documento || '-')} · <span class="mono">${brl(t.v)}</span>${t.pagamento !== e.data ? ` · baixa ${dbr(t.pagamento)}` : ''}</div>`).join('') || '<span class="desc">-</span>'}
+              ${p.c && p.c.obs ? `<div class="mini">obs.: ${esc(p.c.obs)}</div>` : ''}</td>
+            <td><span class="pill ${p.tipo === 'EXATO' || p.tipo === 'AGRUPADO' ? 'p-ok' : p.tipo === 'MANUAL' ? 'p-info' : 'p-aten'}">${ROT[p.tipo]}</span>${p.c ? `<div class="mini">${esc(p.c.por || '')}</div>` : ''}</td>
+            <td>${p.c ? `<button class="btn p" onclick="desfazer('${p.c.id}')">Desfazer</button>` : ''}</td></tr>`; }).join('') + '</tbody></table>';
+    }
+    function listaJust() {
+      const L = res.just; if (!L.length) return '<div class="desc" style="padding: 14px 16px">Nenhum débito justificado sem título.</div>';
+      return `<table class="t" style="min-width: 900px"><thead><tr><th>Dia</th><th>Conta</th><th>Histórico do extrato</th><th class="n">Valor</th><th>Motivo</th><th></th></tr></thead><tbody>`
+        + L.map(j => `<tr><td>${dbr(j.e.data)}</td><td>${nomeConta(j.e.conta)}</td><td>${esc(j.e.descricao || '')}</td><td class="n">${brl(j.e.v)}</td>
+            <td><b>${esc(j.c.motivo)}</b>${j.c.obs ? ' · ' + esc(j.c.obs) : ''}<div class="mini">${esc(j.c.por || '')}</div></td><td><button class="btn p" onclick="desfazer('${j.c.id}')">Desfazer</button></td></tr>`).join('') + '</tbody></table>';
+    }
+
+    $('fConta').addEventListener('change', () => { if (res) { const m = $('fMes').value; conciliar(m + '-01', isoDe(new Date(+m.slice(0, 4), +m.slice(5, 7), 0))); desenhar(); } });
+    inicio();
+  </script>
+</body>
+</html>
