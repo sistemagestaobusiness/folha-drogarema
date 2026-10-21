@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="fluxo_core.js?v=1"></script>
+  <script src="fluxo_core.js?v=4"></script>
   <style>
     .t td.l b { font-weight: 600; }
     .t tr.sub td { background: #F4F5F7; font-weight: 700; }
@@ -28,7 +28,9 @@
       <div class="sub" id="lblSub">Saldo de ontem pelo extrato · previsto de hoje pela venda e pelos títulos a pagar</div>
       <h1>Saldos e aplicações</h1>
     </div>
-    <div id="lblDatas" class="desc"></div>
+    <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap"><div id="lblDatas" class="desc"></div>
+      <label class="desc" style="display: flex; flex-direction: column; gap: 4px">Posição do dia <input id="fRef" type="date" class="inp" onchange="carregar()"></label>
+      <button class="btn" onclick="$('fRef').value = hoje; carregar()">Hoje</button></div>
   </div>
   <div id="aviso" class="alerta verm"></div>
 
@@ -36,7 +38,7 @@
     <div style="padding: 12px 16px 4px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline">
       <h2>Drogarema · por loja</h2><span class="desc">clique no previsto de hoje para informar outro valor</span>
     </div>
-    <div class="rola"><table class="t" style="min-width: 980px"><thead><tr><th>Loja</th><th class="n">Santander</th><th class="n">Sicredi</th><th class="n">Saldo ontem</th><th class="n">Venda a cair hoje</th><th class="n">Títulos de hoje</th><th class="n">Previsto hoje</th><th class="n">Dias negativo</th></tr></thead><tbody id="tbLojas"></tbody></table></div>
+    <div class="rola"><table class="t" style="min-width: 980px"><thead><tr><th>Loja</th><th class="n">Santander</th><th class="n">Sicredi</th><th class="n">Saldo ontem</th><th class="n">Venda a cair</th><th class="n" id="thTit">Títulos do dia</th><th class="n">Previsto do dia</th><th class="n" id="thReal">Realizado</th><th class="n">Dias negativo</th></tr></thead><tbody id="tbLojas"></tbody></table></div>
   </section>
 
   <div class="grade2">
@@ -63,7 +65,7 @@
     const dbr = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '-';
     const hoje = FluxoCore.isoDe(new Date());
     const GRUPOS = { CEF: 'Caixa Econômica', DINHEIRO: 'Dinheiro', APLICACAO: 'Aplicações', CONSORCIO: 'Consórcios' };
-    let contas = [], calc = null, itens = [], manual = {}, prevInf = {}, vendaUni = {}, titUni = {};
+    let ref = hoje, contas = [], calc = null, itens = [], manual = {}, prevInf = {}, vendaUni = {}, titUni = {};
 
     function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
     async function rpcTudo(nome, args) { const tudo = []; for (let de = 0; ; de += 1000) { const { data, error } = await _supabase.rpc(nome, args).range(de, de + 999); if (error) throw error; tudo.push(...(data || [])); if (!data || data.length < 1000) break; } return tudo; }
@@ -71,44 +73,51 @@
     async function carregar() {
       aviso('');
       try {
-        const ini = FluxoCore.somaDia(hoje, -60);
+        ref = $('fRef').value || hoje; if (ref > hoje) { ref = hoje; $('fRef').value = hoje; }
+        const ini = FluxoCore.somaDia(ref, -60), passado = ref < hoje;
         const [rc, ri, rm, rp, rv, rt, rcat, linhas] = await Promise.all([
           _supabase.from('fin_contas').select('*').order('ordem'),
           _supabase.from('fin_saldo_itens').select('*').eq('ativo', true).order('ordem'),
-          _supabase.from('fin_saldo_manual').select('*').order('em', { ascending: false }).limit(500),
-          _supabase.from('fin_saldo_prev').select('*').eq('data', hoje),
-          _supabase.from('fin_venda').select('data, unidade, venda').gte('data', FluxoCore.somaDia(hoje, -4)).lt('data', hoje),
-          _supabase.from('fin_cp').select('unidade, valor').eq('status', 'Pendente').eq('venc_util', hoje),
-          _supabase.from('fin_categorias').select('plano, grupo'),
-          rpcTudo('fn_fin_fluxo', { p_ini: ini, p_fim: FluxoCore.somaDia(hoje, -1) })]);
+          _supabase.from('fin_saldo_manual').select('*').lte('data', ref).order('data', { ascending: false }).order('em', { ascending: false }).limit(500),
+          _supabase.from('fin_saldo_prev').select('*').eq('data', ref),
+          _supabase.from('fin_venda').select('data, unidade, venda').gte('data', FluxoCore.somaDia(ref, -4)).lt('data', ref),
+          // títulos do dia: em aberto que vencem no dia (hoje) · pagos no dia (dia que já passou)
+          passado ? _supabase.from('fin_cp').select('unidade, valor, plano').eq('status', 'Paga').eq('pagamento', ref)
+                  : _supabase.from('fin_cp').select('unidade, valor, plano').eq('status', 'Pendente').eq('venc_util', ref),
+          _supabase.from('fin_categorias').select('plano, grupo, fora_do_fluxo'),
+          rpcTudo('fn_fin_fluxo', { p_ini: ini, p_fim: passado ? ref : FluxoCore.somaDia(ref, -1) })]);
         [rc, ri, rm, rp, rv, rt, rcat].forEach(r => { if (r.error) throw r.error; });
         contas = rc.data; itens = ri.data;
         manual = {}; rm.data.forEach(m => { if (!manual[m.item]) manual[m.item] = m; });
         prevInf = {}; rp.data.forEach(p => prevInf[p.conta] = Number(p.valor));
         const cats = {}; rcat.data.forEach(c => cats[c.plano] = c);
-        calc = FluxoCore.montar({ ini, fim: FluxoCore.somaDia(hoje, -1), hoje, linhas, categorias: cats, contas, previsoes: {}, vendaHist: {}, ajusteUtil: 0, ajusteSegunda: 0 });
+        calc = FluxoCore.montar({ ini, fim: passado ? ref : FluxoCore.somaDia(ref, -1), hoje: ref, linhas, categorias: cats, contas, previsoes: {}, vendaHist: {}, ajusteUtil: 0, ajusteSegunda: 0 });
         // venda que cai hoje: a de ontem; na segunda, a de sexta, sábado e domingo
-        const w = FluxoCore.dow(hoje), diasVenda = w === 1 ? [-3, -2, -1] : w === 0 || w === 6 ? [] : [-1];
-        const dv = new Set(diasVenda.map(n => FluxoCore.somaDia(hoje, n)));
+        const w = FluxoCore.dow(ref), diasVenda = w === 1 ? [-3, -2, -1] : w === 0 || w === 6 ? [] : [-1];
+        const dv = new Set(diasVenda.map(n => FluxoCore.somaDia(ref, n)));
         vendaUni = {}; rv.data.forEach(v => { if (dv.has(v.data)) vendaUni[v.unidade] = (vendaUni[v.unidade] || 0) + Number(v.venda || 0); });
-        titUni = {}; rt.data.forEach(t => titUni[t.unidade] = (titUni[t.unidade] || 0) + Number(t.valor || 0));
+        titUni = {}; rt.data.forEach(t => { if (cats[t.plano] && cats[t.plano].fora_do_fluxo) return; titUni[t.unidade] = (titUni[t.unidade] || 0) + Number(t.valor || 0); });
         desenhar();
       } catch (e) { aviso('Não foi possível carregar os saldos: ' + esc(e.message || e)); }
     }
 
     // saldo do último dia com extrato e dias seguidos negativos
     function saldoDe(conta) {
-      const reais = calc.dias.filter(d => d.saldoContas);
+      const reais = calc.dias.filter(d => d.saldoContas && d.iso < ref);
       if (!reais.length) return { v: null, neg: 0 };
       const v = reais[reais.length - 1].saldoContas[conta];
       let neg = 0; for (let k = reais.length - 1; k >= 0 && (reais[k].saldoContas[conta] || 0) < -0.005; k--) neg++;
       return { v: v === undefined ? 0 : v, neg };
     }
 
+    const realDe = conta => { const d = calc.dias.find(x => x.iso === ref && x.saldoContas); return d ? (d.saldoContas[conta] || 0) : null; };
     function desenhar() {
-      const ult = calc.ultExt;
-      $('lblDatas').innerHTML = `saldo de <b>${dbr(ult)}</b> (último extrato) · previsto de <b>${dbr(hoje)}</b>`;
-      if (ult && ult < FluxoCore.somaDia(hoje, -1)) aviso(`O último extrato carregado é de ${dbr(ult)}. Importe o arquivo do Alpha7 para ter o saldo de ontem.`);
+      const ult = calc.ultExt, passado = ref < hoje, temReal = passado && calc.dias.some(x => x.iso === ref && x.saldoContas);
+      const ant = calc.dias.filter(d => d.saldoContas && d.iso < ref).pop();
+      $('lblDatas').innerHTML = `saldo de <b>${dbr(ant ? ant.iso : ult)}</b> · ${passado ? 'posição de' : 'previsto de'} <b>${dbr(ref)}</b>`;
+      $('thTit').innerText = passado ? 'Títulos pagos no dia' : 'Títulos do dia';
+      $('thReal').style.display = temReal ? '' : 'none';
+      if (!passado && ult && ult < FluxoCore.somaDia(hoje, -1)) aviso(`O último extrato carregado é de ${dbr(ult)}. Importe o arquivo do Alpha7 para ter o saldo de ontem.`);
       // por loja
       const lojas = [...new Set(contas.filter(c => c.no_fluxo).map(c => c.empresa))].sort();
       let tot = { san: 0, sic: 0, ont: 0, ven: 0, tit: 0, prev: 0 }, h = '';
@@ -118,14 +127,14 @@
         const soma = l2 => l2.reduce((a, c) => a + (saldoDe(c.conta).v || 0), 0);
         const vs = soma(san), vc = soma(sic), ont = vs + vc, ven = vendaUni[l] || 0, tit = titUni[l] || 0;
         const chave = 'LOJA ' + l, auto = ont + ven - tit, prev = prevInf[chave] !== undefined ? prevInf[chave] : auto;
-        const neg = Math.max(0, ...cs.map(c => saldoDe(c.conta).neg));
+        const neg = Math.max(0, ...cs.map(c => saldoDe(c.conta).neg)), real = temReal ? cs.reduce((a, c) => a + (realDe(c.conta) || 0), 0) : null;
         const cel = (l2, v) => { const ativa = l2.some(c => c.ativa); return ativa ? `<td class="n ${cls(v)}" title="${esc(l2.map(c => c.conta).join(' · '))}">${brl(v)}</td>` : `<td class="n canc" title="${esc(l2.map(c => c.conta).join(' · '))}">cancelada</td>`; };
         h += `<tr><td><b>Loja ${esc(l)}</b></td>${cel(san, vs)}${cel(sic, vc)}<td class="n ${cls(ont)}"><b>${brl(ont)}</b></td><td class="n">${brl(ven)}</td><td class="n">${tit ? '− ' + brl(tit) : brl(0)}</td>
-          <td class="n edit ${cls(prev)}" data-prev="${esc(chave)}" title="${prevInf[chave] !== undefined ? 'valor informado à mão' : 'automático: saldo de ontem + venda a cair − títulos de hoje'}">${prevInf[chave] !== undefined ? '✎ ' : ''}<b>${brl(prev)}</b></td>
-          <td class="n">${neg ? `<span class="pill p-crit">${neg} dia(s)</span>` : '–'}</td></tr>`;
-        tot.san += vs; tot.sic += vc; tot.ont += ont; tot.ven += ven; tot.tit += tit; tot.prev += prev;
+          <td class="n ${passado ? '' : 'edit'} ${cls(prev)}" data-prev="${esc(chave)}" title="${prevInf[chave] !== undefined ? 'valor informado à mão' : 'automático: saldo de ontem + venda a cair − títulos de hoje'}">${prevInf[chave] !== undefined ? '✎ ' : ''}<b>${brl(prev)}</b></td>
+          ${temReal ? `<td class="n ${cls(real)}" title="saldo do extrato no fim do dia"><b>${brl(real)}</b></td>` : ''}<td class="n">${neg ? `<span class="pill p-crit">${neg} dia(s)</span>` : '–'}</td></tr>`;
+        tot.san += vs; tot.sic += vc; tot.ont += ont; tot.ven += ven; tot.tit += tit; tot.prev += prev; tot.real = (tot.real || 0) + (real || 0);
       });
-      h += `<tr class="tot"><td>Total Drogarema</td><td class="n ${cls(tot.san)}">${brl(tot.san)}</td><td class="n ${cls(tot.sic)}">${brl(tot.sic)}</td><td class="n ${cls(tot.ont)}">${brl(tot.ont)}</td><td class="n">${brl(tot.ven)}</td><td class="n">− ${brl(tot.tit)}</td><td class="n ${cls(tot.prev)}">${brl(tot.prev)}</td><td></td></tr>`;
+      h += `<tr class="tot"><td>Total Drogarema</td><td class="n ${cls(tot.san)}">${brl(tot.san)}</td><td class="n ${cls(tot.sic)}">${brl(tot.sic)}</td><td class="n ${cls(tot.ont)}">${brl(tot.ont)}</td><td class="n">${brl(tot.ven)}</td><td class="n">− ${brl(tot.tit)}</td><td class="n ${cls(tot.prev)}">${brl(tot.prev)}</td>${temReal ? `<td class="n ${cls(tot.real)}">${brl(tot.real)}</td>` : ''}<td></td></tr>`;
       $('tbLojas').innerHTML = h;
       // empresas do Simples
       let tSim = 0;
@@ -145,12 +154,13 @@
 
     document.body.addEventListener('click', async ev => {
       const td = ev.target.closest('td.edit'); if (!td) return;
+      if (ref < hoje) return alert('Dia que já passou: só consulta. Volte para hoje para informar valores.');
       const email = (await _supabase.auth.getUser()).data.user.email;
       if (td.dataset.prev) {
         const k = td.dataset.prev, at = prevInf[k];
         const r = prompt(`Previsto de hoje para ${k} (em branco = volta para o automático)`, at !== undefined ? String(at).replace('.', ',') : ''); if (r === null) return;
         const v = r.trim() ? Number(r.replace(/\./g, '').replace(',', '.')) : null; if (r.trim() && !isFinite(v)) return alert('Valor inválido.');
-        const { error } = v === null ? await _supabase.from('fin_saldo_prev').delete().eq('conta', k).eq('data', hoje) : await _supabase.from('fin_saldo_prev').upsert({ conta: k, data: hoje, valor: v, por: email, em: new Date().toISOString() });
+        const { error } = v === null ? await _supabase.from('fin_saldo_prev').delete().eq('conta', k).eq('data', ref) : await _supabase.from('fin_saldo_prev').upsert({ conta: k, data: ref, valor: v, por: email, em: new Date().toISOString() });
         if (error) return alert('Não foi possível gravar: ' + error.message);
       } else if (td.dataset.item) {
         const it = td.dataset.item, m = manual[it];
@@ -163,7 +173,7 @@
       carregar();
     });
 
-    (async () => { const { data: { user } } = await _supabase.auth.getUser(); if (!user) { location.href = 'login.html'; return; } carregar(); })();
+    (async () => { const { data: { user } } = await _supabase.auth.getUser(); if (!user) { location.href = 'login.html'; return; } $('fRef').value = hoje; $('fRef').max = hoje; carregar(); })();
   </script>
 </body>
 </html>
