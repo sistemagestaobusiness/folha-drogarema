@@ -137,12 +137,12 @@
       }
       if (abas.extrato) {
         const c = abas.extrato.col, L = abas.extrato.linhas;
-        const k = { data: c('Data Hora'), conta: c('Conta Bancaria'), doc: c('Numero Documento'), valor: c('Valor'), descr: c('Descricao'), tipo: c('Tipo'), infl: c('Influencia Saldo') };
+        const k = { data: c('Data Hora'), conta: c('Conta Bancaria'), doc: c('Numero Documento'), valor: c('Valor'), descr: c('Descricao'), tipo: c('Tipo'), mov: c('Tipo Movimentacao'), infl: c('Influencia Saldo') };
         let total = 0, fora = 0;
         for (let i = 1; i < L.length; i++) { const r = L[i]; if (!r || r[k.conta] === null) continue; total++;
           if (k.infl >= 0 && norm(r[k.infl]) === 'NAO') continue;
           const d = iso(r[k.data]); if (!d) continue; if (d <= fixo) { fora++; continue; }
-          out.extrato.push({ data: d, conta: String(r[k.conta]).trim().toUpperCase(), valor: num(r[k.valor]), descricao: txt(r[k.descr]), documento: txt(r[k.doc]), tipo: txt(r[k.tipo]) }); }
+          out.extrato.push({ data: d, conta: String(r[k.conta]).trim().toUpperCase(), valor: num(r[k.valor]), descricao: txt(r[k.descr]), documento: txt(r[k.doc]), tipo: txt(r[k.tipo]), movimentacao: k.mov >= 0 ? txt(r[k.mov]) : null }); }
         const ds = out.extrato.map(x => x.data).sort();
         out.info.extrato = { linhas: total, envia: out.extrato.length, fixo: fora, de: ds[0], ate: ds[ds.length - 1], contas: new Set(out.extrato.map(x => x.conta)).size };
       }
