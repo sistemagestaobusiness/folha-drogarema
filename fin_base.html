@@ -26,11 +26,12 @@
     </section>
 
     <section class="card p">
-      <h2>Ajuste diário do saldo previsto</h2>
+      <h2>Ajuste diário e margem da venda prevista</h2>
       <div class="desc">Desconto do cartão e Farmácia Popular, que cai na CEF e fica fora do fluxo.</div>
       <div class="sec">
         <label class="desc">Dia útil <input id="aUtil" class="inp" style="width: 110px"></label>
         <label class="desc">Segunda <input id="aSeg" class="inp" style="width: 110px"></label>
+        <label class="desc" title="A venda prevista é multiplicada por este percentual (margem de segurança)">Venda prevista × <input id="aFator" class="inp" style="width: 70px">%</label>
         <button type="button" class="btn e" onclick="salvarAjuste()">Salvar</button>
       </div>
     </section>
@@ -86,7 +87,7 @@
         grupos = ok(r[0]).map(g => g.grupo); cats = ok(r[1]); contas = ok(r[2]); partidas = ok(r[3]);
         config = {}; ok(r[4]).forEach(c => config[c.chave] = c.valor); fixo = String(ok(r[5])).slice(0, 10);
         $('lblFixo').innerText = 'fixo até ' + dbr(fixo);
-        $('aUtil').value = brl(config.ajuste_util); $('aSeg').value = brl(config.ajuste_segunda);
+        $('aUtil').value = brl(config.ajuste_util); $('aSeg').value = brl(config.ajuste_segunda); $('aFator').value = String(Math.round((config.venda_fator == null ? 0.9 : Number(config.venda_fator)) * 100));
         const anos = config.anos || []; const max = Math.max(...anos);
         $('boxAnos').innerHTML = anos.map(a => `<span class="pill ${a < 2026 ? 'p-info' : 'p-esc'}">${a}</span>`).join('') + `<button type="button" class="btn" onclick="abrirAno(${max + 1})">Abrir ${max + 1}</button>`;
         $('pConta').innerHTML = contas.map(c => `<option value="${esc(c.conta)}">${esc(c.nome || c.conta)}</option>`).join('');
@@ -130,8 +131,10 @@
       $('pValor').value = ''; carregar();
     }
     async function salvarAjuste() {
-      const u = numBR($('aUtil').value), s = numBR($('aSeg').value); if (!isFinite(u) || !isFinite(s)) return alert('Valores inválidos.');
-      const { error } = await _supabase.from('fin_config').upsert([{ chave: 'ajuste_util', valor: u, alterado_por: email }, { chave: 'ajuste_segunda', valor: s, alterado_por: email }]);
+      const u = numBR($('aUtil').value), s = numBR($('aSeg').value), f = numBR($('aFator').value); if (!isFinite(u) || !isFinite(s)) return alert('Valores inválidos.');
+      if (!isFinite(f) || f < 50 || f > 110) return alert('O percentual da venda prevista precisa ficar entre 50 e 110.');
+      const { error } = await _supabase.from('fin_config').upsert([{ chave: 'ajuste_util', valor: u, alterado_por: email }, { chave: 'ajuste_segunda', valor: s, alterado_por: email },
+        { chave: 'venda_fator', valor: Math.round(f) / 100, alterado_por: email }]);
       if (error) return alert('Não foi possível gravar: ' + error.message);
       carregar();
     }

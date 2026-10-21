@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="fluxo_core.js?v=2"></script>
+  <script src="fluxo_core.js?v=3"></script>
   <style>
     .fc { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: 100%; }
     .fc th, .fc td { padding: 4px 8px; text-align: right; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; border-bottom: 1px solid var(--linha); }
@@ -92,21 +92,36 @@
       return tudo;
     }
 
+    // lê todas as linhas de uma consulta (o Supabase entrega no máximo 1.000 por vez)
+    async function tudoTabela(q) {
+      let out = [], de = 0;
+      for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; }
+    }
     async function carregarCadastros() {
       const [rg, rc, rk, rf, rp, rv] = await Promise.all([
         _supabase.from('fin_grupos').select('*').order('ordem'),
         _supabase.from('fin_categorias').select('*'),
         _supabase.from('fin_contas').select('*').order('ordem'),
         _supabase.from('fin_config').select('*'),
-        _supabase.from('fin_previsao').select('*'),
-        _supabase.from('fin_venda').select('data, venda').gte('data', FluxoCore.somaDia(hoje, -130)).lt('data', hoje)]);
-      [rg, rc, rk, rf, rp, rv].forEach(r => { if (r.error) throw r.error; });
+        _supabase.from('fin_previsao').select('*')]);
+      [rg, rc, rk, rf, rp].forEach(r => { if (r.error) throw r.error; });
+      // histórico de venda para a previsão: loja a loja (fin_venda) + total dos anos fixos (fin_fixo_dia) · 3 anos + 2 meses
+      const desde = FluxoCore.somaDia(hoje, -3 * 366 - 60);
+      const [lv, lf] = await Promise.all([
+        tudoTabela(() => _supabase.from('fin_venda').select('data, unidade, venda').gte('data', desde).lt('data', hoje).order('data').order('unidade')),
+        tudoTabela(() => _supabase.from('fin_fixo_dia').select('data, valor').eq('tipo', 'venda').gte('data', desde).lt('data', hoje).order('data'))]);
       cad.grupos = rg.data.map(g => g.grupo);
       cad.categorias = {}; rc.data.forEach(c => cad.categorias[c.plano] = c);
       cad.contas = rk.data;
       cad.config = {}; rf.data.forEach(c => cad.config[c.chave] = c.valor);
       cad.previsoes = {}; rp.data.forEach(p => cad.previsoes[p.tipo + '|' + p.data] = Number(p.valor));
-      cad.vendaHist = {}; rv.data.forEach(v => cad.vendaHist[v.data] = (cad.vendaHist[v.data] || 0) + Number(v.venda || 0));
+      const tot = {}, lojas = {};
+      lf.forEach(v => tot[v.data] = Number(v.valor || 0));
+      const somaLoja = {};
+      lv.forEach(v => { const u = v.unidade || '?'; (lojas[u] = lojas[u] || {})[v.data] = (lojas[u][v.data] || 0) + Number(v.venda || 0);
+        somaLoja[v.data] = (somaLoja[v.data] || 0) + Number(v.venda || 0); });
+      Object.keys(somaLoja).forEach(d => { if (!(tot[d] > 0)) tot[d] = somaLoja[d]; });
+      cad.vendaHist = { total: tot, lojas };
     }
 
     function periodo() {
@@ -125,7 +140,8 @@
       try {
         const linhas = await rpcTudo('fn_fin_fluxo', { p_ini: buscaIni, p_fim: fim });
         calc = FluxoCore.montar({ ini: buscaIni, fim, hoje, linhas, categorias: cad.categorias, contas: cad.contas, previsoes: cad.previsoes,
-          vendaHist: cad.vendaHist, ajusteUtil: Number(cad.config.ajuste_util || 0), ajusteSegunda: Number(cad.config.ajuste_segunda || 0) });
+          vendaHist: cad.vendaHist, ajusteUtil: Number(cad.config.ajuste_util || 0), ajusteSegunda: Number(cad.config.ajuste_segunda || 0),
+          fatorVenda: cad.config.venda_fator == null ? 0.9 : Number(cad.config.venda_fator) });
         calc.dias = calc.dias.filter(d => d.iso >= ini);
         desenhar();
         resumo();
