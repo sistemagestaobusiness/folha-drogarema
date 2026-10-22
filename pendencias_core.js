@@ -15,6 +15,7 @@
 (function (global) {
   const PRAZO_SUP_H = 24, PRAZO_RH_H = 24, JANELA_DIAS = 7, PRAZO_CADASTRO_H = 24, PRAZO_ATESTADO_H = 48;
   const FERIAS_CRIT = 15, FERIAS_ATEN = 30;
+  const FERIAS_CONTROLE_DESDE = '2027-01-01';   // etapas de férias (RH e ciência do supervisor) só a partir de 2027
   const H = 3600000;
 
   const hojeIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -93,7 +94,8 @@
 
     // ---- férias (etapas do RH) e ciência do supervisor
     const ETAPA = { SOLICITADA: 'pré-aprovar', PRE_APROVADA: 'enviar à contabilidade', CONTABILIDADE: 'registrar o cálculo da contabilidade', CALCULADA: 'lançar na folha' };
-    fe.forEach(x => {
+    // férias de 2026: o RH controlou fora do sistema; valem só para a escala, sem pendência (regra de 22/10/2026)
+    fe.filter(x => String(x.data_inicio || '') >= FERIAS_CONTROLE_DESDE).forEach(x => {
       const n = diasAte(x.data_inicio);
       const nivel = n <= FERIAS_CRIT ? 'critico' : n <= FERIAS_ATEN ? 'atencao' : 'info';
       const quando = n < 0 ? `começou ${dbr(x.data_inicio)} (há ${-n} dias)` : n === 0 ? 'começa hoje' : `começa ${dbr(x.data_inicio)} (em ${n} dias)`;

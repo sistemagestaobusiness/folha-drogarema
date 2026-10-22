@@ -32,7 +32,8 @@
       </div>
       <div class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-right shadow-2xs">
         <span class="text-[10px] text-slate-400 block uppercase font-semibold">COMPETÊNCIA DE LANÇAMENTO</span>
-        <span id="labelCompetenciaAtiva" class="text-emerald-700 font-bold text-xs font-mono uppercase">08/2026 (ABERTA)</span>
+        <span id="labelCompetenciaAtiva" class="text-emerald-700 font-bold text-xs font-mono uppercase">…</span>
+        <span id="labelCompetenciaRegra" class="block text-[9px] text-slate-400 mt-0.5">sempre o período aberto (o mês do Painel vale só para os indicadores)</span>
       </div>
     </div>
 
@@ -529,9 +530,27 @@
             'Durante a liberação é possível incluir e editar; exclusão continua proibida. Tudo fica registrado na auditoria.');
     }
 
+    // Lançamento só no período aberto (regra de 22/10/2026): não depende do mês escolhido no Painel.
+    // Ordem: mês FECHADO com liberação excepcional ativa (o Gestor abriu de propósito) → mês ABERTO mais antigo.
+    async function resolverCompetenciaDeLancamento() {
+      const { data, error } = await _supabase.from('competencias').select('*');
+      if (error || !data || !data.length) return;   // sem tabela: mantém o comportamento antigo
+      const ord = (a, b) => (a.ano - b.ano) || (a.mes - b.mes);
+      const agora = new Date();
+      const lib = data.filter(c => c.status === 'FECHADO' && c.liberado_ate && new Date(c.liberado_ate) > agora).sort(ord);
+      const abertos = data.filter(c => c.status === 'ABERTO').sort(ord);
+      const alvo = lib[0] || abertos[0];
+      const el = document.getElementById('labelCompetenciaRegra');
+      if (!alvo) { if (el) { el.innerText = 'nenhum período aberto: o Gestor abre o próximo mês no Painel'; el.className = 'block text-[9px] text-rose-700 font-bold mt-0.5'; } return; }
+      competenciaRegraLancamento = `${String(alvo.mes).padStart(2, '0')}/${alvo.ano}`;
+      if (el && abertos.length > 1 && !lib.length) el.innerText = `há ${abertos.length} meses abertos: usando o mais antigo`;
+      if (el && lib.length) el.innerText = 'mês fechado em liberação excepcional do Gestor';
+    }
+
     async function inicializarTela() {
       try {
         periodoForcadoDesbloqueado = false;
+        await resolverCompetenciaDeLancamento();
         await carregarPerfilUsuario();
         await verificarStatusCompetenciaNoBanco(competenciaRegraLancamento);
         try { await _supabase.rpc('fn_abatimentos_sincronizar'); } catch (e) { }   // parcelas de abatimento do mês
