@@ -16,7 +16,7 @@
     .seg { display: inline-flex; border: 1px solid #D0D5DD; border-radius: 7px; overflow: hidden; }
     .seg button { border: 0; padding: 5px 11px; font: inherit; font-size: 12.5px; font-weight: 600; background: #fff; color: var(--cinza-tx); cursor: pointer; }
     .seg button.on { background: var(--escuro); color: #fff; }
-    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
     .kpis .card.p { padding: 8px 12px; }
     .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-top: 2px; }
     @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -33,6 +33,7 @@
     .q td.bk { background: #F5F8FF; } .q th.bk { background: #F5F8FF; }
     .q td.dn { background: #F3FAF5; } .q th.dn { background: #F3FAF5; }
     .q .neg { color: var(--verm); }
+    .q th.tp, .q td.tp { font-weight: 700; border-left: 2px solid #D0D5DD; }
     .q .zero { color: #C0C6CF; }
     h2.sec { font-size: 13px; margin: 16px 0 6px; font-weight: 700; }
     .nota { font-size: 11.5px; color: var(--sub); margin-top: 6px; line-height: 1.5; }
@@ -51,7 +52,7 @@
   <div class="kpis" id="kpis"></div>
 
   <section class="card rola" style="max-height: 62vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
-  <p class="nota">Valores do último envio do Resumo da competência ao Financeiro. <b>Pagamento via banco = débito do 5º dia útil nas contas</b> (o total bate com o quadro de débito por conta abaixo).
+  <p class="nota">Valores do último envio do Resumo da competência ao Financeiro. <b>Pagamento via banco = débito do 5º dia útil nas contas</b> (o total bate com o quadro de débito por conta abaixo). <b>Total pago = dinheiro + banco</b> (líquido da folha enviado ao Financeiro).
     Banco (−) comissão = pagamento via banco menos a comissão. Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
     Clique na loja para ver os funcionários.</p>
 
@@ -132,10 +133,10 @@
       const bancos = bancosUsados(), T = somar(linhas);
       // colunas pedidas em 22/10/2026: comissão, dinheiro, banco, banco − comissão (o total do banco = débito do 5º dia útil nas contas)
       $('kpis').innerHTML = [['Comissão', T.com, 'eventos ' + codsCom().join(', ')], ['Pagamento em dinheiro', T.dinheiro, 'pago em espécie'],
-        ['Pagamento via banco', T.banco, `débito nas contas · ${T.n} funcionário(s)` + (T.aPagar > 0.005 ? ` · a pagar ${brl(T.aPagar)}` : '')], ['Banco (−) comissão', T.banco - T.com, 'pagamento via banco menos a comissão']]
+        ['Pagamento via banco', T.banco, `débito nas contas · ${T.n} funcionário(s)` + (T.aPagar > 0.005 ? ` · a pagar ${brl(T.aPagar)}` : '')], ['Banco (−) comissão', T.banco - T.com, 'pagamento via banco menos a comissão'], ['Total pago', T.dinheiro + T.banco, 'dinheiro + banco = líquido da folha']]
         .map(([t, v, d]) => `<div class="card p"><div class="desc">${t}</div><div class="v">${brl(v)}</div><div class="desc">${d}</div></div>`).join('');
-      const cab = `<thead><tr><th class="l">${modo === 'loja' ? 'Loja' : 'Empresa'}</th><th>Func.</th><th class="cm">Valor da comissão</th><th class="dn">Pagamento em dinheiro</th><th class="bk">Pagamento via banco</th><th>Banco (−) comissão</th></tr></thead>`;
-      const lin = (rot, t, cls, attr = '') => `<tr class="${cls}" ${attr}><td class="l">${rot}</td><td>${t.n}</td>${nc(t.com, 'cm')}${nc(t.dinheiro, 'dn')}${nc(t.banco, 'bk')}${n(t.banco - t.com)}</tr>`;
+      const cab = `<thead><tr><th class="l">${modo === 'loja' ? 'Loja' : 'Empresa'}</th><th>Func.</th><th class="cm">Valor da comissão</th><th class="dn">Pagamento em dinheiro</th><th class="bk">Pagamento via banco</th><th>Banco (−) comissão</th><th class="tp">Total pago</th></tr></thead>`;
+      const lin = (rot, t, cls, attr = '') => `<tr class="${cls}" ${attr}><td class="l">${rot}</td><td>${t.n}</td>${nc(t.com, 'cm')}${nc(t.dinheiro, 'dn')}${nc(t.banco, 'bk')}${n(t.banco - t.com)}${nc(t.dinheiro + t.banco, 'tp')}</tr>`;
       let h = cab + '<tbody>';
       grupos().forEach(([k, ls]) => {
         const ab = abertos.has(k);
@@ -160,8 +161,8 @@
 
     function exportarCsv() {
       const bancos = bancosUsados(), f = v => r2(v).toFixed(2).replace('.', ',');
-      const L = [['Loja', 'Empresa', 'CNPJ', 'Funcionário', 'Valor da comissão', 'Pagamento em dinheiro', 'Pagamento via banco', 'Banco (-) comissão']];
-      linhas.forEach(l => { const c = comDe(l); L.push([l.loja, l.empresa, l.cnpj, l.nome, f(c), f(l.dinheiro), f(l.banco), f(l.banco - c)]); });
+      const L = [['Loja', 'Empresa', 'CNPJ', 'Funcionário', 'Valor da comissão', 'Pagamento em dinheiro', 'Pagamento via banco', 'Banco (-) comissão', 'Total pago']];
+      linhas.forEach(l => { const c = comDe(l); L.push([l.loja, l.empresa, l.cnpj, l.nome, f(c), f(l.dinheiro), f(l.banco), f(l.banco - c), f(l.dinheiro + l.banco)]); });
       const csv = '﻿' + L.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `quinto_dia_${$('fComp').value}.csv`; a.click();
     }
