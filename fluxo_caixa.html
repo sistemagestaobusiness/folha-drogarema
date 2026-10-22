@@ -9,76 +9,104 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="fluxo_core.js?v=4"></script>
+  <script src="fluxo_core.js?v=5"></script>
   <style>
-    .fc { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: 100%; }
-    .fc th, .fc td { padding: 4px 8px; text-align: right; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; border-bottom: 1px solid var(--linha); }
-    .fc th { font-family: Inter, sans-serif; font-weight: 600; font-size: 11.5px; color: var(--sub); padding-top: 8px; padding-bottom: 8px; position: sticky; top: 0; background: #fff; z-index: 2; }
-    .fc .l { text-align: left; font-family: Inter, sans-serif; position: sticky; left: 0; background: #fff; z-index: 1; min-width: 250px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; padding-left: 14px; }
+    .fc { border-collapse: separate; border-spacing: 0; font-size: 12px; width: 100%; }
+    .fc th, .fc td { padding: 3px 7px; text-align: right; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; border-bottom: 1px solid var(--linha); }
+    .fc th { font-family: Inter, sans-serif; font-weight: 600; font-size: 11px; color: var(--sub); padding-top: 6px; padding-bottom: 6px; position: sticky; top: 0; background: #fff; z-index: 2; }
+    .fc .l { text-align: left; font-family: Inter, sans-serif; position: sticky; left: 0; background: #fff; z-index: 1; min-width: 220px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; padding-left: 12px; }
     .fc th.l { z-index: 3; }
     .fc .prev { background: var(--prev); color: var(--prev-tx); }
     .fc .sem { background: repeating-linear-gradient(135deg, #F4F5F7 0, #F4F5F7 6px, #ECEEF1 6px, #ECEEF1 12px); color: #98A2B3; }
     .fc .hoje { box-shadow: inset 2px 0 0 var(--ouro); }
-    .fc .tot { background: #F4F5F7; font-weight: 600; }
+    .fc td.tot, .fc th.tot { background: #F7F8FA; font-weight: 600; }
+    /* linhas de grupo (Fornecedores, Administrativo…) */
     .fc tr.grp td { font-weight: 600; }
     .fc tr.grp td.l { cursor: pointer; }
-    .fc tr.cat td { color: var(--sub); font-size: 12px; }
-    .fc tr.cat td.l { padding-left: 34px; }
-    .fc tr.sec td { background: var(--escuro); color: #fff; font-family: Inter, sans-serif; font-weight: 600; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
-    .fc tr.saldo td { font-weight: 700; border-bottom: 1px solid #D0D5DD; }
-    .fc td.edit { cursor: pointer; }
-    .fc td.edit:hover { outline: 1px solid var(--ouro); outline-offset: -1px; }
+    /* linhas de componente (categorias, contas, ajuste): fonte menor */
+    .fc tr.cat td { color: var(--sub); font-size: 11px; padding-top: 2px; padding-bottom: 2px; }
+    .fc tr.cat td.l { padding-left: 30px; }
+    /* faixas Entradas / Pagamentos / Saldo: cor viva */
+    .fc tr.sec td { background: var(--azul); color: #fff; font-family: Inter, sans-serif; font-weight: 700; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; padding-top: 4px; padding-bottom: 4px; border-bottom: 0; }
+    /* totalizadores: fundo claro */
+    .fc tr.tt td { background: #EEF4FF; font-weight: 700; color: #1E3A8A; border-bottom: 1px solid #D6E2FF; }
+    .fc tr.tt td.l { background: #EEF4FF; }
+    .fc tr.tt td.prev { background: #E3ECFF; }
+    .fc tr.tt td.fds { background: #DFE6F5; }
+    /* saldo bancário final: destaque discreto */
+    .fc tr.sfinal td { background: #FDF6EC; font-weight: 700; font-size: 12.5px; color: #3D2B12; border-top: 2px solid var(--ouro); border-bottom: 2px solid var(--ouro); }
+    .fc tr.sfinal td.l { background: #FDF6EC; }
+    .fc tr.sfinal td.fds { background: #F5ECDD; }
+    .fc td.edit { cursor: text; }
+    .fc td.edit:hover { outline: 1px solid #9E77ED; outline-offset: -1px; }
+    .fc td.ver { cursor: zoom-in; }
+    .fc td.ver:hover { outline: 1px solid var(--azul); outline-offset: -1px; }
     .fc .neg { color: var(--verm); }
-    .fc .fds { color: #98A2B3; }
-    .chev { display: inline-block; width: 14px; color: var(--sub); }
+    .fc tr.sfinal td.neg, .fc tr.tt td.neg { color: var(--verm); }
+    .fc input.ced { width: 88px; border: 1px solid #9E77ED; border-radius: 4px; padding: 1px 4px; font: inherit; text-align: right; background: #fff; color: #14181F; }
+    .fc .pc { display: block; font-size: 9.5px; line-height: 1.1; color: #98A2B3; font-weight: 500; }
+    .chev { display: inline-block; width: 13px; color: var(--sub); }
     .seg { display: inline-flex; border: 1px solid #D0D5DD; border-radius: 7px; overflow: hidden; }
-    .seg button { border: 0; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600; background: #fff; color: var(--cinza-tx); cursor: pointer; }
+    .seg button { border: 0; padding: 5px 11px; font: inherit; font-size: 12.5px; font-weight: 600; background: #fff; color: var(--cinza-tx); cursor: pointer; }
     .seg button.on { background: var(--escuro); color: #fff; }
-    .leg { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--sub); align-items: center; margin: 10px 0; }
-    .leg i { display: inline-block; width: 14px; height: 10px; border: 1px solid #D0D5DD; vertical-align: middle; margin-right: 5px; }
-    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-    .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 18px; margin-top: 2px; }
+    .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .barra h1 { margin: 0 10px 0 0; font-size: 18px; font-weight: 700; }
+    .barra .btn { min-height: 30px; padding: 0 10px; }
+    .leg { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--sub); align-items: center; margin: 0 0 6px; }
+    .leg i { display: inline-block; width: 12px; height: 9px; border: 1px solid #D0D5DD; vertical-align: middle; margin-right: 4px; }
+    #alertas { display: flex; flex-wrap: wrap; gap: 6px; }
+    #alertas .alerta { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+    .kpis .card.p { padding: 8px 12px; }
+    .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-top: 2px; }
     @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     /* fim de semana e feriado: coluna inteira em cinza (21/10/2026) */
     .fc th.fds { background: #E4E7EC; color: #344054; }
     .fc td.fds { background: #F0F2F5; }
     .fc td.fds.prev { background: #E6EAF2; }
-    .fc tr.sec td.fds { background: var(--escuro); }
-    /* previsão manual de fornecedor: linha inteira em lilás claro, fora da paleta */
-    .fc tr.prevforn td, .fc tr.prevforn td.prev, .fc tr.prevforn td.fds { background: #F4EBFF; color: #53389E; font-style: italic; }
-    .fc tr.prevforn td.l { padding-left: 34px; font-size: 12px; }
+    .fc tr.sec td.fds { background: var(--azul); }
+    /* previsão manual (entrada e grupos): linha inteira em lilás claro */
+    .fc tr.prevl td, .fc tr.prevl td.prev, .fc tr.prevl td.fds { background: #F4EBFF; color: #53389E; font-style: italic; font-size: 11px; }
+    .fc tr.prevl td.l { padding-left: 30px; }
+    /* total da semana de fornecedores: informativo */
+    .fc tr.sem7 td { font-size: 10px; color: #98A2B3; border-bottom: 1px dashed var(--linha); padding-top: 1px; padding-bottom: 1px; }
+    .fc tr.sem7 td.l { padding-left: 30px; }
+    .fc tr.sem7 td.w { color: #475467; font-weight: 600; }
+    /* rastreio dos títulos */
+    #modal { position: fixed; inset: 0; background: rgba(16, 24, 40, .45); display: none; align-items: flex-start; justify-content: center; z-index: 50; padding: 40px 12px; }
+    #modal .caixa { background: #fff; border-radius: 12px; width: min(1100px, 100%); max-height: calc(100vh - 80px); display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,.2); }
+    #modal .topo { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--borda); }
+    #modal .corpo { overflow: auto; padding: 0 0 8px; }
+    #modal .t td, #modal .t th { font-size: 12px; white-space: nowrap; }
+    #modal .t td.cr { white-space: normal; min-width: 180px; }
   </style>
 </head>
 <body>
-  <div class="cab">
-    <div>
-      <div class="sub">Realizado até ontem pelo extrato e pelas baixas do Alpha7 · previsto pelo contas a pagar e pela média de vendas</div>
-      <h1>Fluxo de caixa</h1>
-    </div>
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
-      <div class="seg" role="tablist"><button type="button" id="mDia" class="on" onclick="trocarModo('dia')">Diário</button><button type="button" id="mMes" onclick="trocarModo('mes')">Mensal</button></div>
-      <button type="button" class="btn" onclick="mover(-1)" aria-label="Anterior">‹</button>
-      <span id="lblPeriodo" style="font-weight: 700; font-size: 15px; min-width: 130px; text-align: center"></span>
-      <button type="button" class="btn" onclick="mover(1)" aria-label="Próximo">›</button>
-      <button type="button" class="btn" onclick="irHoje()">Hoje</button>
-    </div>
+  <div class="barra">
+    <h1>Fluxo de caixa</h1>
+    <div class="seg" role="tablist"><button type="button" id="mDia" class="on" onclick="trocarModo('dia')">Diário</button><button type="button" id="mMes" onclick="trocarModo('mes')">Mensal · 12 meses</button></div>
+    <button type="button" class="btn" onclick="mover(-1)" aria-label="Anterior">‹</button>
+    <span id="lblPeriodo" style="font-weight: 700; font-size: 14px; min-width: 120px; text-align: center"></span>
+    <button type="button" class="btn" onclick="mover(1)" aria-label="Próximo">›</button>
+    <button type="button" class="btn" onclick="irHoje()">Hoje</button>
+    <div id="alertas" style="margin-left: auto"></div>
   </div>
   <div id="aviso" class="alerta verm"></div>
-  <div id="alertas" style="display: flex; flex-wrap: wrap; gap: 10px"></div>
 
   <div class="leg">
-    <span><i style="background: #fff"></i>realizado</span>
     <span><i style="background: var(--prev); border-color: #C7D7FE"></i>previsto</span>
     <span><i style="background: repeating-linear-gradient(135deg,#F4F5F7 0,#F4F5F7 3px,#ECEEF1 3px,#ECEEF1 6px)"></i>sem carga</span>
     <span><i style="width: 2px; border: 0; background: var(--ouro)"></i>hoje</span>
     <span><i style="background: #E4E7EC"></i>fim de semana · ★ feriado</span>
     <span><i style="background: #F4EBFF; border-color: #D6BBFB"></i>previsão manual</span>
-    <span style="margin-left: auto">valores em R$ · clique no grupo para abrir as categorias<span id="legEdit"> · nos dias futuros, clique na venda ou na previsão de fornecedor para informar um valor</span></span>
+    <span style="margin-left: auto">R$ · clique no grupo para abrir · clique num valor de pagamento para ver os títulos<span id="legEdit"> · nas linhas Previsão e na venda futura, clique e digite (Enter grava, Tab vai para o dia seguinte)</span></span>
   </div>
 
-  <section class="card rola" style="max-height: 74vh; overflow: auto"><table class="fc" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
+  <section class="card rola" id="rola" style="max-height: 80vh; overflow: auto"><table class="fc" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
 
   <div class="kpis" id="kpis"></div>
+
+  <div id="modal" onclick="if (event.target === this) fecharModal()"><div class="caixa"><div class="topo"><div style="flex: 1"><div class="desc" id="mSub"></div><h2 id="mTit" style="margin: 2px 0 0; font-size: 15px"></h2></div><button type="button" class="btn" onclick="fecharModal()">Fechar</button></div><div class="corpo" id="mCorpo"></div></div></div>
 
   <script>
     const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
@@ -86,13 +114,23 @@
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fmt = v => v === null || v === undefined ? '' : Math.round(v) === 0 ? '–' : Math.round(v).toLocaleString('pt-BR');
     const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dbr = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
     const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
     const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
     const hoje = FluxoCore.isoDe(new Date());
-    let perfil = null, modo = 'dia', ano = +hoje.slice(0, 4), mes = +hoje.slice(5, 7);
+    // mensal = 12 meses corridos a partir de iniMes ("aaaa-mm"), anda mês a mês (22/10/2026)
+    const somaMes = (ym, n) => { const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+    const iniPadrao = () => somaMes(hoje.slice(0, 7), -3);
+    let perfil = null, modo = 'dia', ano = +hoje.slice(0, 4), mes = +hoje.slice(5, 7), iniMes = iniPadrao();
     let cad = { grupos: [], categorias: {}, contas: [], config: {}, previsoes: {}, vendaHist: {} };
-    const abertos = new Set(); let calc = null;
+    const abertos = new Set(); let calc = null, base = null, cols = [], editAtual = null;
     const podeEditar = () => ['FINANCEIRO', 'GESTOR'].includes(perfil);
+    // grupos com linha "Previsão" para digitar (Fornecedores sempre visível; os demais ao abrir o grupo)
+    const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    const PREV_GRUPOS = ['FORNECEDORES', 'ADMINISTRATIVO', 'BANCO', 'MANUTENCAO', 'MARKETING', 'IMPOSTOS'];
+    const temPrev = g => PREV_GRUPOS.includes(semAcento(g));
+    const tipoPrev = g => g === 'FORNECEDORES' ? 'fornecedor' : 'G:' + g;   // fornecedor mantém o tipo antigo
+    const nomeG = g => g === 'SEM GRUPO' ? 'Sem grupo (corrigir no Alpha7)' : g.charAt(0) + g.slice(1).toLowerCase();
 
     function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
 
@@ -101,14 +139,13 @@
       for (let de = 0; ; de += 1000) { const { data, error } = await _supabase.rpc(nome, args).range(de, de + 999); if (error) throw error; tudo.push(...(data || [])); if (!data || data.length < 1000) break; }
       return tudo;
     }
-
     // lê todas as linhas de uma consulta (o Supabase entrega no máximo 1.000 por vez)
     async function tudoTabela(q) {
       let out = [], de = 0;
       for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; }
     }
     async function carregarCadastros() {
-      const [rg, rc, rk, rf, rp, rv] = await Promise.all([
+      const [rg, rc, rk, rf, rp] = await Promise.all([
         _supabase.from('fin_grupos').select('*').order('ordem'),
         _supabase.from('fin_categorias').select('*'),
         _supabase.from('fin_contas').select('*').order('ordem'),
@@ -125,9 +162,8 @@
       cad.contas = rk.data;
       cad.config = {}; rf.data.forEach(c => cad.config[c.chave] = c.valor);
       cad.previsoes = {}; rp.data.forEach(p => cad.previsoes[p.tipo + '|' + p.data] = Number(p.valor));
-      const tot = {}, lojas = {};
+      const tot = {}, lojas = {}, somaLoja = {};
       lf.forEach(v => tot[v.data] = Number(v.valor || 0));
-      const somaLoja = {};
       lv.forEach(v => { const u = v.unidade || '?'; (lojas[u] = lojas[u] || {})[v.data] = (lojas[u][v.data] || 0) + Number(v.venda || 0);
         somaLoja[v.data] = (somaLoja[v.data] || 0) + Number(v.venda || 0); });
       Object.keys(somaLoja).forEach(d => { if (!(tot[d] > 0)) tot[d] = somaLoja[d]; });
@@ -136,29 +172,34 @@
 
     function periodo() {
       if (modo === 'dia') { const ini = `${ano}-${String(mes).padStart(2, '0')}-01`; const fim = FluxoCore.isoDe(new Date(ano, mes, 0)); return { ini, fim }; }
-      return { ini: `${ano}-01-01`, fim: `${ano}-12-31` };
+      const f = somaMes(iniMes, 11);
+      return { ini: iniMes + '-01', fim: FluxoCore.isoDe(new Date(+f.slice(0, 4), +f.slice(5, 7), 0)) };
     }
+    const rotMes = ym => MESES[+ym.slice(5, 7) - 1].slice(0, 3) + '/' + ym.slice(2, 4);
 
     async function carregar() {
       aviso('');
       const { ini, fim } = periodo();
-      $('lblPeriodo').innerText = modo === 'dia' ? `${MESES[mes - 1]} ${ano}` : String(ano);
+      $('lblPeriodo').innerText = modo === 'dia' ? `${MESES[mes - 1]} ${ano}` : `${rotMes(iniMes)} a ${rotMes(somaMes(iniMes, 11))}`;
       $('tab').innerHTML = '<tbody><tr><td class="l">Carregando…</td></tr></tbody>';
       // período no futuro: busca desde o mês atual, para o saldo previsto partir do último saldo real
       const mesAtual = hoje.slice(0, 8) + '01';
       const buscaIni = ini > hoje ? mesAtual : ini;
       try {
         const linhas = await rpcTudo('fn_fin_fluxo', { p_ini: buscaIni, p_fim: fim });
-        calc = FluxoCore.montar({ ini: buscaIni, fim, hoje, linhas, categorias: cad.categorias, contas: cad.contas, previsoes: cad.previsoes,
-          vendaHist: cad.vendaHist, ajusteUtil: Number(cad.config.ajuste_util || 0), ajusteSegunda: Number(cad.config.ajuste_segunda || 0),
-          fatorVenda: cad.config.venda_fator == null ? 0.97 : Number(cad.config.venda_fator), lojasNovas: cad.config.venda_lojas_novas || undefined });
-        calc.dias = calc.dias.filter(d => d.iso >= ini);
-        desenhar();
-        resumo();
+        base = { ini, buscaIni, fim, linhas };
+        recalcular();
       } catch (e) { aviso('Não foi possível montar o fluxo: ' + esc(e.message || e)); }
     }
+    // recalcula com as linhas já buscadas (depois de digitar uma previsão não precisa ir ao banco de novo)
+    function recalcular() {
+      calc = FluxoCore.montar({ ini: base.buscaIni, fim: base.fim, hoje, linhas: base.linhas, categorias: cad.categorias, contas: cad.contas, previsoes: cad.previsoes,
+        vendaHist: cad.vendaHist, ajusteUtil: Number(cad.config.ajuste_util || 0), ajusteSegunda: Number(cad.config.ajuste_segunda || 0),
+        fatorVenda: cad.config.venda_fator == null ? 0.97 : Number(cad.config.venda_fator), lojasNovas: cad.config.venda_lojas_novas || undefined });
+      calc.dias = calc.dias.filter(d => d.iso >= base.ini);
+      desenhar(); resumo();
+    }
 
-    // colunas: dias do mês (modo diário) ou meses do ano (modo mensal)
     // feriados nacionais (fixos + Carnaval, Sexta-feira Santa e Corpus Christi)
     function pascoa(a) { const b = a % 19, c = Math.floor(a / 100), d = a % 100, e = Math.floor(c / 4), f = c % 4, g = Math.floor((c + 8) / 25), h = Math.floor((c - g + 1) / 3),
       i = (19 * b + c - e - h + 15) % 30, k = Math.floor(d / 4), l = d % 4, m = (32 + 2 * f + 2 * k - i - l) % 7, n = Math.floor((b + 11 * i + 22 * m) / 451), mes = Math.floor((i + m - 7 * n + 114) / 31), dia = ((i + m - 7 * n + 114) % 31) + 1;
@@ -171,78 +212,106 @@
         m[FluxoCore.somaDia(p, -48)] = 'Carnaval'; m[FluxoCore.somaDia(p, -47)] = 'Carnaval'; m[FluxoCore.somaDia(p, -2)] = 'Sexta-feira Santa'; m[FluxoCore.somaDia(p, 60)] = 'Corpus Christi'; _fer[a] = m; }
       return _fer[a][iso] || null;
     }
+    // colunas: dias do mês (diário) ou 12 meses corridos (mensal)
     function colunas() {
       if (modo === 'dia') return calc.dias.map(d => { const fer = feriado(d.iso);
         return { id: d.iso, tit: `${SEM[FluxoCore.dow(d.iso)]} ${d.iso.slice(8)}`, dias: [d], hoje: d.iso === hoje, fds: !!fer || [0, 6].includes(FluxoCore.dow(d.iso)), fer }; });
-      return MESES.map((m, k) => { const pre = `${ano}-${String(k + 1).padStart(2, '0')}`; return { id: pre, tit: m.slice(0, 3), dias: calc.dias.filter(d => d.iso.startsWith(pre)), hoje: hoje.startsWith(pre) }; });
+      return Array.from({ length: 12 }, (_, k) => { const pre = somaMes(iniMes, k); return { id: pre, tit: rotMes(pre), dias: calc.dias.filter(d => d.iso.startsWith(pre)), hoje: hoje.startsWith(pre) }; });
     }
     const classe = c => { const d = c.dias; if (!d.length) return ''; const prev = d.every(x => !x.passado), sem = d.every(x => x.semCarga);
       return (prev ? 'prev' : sem ? 'sem' : '') + (c.hoje ? ' hoje' : '') + (c.fds ? ' fds' : ''); };
+    const totForn = d => ((d.grupos.FORNECEDORES && d.grupos.FORNECEDORES.tot) || 0) + (d.forn || 0);
+    const pctTxt = (a, b) => b > 0 && Math.round(a) ? (a / b * 100).toFixed(1).replace('.', ',') + '%' : '';
 
     function desenhar() {
-      const cols = colunas();
+      const rola = $('rola'), sl = rola.scrollLeft, st = rola.scrollTop;
+      cols = colunas();
       const soma = (c, f) => c.dias.reduce((a, d) => a + (f(d) || 0), 0);
-      const cel = (c, v, editar = '') => `<td class="${classe(c)} ${editar ? 'edit' : ''} ${v < -0.5 ? 'neg' : ''}"${editar ? ` data-edit="${editar}" data-dia="${c.id}"` : ''}>${fmt(v)}</td>`;
+      const futuro = c => modo === 'dia' && c.dias[0] && !c.dias[0].passado;
+      // opc: cls, title, chev, attr, edit (tipo da previsão), ver (rastreio: 'G:grupo' | 'P:plano'), extra (html extra na célula k)
+      const cel = (c, k, v, opc = {}) => {
+        const ed = opc.edit && futuro(c) && podeEditar(), ver = opc.ver && !ed;
+        return `<td class="${classe(c)}${ed ? ' edit' : ''}${ver ? ' ver' : ''}${v < -0.5 ? ' neg' : ''}"${ed ? ` data-edit="${esc(opc.edit)}" data-dia="${c.id}"` : ''}${ver ? ` data-ver="${esc(opc.ver)}" data-k="${k}"` : ''}>${fmt(v)}${opc.extra ? opc.extra(k) : ''}</td>`;
+      };
       const linha = (rot, f, opc = {}) => {
         const vals = cols.map(c => soma(c, f)), tot = vals.reduce((a, b) => a + b, 0);
-        return `<tr class="${opc.cls || ''}" ${opc.attr || ''}><td class="l" title="${esc(opc.title || rot)}">${opc.chev !== undefined ? `<span class="chev">${opc.chev ? '▾' : '▸'}</span>` : ''}${esc(rot)}</td>${cols.map((c, k) => cel(c, vals[k], opc.edit && modo === 'dia' && c.dias[0] && !c.dias[0].passado ? opc.edit : '')).join('')}<td class="tot">${fmt(tot)}</td></tr>`;
+        return `<tr class="${opc.cls || ''}" ${opc.attr || ''}><td class="l" title="${esc(opc.title || rot)}">${opc.chev !== undefined ? `<span class="chev">${opc.chev ? '▾' : '▸'}</span>` : ''}${esc(rot)}</td>${cols.map((c, k) => cel(c, k, vals[k], opc)).join('')}<td class="tot${opc.ver ? ' ver' : ''}"${opc.ver ? ` data-ver="${esc(opc.ver)}" data-k="T"` : ''}>${fmt(tot)}${opc.extra ? opc.extra('T') : ''}</td></tr>`;
       };
-      let h = `<thead><tr><th class="l">${modo === 'dia' ? MESES[mes - 1] + ' ' + ano : ano}</th>${cols.map(c => `<th class="${c.hoje ? 'hoje' : ''} ${c.fds ? 'fds' : ''}"${c.fer ? ` title="Feriado: ${esc(c.fer)}"` : ''}>${c.tit}${c.fer ? ' ★' : ''}</th>`).join('')}<th class="tot">Total</th></tr></thead><tbody>`;
-      const sec = t => `<tr class="sec"><td class="l">${t}</td>${cols.map(() => '<td></td>').join('')}<td></td></tr>`;   // sem fds: faixa escura contínua
-      // entradas
+      const tituloTab = modo === 'dia' ? MESES[mes - 1] + ' ' + ano : '12 meses';
+      let h = `<thead><tr><th class="l">${tituloTab}</th>${cols.map(c => `<th class="${c.hoje ? 'hoje' : ''} ${c.fds ? 'fds' : ''}"${c.fer ? ` title="Feriado: ${esc(c.fer)}"` : ''}>${c.tit}${c.fer ? ' ★' : ''}</th>`).join('')}<th class="tot">${modo === 'dia' ? 'Total' : 'Total 12m'}</th></tr></thead><tbody>`;
+      const sec = t => `<tr class="sec"><td class="l">${t}</td>${cols.map(c => `<td class="${c.fds ? 'fds' : ''}"></td>`).join('')}<td></td></tr>`;
+
+      // ---------- entradas
       h += sec('Entradas');
-      h += `<tr class="grp"><td class="l" title="A venda do dia cai no banco no dia útil seguinte">Venda do dia</td>${cols.map(c => {
+      const vendas = cols.map(c => soma(c, d => d.venda)), vendaTot = vendas.reduce((a, b) => a + b, 0);
+      h += `<tr class="grp"><td class="l" title="A venda do dia cai no banco no dia útil seguinte">Venda do dia</td>${cols.map((c, k) => {
         const sem = c.dias.length && c.dias.every(d => d.vendaSemCarga);
-        const v = soma(c, d => d.venda), man = modo === 'dia' && c.dias[0] && c.dias[0].vendaManual;
-        const tip = modo === 'dia' && c.dias[0] && !c.dias[0].passado ? ` title="${esc(c.dias[0].vendaRegra)}"` : '';
-        const ed = modo === 'dia' && c.dias[0] && !c.dias[0].passado && podeEditar();
-        return sem ? `<td class="sem${c.hoje ? ' hoje' : ''}">–</td>` : `<td class="${classe(c)}${ed ? ' edit' : ''}"${ed ? ` data-edit="venda" data-dia="${c.id}"` : ''}${tip}>${man ? '✎ ' : ''}${fmt(v)}</td>`; }).join('')}<td class="tot">${fmt(calc.dias.reduce((a, d) => a + (d.venda || 0), 0))}</td></tr>`;
+        const man = modo === 'dia' && c.dias[0] && c.dias[0].vendaManual;
+        const tip = futuro(c) ? ` title="${esc(c.dias[0].vendaRegra)}"` : '';
+        const ed = futuro(c) && podeEditar();
+        return sem ? `<td class="sem${c.hoje ? ' hoje' : ''}">–</td>` : `<td class="${classe(c)}${ed ? ' edit' : ''}"${ed ? ` data-edit="venda" data-dia="${c.id}"` : ''}${tip}>${man ? '✎ ' : ''}${fmt(vendas[k])}</td>`; }).join('')}<td class="tot">${fmt(vendaTot)}</td></tr>`;
+      if (modo === 'mes') {   // média da venda por dia do mês (como no FC: total do mês ÷ dias)
+        const nd = c => c.dias.filter(d => d.venda !== null).length;
+        const tdias = cols.reduce((a, c) => a + nd(c), 0);
+        h += `<tr class="cat"><td class="l" title="Venda do mês ÷ dias do mês">Média por dia</td>${cols.map((c, k) => `<td class="${classe(c)}">${nd(c) ? fmt(vendas[k] / nd(c)) : ''}</td>`).join('')}<td class="tot">${tdias ? fmt(vendaTot / tdias) : ''}</td></tr>`;
+      }
       h += linha('(–) Ajuste diário (cartão + Farmácia Popular)', d => d.ajuste ? -d.ajuste : 0, { cls: 'cat', title: 'Desconto de cartão e Farmácia Popular que caem na CEF: reduz a entrada da venda' });
-      h += linha('Venda líquida (entrada)', d => d.venda === null ? 0 : (d.venda || 0) - (d.ajuste || 0), { cls: 'grp' });
-      h += linha('Créditos no extrato', d => d.cred, { cls: 'cat' });
-      // pagamentos
+      h += linha('Venda líquida', d => d.venda === null ? 0 : (d.venda || 0) - (d.ajuste || 0), { cls: 'cat' });
+      h += linha('Previsão', d => d.entPrev, { cls: 'prevl', edit: 'entrada', title: 'Outra entrada prevista, digitada à mão (não vem do Alpha7)' });
+      h += linha('Total de entradas', d => (d.venda === null ? 0 : (d.venda || 0) - (d.ajuste || 0)) + (d.entPrev || 0), { cls: 'tt' });
+
+      // ---------- pagamentos
       h += sec('Pagamentos');
       const grupos = [...cad.grupos]; if (calc.dias.some(d => d.grupos['SEM GRUPO'])) grupos.push('SEM GRUPO');
-      const FORN = 'FORNECEDORES', temForn = grupos.includes(FORN);
       grupos.forEach(g => {
-        const tem = calc.dias.some(d => d.grupos[g]); if (!tem && !(g === FORN)) return;
-        const ab = abertos.has(g), eForn = g === FORN;
-        h += linha(g === 'SEM GRUPO' ? 'Sem grupo (corrigir no Alpha7)' : g.charAt(0) + g.slice(1).toLowerCase(), d => ((d.grupos[g] && d.grupos[g].tot) || 0) + (eForn ? d.forn || 0 : 0), { cls: 'grp', chev: ab, attr: `data-g="${esc(g)}"` });
-        // previsão manual de fornecedor: dentro do grupo, sempre visível e com cor própria (21/10/2026)
-        if (eForn) h += linha('✎ Previsão de fornecedor (manual · não é título do Alpha7)', d => d.forn, { cls: 'prevforn', edit: podeEditar() ? 'fornecedor' : '', title: 'Valor informado à mão para os dias futuros: clique na célula para informar' });
+        const tem = calc.dias.some(d => d.grupos[g] || (d.prevG && d.prevG[g])); if (!tem && !temPrev(g)) return;
+        const ab = abertos.has(g), eForn = g === 'FORNECEDORES';
+        const valG = d => ((d.grupos[g] && d.grupos[g].tot) || 0) + ((d.prevG && d.prevG[g]) || 0);
+        // mensal: % de fornecedores sobre a venda do mês (como no FC)
+        const extra = eForn && modo === 'mes' ? k => { const v = k === 'T' ? calc.dias.reduce((a, d) => a + totForn(d), 0) : soma(cols[k], totForn), b = k === 'T' ? vendaTot : vendas[k];
+          return `<span class="pc" title="Fornecedores ÷ venda do mês">${pctTxt(v, b)}</span>`; } : null;
+        h += linha(nomeG(g), valG, { cls: 'grp', chev: ab, attr: `data-g="${esc(g)}"`, ver: 'G:' + g, extra, title: nomeG(g) + ' · clique no nome para abrir; num valor para ver os títulos' });
+        if (eForn && modo === 'dia') {   // total da semana (seg a dom), discreto, na coluna do domingo ou no último dia do mês
+          let acum = 0;
+          h += `<tr class="sem7"><td class="l" title="Fornecedores: títulos + previsão, de segunda a domingo">total da semana</td>${cols.map((c, k) => { acum += totForn(c.dias[0]);
+            const fecha = FluxoCore.dow(c.id) === 0 || k === cols.length - 1, v = acum; if (fecha) acum = 0;
+            return `<td class="${c.fds ? 'fds' : ''}${fecha ? ' w' : ''}">${fecha && Math.round(v) ? fmt(v) : ''}</td>`; }).join('')}<td class="tot"></td></tr>`;
+        }
+        if (temPrev(g) && (eForn || ab)) h += linha('Previsão', d => d.prevG && d.prevG[g], { cls: 'prevl', edit: tipoPrev(g), title: 'Valor digitado à mão para os dias futuros (não é título do Alpha7)' });
         if (ab) {
           const cats = new Set(); calc.dias.forEach(d => d.grupos[g] && Object.keys(d.grupos[g].cats).forEach(p => cats.add(p)));
           [...cats].sort((a, b) => ((cad.categorias[a] || {}).ordem || 999) - ((cad.categorias[b] || {}).ordem || 999)).forEach(p => {
             const nome = (cad.categorias[p] || {}).nome || (p ? p.split('>').pop().trim() : '(sem plano de contas)');
-            h += linha(nome, d => d.grupos[g] && d.grupos[g].cats[p], { cls: 'cat', title: p || 'sem plano de contas' });
+            h += linha(nome, d => d.grupos[g] && d.grupos[g].cats[p], { cls: 'cat', title: p || 'sem plano de contas', ver: 'P:' + p });
           });
         }
       });
-      if (!temForn) h += linha('✎ Previsão de fornecedor (manual · não é título do Alpha7)', d => d.forn, { cls: 'prevforn', edit: podeEditar() ? 'fornecedor' : '' });
-      h += linha('Total de pagamentos', d => d.totPag, { cls: 'saldo' });
-      // saldo
+      h += linha('Total de pagamentos', d => d.totPag, { cls: 'tt' });
+
+      // ---------- saldo
       h += sec('Saldo');
       const fim = c => { const l = c.dias.filter(d => d.saldoReal !== null || d.saldoPrev !== null); return l.length ? l[l.length - 1] : null; };
       const fimReal = c => { const l = c.dias.filter(d => d.saldoContas); return l.length ? l[l.length - 1] : null; };
+      const val = (c, lista) => { const d = fimReal(c); return d ? lista.reduce((a, k) => a + (d.saldoContas[k] || 0), 0) : null; };
+      const celSaldo = (c, v) => v === null ? `<td class="${classe(c)}"></td>` : `<td class="${classe(c)}${v < -0.5 ? ' neg' : ''}">${fmt(v)}</td>`;
       const bancos = [...new Set(cad.contas.filter(c => c.no_fluxo).map(c => c.banco || 'OUTROS'))];
       bancos.forEach(b => {
         const contas = cad.contas.filter(c => c.no_fluxo && (c.banco || 'OUTROS') === b).map(c => c.conta), ab = abertos.has('B:' + b);
-        const val = (c, lista) => { const d = fimReal(c); return d ? lista.reduce((a, k) => a + (d.saldoContas[k] || 0), 0) : null; };
-        h += `<tr class="grp" data-g="B:${esc(b)}"><td class="l"><span class="chev">${ab ? '▾' : '▸'}</span>${esc(b.charAt(0) + b.slice(1).toLowerCase())} · ${contas.length} contas</td>${cols.map(c => { const v = val(c, contas); return v === null ? `<td class="${classe(c)}"></td>` : cel(c, v); }).join('')}<td class="tot"></td></tr>`;
+        h += `<tr class="grp" data-g="B:${esc(b)}"><td class="l"><span class="chev">${ab ? '▾' : '▸'}</span>${esc(b.charAt(0) + b.slice(1).toLowerCase())} · ${contas.length} contas</td>${cols.map(c => celSaldo(c, val(c, contas))).join('')}<td class="tot"></td></tr>`;
         if (ab) contas.forEach(k => { const ct = cad.contas.find(c => c.conta === k);
-          h += `<tr class="cat"><td class="l">${esc(k)}${ct && ct.empresa ? ' · ' + esc(ct.empresa) : ''}</td>${cols.map(c => { const v = val(c, [k]); return v === null ? `<td class="${classe(c)}"></td>` : cel(c, v); }).join('')}<td class="tot"></td></tr>`; });
+          h += `<tr class="cat"><td class="l">${esc(k)}${ct && ct.empresa ? ' · ' + esc(ct.empresa) : ''}</td>${cols.map(c => celSaldo(c, val(c, [k]))).join('')}<td class="tot"></td></tr>`; });
       });
-      h += `<tr class="saldo"><td class="l">Saldo bancário (real e previsto)</td>${cols.map(c => { const d = fim(c); const v = d ? (d.saldoReal !== null ? d.saldoReal : d.saldoPrev) : null; return v === null ? `<td class="${classe(c)}"></td>` : cel(c, v); }).join('')}<td class="tot"></td></tr>`;
+      h += `<tr class="sfinal"><td class="l">Saldo bancário (real e previsto)</td>${cols.map(c => { const d = fim(c); return celSaldo(c, d ? (d.saldoReal !== null ? d.saldoReal : d.saldoPrev) : null); }).join('')}<td class="tot"></td></tr>`;
       // outras empresas (só saldo)
       const outras = cad.contas.filter(c => !c.no_fluxo).map(c => c.conta);
       if (outras.length) {
         const ab = abertos.has('B:OUTRAS');
-        const val = (c, lista) => { const d = fimReal(c); return d ? lista.reduce((a, k) => a + (d.saldoContas[k] || 0), 0) : null; };
-        h += `<tr class="grp" data-g="B:OUTRAS"><td class="l"><span class="chev">${ab ? '▾' : '▸'}</span>Outras empresas · ${outras.length} contas (fora do saldo)</td>${cols.map(c => { const v = val(c, outras); return v === null ? `<td class="${classe(c)}"></td>` : cel(c, v); }).join('')}<td class="tot"></td></tr>`;
+        h += `<tr class="grp" data-g="B:OUTRAS"><td class="l"><span class="chev">${ab ? '▾' : '▸'}</span>Outras empresas · ${outras.length} contas (fora do saldo)</td>${cols.map(c => celSaldo(c, val(c, outras))).join('')}<td class="tot"></td></tr>`;
         if (ab) outras.forEach(k => { const ct = cad.contas.find(c => c.conta === k);
-          h += `<tr class="cat"><td class="l">${esc(k)}${ct && ct.empresa ? ' · ' + esc(ct.empresa) : ''}</td>${cols.map(c => { const v = val(c, [k]); return v === null ? `<td class="${classe(c)}"></td>` : cel(c, v); }).join('')}<td class="tot"></td></tr>`; });
+          h += `<tr class="cat"><td class="l">${esc(k)}${ct && ct.empresa ? ' · ' + esc(ct.empresa) : ''}</td>${cols.map(c => celSaldo(c, val(c, [k]))).join('')}<td class="tot"></td></tr>`; });
       }
       $('tab').innerHTML = h + '</tbody>';
+      rola.scrollLeft = sl; rola.scrollTop = st;   // não volta para o início do mês
     }
 
     function resumo() {
@@ -250,11 +319,11 @@
       const ult = calc.dias.filter(d => d.saldoReal !== null || d.saldoPrev !== null).pop();
       const menor = fut.length ? fut.reduce((a, d) => d.saldoPrev < a.saldoPrev ? d : a) : null;
       const pagPrev = calc.dias.filter(d => !d.passado).reduce((a, d) => a + d.totPag, 0);
-      const dbr = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+      const db = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
       $('kpis').innerHTML = `
-        <div class="card p"><div class="desc">Saldo ${ult && ult.saldoReal === null ? 'previsto' : 'real'} em ${ult ? dbr(ult.iso) : '-'}</div><div class="v ${ult && (ult.saldoReal ?? ult.saldoPrev) < 0 ? 'neg' : ''}">${ult ? brl(ult.saldoReal ?? ult.saldoPrev) : '-'}</div></div>
-        <div class="card p"><div class="desc">Menor saldo previsto${modo === 'dia' ? ' no mês' : ' no ano'}</div><div class="v ${menor && menor.saldoPrev < 0 ? 'neg' : ''}">${menor ? brl(menor.saldoPrev) : '-'}</div><div class="desc">${menor ? 'em ' + dbr(menor.iso) : ''}</div></div>
-        <div class="card p"><div class="desc">Pagamentos previstos ${modo === 'dia' ? 'até o fim do mês' : 'até o fim do ano'}</div><div class="v">${brl(pagPrev)}</div></div>
+        <div class="card p"><div class="desc">Saldo ${ult && ult.saldoReal === null ? 'previsto' : 'real'} em ${ult ? db(ult.iso) : '-'}</div><div class="v ${ult && (ult.saldoReal ?? ult.saldoPrev) < 0 ? 'neg' : ''}">${ult ? brl(ult.saldoReal ?? ult.saldoPrev) : '-'}</div></div>
+        <div class="card p"><div class="desc">Menor saldo previsto no período</div><div class="v ${menor && menor.saldoPrev < 0 ? 'neg' : ''}">${menor ? brl(menor.saldoPrev) : '-'}</div><div class="desc">${menor ? 'em ' + db(menor.iso) : ''}</div></div>
+        <div class="card p"><div class="desc">Pagamentos previstos até o fim do período</div><div class="v">${brl(pagPrev)}</div></div>
         <div class="card p" id="kVenc"><div class="desc">Contas a pagar vencidas e em aberto</div><div class="v">-</div></div>`;
       _supabase.rpc('fn_fin_vencidos').then(({ data }) => { const r = (data || [])[0]; if (r) $('kVenc').innerHTML = `<div class="desc">Contas a pagar vencidas e em aberto</div><div class="v ${r.titulos ? 'neg' : ''}">${brl(r.valor)}</div><div class="desc">${r.titulos} título(s) · ficam fora do dia a dia</div>`; });
     }
@@ -264,39 +333,115 @@
       const c = (data || [])[0], r = (c && c.resumo) || {}; let h = '';
       const { data: sg } = await _supabase.rpc('fn_fin_sem_grupo');
       if (sg && (sg.sem_plano || []).length) { const l = sg.sem_plano, v = l.reduce((a, x) => a + Number(x.valor || 0), 0);
-        h += `<a href="fin_importar.html" class="alerta verm" style="flex: 1 1 360px"><span class="ponto"></span><span style="flex: 1"><b>${l.reduce((a, x) => a + x.titulos, 0)} título(s) sem plano de contas</b> · ${esc(l.slice(0, 3).map(x => x.credor).join(', '))}${l.length > 3 ? ' e mais ' + (l.length - 3) : ''} · ${brl(v)} · corrigir no Alpha7</span><b>Ver →</b></a>`; }
-      if (sg && (sg.sem_grupo || []).length) { const l = sg.sem_grupo;
-        h += `<a href="fin_base.html?sem=1" class="alerta neutro" style="flex: 1 1 320px"><span class="ponto aten"></span><span style="flex: 1"><b>${l.length} plano(s) de contas sem grupo no fluxo</b> · classificar na Base do fluxo</span><b>Classificar →</b></a>`; }
+        h += `<a href="fin_importar.html" class="alerta verm" title="${esc(l.map(x => x.credor).join(', '))}"><span class="ponto"></span><span><b>${l.reduce((a, x) => a + x.titulos, 0)} título(s) sem plano</b> · ${brl(v)}</span></a>`; }
+      if (sg && (sg.sem_grupo || []).length) h += `<a href="fin_base.html?sem=1" class="alerta neutro"><span class="ponto aten"></span><span>${sg.sem_grupo.length} plano(s) sem grupo</span></a>`;
       const ate = r.extrato_ate || r.venda_ate;
-      if (!c) h += `<a href="fin_importar.html" class="alerta neutro" style="flex: 1 1 300px"><span class="ponto aten"></span><span style="flex: 1">Nenhuma carga do Alpha7 ainda.</span><b>Importar →</b></a>`;
-      else if (ate && ate < FluxoCore.somaDia(hoje, -1)) h += `<a href="fin_importar.html" class="alerta neutro" style="flex: 1 1 300px"><span class="ponto aten"></span><span style="flex: 1">Última carga com extrato até <b>${ate.slice(8, 10)}/${ate.slice(5, 7)}</b> · os dias seguintes até ontem aparecem como "sem carga"</span><b>Importar →</b></a>`;
-      $('alertas').innerHTML = h; $('alertas').style.marginBottom = h ? '4px' : '0';
+      if (!c) h += `<a href="fin_importar.html" class="alerta neutro"><span class="ponto aten"></span><span>Nenhuma carga do Alpha7</span></a>`;
+      else if (ate && ate < FluxoCore.somaDia(hoje, -1)) h += `<a href="fin_importar.html" class="alerta neutro"><span class="ponto aten"></span><span>Extrato até <b>${ate.slice(8, 10)}/${ate.slice(5, 7)}</b> · importar</span></a>`;
+      $('alertas').innerHTML = h;
     }
 
-    // cliques: abrir grupo, informar previsão
-    $('tab').addEventListener('click', async ev => {
-      const td = ev.target.closest('td');
-      if (td && td.dataset.edit) {
-        const tipo = td.dataset.edit, dia = td.dataset.dia, atual = cad.previsoes[tipo + '|' + dia];
-        const r = prompt(`${tipo === 'venda' ? 'Venda prevista' : 'Previsão de fornecedor'} para ${dia.split('-').reverse().join('/')} (em branco = ${tipo === 'venda' ? 'volta para a regra automática' : 'sem previsão'})`, atual !== undefined ? String(atual).replace('.', ',') : '');
-        if (r === null) return;
-        const v = r.trim() ? Number(r.replace(/\./g, '').replace(',', '.')) : null;
-        if (r.trim() && !isFinite(v)) return alert('Valor inválido.');
-        const q = v === null ? _supabase.from('fin_previsao').delete().eq('data', dia).eq('tipo', tipo)
-          : _supabase.from('fin_previsao').upsert({ data: dia, tipo, valor: v, por: (await _supabase.auth.getUser()).data.user.email, em: new Date().toISOString() });
-        const { error } = await q; if (error) return alert('Não foi possível gravar: ' + error.message);
-        if (v === null) delete cad.previsoes[tipo + '|' + dia]; else cad.previsoes[tipo + '|' + dia] = v;
-        return carregar();
+    // ---------- digitação na própria célula (22/10/2026)
+    const lerValor = t => { t = String(t || '').trim(); if (!t) return null; t = t.replace(/\s|R\$/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); return Number(t); };
+    function editar(td) {
+      if (td.querySelector('input')) return;
+      const tipo = td.dataset.edit, dia = td.dataset.dia, atual = cad.previsoes[tipo + '|' + dia], antes = td.innerHTML;
+      editAtual = tipo + '|' + dia;
+      td.innerHTML = `<input class="ced" inputmode="decimal" value="${atual !== undefined ? String(atual).replace('.', ',') : ''}" placeholder="${tipo === 'venda' ? 'automático' : ''}">`;
+      const inp = td.querySelector('input'); inp.focus(); inp.select();
+      let feito = false;
+      const fim = async (gravar, proximo) => {
+        if (feito) return; feito = true;
+        const reabrir = () => {   // clicou em outra célula de previsão enquanto gravava: abre de novo depois de redesenhar
+          if (proximo || !editAtual || editAtual === tipo + '|' + dia) return; const [t2, d2] = [editAtual.slice(0, editAtual.lastIndexOf('|')), editAtual.slice(editAtual.lastIndexOf('|') + 1)];
+          const alvo = $('tab').querySelector(`td[data-edit="${CSS.escape(t2)}"][data-dia="${d2}"]`); if (alvo) editar(alvo); };
+        if (editAtual === tipo + '|' + dia) editAtual = null;
+        if (!gravar) { td.innerHTML = antes; return; }
+        const v = lerValor(inp.value);
+        if (v !== null && !isFinite(v)) { feito = false; inp.style.borderColor = '#D92D20'; inp.title = 'Valor inválido'; return; }
+        const igual = (v === null && atual === undefined) || v === atual;
+        if (!igual) {
+          const q = v === null ? _supabase.from('fin_previsao').delete().eq('data', dia).eq('tipo', tipo)
+            : _supabase.from('fin_previsao').upsert({ data: dia, tipo, valor: v, por: (await _supabase.auth.getUser()).data.user.email, em: new Date().toISOString() });
+          const { error } = await q;
+          if (error) { aviso('Não foi possível gravar a previsão: ' + esc(error.message)); return desenhar(); }
+          if (v === null) delete cad.previsoes[tipo + '|' + dia]; else cad.previsoes[tipo + '|' + dia] = v;
+          recalcular(); reabrir();
+        } else td.innerHTML = antes;
+        if (proximo) { const prox = FluxoCore.somaDia(dia, 1), alvo = $('tab').querySelector(`td[data-edit="${CSS.escape(tipo)}"][data-dia="${prox}"]`); if (alvo) editar(alvo); }
+      };
+      inp.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter' || ev.key === 'Tab') { ev.preventDefault(); fim(true, true); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); fim(false); }
+      });
+      inp.addEventListener('blur', () => setTimeout(() => fim(true, false), 150));   // deixa o clique seguinte acontecer antes de redesenhar
+    }
+
+    // ---------- rastreio: títulos do contas a pagar que compõem a célula (22/10/2026)
+    function fecharModal() { $('modal').style.display = 'none'; }
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') fecharModal(); });
+    async function rastrear(ver, k) {
+      const dias = k === 'T' ? calc.dias : cols[+k].dias; if (!dias.length) return;
+      const ini = dias[0].iso, fim = dias[dias.length - 1].iso;
+      const eGrupo = ver.startsWith('G:'), chave = ver.slice(2);
+      const nome = eGrupo ? nomeG(chave) : ((cad.categorias[chave] || {}).nome || (chave ? chave.split('>').pop().trim() : '(sem plano de contas)'));
+      const fixo = String(cad.config.periodo_fixo_ate || '2025-12-31').replace(/"/g, '');
+      const ontem = FluxoCore.somaDia(hoje, -1);
+      $('mSub').innerText = (ini === fim ? dbr(ini) : `${dbr(ini)} a ${dbr(fim)}`) + (eGrupo ? ' · grupo' : ' · ' + chave);
+      $('mTit').innerText = nome; $('mCorpo').innerHTML = '<div class="desc" style="padding: 14px 16px">Buscando os títulos…</div>'; $('modal').style.display = 'flex';
+      const sel = 'id, status, vencimento, venc_util, pagamento, documento, parcela, valor, credor, unidade, plano, conta_pagadora, descricao';
+      const filtroPlano = q => eGrupo ? q : (chave ? q.eq('plano', chave) : q.is('plano', null));
+      const buscas = [];
+      const pIni = ini > fixo ? ini : FluxoCore.somaDia(fixo, 1), pFim = fim < ontem ? fim : ontem;
+      if (pIni <= pFim) buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Paga').gte('pagamento', pIni).lte('pagamento', pFim)).order('pagamento').order('id')));
+      const fIni = ini > hoje ? ini : hoje;
+      if (fIni <= fim) {
+        buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Pendente').gte('venc_util', fIni).lte('venc_util', fim)).order('venc_util').order('id')));
+        buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Paga').gte('pagamento', fIni).lte('pagamento', fim)).order('pagamento').order('id')));
       }
+      let lista;
+      try { lista = (await Promise.all(buscas)).flat(); } catch (e) { $('mCorpo').innerHTML = `<div class="alerta verm" style="margin: 12px 16px">${esc(e.message || e)}</div>`; return; }
+      const grupoDe = p => { const c = cad.categorias[p]; return c && c.grupo ? c.grupo : 'SEM GRUPO'; };
+      lista = lista.filter(t => !(cad.categorias[t.plano] || {}).fora_do_fluxo && (!eGrupo || grupoDe(t.plano || '') === chave));
+      const dataFluxo = t => t.status === 'Paga' ? t.pagamento : t.venc_util;
+      lista.sort((a, b) => dataFluxo(a) < dataFluxo(b) ? -1 : dataFluxo(a) > dataFluxo(b) ? 1 : Number(b.valor) - Number(a.valor));
+      const tot = lista.reduce((a, t) => a + Number(t.valor || 0), 0);
+      // previsões digitadas no período
+      let prev = 0; if (eGrupo && temPrev(chave)) dias.forEach(d => prev += (d.prevG && d.prevG[chave]) || 0);
+      const naCelula = dias.reduce((a, d) => a + (eGrupo ? ((d.grupos[chave] && d.grupos[chave].tot) || 0) + ((d.prevG && d.prevG[chave]) || 0) : ((d.grupos[grupoDe(chave)] || { cats: {} }).cats[chave] || 0)), 0);
+      const temFixo = ini <= fixo;
+      const curto = p => p ? p.split('>').pop().trim() : '(sem plano)';
+      let h = `<div style="display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 16px; font-size: 12.5px; border-bottom: 1px solid var(--linha)">
+        <span><b>${lista.length}</b> título(s) · <b class="mono">${brl(tot)}</b></span>${prev ? `<span style="color: #53389E">+ previsão digitada <b class="mono">${brl(prev)}</b></span>` : ''}
+        <span class="desc">valor na célula: <b class="mono">${brl(naCelula)}</b>${Math.abs(naCelula - tot - prev) > 0.5 ? ' · diferença ' + brl(naCelula - tot - prev) : ''}</span></div>`;
+      if (temFixo) h += `<div class="alerta neutro" style="margin: 8px 16px"><span class="ponto aten"></span><span>Até ${dbr(fixo)} o fluxo guarda só o total por dia (período fixo): os títulos desses dias não aparecem aqui.</span></div>`;
+      h += lista.length ? `<table class="t"><thead><tr><th>Data no fluxo</th><th>Situação</th><th>Vencimento</th><th>Credor</th><th>Documento</th><th>Parc.</th><th>Loja</th>${eGrupo ? '<th>Plano de contas</th>' : ''}<th>Conta pagadora</th><th class="n">Valor</th></tr></thead><tbody>${lista.map(t => `<tr>
+          <td class="mono">${dbr(dataFluxo(t))}</td><td>${t.status === 'Paga' ? '<span class="pill p-ok">Paga</span>' : '<span class="pill p-info">Em aberto</span>'}</td>
+          <td class="mono">${dbr(t.vencimento)}${t.venc_util && t.venc_util !== t.vencimento ? ' <span class="desc">(útil ' + dbr(t.venc_util).slice(0, 5) + ')</span>' : ''}</td>
+          <td class="cr" title="${esc(t.descricao || '')}">${esc(t.credor || '')}</td><td class="mono">${esc(t.documento || '')}</td><td>${esc(t.parcela || '')}</td><td>${esc(t.unidade || '')}</td>
+          ${eGrupo ? `<td title="${esc(t.plano || '')}">${esc(curto(t.plano))}</td>` : ''}<td>${esc(t.conta_pagadora || '')}</td><td class="n">${brl(t.valor)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="desc" style="padding: 14px 16px">Nenhum título do Alpha7 neste período.</div>';
+      $('mCorpo').innerHTML = h;
+    }
+
+    // cliques: digitar previsão, ver títulos, abrir grupo
+    $('tab').addEventListener('click', ev => {
+      const td = ev.target.closest('td');
+      if (td && td.dataset.edit) return editar(td);
+      if (td && td.dataset.ver && !td.classList.contains('l')) return rastrear(td.dataset.ver, td.dataset.k);
       const tr = ev.target.closest('tr[data-g]');
-      if (tr) { const g = tr.dataset.g; abertos.has(g) ? abertos.delete(g) : abertos.add(g); desenhar(); }
+      if (tr && td && td.classList.contains('l')) { const g = tr.dataset.g; abertos.has(g) ? abertos.delete(g) : abertos.add(g); desenhar(); }
+      else if (tr && tr.dataset.g.startsWith('B:')) { const g = tr.dataset.g; abertos.has(g) ? abertos.delete(g) : abertos.add(g); desenhar(); }
     });
 
     function trocarModo(m) { modo = m; $('mDia').classList.toggle('on', m === 'dia'); $('mMes').classList.toggle('on', m === 'mes'); carregar(); }
-    function mover(n) { if (modo === 'dia') { mes += n; if (mes < 1) { mes = 12; ano--; } if (mes > 12) { mes = 1; ano++; } } else ano += n;
-      const anos = cad.config.anos || []; if (anos.length && !anos.includes(ano)) { aviso(`O ano ${ano} ainda não está aberto no fluxo. O Gestor abre na Base do fluxo.`); if (modo === 'dia') { mes -= n; if (mes < 1) { mes = 12; ano--; } if (mes > 12) { mes = 1; ano++; } } else ano -= n; return; }
-      carregar(); }
-    function irHoje() { ano = +hoje.slice(0, 4); mes = +hoje.slice(5, 7); carregar(); }
+    function mover(n) {
+      if (modo === 'mes') { iniMes = somaMes(iniMes, n); return carregar(); }
+      mes += n; if (mes < 1) { mes = 12; ano--; } if (mes > 12) { mes = 1; ano++; }
+      const anos = cad.config.anos || []; if (anos.length && !anos.includes(ano)) { aviso(`O ano ${ano} ainda não está aberto no fluxo. O Gestor abre na Base do fluxo.`); mes -= n; if (mes < 1) { mes = 12; ano--; } if (mes > 12) { mes = 1; ano++; } return; }
+      carregar();
+    }
+    function irHoje() { ano = +hoje.slice(0, 4); mes = +hoje.slice(5, 7); iniMes = iniPadrao(); carregar(); }
 
     (async () => {
       const { data: { user } } = await _supabase.auth.getUser();

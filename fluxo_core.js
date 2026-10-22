@@ -143,24 +143,31 @@
       const fonte = passado ? x.cat : x.catp;
       const grupos = {};
       Object.entries(fonte).forEach(([p, v]) => { const g = grupoDe(p); const o = grupos[g] = grupos[g] || { tot: 0, cats: {} }; o.tot += v; o.cats[p] = (o.cats[p] || 0) + v; });
-      const forn = passado ? 0 : (e.previsoes['fornecedor|' + iso] || 0);
+      // previsões manuais (dias futuros): por grupo ('G:<GRUPO>|dia'; fornecedor também em 'fornecedor|dia') e de entrada ('entrada|dia')
+      const prevG = {};
+      if (!passado) {
+        Object.keys(e.previsoes).forEach(k => { if (k.startsWith('G:') && k.endsWith('|' + iso)) { const g = k.slice(2, k.length - iso.length - 1); prevG[g] = (prevG[g] || 0) + e.previsoes[k]; } });
+        if (e.previsoes['fornecedor|' + iso]) prevG.FORNECEDORES = (prevG.FORNECEDORES || 0) + e.previsoes['fornecedor|' + iso];
+      }
+      const forn = prevG.FORNECEDORES || 0, totPrevG = Object.values(prevG).reduce((a, v) => a + v, 0);
+      const entPrev = passado ? 0 : (e.previsoes['entrada|' + iso] || 0);
       const w = dow(iso);
       const projetado = !comExtrato;
       const ajuste = projetado && !passado ? (w === 1 ? e.ajusteSegunda : (w >= 2 && w <= 5 ? e.ajusteUtil : 0)) : 0;
-      const totPag = Object.values(grupos).reduce((a, g) => a + g.tot, 0) + forn;   // o ajuste reduz a venda, não entra nos pagamentos (21/10/2026)
+      const totPag = Object.values(grupos).reduce((a, g) => a + g.tot, 0) + totPrevG;   // o ajuste reduz a venda, não entra nos pagamentos (21/10/2026)
       // saldo
       const saldoReal = comExtrato ? contasFluxo.reduce((a, c) => a + (s[c] || 0), 0) : null;
       // a venda cai no banco no dia útil seguinte: terça recebe a de segunda; segunda recebe sexta, sábado e domingo
       let saldoPrev = null;
       if (comExtrato) { saldoProj = saldoReal; vendaFds = venda || 0; }
       else if (saldoProj !== null) {
-        if (w === 0 || w === 6) { saldoProj -= totPag; vendaFds += venda || 0; }
-        else { saldoProj += vendaFds - ajuste - totPag; vendaFds = venda || 0; }
+        if (w === 0 || w === 6) { saldoProj += entPrev - totPag; vendaFds += venda || 0; }
+        else { saldoProj += vendaFds - ajuste + entPrev - totPag; vendaFds = venda || 0; }
         saldoPrev = saldoProj;
       }
       const semCarga = passado && (venda === null || !comExtrato);
       dias.push({ iso, passado, projetado, semCarga, venda, vendaRegra, vendaManual, vendaSemCarga: passado && venda === null,
-        cred: comExtrato ? x.cred : null, grupos, forn, ajuste, totPag,
+        cred: comExtrato ? x.cred : null, grupos, forn, prevG, entPrev, ajuste, totPag,
         saldoContas: comExtrato ? Object.fromEntries(todasContas.map(c => [c, s[c]])) : null, saldoReal, saldoPrev });
     }
     return { dias, ultExt, ultVenda };
