@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pagamento do 5º dia útil - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fin_estilo.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <style>
+    .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .barra h1 { margin: 0 10px 0 0; font-size: 18px; font-weight: 700; }
+    .barra .inp, .barra .btn { height: 32px; min-height: 32px; }
+    .seg { display: inline-flex; border: 1px solid #D0D5DD; border-radius: 7px; overflow: hidden; }
+    .seg button { border: 0; padding: 5px 11px; font: inherit; font-size: 12.5px; font-weight: 600; background: #fff; color: var(--cinza-tx); cursor: pointer; }
+    .seg button.on { background: var(--escuro); color: #fff; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpis .card.p { padding: 8px 12px; }
+    .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-top: 2px; }
+    @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .q { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
+    .q th, .q td { padding: 5px 9px; white-space: nowrap; border-bottom: 1px solid var(--linha); text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .q th { font-family: Inter, sans-serif; font-size: 10.5px; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; background: #fff; position: sticky; top: 0; z-index: 1; }
+    .q .l { text-align: left; font-family: Inter, sans-serif; }
+    .q tr.grp td { font-weight: 600; cursor: pointer; }
+    .q tr.grp td.l .chev { display: inline-block; width: 13px; color: var(--sub); }
+    .q tr.det td { font-size: 11px; color: var(--sub); }
+    .q tr.det td.l { padding-left: 30px; }
+    .q tr.tt td { background: #EEF4FF; font-weight: 700; color: #1E3A8A; border-top: 1px solid #D6E2FF; }
+    .q td.cm { background: #FBF7F0; } .q th.cm { background: #FBF7F0; }
+    .q td.bk { background: #F5F8FF; } .q th.bk { background: #F5F8FF; }
+    .q td.dn { background: #F3FAF5; } .q th.dn { background: #F3FAF5; }
+    .q .neg { color: var(--verm); }
+    .q .zero { color: #C0C6CF; }
+    h2.sec { font-size: 13px; margin: 16px 0 6px; font-weight: 700; }
+    .nota { font-size: 11.5px; color: var(--sub); margin-top: 6px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="barra">
+    <h1>Pagamento do 5º dia útil</h1>
+    <label class="desc">Competência <input id="fComp" type="month" class="inp mono" onchange="carregar()"></label>
+    <div class="seg"><button type="button" id="gLoja" class="on" onclick="agrupar('loja')">Por loja</button><button type="button" id="gEmp" onclick="agrupar('empresa')">Por empresa (CNPJ do registro)</button></div>
+    <label class="desc" title="Genérico e similar (2018) e perfumaria (2019)"><input type="checkbox" id="fTodas" onchange="render()"> incluir comissão de gen./sim. e perfumaria</label>
+    <button type="button" class="btn" style="margin-left: auto" onclick="exportarCsv()">⬇ CSV</button>
+  </div>
+  <div id="aviso" class="alerta verm"></div>
+  <div id="info" class="desc" style="margin-bottom: 8px"></div>
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card rola" style="max-height: 62vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
+  <p class="nota">Valores do último envio do Resumo da competência ao Financeiro. <b>Líquido pago = Comissão + Salário e demais = Dinheiro + Banco.</b>
+    Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
+    Banco por conta = o que o Financeiro já baixou, pelo banco pagador; "A pagar" ainda não foi baixado. Clique na loja para ver os funcionários.</p>
+
+  <h2 class="sec">Débito por conta e dia (para conferir com o extrato)</h2>
+  <section class="card rola"><table class="q" id="tabBancos"></table></section>
+
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '';
+    const COM_BASE = ['2020', '2021', '2022', '2023'], COM_EXTRA = ['2018', '2019'];
+    let modo = 'loja', linhas = [], envio = null, pagos = [], abertos = new Set(), cad = { lojas: {}, empresas: {} };
+
+    function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
+    async function tudo(q) { let out = [], de = 0; for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; } }
+    const compDe = ym => ym ? ym.slice(5, 7) + '/' + ym.slice(0, 4) : '';
+
+    async function carregar() {
+      aviso(''); const comp = compDe($('fComp').value); if (!comp) return;
+      $('tab').innerHTML = '<tbody><tr><td class="l">Carregando…</td></tr></tbody>';
+      try {
+        const [rE, lp, li, lf, rl, re] = await Promise.all([
+          _supabase.from('folha_envios').select('*').eq('competencia', comp).order('versao', { ascending: false }).limit(1),
+          tudo(() => _supabase.from('pagamentos_extras').select('id, funcionario_id, status, valor, meio, vencimento, pago_em, banco_pagador').eq('tipo', 'QUINTO_DIA').eq('competencia', comp).neq('status', 'CANCELADO')),
+          tudo(() => _supabase.from('folha_itens').select('funcionario_id, rubrica, tipo, valor').eq('competencia', comp)),
+          tudo(() => _supabase.from('funcionarios').select('id, nome, nome_registro, loja_id, empresa_id, empresa_registro')),
+          _supabase.from('lojas').select('id, nome_loja'),
+          _supabase.from('empresas').select('id, nome_fantasia, razao_social, cnpj')]);
+        if (rE.error) throw rE.error;
+        envio = (rE.data || [])[0] || null; pagos = lp;
+        cad.lojas = {}; (rl.data || []).forEach(l => cad.lojas[l.id] = l.nome_loja);
+        const emps = re.data || []; cad.empresas = {}; emps.forEach(e => cad.empresas[e.id] = e);
+        const func = {}; lf.forEach(f => func[f.id] = f);
+        const empDe = f => { if (!f) return null; if (f.empresa_id && cad.empresas[f.empresa_id]) return cad.empresas[f.empresa_id];
+          const r = String(f.empresa_registro || ''); return emps.find(e => e.cnpj && r.includes(e.cnpj)) || emps.find(e => e.razao_social && r.includes(e.razao_social)) || null; };
+        // comissão por funcionário e evento
+        const com = {};
+        li.forEach(i => { const cod = (String(i.rubrica || '').match(/^\s*(\d+)/) || [])[1]; if (!cod || i.tipo !== 'PROVENTO' || ![...COM_BASE, ...COM_EXTRA].includes(cod)) return;
+          (com[i.funcionario_id] = com[i.funcionario_id] || {})[cod] = (com[i.funcionario_id][cod] || 0) + Number(i.valor || 0); });
+        if (!envio) { linhas = []; $('info').innerHTML = ''; render(); return aviso(`A competência ${comp} ainda não foi enviada ao Financeiro pelo Resumo da competência.`); }
+        const pg = {}; pagos.forEach(p => (pg[p.funcionario_id] = pg[p.funcionario_id] || []).push(p));
+        linhas = (envio.itens || []).filter(i => Number(i.liquido) > 0).map(i => {
+          const f = func[i.funcionario_id], e = empDe(f), ps = pg[i.funcionario_id] || [];
+          const pagoBanco = {}; let aPagar = 0;
+          ps.filter(p => p.meio !== 'DINHEIRO').forEach(p => { if (p.status === 'PAGO') { const b = p.banco_pagador || '(sem banco)'; pagoBanco[b] = (pagoBanco[b] || 0) + Number(p.valor || 0); } else aPagar += Number(p.valor || 0); });
+          return { id: i.funcionario_id, nome: (f && (f.nome_registro || f.nome)) || i.nome || '?', loja: f && f.loja_id ? (cad.lojas[f.loja_id] || '(loja?)') : '(sem loja no cadastro)',
+            empresa: e ? (e.nome_fantasia || e.razao_social) : (f && f.empresa_registro) || '(sem empresa)', cnpj: e ? e.cnpj : '',
+            liquido: r2(i.liquido), dinheiro: r2(i.dinheiro), banco: r2(i.liquido - (i.dinheiro || 0)), com: com[i.funcionario_id] || {}, pagoBanco, aPagar: r2(aPagar) };
+        });
+        $('info').innerHTML = `Envio v${envio.versao} de ${new Date(envio.enviado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} por ${esc(envio.enviado_por || '')} · pagamento em <b>${dbr(envio.data_pagamento)}</b>`;
+        render();
+      } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); }
+    }
+
+    const codsCom = () => $('fTodas').checked ? [...COM_BASE, ...COM_EXTRA] : COM_BASE;
+    const comDe = l => codsCom().reduce((a, c) => a + (l.com[c] || 0), 0);
+    function agrupar(m) { modo = m; $('gLoja').classList.toggle('on', m === 'loja'); $('gEmp').classList.toggle('on', m === 'empresa'); abertos.clear(); render(); }
+    function bancosUsados() { const s = new Set(); linhas.forEach(l => Object.keys(l.pagoBanco).forEach(b => s.add(b))); return [...s].sort(); }
+    function grupos() {
+      const g = {};
+      linhas.forEach(l => { const k = modo === 'loja' ? l.loja : l.empresa + (l.cnpj ? ' · ' + l.cnpj : ''); (g[k] = g[k] || []).push(l); });
+      return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
+    }
+    function somar(ls) {
+      const t = { n: ls.length, liquido: 0, com: 0, dinheiro: 0, banco: 0, aPagar: 0, porBanco: {} };
+      ls.forEach(l => { t.liquido += l.liquido; t.com += comDe(l); t.dinheiro += l.dinheiro; t.banco += l.banco; t.aPagar += l.aPagar;
+        Object.entries(l.pagoBanco).forEach(([b, v]) => t.porBanco[b] = (t.porBanco[b] || 0) + v); });
+      t.salario = t.liquido - t.com; return t;
+    }
+    const n = v => `<td class="${Math.abs(v) < 0.005 ? 'zero' : v < 0 ? 'neg' : ''}">${Math.abs(v) < 0.005 ? '–' : brl(v)}</td>`;
+    const nc = (v, c) => n(v).replace('<td class="', `<td class="${c} `);
+
+    function render() {
+      $('notaTodas').innerText = $('fTodas').checked ? ', genérico e similar (2018) e perfumaria (2019)' : '';
+      const bancos = bancosUsados(), T = somar(linhas);
+      $('kpis').innerHTML = [['Líquido pago', T.liquido, `${T.n} funcionário(s)`], ['Comissão', T.com, 'eventos ' + codsCom().join(', ')], ['Salário e demais', T.salario, 'líquido − comissão'],
+        ['Dinheiro', T.dinheiro, 'pago em espécie'], ['Banco', T.banco, T.aPagar > 0.005 ? `a pagar ${brl(T.aPagar)}` : 'tudo baixado pelo Financeiro']]
+        .map(([t, v, d]) => `<div class="card p"><div class="desc">${t}</div><div class="v">${brl(v)}</div><div class="desc">${d}</div></div>`).join('');
+      const cab = `<thead><tr><th class="l">${modo === 'loja' ? 'Loja' : 'Empresa'}</th><th>Func.</th><th>Líquido pago</th><th class="cm">Comissão</th><th>Salário e demais</th><th class="dn">Dinheiro</th><th class="bk">Banco</th>${bancos.map(b => `<th class="bk" title="já pago por esta conta">${esc(b)}</th>`).join('')}<th>A pagar</th></tr></thead>`;
+      const lin = (rot, t, cls, attr = '') => `<tr class="${cls}" ${attr}><td class="l">${rot}</td><td>${t.n}</td>${n(t.liquido)}${nc(t.com, 'cm')}${n(t.salario)}${nc(t.dinheiro, 'dn')}${nc(t.banco, 'bk')}${bancos.map(b => nc(t.porBanco[b] || 0, 'bk')).join('')}${n(t.aPagar)}</tr>`;
+      let h = cab + '<tbody>';
+      grupos().forEach(([k, ls]) => {
+        const ab = abertos.has(k);
+        h += lin(`<span class="chev">${ab ? '▾' : '▸'}</span>${esc(k)}`, somar(ls), 'grp', `data-k="${esc(k)}"`);
+        if (ab) ls.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach(l => h += lin(esc(l.nome) + (modo === 'loja' ? ` <span class="desc">· ${esc(l.empresa)}</span>` : ` <span class="desc">· ${esc(l.loja)}</span>`), somar([l]), 'det'));
+      });
+      h += lin('Total', T, 'tt') + '</tbody>';
+      $('tab').innerHTML = linhas.length ? h : '<tbody><tr><td class="l">Nada para mostrar.</td></tr></tbody>';
+      // débito por conta e dia
+      const pd = {}; pagos.filter(p => p.status === 'PAGO' && p.meio !== 'DINHEIRO').forEach(p => { const k = (p.banco_pagador || '(sem banco)') + '|' + String(p.pago_em || '').slice(0, 10);
+        const o = pd[k] = pd[k] || { n: 0, v: 0 }; o.n++; o.v += Number(p.valor || 0); });
+      const ks = Object.keys(pd).sort();
+      const noFin = Object.values(T.porBanco).reduce((a, v) => a + v, 0) + T.aPagar, difEnvio = Math.abs(T.banco - noFin);
+      $('tabBancos').innerHTML = ks.length ? `<thead><tr><th class="l">Conta (banco pagador)</th><th class="l">Pago em</th><th>Pagamentos</th><th>Valor</th></tr></thead><tbody>${ks.map(k => { const [b, d] = k.split('|');
+        return `<tr><td class="l">${esc(b)}</td><td class="l mono">${dbr(d)}</td><td>${pd[k].n}</td>${n(pd[k].v)}</tr>`; }).join('')}
+        <tr class="tt"><td class="l">Total baixado</td><td></td><td>${ks.reduce((a, k) => a + pd[k].n, 0)}</td>${n(ks.reduce((a, k) => a + pd[k].v, 0))}</tr></tbody>`
+        : '<tbody><tr><td class="l desc">Nenhum pagamento do 5º dia útil baixado ainda nesta competência.</td></tr></tbody>';
+      if (linhas.length && difEnvio > 0.5) aviso(`O banco do envio (${brl(T.banco)}) difere do que está no Financeiro (pago + a pagar = ${brl(noFin)}): confira complementos ou pagamentos cancelados.`);
+    }
+
+    $('tab').addEventListener('click', ev => { const tr = ev.target.closest('tr.grp'); if (!tr) return; const k = tr.dataset.k; abertos.has(k) ? abertos.delete(k) : abertos.add(k); render(); });
+
+    function exportarCsv() {
+      const bancos = bancosUsados(), f = v => r2(v).toFixed(2).replace('.', ',');
+      const L = [['Loja', 'Empresa', 'CNPJ', 'Funcionário', 'Líquido pago', 'Comissão', 'Salário e demais', 'Dinheiro', 'Banco', ...bancos, 'A pagar']];
+      linhas.forEach(l => { const c = comDe(l); L.push([l.loja, l.empresa, l.cnpj, l.nome, f(l.liquido), f(c), f(l.liquido - c), f(l.dinheiro), f(l.banco), ...bancos.map(b => f(l.pagoBanco[b] || 0)), f(l.aPagar)]); });
+      const csv = '﻿' + L.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `quinto_dia_${$('fComp').value}.csv`; a.click();
+    }
+
+    (async () => {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);   // padrão: competência do mês passado (paga no 5º dia útil deste mês)
+      $('fComp').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      carregar();
+    })();
+  </script>
+</body>
+</html>
