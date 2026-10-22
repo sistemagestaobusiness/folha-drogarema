@@ -16,7 +16,7 @@
     .seg { display: inline-flex; border: 1px solid #D0D5DD; border-radius: 7px; overflow: hidden; }
     .seg button { border: 0; padding: 5px 11px; font: inherit; font-size: 12.5px; font-weight: 600; background: #fff; color: var(--cinza-tx); cursor: pointer; }
     .seg button.on { background: var(--escuro); color: #fff; }
-    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
     .kpis .card.p { padding: 8px 12px; }
     .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-top: 2px; }
     @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -51,9 +51,9 @@
   <div class="kpis" id="kpis"></div>
 
   <section class="card rola" style="max-height: 62vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
-  <p class="nota">Valores do último envio do Resumo da competência ao Financeiro. <b>Líquido pago = Comissão + Salário e demais = Dinheiro + Banco.</b>
-    Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
-    Banco por conta = o que o Financeiro já baixou, pelo banco pagador; "A pagar" ainda não foi baixado. Clique na loja para ver os funcionários.</p>
+  <p class="nota">Valores do último envio do Resumo da competência ao Financeiro. <b>Pagamento via banco = débito do 5º dia útil nas contas</b> (o total bate com o quadro de débito por conta abaixo).
+    Banco (−) comissão = pagamento via banco menos a comissão. Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
+    Clique na loja para ver os funcionários.</p>
 
   <h2 class="sec">Débito por conta e dia (para conferir com o extrato)</h2>
   <section class="card rola"><table class="q" id="tabBancos"></table></section>
@@ -130,11 +130,12 @@
     function render() {
       $('notaTodas').innerText = $('fTodas').checked ? ', genérico e similar (2018) e perfumaria (2019)' : '';
       const bancos = bancosUsados(), T = somar(linhas);
-      $('kpis').innerHTML = [['Líquido pago', T.liquido, `${T.n} funcionário(s)`], ['Comissão', T.com, 'eventos ' + codsCom().join(', ')], ['Salário e demais', T.salario, 'líquido − comissão'],
-        ['Dinheiro', T.dinheiro, 'pago em espécie'], ['Banco', T.banco, T.aPagar > 0.005 ? `a pagar ${brl(T.aPagar)}` : 'tudo baixado pelo Financeiro']]
+      // colunas pedidas em 22/10/2026: comissão, dinheiro, banco, banco − comissão (o total do banco = débito do 5º dia útil nas contas)
+      $('kpis').innerHTML = [['Comissão', T.com, 'eventos ' + codsCom().join(', ')], ['Pagamento em dinheiro', T.dinheiro, 'pago em espécie'],
+        ['Pagamento via banco', T.banco, `débito nas contas · ${T.n} funcionário(s)` + (T.aPagar > 0.005 ? ` · a pagar ${brl(T.aPagar)}` : '')], ['Banco (−) comissão', T.banco - T.com, 'pagamento via banco menos a comissão']]
         .map(([t, v, d]) => `<div class="card p"><div class="desc">${t}</div><div class="v">${brl(v)}</div><div class="desc">${d}</div></div>`).join('');
-      const cab = `<thead><tr><th class="l">${modo === 'loja' ? 'Loja' : 'Empresa'}</th><th>Func.</th><th>Líquido pago</th><th class="cm">Comissão</th><th>Salário e demais</th><th class="dn">Dinheiro</th><th class="bk">Banco</th>${bancos.map(b => `<th class="bk" title="já pago por esta conta">${esc(b)}</th>`).join('')}<th>A pagar</th></tr></thead>`;
-      const lin = (rot, t, cls, attr = '') => `<tr class="${cls}" ${attr}><td class="l">${rot}</td><td>${t.n}</td>${n(t.liquido)}${nc(t.com, 'cm')}${n(t.salario)}${nc(t.dinheiro, 'dn')}${nc(t.banco, 'bk')}${bancos.map(b => nc(t.porBanco[b] || 0, 'bk')).join('')}${n(t.aPagar)}</tr>`;
+      const cab = `<thead><tr><th class="l">${modo === 'loja' ? 'Loja' : 'Empresa'}</th><th>Func.</th><th class="cm">Valor da comissão</th><th class="dn">Pagamento em dinheiro</th><th class="bk">Pagamento via banco</th><th>Banco (−) comissão</th></tr></thead>`;
+      const lin = (rot, t, cls, attr = '') => `<tr class="${cls}" ${attr}><td class="l">${rot}</td><td>${t.n}</td>${nc(t.com, 'cm')}${nc(t.dinheiro, 'dn')}${nc(t.banco, 'bk')}${n(t.banco - t.com)}</tr>`;
       let h = cab + '<tbody>';
       grupos().forEach(([k, ls]) => {
         const ab = abertos.has(k);
@@ -159,8 +160,8 @@
 
     function exportarCsv() {
       const bancos = bancosUsados(), f = v => r2(v).toFixed(2).replace('.', ',');
-      const L = [['Loja', 'Empresa', 'CNPJ', 'Funcionário', 'Líquido pago', 'Comissão', 'Salário e demais', 'Dinheiro', 'Banco', ...bancos, 'A pagar']];
-      linhas.forEach(l => { const c = comDe(l); L.push([l.loja, l.empresa, l.cnpj, l.nome, f(l.liquido), f(c), f(l.liquido - c), f(l.dinheiro), f(l.banco), ...bancos.map(b => f(l.pagoBanco[b] || 0)), f(l.aPagar)]); });
+      const L = [['Loja', 'Empresa', 'CNPJ', 'Funcionário', 'Valor da comissão', 'Pagamento em dinheiro', 'Pagamento via banco', 'Banco (-) comissão']];
+      linhas.forEach(l => { const c = comDe(l); L.push([l.loja, l.empresa, l.cnpj, l.nome, f(c), f(l.dinheiro), f(l.banco), f(l.banco - c)]); });
       const csv = '﻿' + L.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `quinto_dia_${$('fComp').value}.csv`; a.click();
     }
