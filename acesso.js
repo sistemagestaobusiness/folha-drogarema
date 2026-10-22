@@ -14,8 +14,14 @@
   const cli = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
   (async () => {
     try {
-      const { data: { user } } = await cli.auth.getUser();
-      if (!user) { (window.top !== window ? window.top : window).location.replace('login.html'); return; }   // dentro de uma aba: volta o sistema inteiro para o login
+      const { data: { user }, error: eu } = await cli.auth.getUser();
+      if (!user) {
+        // sem conexão com o Supabase: não derruba o login (senão vira laço); avisa e libera a tela
+        if (eu && /fetch|network|timeout|Failed/i.test(eu.message || '')) { console.warn('Sem conexão com o banco:', eu.message); liberar(); return; }
+        // sessão vencida: limpa a marca e a sessão guardada antes de voltar ao login (evita o laço login ↔ painel)
+        try { localStorage.removeItem('usuario_drogarema'); await cli.auth.signOut({ scope: 'local' }); } catch (e) { }
+        (window.top !== window ? window.top : window).location.replace('login.html'); return;
+      }   // dentro de uma aba: volta o sistema inteiro para o login
       const { data, error } = await cli.rpc('fn_minhas_telas');
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }

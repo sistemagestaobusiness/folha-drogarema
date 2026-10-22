@@ -12,9 +12,18 @@
 
   <!-- Redireciona se já estiver autenticado -->
   <script>
-    if (localStorage.getItem('usuario_drogarema')) {
-      window.location.href = 'index.html';
-    }
+    // só pula o login se a sessão do Supabase ainda vale de verdade (22/10/2026).
+    // Antes bastava a marca no navegador: com a sessão vencida, login → painel → login ficava em laço (tela azul piscando).
+    (async () => {
+      if (!localStorage.getItem('usuario_drogarema')) return;
+      try {
+        const c = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+        const { data } = await c.auth.getUser();
+        if (data && data.user) { window.location.href = 'index.html'; return; }
+        await c.auth.signOut({ scope: 'local' });
+      } catch (e) { }
+      localStorage.removeItem('usuario_drogarema');
+    })();
   </script>
 
   <div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md">
