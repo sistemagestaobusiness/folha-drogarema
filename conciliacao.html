@@ -26,6 +26,8 @@
     .acoes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .btn.p { min-height: 28px; font-size: 12px; padding: 0 9px; }
     .ok { color: var(--verde-tx); }
+    .kpis .kc { cursor: pointer; transition: box-shadow .15s; } .kpis .kc:hover { box-shadow: 0 0 0 2px #C7D7FE; } .kpis .kc.on { box-shadow: 0 0 0 2px var(--azul); }
+    .t tr.sub td { background: #F4F5F7; font-weight: 700; }
     @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
@@ -232,16 +234,18 @@
       const vSem = R.semTit.reduce((a, x) => a + x.e.v, 0), nSug = R.semTit.filter(x => x.sugestao).length;
       const vEnc = R.encontro.reduce((a, x) => a + x.es.reduce((b, e) => b + e.v, 0), 0), nEnc = R.encontro.reduce((a, x) => a + x.ts.length, 0);
       const pc = tot ? (vConc + vJust) / tot * 100 : 0;   // "falta baixar" não conta como conciliado: o título ainda está em aberto
-      $('kpis').innerHTML = `
-        <div class="card p"><div class="desc">Saídas no extrato</div><div class="v">${brl(tot)}</div><div class="desc">${R.total.length} débito(s)</div></div>
-        <div class="card p"><div class="desc">Conciliado</div><div class="v ok">${pc.toFixed(1).replace('.', ',')}%</div><div class="desc">${brl(vConc + vJust)} · ${R.pares.length + R.natureza.length} débito(s)</div></div>
-        <div class="card p"><div class="desc">Saídas sem título baixado</div><div class="v" style="color: var(--verm)">${brl(vSem)}</div><div class="desc">${R.semTit.length} débito(s)</div></div>
-        <div class="card p"><div class="desc">Falta baixar no Alpha7</div><div class="v" style="color: ${nEnc + nSug ? '#B54708' : 'inherit'}">${brl(vEnc + R.semTit.filter(x => x.sugestao).reduce((a, x) => a + x.e.v, 0))}</div><div class="desc">${nEnc + nSug} título(s) em aberto já pagos pelo extrato</div></div>
-        <div class="card p"><div class="desc">Títulos pagos sem saída no extrato</div><div class="v">${brl(R.semSaida.reduce((a, t) => a + t.v, 0))}</div><div class="desc">${R.semSaida.length} título(s)</div></div>`;
-      const ab = [['pend', 'Saídas sem título', R.semTit.length, true], ['baixar', 'Falta baixar no Alpha7', R.encontro.length + nSug, true], ['semsaida', 'Títulos sem saída', R.semSaida.length, false],
-                  ['conc', 'Conciliados', R.pares.length, false], ['nat', 'Sem título por natureza', R.natureza.length, false]];
+      // quadros clicáveis: cada um abre a lista que compõe o valor (22/10/2026)
+      const card = (k, t, v, d, cor = '') => `<div class="card p kc${aba === k ? ' on' : ''}" onclick="aba='${k}'; aberto=null; desenhar()" title="clique para ver a composição"><div class="desc">${t}</div><div class="v"${cor ? ` style="color: ${cor}"` : ''}>${v}</div><div class="desc">${d}</div></div>`;
+      const vSug = R.semTit.filter(x => x.sugestao).reduce((a, x) => a + x.e.v, 0);
+      $('kpis').innerHTML = card('contas', 'Saídas no extrato', brl(tot), `${R.total.length} débito(s) · ver por conta`)
+        + card('conc', 'Conciliado', pc.toFixed(1).replace('.', ',') + '%', `${brl(vConc)} com título + ${brl(vJust)} entre contas do grupo`, 'var(--verde-tx)')
+        + card('baixar', 'Falta baixar no Alpha7', brl(vEnc + vSug), `${nEnc + nSug} título(s) em aberto já pagos pelo extrato`, nEnc + nSug ? '#B54708' : '')
+        + card('pend', 'Saídas sem título', brl(vSem - vSug), `${R.semTit.length - nSug} débito(s) sem título lançado`, 'var(--verm)')
+        + card('semsaida', 'Títulos pagos sem saída no extrato', brl(R.semSaida.reduce((a, t) => a + t.v, 0)), `${R.semSaida.length} título(s)`);
+      const ab = [['contas', 'Por conta', R.total.length, false], ['pend', 'Saídas sem título', R.semTit.length, true], ['baixar', 'Falta baixar no Alpha7', R.encontro.length + nSug, true], ['semsaida', 'Títulos sem saída', R.semSaida.length, false],
+                  ['conc', 'Conciliados', R.pares.length, false], ['nat', 'Entre contas do grupo', R.natureza.length, false]];
       $('abas').innerHTML = ab.map(([k, n, q, crit]) => `<button class="${aba === k ? 'on' : ''}" onclick="aba='${k}'; aberto=null; desenhar()">${n}<span class="q ${crit && q ? 'crit' : ''}">${q}</span></button>`).join('');
-      $('lista').innerHTML = aba === 'baixar' ? listaBaixar() : aba === 'pend' ? listaPend() : aba === 'semsaida' ? listaSemSaida() : aba === 'conc' ? listaConc() : listaNat();
+      $('lista').innerHTML = aba === 'contas' ? listaContas() : aba === 'baixar' ? listaBaixar() : aba === 'pend' ? listaPend() : aba === 'semsaida' ? listaSemSaida() : aba === 'conc' ? listaConc() : listaNat();
     }
     const nomeConta = k => { const c = contas.find(x => x.conta === k); return esc(c ? (c.nome || c.conta) + (c.empresa ? ' · ' + c.empresa : '') : k || '(sem conta na baixa)'); };
 
@@ -255,6 +259,22 @@
           : '<span class="pill p-crit">sem título baixado</span><div class="mini">lançar ou localizar o título e dar baixa nesta conta, data e valor</div>';
         let h = `<tr><td>${dbr(e.data)}</td><td>${nomeConta(e.conta)}</td><td>${esc(e.descricao || '')}${e.documento ? `<div class="mini">doc ${esc(e.documento)}</div>` : ''}</td><td class="n">${brl(e.v)}</td><td>${sit}</td></tr>`;
         return h; }).join('') + '</tbody></table>';
+    }
+    // composição das saídas por conta: conciliado, entre contas, falta baixar e sem título
+    function listaContas() {
+      const m = {}, o = k => m[k] = m[k] || { tot: 0, conc: 0, nat: 0, baixar: 0, sem: 0 };
+      res.total.forEach(e => o(e.conta).tot += e.v);
+      res.pares.forEach(p => p.es.forEach(e => o(e.conta).conc += e.v));
+      res.natureza.forEach(j => o(j.e.conta).nat += j.e.v);
+      res.encontro.forEach(x => x.es.forEach(e => o(e.conta).baixar += e.v));
+      res.semTit.forEach(x => o(x.e.conta)[x.sugestao ? 'baixar' : 'sem'] += x.e.v);
+      const ks = Object.keys(m).sort((a, b) => m[b].tot - m[a].tot), T = { tot: 0, conc: 0, nat: 0, baixar: 0, sem: 0 };
+      ks.forEach(k => Object.keys(T).forEach(c => T[c] += m[k][c]));
+      const c = v => `<td class="n">${Math.abs(v) < 0.005 ? '<span class="desc">–</span>' : brl(v)}</td>`;
+      const lin = (rot, x, cls = '') => `<tr class="${cls}"><td>${rot}</td>${c(x.tot)}${c(x.conc)}${c(x.nat)}<td class="n" style="color: #B54708">${Math.abs(x.baixar) < 0.005 ? '<span class="desc">–</span>' : brl(x.baixar)}</td><td class="n" style="color: var(--verm)">${Math.abs(x.sem) < 0.005 ? '<span class="desc">–</span>' : brl(x.sem)}</td></tr>`;
+      return `<div class="desc" style="padding: 10px 16px 0">Cada saída do extrato cai em uma coluna: conciliada com título baixado, transferência entre contas do grupo, título em aberto já pago (falta a baixa) ou sem título. A soma das colunas é o total de saídas.</div>
+        <table class="t" style="min-width: 900px"><thead><tr><th>Conta</th><th class="n">Saídas</th><th class="n">Conciliado com título</th><th class="n">Entre contas do grupo</th><th class="n">Falta baixar no Alpha7</th><th class="n">Sem título</th></tr></thead><tbody>`
+        + ks.map(k => lin(nomeConta(k), m[k])).join('') + lin('<b>Total</b>', T, 'sub') + '</tbody></table>';
     }
     function listaBaixar() {
       const sug = res.semTit.filter(x => x.sugestao);
