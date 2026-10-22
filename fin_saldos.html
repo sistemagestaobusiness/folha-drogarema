@@ -14,6 +14,11 @@
     .t td.l b { font-weight: 600; }
     .t tr.sub td { background: #F4F5F7; font-weight: 700; }
     .t tr.tot td { background: var(--escuro); color: #fff; font-weight: 700; }
+    /* quadro por loja: títulos das colunas quebram a linha, sem barra de rolagem (22/10/2026) */
+    .t.lojas th { white-space: normal; line-height: 1.25; vertical-align: bottom; font-size: 10.5px; }
+    .t.lojas td, .t.lojas th { padding-left: 8px; padding-right: 8px; }
+    .t.lojas tr.aj td { background: #F4F5F7; font-weight: 600; }
+    .t.lojas tr.liq td { background: #FDF6EC; font-weight: 700; border-top: 2px solid var(--ouro); }
     .topo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
     .topo .v { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; margin: 2px 0; }
     @media (max-width: 900px) { .topo { grid-template-columns: minmax(0, 1fr); } }
@@ -46,7 +51,7 @@
     <div style="padding: 12px 16px 4px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline">
       <h2>Drogarema · por loja</h2><span class="desc">clique no previsto de hoje para informar outro valor</span>
     </div>
-    <div class="rola"><table class="t" style="min-width: 980px"><thead><tr><th>Loja</th><th class="n">Santander</th><th class="n">Sicredi</th><th class="n" id="thOnt">Saldo real ontem</th><th class="n">Venda a cair</th><th class="n" id="thTit">Títulos baixados no dia</th><th class="n" id="thPend">Títulos a pagar no dia</th><th class="n" id="thPrev">Previsto do dia</th><th class="n" id="thReal">Realizado</th><th class="n">Dias negativo</th></tr></thead><tbody id="tbLojas"></tbody></table></div>
+    <div class="rola"><table class="t lojas"><thead><tr><th>Loja</th><th class="n">Santander</th><th class="n">Sicredi</th><th class="n" id="thOnt">Saldo real ontem</th><th class="n">Venda a cair</th><th class="n" id="thTit">Títulos baixados no dia</th><th class="n" id="thPend">Títulos a pagar no dia</th><th class="n" id="thPrev">Previsto do dia</th><th class="n" id="thReal">Realizado</th><th class="n">Dias negativo</th></tr></thead><tbody id="tbLojas"></tbody></table></div>
   </section>
 
   <div class="grade2">
@@ -73,7 +78,7 @@
     const dbr = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '-';
     const hoje = FluxoCore.isoDe(new Date());
     const GRUPOS = { CEF: 'Caixa Econômica', DINHEIRO: 'Dinheiro', APLICACAO: 'Aplicações', CONSORCIO: 'Consórcios' };
-    let ref = hoje, chequeBase = null, contas = [], calc = null, itens = [], manual = {}, prevInf = {}, vendaUni = {}, titUni = {}, titLista = {};
+    let ref = hoje, chequeBase = null, ajusteCfg = { util: 0, segunda: 0 }, contas = [], calc = null, itens = [], manual = {}, prevInf = {}, vendaUni = {}, titUni = {}, titLista = {};
 
     function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
     async function rpcTudo(nome, args) { const tudo = []; for (let de = 0; ; de += 1000) { const { data, error } = await _supabase.rpc(nome, args).range(de, de + 999); if (error) throw error; tudo.push(...(data || [])); if (!data || data.length < 1000) break; } return tudo; }
@@ -97,7 +102,10 @@
           _supabase.from('fin_categorias').select('plano, grupo, fora_do_fluxo'),
           rpcTudo('fn_fin_fluxo', { p_ini: ini, p_fim: passado ? ref : FluxoCore.somaDia(ref, -1) })]);
         [rc, ri, rm, rp, rv, rt, rcat].forEach(r => { if (r.error) throw r.error; });
-        { const { data: cb } = await _supabase.from('fin_config').select('valor').eq('chave', 'cheque_base').maybeSingle(); chequeBase = cb && cb.valor && cb.valor.data ? cb.valor : null; }
+        { const { data: cf } = await _supabase.from('fin_config').select('chave, valor').in('chave', ['cheque_base', 'ajuste_util', 'ajuste_segunda']);
+          const g = k => ((cf || []).find(x => x.chave === k) || {}).valor;
+          chequeBase = g('cheque_base') && g('cheque_base').data ? g('cheque_base') : null;
+          ajusteCfg = { util: Number(g('ajuste_util') || 0), segunda: Number(g('ajuste_segunda') || 0) }; }
         contas = rc.data; itens = ri.data;
         manual = {}; rm.data.forEach(m => { if (!manual[m.item]) manual[m.item] = m; });
         prevInf = {}; rp.data.forEach(p => prevInf[p.conta] = Number(p.valor));
@@ -138,9 +146,9 @@
       // datas completas nas colunas, atualizadas sozinhas pela posição do dia (22/10/2026)
       const dAno = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '-';
       const dAnt = dAno(ant ? ant.iso : ult), dRef = dAno(ref);
-      $('thOnt').innerText = `Saldo de ontem ${dAnt}`; $('thTit').innerText = `Títulos já baixados em ${dRef}`;
-      $('thPend').innerText = `Títulos a pagar em ${dRef} (em aberto)`; $('thPend').style.display = passado ? 'none' : '';
-      $('thPrev').innerText = `Previsto do dia ${dRef}`;
+      $('thOnt').innerHTML = `Saldo de ontem<br>${dAnt}`; $('thTit').innerHTML = `Títulos já baixados<br>${dRef}`;
+      $('thPend').innerHTML = `Títulos a pagar<br>${dRef} (em aberto)`; $('thPend').style.display = passado ? 'none' : '';
+      $('thPrev').innerHTML = `Previsto do dia<br>${dRef}`;
       $('thReal').style.display = temReal ? '' : 'none';
       if (!passado && ult && ult < FluxoCore.somaDia(hoje, -1)) aviso(`O último extrato carregado é de ${dbr(ult)}. Importe o arquivo do Alpha7 para ter o saldo de ontem.`);
       // por loja
@@ -160,10 +168,15 @@
         tot.san += vs; tot.sic += vc; tot.ont += ont; tot.ven += ven; tot.tit += tit; tot.pago = (tot.pago || 0) + tu.pago; tot.pend = (tot.pend || 0) + tu.pend; tot.prev += prev; tot.real = (tot.real || 0) + (real || 0);
       });
       h += `<tr class="tot"><td>Total Drogarema</td><td class="n ${cls(tot.san)}">${brl(tot.san)}</td><td class="n ${cls(tot.sic)}">${brl(tot.sic)}</td><td class="n ${cls(tot.ont)}">${brl(tot.ont)}</td><td class="n">${brl(tot.ven)}</td><td class="n">− ${brl(tot.pago || 0)}</td>${passado ? '' : `<td class="n">− ${brl(tot.pend || 0)}</td>`}<td class="n ${cls(tot.prev)}">${brl(tot.prev)}</td>${temReal ? `<td class="n ${cls(tot.real)}">${brl(tot.real)}</td>` : ''}<td></td></tr>`;
+      // tarifa de cartão + Farmácia Popular (mesmo ajuste diário do fluxo): segunda 7.000, terça a sexta 5.000, fim de semana 0
+      const w = FluxoCore.dow(ref), ajuste = w === 1 ? ajusteCfg.segunda : (w >= 2 && w <= 5 ? ajusteCfg.util : 0), liq = tot.prev - ajuste;
+      const antes = passado ? 6 : 7, depois = (temReal ? 1 : 0) + 1;
+      h += `<tr class="aj"><td colspan="${antes}">(–) Tarifa de cartão + Farmácia Popular (ajuste diário · Base do fluxo)</td><td class="n">${ajuste ? '− ' + brl(ajuste) : brl(0)}</td><td colspan="${depois}"></td></tr>`
+        + `<tr class="liq"><td colspan="${antes}">Previsto líquido do dia ${dRef} · Drogarema</td><td class="n ${cls(liq)}">${brl(liq)}</td><td colspan="${depois}"></td></tr>`;
       $('tbLojas').innerHTML = h;
       $('topo').innerHTML = `<div class="card p"><div class="desc">Saldo real em ${dAnt} · pelo extrato bancário</div><div class="v ${cls(tot.ont)}">${brl(tot.ont)}</div><div class="desc">Drogarema, todas as lojas</div></div>
-        <div class="card p"><div class="desc">${passado ? 'Previsto para' : 'Previsto para hoje,'} ${dRef}</div><div class="v ${cls(tot.prev)}">${brl(tot.prev)}</div><div class="desc">+ venda a cair ${brl(tot.ven)} − títulos ${brl(tot.tit)}</div></div>
-        ${temReal ? `<div class="card p"><div class="desc">Realizado em ${dRef} · extrato</div><div class="v ${cls(tot.real)}">${brl(tot.real)}</div><div class="desc">diferença ${brl((tot.real || 0) - tot.prev)}</div></div>` : ''}`;
+        <div class="card p"><div class="desc">${passado ? 'Previsto para' : 'Previsto para hoje,'} ${dRef}</div><div class="v ${cls(liq)}">${brl(liq)}</div><div class="desc">saldo ontem + venda a cair ${brl(tot.ven)} − títulos ${brl(tot.tit)} − tarifa e FP ${brl(ajuste)}</div></div>
+        ${temReal ? `<div class="card p"><div class="desc">Realizado em ${dRef} · extrato</div><div class="v ${cls(tot.real)}">${brl(tot.real)}</div><div class="desc">diferença ${brl((tot.real || 0) - liq)}</div></div>` : ''}`;
       // empresas do Simples
       let tSim = 0;
       $('tbSimples').innerHTML = contas.filter(c => !c.no_fluxo).map(c => { const s = saldoDe(c.conta); tSim += s.v || 0;
