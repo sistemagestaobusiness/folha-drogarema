@@ -129,9 +129,11 @@
           vutil: c('Data Util de Vencimento'), pag: c('Data Pagamento'), cod: c('Codigo Pagamento'), ret: c('Retiradas Pagamento'), parc: c('Parcela'), descr: c('Descricao'), plano: c('Plano de Contas') };
         for (let i = 1; i < L.length; i++) { const r = L[i]; if (!r || r[k.valor] === null) continue;
           const ret = String(r[k.ret] || ''); const mc = ret.match(/^\s*([^()]+?)\s*\(/);
+          // todas as retiradas do pagamento: "SICREDI D3 ... (18120.7800),SICREDI D1 ... (574.5200)" (22/10/2026)
+          const retiradas = [...ret.matchAll(/([^(),;]+?)\s*\(\s*([\d.,]+)\s*\)/g)].map(m => ({ conta: m[1].trim().toUpperCase(), valor: Number(/,\d{1,4}$/.test(m[2]) ? m[2].replace(/\./g, '').replace(',', '.') : m[2]) })).filter(x => x.conta && isFinite(x.valor));
           out.cp.push({ origem: txt(r[k.origem]), status: txt(r[k.status]), vencimento: iso(r[k.venc]), venc_util: iso(r[k.vutil]), pagamento: iso(r[k.pag]),
             documento: txt(r[k.doc]), valor: num(r[k.valor]), credor: txt(r[k.credor]), unidade: txt(r[k.unid]), plano: txt(r[k.plano]),
-            conta_pagadora: mc ? mc[1].replace(/[,;]/g, '').trim() : null, codigo_pagamento: txt(r[k.cod]), parcela: txt(r[k.parc]), descricao: txt(r[k.descr]) }); }
+            conta_pagadora: mc ? mc[1].replace(/[,;]/g, '').trim() : null, codigo_pagamento: txt(r[k.cod]), parcela: txt(r[k.parc]), descricao: txt(r[k.descr]), retiradas: retiradas.length ? retiradas : null }); }
         const vs = out.cp.map(x => x.vencimento).filter(Boolean).sort();
         out.info.cp = { linhas: out.cp.length, de: vs[0], ate: vs[vs.length - 1], pendentes: out.cp.filter(x => x.status === 'Pendente').length };
       }

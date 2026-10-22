@@ -27,6 +27,14 @@
     .q tr.grp td { font-weight: 600; cursor: pointer; }
     .q tr.grp td.l .chev { display: inline-block; width: 13px; color: var(--sub); }
     .q tr.det td { font-size: 11px; color: var(--sub); }
+    /* separação por linha e valor copiável */
+    .q tbody tr.grp:nth-child(even) td:not(.cm):not(.dn):not(.bk):not(.tp) { background: #FAFBFC; }
+    .q tbody tr.grp td { border-bottom: 1px solid #E4E7EC; }
+    .q tbody tr:hover td { box-shadow: inset 0 1px 0 #C7D7FE, inset 0 -1px 0 #C7D7FE; }
+    .q td.cp { cursor: copy; }
+    .q td.cp:hover { outline: 1px solid var(--azul); outline-offset: -2px; }
+    .q td.copiado { background: #DCFAE6 !important; }
+    #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--escuro); color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 12.5px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60; font-family: 'JetBrains Mono', monospace; }
     .q tr.det td.l { padding-left: 30px; }
     .q tr.tt td { background: #EEF4FF; font-weight: 700; color: #1E3A8A; border-top: 1px solid #D6E2FF; }
     .q td.cm { background: #FBF7F0; } .q th.cm { background: #FBF7F0; }
@@ -54,8 +62,9 @@
   <section class="card rola" style="max-height: 62vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
   <p class="nota">Valores do último envio do Resumo da competência ao Financeiro. <b>Pagamento via banco = débito do 5º dia útil nas contas</b> (o total bate com o quadro de débito por conta abaixo). <b>Total pago = dinheiro + banco</b> (líquido da folha enviado ao Financeiro).
     Banco (−) comissão = pagamento via banco menos a comissão. Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
-    Clique na loja para ver os funcionários.</p>
+    Clique na loja para ver os funcionários. <b>Clique num valor para copiar</b> (sem ponto de milhar, pronto para colar no Alpha7).</p>
 
+  <div id="toast"></div>
   <h2 class="sec">Débito por conta e dia (para conferir com o extrato)</h2>
   <section class="card rola"><table class="q" id="tabBancos"></table></section>
 
@@ -125,7 +134,8 @@
         Object.entries(l.pagoBanco).forEach(([b, v]) => t.porBanco[b] = (t.porBanco[b] || 0) + v); });
       t.salario = t.liquido - t.com; return t;
     }
-    const n = v => `<td class="${Math.abs(v) < 0.005 ? 'zero' : v < 0 ? 'neg' : ''}">${Math.abs(v) < 0.005 ? '–' : brl(v)}</td>`;
+    // valor copiável (22/10/2026): clique copia sem ponto de milhar ("12819,78") para colar no Alpha7
+    const n = v => Math.abs(v) < 0.005 ? `<td class="zero">–</td>` : `<td class="cp${v < 0 ? ' neg' : ''}" data-v="${r2(v).toFixed(2).replace('.', ',')}" title="clique para copiar">${brl(v)}</td>`;
     const nc = (v, c) => n(v).replace('<td class="', `<td class="${c} `);
 
     function render() {
@@ -157,7 +167,14 @@
       if (linhas.length && difEnvio > 0.5) aviso(`O banco do envio (${brl(T.banco)}) difere do que está no Financeiro (pago + a pagar = ${brl(noFin)}): confira complementos ou pagamentos cancelados.`);
     }
 
-    $('tab').addEventListener('click', ev => { const tr = ev.target.closest('tr.grp'); if (!tr) return; const k = tr.dataset.k; abertos.has(k) ? abertos.delete(k) : abertos.add(k); render(); });
+    async function copiar(td) {
+      const v = td.dataset.v;
+      try { await navigator.clipboard.writeText(v); } catch (e) { const t = document.createElement('textarea'); t.value = v; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+      document.querySelectorAll('.q td.copiado').forEach(x => x.classList.remove('copiado'));
+      td.classList.add('copiado'); const m = $('toast'); m.innerText = `copiado: ${v}`; m.style.opacity = 1; clearTimeout(copiar._t); copiar._t = setTimeout(() => m.style.opacity = 0, 1400);
+    }
+    $('tabBancos').addEventListener('click', ev => { const td = ev.target.closest('td.cp'); if (td) copiar(td); });
+    $('tab').addEventListener('click', ev => { const td = ev.target.closest('td.cp'); if (td) return copiar(td); const tr = ev.target.closest('tr.grp'); if (!tr) return; const k = tr.dataset.k; abertos.has(k) ? abertos.delete(k) : abertos.add(k); render(); });
 
     function exportarCsv() {
       const bancos = bancosUsados(), f = v => r2(v).toFixed(2).replace('.', ',');

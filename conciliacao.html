@@ -62,7 +62,7 @@
     const difDias = (a, b) => Math.round((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 864e5);
     const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
     const r2 = v => Math.round(Number(v || 0) * 100) / 100;
-    const ROT = { EXATO: 'mesmo dia e valor', AGRUPADO: 'várias NFs num pagamento', DATA: 'data da baixa diferente', CONTA: 'conta diferente na baixa', };
+    const ROT = { RETIRADA: 'retirada da baixa (conta e valor)', EXATO: 'mesmo dia e valor', AGRUPADO: 'várias NFs num pagamento', DATA: 'data da baixa diferente', CONTA: 'conta diferente na baixa', };
     let grupo = { raizes: [], nomes: [] }, creditos = [], contas = [], saidas = [], titulos = [], pendentes = [], conc = [], res = null, aba = 'pend', aberto = null, email = '';
 
     function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
@@ -91,8 +91,8 @@
         const [exTodo, cfgD, tp, tpend, foraL] = await Promise.all([
           tudo(() => _supabase.from('fin_extrato').select('id, data, conta, valor, descricao, documento, movimentacao').gte('data', somaDia(ini, -2)).lte('data', somaDia(fim, 2)).order('data').order('id')),
           _supabase.from('fin_config').select('valor').eq('chave', 'conc_grupo').maybeSingle(),
-          tudo(() => _supabase.from('fin_cp').select('id, status, vencimento, venc_util, pagamento, documento, parcela, valor, credor, unidade, plano, conta_pagadora').eq('status', 'Paga').gte('pagamento', somaDia(ini, -7)).lte('pagamento', somaDia(fim, 7)).order('pagamento').order('id')),
-          tudo(() => _supabase.from('fin_cp').select('id, status, vencimento, venc_util, documento, parcela, valor, credor, unidade, plano, conta_pagadora').eq('status', 'Pendente').gte('venc_util', somaDia(ini, -20)).lte('venc_util', somaDia(fim, 10)).order('venc_util').order('id')),
+          tudo(() => _supabase.from('fin_cp').select('*').eq('status', 'Paga').gte('pagamento', somaDia(ini, -7)).lte('pagamento', somaDia(fim, 7)).order('pagamento').order('id')),
+          tudo(() => _supabase.from('fin_cp').select('*').eq('status', 'Pendente').gte('venc_util', somaDia(ini, -20)).lte('venc_util', somaDia(fim, 10)).order('venc_util').order('id')),
           tudo(() => _supabase.from('fin_categorias').select('plano').eq('fora_do_fluxo', true).order('plano'))]);
         const fora = new Set(foraL.map(c => c.plano));   // ex.: notas fiscais de despesa externas: não sai dinheiro
         // tipos de movimentação do Alpha7 que não têm título (transferência entre contas e empresas do grupo, aplicação)
@@ -130,6 +130,19 @@
         es.forEach(e => usadoE.add(e.id)); ts.forEach(t => usadoT.add(t.id));
         pares.push({ es, ts, tipo: 'MANUAL', c });
       });
+      // 0b. retiradas da baixa (22/10/2026): o Alpha7 diz quanto saiu de cada conta em cada pagamento ("Retiradas Pagamento").
+      //     Cada retirada (conta + dia + valor) casa com um débito ou com a soma de débitos da conta no dia (ex.: folha da loja em vários débitos).
+      const porPag = {}; titulos.forEach(t => { if (t.codigo_pagamento && Array.isArray(t.retiradas) && t.retiradas.length) (porPag[t.codigo_pagamento + '|' + t.pagamento] = porPag[t.codigo_pagamento + '|' + t.pagamento] || []).push(t); });
+      Object.values(porPag).forEach(ts => {
+        const livres = ts.filter(t => !usadoT.has(t.id)); if (!livres.length) return;
+        const ret = livres[0].retiradas, dia = livres[0].pagamento, es = [];
+        ret.forEach(r => { const conta = String(r.conta || '').toUpperCase(), v = r2(r.valor);
+          const cand = S.filter(e => !usadoE.has(e.id) && !es.includes(e) && e.conta === conta && e.data === dia);
+          const um = cand.find(e => Math.abs(e.v - v) < 0.01);
+          const achou = um ? [um] : cand.length > 1 && cand.length <= 14 ? subconjunto(cand, v) : null;
+          if (achou) es.push(...achou); });
+        if (es.length) { es.forEach(e => usadoE.add(e.id)); livres.forEach(t => usadoT.add(t.id)); pares.push({ es, ts: livres, tipo: 'RETIRADA' }); }
+      });
       // índices
       const idx = {}; titulos.forEach(t => { const k = t.conta + '|' + t.pagamento + '|' + t.v.toFixed(2); (idx[k] = idx[k] || []).push(t); });
       // 1. mesmo dia, conta e valor
@@ -165,19 +178,41 @@
         const destFora = dest && !grupo.nomes.some(n => dest.includes(n));
         if (cr && !destFora) { usadoC.add(cr.id); usadoE.add(e.id); natureza.push({ e, motivo: 'transferência para ' + ((contas.find(c => c.conta === cr.conta) || {}).nome || cr.conta) + ' (crédito no extrato)', cr }); return; }
         // 3. destino do grupo no histórico do extrato: CNPJ ou nome de empresa do grupo
-        const dig = String(e.descricao || '').replace(/\D/g, ' ');
-        const raiz = grupo.raizes.find(r => new RegExp('(^|\\D)' + r).test(String(e.descricao || '').replace(/[.\/-]/g, '')));
-        const nome = grupo.nomes.find(n => new RegExp('(^|[^A-Z])' + n + '([^A-Z]|$)').test(d));
+        const txtD = String(e.descricao || '') + ' ' + String(e.documento || ''), dd = norm(txtD);   // o PIX traz CNPJ e nome no documento
+        const raiz = grupo.raizes.find(r => new RegExp('(^|\\D)' + r).test(txtD.replace(/[.\/-]/g, '')));
+        const nome = grupo.nomes.find(n => new RegExp('(^|[^A-Z])' + n + '([^A-Z]|$)').test(dd));
         if (raiz || nome) { usadoE.add(e.id); natureza.push({ e, motivo: 'transferência para empresa do grupo (' + (nome || 'CNPJ ' + raiz) + ' no histórico)' }); return; }
         // classificado como transferência no Alpha7, mas o destino não é do grupo: continua exigindo título
         if (/TRANSFERENCIA ENTRE CONTAS/.test(mov)) e.avisoTransf = true; });
+      // encontro de contas (22/10/2026): títulos EM ABERTO da empresa com vencimento no dia × débitos do extrato sem título nesse dia.
+      // Se uma parte dos títulos soma o mesmo que uma parte dos débitos, o pagamento saiu do banco e falta só a baixa no Alpha7.
+      // 1ª volta: só contas da própria empresa · 2ª volta: inclui débito de folha de outra conta (ex.: parte da loja 3 paga pela conta da loja 1)
+      const encontro = [], usadoP = new Set(), empresaDe = k => (contas.find(c => c.conta === k) || {}).empresa || '';
+      const gruposP = {}; pendentes.forEach(p => { const k = String(p.unidade || '') + '|' + p.venc_util; (gruposP[k] = gruposP[k] || []).push(p); });
+      const somasTit = l => { const m = new Map(), n = Math.min(l.length, 10);
+        for (let b = 1; b < (1 << n); b++) { let v = 0; const ts = []; for (let i = 0; i < n; i++) if (b & (1 << i)) { v += l[i].v; ts.push(l[i]); } const k = r2(v).toFixed(2); if (!m.has(k)) m.set(k, ts); } return m; };
+      const tentar = (k, cand) => {
+        const ls = gruposP[k].filter(p => !usadoP.has(p.id)); if (!ls.length || !cand.length) return;
+        const totG = ls.reduce((a, p) => a + p.v, 0), mapa = somasTit(ls.sort((a, b) => b.v - a.v)), c = cand.filter(e => e.v <= totG + 0.01).sort((a, b) => b.v - a.v).slice(0, 16);
+        let melhor = null;
+        for (let b = 1; b < (1 << c.length); b++) { let v = 0; for (let i = 0; i < c.length; i++) if (b & (1 << i)) v += c[i].v;
+          const ts = mapa.get(r2(v).toFixed(2)); if (ts && (!melhor || v > melhor.v)) melhor = { v, b, ts }; }
+        if (!melhor) return;
+        const es = c.filter((_, i) => melhor.b & (1 << i));
+        es.forEach(e => usadoE.add(e.id)); melhor.ts.forEach(t => usadoP.add(t.id));
+        encontro.push({ es, ts: melhor.ts, unidade: k.split('|')[0], data: k.split('|')[1] });
+      };
+      const chavesP = Object.keys(gruposP).filter(k => k.split('|')[1] >= ini && k.split('|')[1] <= fim);
+      const livresDia = (dia, filtro) => S.filter(e => !usadoE.has(e.id) && e.data === dia && filtro(e));
+      chavesP.forEach(k => { const [u, dia] = k.split('|'); tentar(k, livresDia(dia, e => empresaDe(e.conta) === u)); });
+      chavesP.forEach(k => { const [u, dia] = k.split('|'); tentar(k, livresDia(dia, e => empresaDe(e.conta) === u || /SALARIO|FOLHA/.test(norm(e.descricao)) || /SALARIO/.test(norm(e.movimentacao)))); });
       // pendências
       const semTit = S.filter(e => !usadoE.has(e.id)).map(e => ({ e,
         sugestao: pendentes.filter(p => Math.abs(p.v - e.v) < 0.01 && Math.abs(difDias(p.venc_util, e.data)) <= 15)
           .sort((a, b) => Math.abs(difDias(a.venc_util, e.data)) - Math.abs(difDias(b.venc_util, e.data)))[0] || null }));
-      const semSaida = titulos.filter(t => !usadoT.has(t.id) && t.pagamento >= ini && t.pagamento <= fim);
+      const semSaida = titulos.filter(t => !usadoT.has(t.id) && t.pagamento >= ini && t.pagamento <= fim && !/CAIXA|DINHEIRO|ESPECIE/.test(norm(t.conta)));
       const vis = x => naConta(x.e ? x.e.conta : x.es ? x.es[0].conta : x.conta);
-      res = { pares: pares.filter(vis), semTit: semTit.filter(vis), just: just.filter(vis), natureza: natureza.filter(vis),
+      res = { pares: pares.filter(vis), semTit: semTit.filter(vis), encontro: encontro.filter(x => naConta(x.es[0].conta)), just: just.filter(vis), natureza: natureza.filter(vis),
               semSaida: semSaida.filter(t => f === '*' || !t.conta || (f ? t.conta === f : fluxo.has(t.conta) || !contas.some(c => c.conta === t.conta))),
               total: S.filter(e => naConta(e.conta)) };
     }
@@ -195,17 +230,18 @@
       const R = res, tot = R.total.reduce((a, e) => a + e.v, 0);
       const vConc = R.pares.reduce((a, p) => a + p.es.reduce((b, e) => b + e.v, 0), 0), vJust = R.natureza.reduce((a, j) => a + j.e.v, 0);
       const vSem = R.semTit.reduce((a, x) => a + x.e.v, 0), nSug = R.semTit.filter(x => x.sugestao).length;
-      const pc = tot ? (vConc + vJust) / tot * 100 : 0;
+      const vEnc = R.encontro.reduce((a, x) => a + x.es.reduce((b, e) => b + e.v, 0), 0), nEnc = R.encontro.reduce((a, x) => a + x.ts.length, 0);
+      const pc = tot ? (vConc + vJust) / tot * 100 : 0;   // "falta baixar" não conta como conciliado: o título ainda está em aberto
       $('kpis').innerHTML = `
         <div class="card p"><div class="desc">Saídas no extrato</div><div class="v">${brl(tot)}</div><div class="desc">${R.total.length} débito(s)</div></div>
         <div class="card p"><div class="desc">Conciliado</div><div class="v ok">${pc.toFixed(1).replace('.', ',')}%</div><div class="desc">${brl(vConc + vJust)} · ${R.pares.length + R.natureza.length} débito(s)</div></div>
         <div class="card p"><div class="desc">Saídas sem título baixado</div><div class="v" style="color: var(--verm)">${brl(vSem)}</div><div class="desc">${R.semTit.length} débito(s)</div></div>
-        <div class="card p"><div class="desc">Possível baixa esquecida no Alpha7</div><div class="v">${nSug}</div><div class="desc">saída igual a um título ainda em aberto</div></div>
+        <div class="card p"><div class="desc">Falta baixar no Alpha7</div><div class="v" style="color: ${nEnc + nSug ? '#B54708' : 'inherit'}">${brl(vEnc + R.semTit.filter(x => x.sugestao).reduce((a, x) => a + x.e.v, 0))}</div><div class="desc">${nEnc + nSug} título(s) em aberto já pagos pelo extrato</div></div>
         <div class="card p"><div class="desc">Títulos pagos sem saída no extrato</div><div class="v">${brl(R.semSaida.reduce((a, t) => a + t.v, 0))}</div><div class="desc">${R.semSaida.length} título(s)</div></div>`;
-      const ab = [['pend', 'Saídas sem título', R.semTit.length, true], ['semsaida', 'Títulos sem saída', R.semSaida.length, false],
+      const ab = [['pend', 'Saídas sem título', R.semTit.length, true], ['baixar', 'Falta baixar no Alpha7', R.encontro.length + nSug, true], ['semsaida', 'Títulos sem saída', R.semSaida.length, false],
                   ['conc', 'Conciliados', R.pares.length, false], ['nat', 'Sem título por natureza', R.natureza.length, false]];
       $('abas').innerHTML = ab.map(([k, n, q, crit]) => `<button class="${aba === k ? 'on' : ''}" onclick="aba='${k}'; aberto=null; desenhar()">${n}<span class="q ${crit && q ? 'crit' : ''}">${q}</span></button>`).join('');
-      $('lista').innerHTML = aba === 'pend' ? listaPend() : aba === 'semsaida' ? listaSemSaida() : aba === 'conc' ? listaConc() : listaNat();
+      $('lista').innerHTML = aba === 'baixar' ? listaBaixar() : aba === 'pend' ? listaPend() : aba === 'semsaida' ? listaSemSaida() : aba === 'conc' ? listaConc() : listaNat();
     }
     const nomeConta = k => { const c = contas.find(x => x.conta === k); return esc(c ? (c.nome || c.conta) + (c.empresa ? ' · ' + c.empresa : '') : k || '(sem conta na baixa)'); };
 
@@ -220,6 +256,17 @@
         let h = `<tr><td>${dbr(e.data)}</td><td>${nomeConta(e.conta)}</td><td>${esc(e.descricao || '')}${e.documento ? `<div class="mini">doc ${esc(e.documento)}</div>` : ''}</td><td class="n">${brl(e.v)}</td><td>${sit}</td></tr>`;
         return h; }).join('') + '</tbody></table>';
     }
+    function listaBaixar() {
+      const sug = res.semTit.filter(x => x.sugestao);
+      if (!res.encontro.length && !sug.length) return '<div class="desc" style="padding: 14px 16px">Nenhum título em aberto com pagamento já no extrato. ✓</div>';
+      return `<div class="desc" style="padding: 10px 16px 0">O dinheiro já saiu da conta (extrato) e o título continua <b>em aberto</b> no Alpha7: dar baixa nos títulos abaixo, na conta e na data do débito, e importar o arquivo de novo.</div>
+        <table class="t" style="min-width: 980px"><thead><tr><th>Dia</th><th>Empresa</th><th>Título(s) em aberto no Alpha7</th><th class="n">Títulos</th><th>Débito(s) no extrato</th><th class="n">Extrato</th></tr></thead><tbody>`
+        + res.encontro.map(x => `<tr><td>${dbr(x.data)}</td><td>${esc(x.unidade)}</td>
+            <td>${x.ts.map(t => `<div>${esc(t.descricao || t.credor)} · <span class="mono">${brl(t.v)}</span></div>`).join('')}</td><td class="n">${brl(x.ts.reduce((a, t) => a + t.v, 0))}</td>
+            <td>${x.es.map(e => `<div>${nomeConta(e.conta)} · ${esc(e.descricao || '')} · <span class="mono">${brl(e.v)}</span></div>`).join('')}</td><td class="n">${brl(x.es.reduce((a, e) => a + e.v, 0))}</td></tr>`).join('')
+        + sug.map(x => `<tr><td>${dbr(x.e.data)}</td><td>${esc(x.sugestao.unidade || '')}</td><td><div>${esc(x.sugestao.descricao || x.sugestao.credor)} · venc. ${dbr(x.sugestao.venc_util)}</div></td><td class="n">${brl(x.sugestao.v)}</td>
+            <td><div>${nomeConta(x.e.conta)} · ${esc(x.e.descricao || '')}</div></td><td class="n">${brl(x.e.v)}</td></tr>`).join('') + '</tbody></table>';
+    }
     function listaSemSaida() {
       const L = res.semSaida; if (!L.length) return '<div class="desc" style="padding: 14px 16px">Todos os títulos pagos no mês têm saída no extrato. ✓</div>';
       return `<div class="desc" style="padding: 10px 16px 0">Título baixado no Alpha7 sem débito correspondente nas contas: corrigir no Alpha7 a data ou a conta da baixa (ou conferir se foi pago em dinheiro ou por conta que não está no sistema).</div>
@@ -233,7 +280,7 @@
           return `<tr><td>${dbr(e.data)}</td><td>${nomeConta(e.conta)}</td><td>${esc(e.descricao || '')}</td><td class="n">${brl(p.es.reduce((a, x) => a + x.v, 0))}</td>
             <td>${p.ts.map(t => `<div>${esc(t.credor)} · ${esc(t.documento || '-')} · <span class="mono">${brl(t.v)}</span>${t.pagamento !== e.data ? ` · baixa ${dbr(t.pagamento)}` : ''}</div>`).join('') || '<span class="desc">-</span>'}
               ${p.c && p.c.obs ? `<div class="mini">obs.: ${esc(p.c.obs)}</div>` : ''}</td>
-            <td><span class="pill ${p.tipo === 'EXATO' || p.tipo === 'AGRUPADO' ? 'p-ok' : p.tipo === 'MANUAL' ? 'p-info' : 'p-aten'}">${ROT[p.tipo]}</span>${p.c ? `<div class="mini">${esc(p.c.por || '')}</div>` : ''}</td>
+            <td><span class="pill ${p.tipo === 'EXATO' || p.tipo === 'AGRUPADO' || p.tipo === 'RETIRADA' ? 'p-ok' : p.tipo === 'MANUAL' ? 'p-info' : 'p-aten'}">${ROT[p.tipo]}</span>${p.c ? `<div class="mini">${esc(p.c.por || '')}</div>` : ''}</td>
 </tr>`; }).join('') + '</tbody></table>';
     }
     function listaNat() {
