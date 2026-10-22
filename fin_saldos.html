@@ -65,7 +65,7 @@
     const dbr = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '-';
     const hoje = FluxoCore.isoDe(new Date());
     const GRUPOS = { CEF: 'Caixa Econômica', DINHEIRO: 'Dinheiro', APLICACAO: 'Aplicações', CONSORCIO: 'Consórcios' };
-    let ref = hoje, contas = [], calc = null, itens = [], manual = {}, prevInf = {}, vendaUni = {}, titUni = {};
+    let ref = hoje, chequeBase = null, contas = [], calc = null, itens = [], manual = {}, prevInf = {}, vendaUni = {}, titUni = {};
 
     function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
     async function rpcTudo(nome, args) { const tudo = []; for (let de = 0; ; de += 1000) { const { data, error } = await _supabase.rpc(nome, args).range(de, de + 999); if (error) throw error; tudo.push(...(data || [])); if (!data || data.length < 1000) break; } return tudo; }
@@ -87,6 +87,7 @@
           _supabase.from('fin_categorias').select('plano, grupo, fora_do_fluxo'),
           rpcTudo('fn_fin_fluxo', { p_ini: ini, p_fim: passado ? ref : FluxoCore.somaDia(ref, -1) })]);
         [rc, ri, rm, rp, rv, rt, rcat].forEach(r => { if (r.error) throw r.error; });
+        { const { data: cb } = await _supabase.from('fin_config').select('valor').eq('chave', 'cheque_base').maybeSingle(); chequeBase = cb && cb.valor && cb.valor.data ? cb.valor : null; }
         contas = rc.data; itens = ri.data;
         manual = {}; rm.data.forEach(m => { if (!manual[m.item]) manual[m.item] = m; });
         prevInf = {}; rp.data.forEach(p => prevInf[p.conta] = Number(p.valor));
@@ -106,7 +107,15 @@
       const reais = calc.dias.filter(d => d.saldoContas && d.iso < ref);
       if (!reais.length) return { v: null, neg: 0 };
       const v = reais[reais.length - 1].saldoContas[conta];
-      let neg = 0; for (let k = reais.length - 1; k >= 0 && (reais[k].saldoContas[conta] || 0) < -0.005; k--) neg++;
+      // dias seguidos no negativo · a contagem parte da base informada (cheque_base: saldo da planilha Saldo Diário em 20/10/2026)
+      let neg = 0;
+      for (let k = reais.length - 1; k >= 0; k--) {
+        const d = reais[k], negativo = (d.saldoContas[conta] || 0) < -0.005;
+        if (chequeBase && d.iso < chequeBase.data) break;
+        if (!negativo) break;
+        if (chequeBase && d.iso === chequeBase.data) { neg += Number((chequeBase.dias || {})[conta] || 1); break; }
+        neg++;
+      }
       return { v: v === undefined ? 0 : v, neg };
     }
 
