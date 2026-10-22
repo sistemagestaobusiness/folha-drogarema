@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="fluxo_core.js?v=5"></script>
+  <script src="fluxo_core.js?v=6"></script>
   <style>
     .fc { border-collapse: separate; border-spacing: 0; font-size: 12px; width: 100%; }
     .fc th, .fc td { padding: 3px 7px; text-align: right; white-space: nowrap; font-family: 'JetBrains Mono', ui-monospace, monospace; border-bottom: 1px solid var(--linha); }
@@ -17,8 +17,7 @@
     .fc .l { text-align: left; font-family: Inter, sans-serif; position: sticky; left: 0; background: #fff; z-index: 1; min-width: 220px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; padding-left: 12px; }
     .fc th.l { z-index: 3; }
     .fc .prev { background: var(--prev); color: var(--prev-tx); }
-    .fc .sem { background: repeating-linear-gradient(135deg, #F4F5F7 0, #F4F5F7 6px, #ECEEF1 6px, #ECEEF1 12px); color: #98A2B3; }
-    .fc .hoje { box-shadow: inset 2px 0 0 var(--ouro); }
+    .fc .hoje { box-shadow: inset 3px 0 0 var(--ouro); }
     .fc td.tot, .fc th.tot { background: #F7F8FA; font-weight: 600; }
     /* linhas de grupo (Fornecedores, Administrativo…) */
     .fc tr.grp td { font-weight: 600; }
@@ -95,8 +94,7 @@
 
   <div class="leg">
     <span><i style="background: var(--prev); border-color: #C7D7FE"></i>previsto</span>
-    <span><i style="background: repeating-linear-gradient(135deg,#F4F5F7 0,#F4F5F7 3px,#ECEEF1 3px,#ECEEF1 6px)"></i>sem carga</span>
-    <span><i style="width: 2px; border: 0; background: var(--ouro)"></i>hoje</span>
+    <span><i style="width: 3px; border: 0; background: var(--ouro)"></i>hoje</span>
     <span><i style="background: #E4E7EC"></i>fim de semana · ★ feriado</span>
     <span><i style="background: #F4EBFF; border-color: #D6BBFB"></i>previsão manual</span>
     <span style="margin-left: auto">R$ · clique no grupo para abrir · clique num valor de pagamento para ver os títulos<span id="legEdit"> · nas linhas Previsão e na venda futura, clique e digite (Enter grava, Tab vai para o dia seguinte)</span></span>
@@ -144,6 +142,16 @@
       let out = [], de = 0;
       for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; }
     }
+    // último dia de venda fechada = véspera do dia em que o arquivo da última carga foi enviado (22/10/2026)
+    let _vfa = null;
+    async function vendaFechadaAte() {
+      if (_vfa) return _vfa;
+      const { data } = await _supabase.from('fin_cargas').select('em').eq('status', 'APLICADA').order('id', { ascending: false }).limit(1);
+      const em = data && data[0] && data[0].em;
+      _vfa = em ? FluxoCore.somaDia(FluxoCore.isoDe(new Date(em)), -1) : FluxoCore.somaDia(hoje, -1);
+      if (_vfa >= hoje) _vfa = FluxoCore.somaDia(hoje, -1);
+      return _vfa;
+    }
     async function carregarCadastros() {
       const [rg, rc, rk, rf, rp] = await Promise.all([
         _supabase.from('fin_grupos').select('*').order('ordem'),
@@ -153,14 +161,15 @@
         _supabase.from('fin_previsao').select('*')]);
       [rg, rc, rk, rf, rp].forEach(r => { if (r.error) throw r.error; });
       // histórico de venda para a previsão: loja a loja (fin_venda) + total dos anos fixos (fin_fixo_dia) · 3 anos + 2 meses
-      const desde = FluxoCore.somaDia(hoje, -3 * 366 - 60);
+      const desde = FluxoCore.somaDia(hoje, -3 * 366 - 60), corte = FluxoCore.somaDia(await vendaFechadaAte(), 1);
       const [lv, lf] = await Promise.all([
-        tudoTabela(() => _supabase.from('fin_venda').select('data, unidade, venda').gte('data', desde).lt('data', hoje).order('data').order('unidade')),
+        tudoTabela(() => _supabase.from('fin_venda').select('data, unidade, venda').gte('data', desde).lt('data', corte < hoje ? corte : hoje).order('data').order('unidade')),
         tudoTabela(() => _supabase.from('fin_fixo_dia').select('data, valor').eq('tipo', 'venda').gte('data', desde).lt('data', hoje).order('data'))]);
       cad.grupos = rg.data.map(g => g.grupo);
       cad.categorias = {}; rc.data.forEach(c => cad.categorias[c.plano] = c);
       cad.contas = rk.data;
       cad.config = {}; rf.data.forEach(c => cad.config[c.chave] = c.valor);
+      cad.vendaFechadaAte = await vendaFechadaAte();
       cad.previsoes = {}; rp.data.forEach(p => cad.previsoes[p.tipo + '|' + p.data] = Number(p.valor));
       const tot = {}, lojas = {}, somaLoja = {};
       lf.forEach(v => tot[v.data] = Number(v.valor || 0));
@@ -195,6 +204,7 @@
     function recalcular() {
       calc = FluxoCore.montar({ ini: base.buscaIni, fim: base.fim, hoje, linhas: base.linhas, categorias: cad.categorias, contas: cad.contas, previsoes: cad.previsoes,
         vendaHist: cad.vendaHist, ajusteUtil: Number(cad.config.ajuste_util || 0), ajusteSegunda: Number(cad.config.ajuste_segunda || 0),
+        vendaFechadaAte: cad.vendaFechadaAte,
         fatorVenda: cad.config.venda_fator == null ? 0.97 : Number(cad.config.venda_fator), lojasNovas: cad.config.venda_lojas_novas || undefined });
       calc.dias = calc.dias.filter(d => d.iso >= base.ini);
       desenhar(); resumo();
@@ -218,8 +228,8 @@
         return { id: d.iso, tit: `${SEM[FluxoCore.dow(d.iso)]} ${d.iso.slice(8)}`, dias: [d], hoje: d.iso === hoje, fds: !!fer || [0, 6].includes(FluxoCore.dow(d.iso)), fer }; });
       return Array.from({ length: 12 }, (_, k) => { const pre = somaMes(iniMes, k); return { id: pre, tit: rotMes(pre), dias: calc.dias.filter(d => d.iso.startsWith(pre)), hoje: hoje.startsWith(pre) }; });
     }
-    const classe = c => { const d = c.dias; if (!d.length) return ''; const prev = d.every(x => !x.passado), sem = d.every(x => x.semCarga);
-      return (prev ? 'prev' : sem ? 'sem' : '') + (c.hoje ? ' hoje' : '') + (c.fds ? ' fds' : ''); };
+    const classe = c => { const d = c.dias; if (!d.length) return ''; const prev = d.every(x => !x.passado);
+      return (prev ? 'prev' : '') + (c.hoje ? ' hoje' : '') + (c.fds ? ' fds' : ''); };
     const totForn = d => ((d.grupos.FORNECEDORES && d.grupos.FORNECEDORES.tot) || 0) + (d.forn || 0);
     const pctTxt = (a, b) => b > 0 && Math.round(a) ? (a / b * 100).toFixed(1).replace('.', ',') + '%' : '';
 
@@ -245,11 +255,12 @@
       h += sec('Entradas');
       const vendas = cols.map(c => soma(c, d => d.venda)), vendaTot = vendas.reduce((a, b) => a + b, 0);
       h += `<tr class="grp"><td class="l" title="A venda do dia cai no banco no dia útil seguinte">Venda do dia</td>${cols.map((c, k) => {
-        const sem = c.dias.length && c.dias.every(d => d.vendaSemCarga);
+        const sem = false;
         const man = modo === 'dia' && c.dias[0] && c.dias[0].vendaManual;
-        const tip = futuro(c) ? ` title="${esc(c.dias[0].vendaRegra)}"` : '';
+        const est = modo === 'dia' && c.dias[0] && c.dias[0].passado && c.dias[0].vendaPrevista;   // dia passado ainda não fechado no relatório
+        const tip = futuro(c) || est ? ` title="${esc((est ? 'Dia ainda não fechado na carga: usando a venda prevista · ' : '') + c.dias[0].vendaRegra)}"` : '';
         const ed = futuro(c) && podeEditar();
-        return sem ? `<td class="sem${c.hoje ? ' hoje' : ''}">–</td>` : `<td class="${classe(c)}${ed ? ' edit' : ''}"${ed ? ` data-edit="venda" data-dia="${c.id}"` : ''}${tip}>${man ? '✎ ' : ''}${fmt(vendas[k])}</td>`; }).join('')}<td class="tot">${fmt(vendaTot)}</td></tr>`;
+        return sem ? `<td class="sem${c.hoje ? ' hoje' : ''}">–</td>` : `<td class="${classe(c)}${ed ? ' edit' : ''}${est ? ' prev' : ''}"${ed ? ` data-edit="venda" data-dia="${c.id}"` : ''}${tip}>${man ? '✎ ' : ''}${fmt(vendas[k])}</td>`; }).join('')}<td class="tot">${fmt(vendaTot)}</td></tr>`;
       if (modo === 'mes') {   // média da venda por dia do mês (como no FC: total do mês ÷ dias)
         const nd = c => c.dias.filter(d => d.venda !== null).length;
         const tdias = cols.reduce((a, c) => a + nd(c), 0);

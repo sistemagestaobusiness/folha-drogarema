@@ -133,10 +133,13 @@
       });
       // venda
       let venda = null, vendaRegra = '', vendaManual = false;
-      if (passado) venda = ultVenda && iso <= ultVenda ? (x.venda || 0) : null;
+      // venda real só de dia fechado: dias até a véspera da carga (22/10/2026). O dia da exportação vem parcial
+      // no relatório; ele e os dias sem carga usam a venda prevista.
+      const vendaReal = passado && ultVenda && iso <= ultVenda && (!e.vendaFechadaAte || iso <= e.vendaFechadaAte);
+      if (vendaReal) venda = x.venda || 0;
       else {
         const m = e.previsoes['venda|' + iso];
-        if (m !== undefined) { venda = m; vendaManual = true; vendaRegra = 'valor informado à mão'; }
+        if (m !== undefined && !passado) { venda = m; vendaManual = true; vendaRegra = 'valor informado à mão'; }
         else { const p = vendaPrevista(iso, e.vendaHist, e.hoje, e.fatorVenda == null ? 0.97 : e.fatorVenda, e.lojasNovas || undefined); venda = p.valor; vendaRegra = p.regra; }
       }
       // pagamentos por grupo
@@ -153,7 +156,7 @@
       const entPrev = passado ? 0 : (e.previsoes['entrada|' + iso] || 0);
       const w = dow(iso);
       const projetado = !comExtrato;
-      const ajuste = projetado && !passado ? (w === 1 ? e.ajusteSegunda : (w >= 2 && w <= 5 ? e.ajusteUtil : 0)) : 0;
+      const ajuste = projetado ? (w === 1 ? e.ajusteSegunda : (w >= 2 && w <= 5 ? e.ajusteUtil : 0)) : 0;
       const totPag = Object.values(grupos).reduce((a, g) => a + g.tot, 0) + totPrevG;   // o ajuste reduz a venda, não entra nos pagamentos (21/10/2026)
       // saldo
       const saldoReal = comExtrato ? contasFluxo.reduce((a, c) => a + (s[c] || 0), 0) : null;
@@ -165,8 +168,8 @@
         else { saldoProj += vendaFds - ajuste + entPrev - totPag; vendaFds = venda || 0; }
         saldoPrev = saldoProj;
       }
-      const semCarga = passado && (venda === null || !comExtrato);
-      dias.push({ iso, passado, projetado, semCarga, venda, vendaRegra, vendaManual, vendaSemCarga: passado && venda === null,
+      const semCarga = passado && !comExtrato;   // dia passado ainda sem extrato: saldo estimado
+      dias.push({ iso, passado, projetado, semCarga, venda, vendaRegra, vendaManual, vendaSemCarga: false, vendaPrevista: !vendaReal,
         cred: comExtrato ? x.cred : null, grupos, forn, prevG, entPrev, ajuste, totPag,
         saldoContas: comExtrato ? Object.fromEntries(todasContas.map(c => [c, s[c]])) : null, saldoReal, saldoPrev });
     }
