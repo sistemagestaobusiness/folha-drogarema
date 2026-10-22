@@ -80,7 +80,7 @@
           _supabase.from('folha_envios').select('*').eq('competencia', comp).order('versao', { ascending: false }).limit(1),
           tudo(() => _supabase.from('pagamentos_extras').select('id, funcionario_id, status, valor, meio, vencimento, pago_em, banco_pagador').eq('tipo', 'QUINTO_DIA').eq('competencia', comp).neq('status', 'CANCELADO')),
           tudo(() => _supabase.from('folha_itens').select('funcionario_id, rubrica, tipo, valor').eq('competencia', comp)),
-          tudo(() => _supabase.from('funcionarios').select('id, nome, nome_registro, loja_id, empresa_id, empresa_registro')),
+          tudo(() => _supabase.from('funcionarios').select('*')),
           _supabase.from('lojas').select('id, nome_loja'),
           _supabase.from('empresas').select('id, nome_fantasia, razao_social, cnpj')]);
         if (rE.error) throw rE.error;
