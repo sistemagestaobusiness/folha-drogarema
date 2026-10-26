@@ -92,6 +92,20 @@
         nivel, data: x.data_servico, desde, prazo, foraHa: fora ? agora - Math.min(prazo, agora) : 0 });
     });
 
+    // ---- faltas da escala com desconto aguardando o RH (SQL DI, regra de 26/10/2026)
+    if (veTudo) {
+      const rdf = await Promise.resolve(cli.from('escala_faltas_desconto').select('id, data, criado_em').eq('status', 'PENDENTE').order('data')).catch(e => ({ error: e }));
+      const dfs = ok(rdf);
+      if (dfs.length) {
+        const desde = dfs.reduce((a, x) => x.criado_em < a ? x.criado_em : a, dfs[0].criado_em);
+        const prazo = new Date(desde).getTime() + PRAZO_RH_H * 3600e3;
+        const fora = agora > prazo;
+        add({ assunto: 'falta', com: 'RH', tela: 'lancamentos.html', titulo: `Faltas da escala · ${dfs.length} desconto(s) para confirmar`,
+          sub: 'aprovar, ajustar com justificativa ou recusar', detalhe: `mais antiga marcada em ${dataHora(desde)}${fora ? ' · fora do prazo há ' + tempo(agora - prazo) : ''}`,
+          nivel: fora ? 'critico' : 'atencao', data: dfs[0].data, desde, prazo, foraHa: fora ? agora - prazo : 0 });
+      }
+    }
+
     // ---- férias (etapas do RH) e ciência do supervisor
     const ETAPA = { SOLICITADA: 'pré-aprovar', PRE_APROVADA: 'enviar à contabilidade', CONTABILIDADE: 'registrar o cálculo da contabilidade', CALCULADA: 'lançar na folha' };
     // férias de 2026: o RH controlou fora do sistema; valem só para a escala, sem pendência (regra de 22/10/2026)

@@ -160,6 +160,17 @@
           else o.alertas.push('aguardando conferência do supervisor'); }
         else if (t === 'NENHUM') o.etapa = 'SEM_DESCONTO';
       });
+      // desconto automático da falta (SQL DI, regra de 26/10/2026): etapas e histórico (só RH/Gestor leem a tabela)
+      if (comValores()) {
+        const { data: dfs } = await _supabase.from('escala_faltas_desconto').select('*').gte('data', ini).lte('data', fim).order('criado_em');
+        const ACAO = { CRIADO: '🧮 desconto calculado', DSR: '🧮 DSR', APROVADO: '✓ RH aprovou', RECUSADO: '✗ RH recusou', CANCELADO: '⊘ cancelado', ESTORNADO: '↩ estornado' };
+        (dfs || []).forEach(x => {
+          const o = mapa[x.funcionario_id + '|' + x.data]; if (!o) return;
+          (Array.isArray(x.historico) ? x.historico : []).forEach(e => o.passos.push(`${ACAO[e.acao] || esc(e.acao || '')} · ${esc(e.por || '')} em ${dh(e.em)}${e.detalhe ? ' · ' + esc(e.detalhe) : ''}`));
+          if (x.status === 'PENDENTE') { o.etapa = 'AGUARDA'; o.passos.push(`⏳ desconto de ${fmtR(x.valor_calculado)} aguardando o RH`); }
+          if (x.status === 'APROVADO' && x.justificativa_valor) o.alertas.push('valor do desconto ajustado pelo RH: ' + esc(x.justificativa_valor));
+        });
+      }
       linhas = Object.values(mapa).sort((x, y) => x.data.localeCompare(y.data) || nomeF(x.fid).localeCompare(nomeF(y.fid)));
       render();
     }

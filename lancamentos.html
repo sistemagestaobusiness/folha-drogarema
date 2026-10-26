@@ -1035,6 +1035,7 @@
     const nomeFuncEscala = id => (listaGlobalFuncionarios.find(f => String(f.id) === String(id)) || {}).nome_registro || '?';
     function situacaoOcorr(o) {
       if (o.trat) return 'OK';
+      if (o.fd && o.fd.status === 'PENDENTE') return 'PENDENTE';
       if (o.freela && o.freela.tratamento_ausencia) return 'OK_FREELA';
       if (o.freela && o.freela.status !== 'APROVADA') return 'AGUARDA_FREELA';
       return 'PENDENTE';
@@ -1068,12 +1069,19 @@
     async function carregarOcorrenciasEscala() {
       const [m, a] = competenciaRegraLancamento.split('/');
       const ini = `${a}-${m}-01`, fim = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);
-      const [re, rf] = await Promise.all([
+      const [re, rf, rd] = await Promise.all([
         _supabase.from('escala_dias').select('*').in('tipo', ['FALTA', 'ATESTADO']).gte('data', ini).lte('data', fim),
         _supabase.from('freelance_solicitacoes').select('id, funcionario_ausente_id, data_servico, motivo, status, tratamento_ausencia, loja_solicitante')
-          .not('funcionario_ausente_id', 'is', null).gte('data_servico', ini).lte('data_servico', fim)
+          .not('funcionario_ausente_id', 'is', null).gte('data_servico', ini).lte('data_servico', fim),
+        // desconto de falta criado pela escala, aguardando o RH (SQL DI)
+        _supabase.from('escala_faltas_desconto').select('*').gte('data', ini).lte('data', fim).order('criado_em')
       ]);
       ocorrEscala = [];
+      const descFalta = {};
+      (rd && !rd.error ? rd.data || [] : []).forEach(x => {
+        const k = x.funcionario_id + '|' + x.data;
+        if (!descFalta[k] || ['PENDENTE', 'APROVADO'].includes(x.status)) descFalta[k] = x;
+      });
       if (re.error) { renderBannerEscala(); return; }
       const mapa = {};
       (re.data || []).forEach(d => {
@@ -1085,6 +1093,7 @@
         const o = mapa[k] || (mapa[k] = { fid: s.funcionario_ausente_id, data: s.data_servico, tipo: s.motivo === 'ATESTADO' ? 'ATESTADO' : s.motivo === 'FALTA_PARCIAL' ? 'FALTA PARCIAL' : 'FALTA', origem: 'FREELA' });
         o.freela = s;
       });
+      Object.values(mapa).forEach(o => { o.fd = descFalta[o.fid + '|' + o.data] || null; });
       ocorrEscala = Object.values(mapa).sort((x, y) => x.data.localeCompare(y.data));
       renderBannerEscala();
     }
@@ -1095,7 +1104,7 @@
       if (!pend.length && !aguard.length) { box.classList.add('hidden'); return; }
       const item = o => `<a href="#" onclick="abrirFuncionarioEscala('${o.fid}');return false;" class="inline-block bg-white border border-amber-300 rounded px-1.5 py-0.5 mr-1 mb-1 hover:bg-amber-100">${escaparHtml(nomeFuncEscala(o.fid))} · ${dmEscala(o.data)} · ${escaparHtml(o.tipo.toLowerCase())}</a>`;
       box.innerHTML = `<div class="font-black uppercase">📅 Escala de ${competenciaRegraLancamento}: ${pend.length ? pend.length + ' falta(s)/atestado(s) sem tratamento' : 'faltas aguardando o freelance'}</div>`
-        + (pend.length ? `<div class="mt-1">${pend.map(item).join('')}</div><div class="text-[10px]">Clique no nome para abrir o funcionário e definir: desconto, banco de horas ou abono.</div>` : '')
+        + (pend.length ? `<div class="mt-1">${pend.map(item).join('')}</div><div class="text-[10px]">Clique no nome para abrir o funcionário: a falta já vem com o desconto calculado (1 dia + DSR) para o RH aprovar, ajustar com justificativa ou recusar (banco de horas / abono).</div>` : '')
         + (aguard.length ? `<div class="mt-1 text-[10px]">⏳ ${aguard.length} aguardando a aprovação do freelance (o RH decide o tratamento lá): ${aguard.map(o => escaparHtml(nomeFuncEscala(o.fid)) + ' ' + dmEscala(o.data)).join(', ')}</div>` : '')
         + (escalaSemTratamento ? '<div class="mt-1 font-bold text-rose-700">Rode o SQL AC_escala_tratamento_faltas para poder marcar o tratamento.</div>' : '');
       box.classList.remove('hidden');
@@ -1120,7 +1129,9 @@
       const bt = (txt, fn, cls) => `<button type="button" onclick="${fn}" class="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${cls}">${txt}</button>`;
       box.innerHTML = `<div class="font-black uppercase">📅 Faltas / atestados na escala de ${competenciaRegraLancamento}</div>` + lista.map(o => {
         const s = situacaoOcorr(o), cab = `<b>${dmEscala(o.data)}</b> · ${escaparHtml(o.tipo.toLowerCase())}${o.obs ? ' · <i>' + escaparHtml(o.obs) + '</i>' : ''}`;
-        if (s === 'OK') return `<div class="text-emerald-800">✓ ${cab} → <b>${TRAT_ESCALA[o.trat] || o.trat}${o.horas ? ' (' + String(o.horas).replace('.', ',') + 'h)' : ''}</b>${o.trat === 'ABONADO' ? (o.doc ? ' 📎' : ' <span class="text-amber-700 font-bold">(sem documento — abono anterior à regra)</span>') : ''} <span class="text-[10px] text-slate-500">${escaparHtml(o.por || '')}</span> ${bt('↩ desfazer', `tratarEscala('${o.fid}','${o.data}',null)`, 'bg-white border border-slate-300 text-slate-600')}</div>`;
+        const aprov = o.fd && o.fd.status === 'APROVADO' && o.trat === 'DESCONTO';
+        if (s === 'OK') return `<div class="text-emerald-800">✓ ${cab} → <b>${TRAT_ESCALA[o.trat] || o.trat}${o.horas ? ' (' + String(o.horas).replace('.', ',') + 'h)' : ''}</b>${aprov ? ` · ${o.fd.natureza === 'CONTABIL' ? '2060 contábil' : '3003 não contábil'} ${fmtMoeda(o.fd.valor_final)}` : ''}${o.trat === 'ABONADO' ? (o.doc ? ' 📎' : ' <span class="text-amber-700 font-bold">(sem documento — abono anterior à regra)</span>') : ''} <span class="text-[10px] text-slate-500">${escaparHtml(o.por || '')}</span> ${aprov ? bt('↩ estornar', `estornarFalta('${o.fd.id}')`, 'bg-white border border-slate-300 text-slate-600') : bt('↩ desfazer', `tratarEscala('${o.fid}','${o.data}',null)`, 'bg-white border border-slate-300 text-slate-600')}${o.fd ? histFalta(o.fd) : ''}</div>`;
+        if (s === 'PENDENTE' && o.fd && o.fd.status === 'PENDENTE') return caixaFaltaPendente(o, cab, bt);
         if (s === 'OK_FREELA') return `<div class="text-emerald-800">✓ ${cab} → tratado na aprovação do freelance: <b>${TRAT_FREELA[o.freela.tratamento_ausencia] || o.freela.tratamento_ausencia}</b></div>`;
         if (s === 'AGUARDA_FREELA') return `<div>⏳ ${cab} → freelance pedido para cobrir; o tratamento é definido na <a href="rh_aprovacao_freelance.html" class="underline font-bold">aprovação do freelance</a>.</div>`;
         return `<div class="bg-white border border-amber-300 rounded p-1.5">⚠ ${cab} <b>sem tratamento</b><div class="mt-1 flex flex-wrap gap-1">`
@@ -1170,6 +1181,92 @@
       if (e2) { alert('Arquivo enviado, mas não foi registrado: ' + e2.message); return null; }
       await _supabase.rpc('fn_atestado_analise', { p_id: doc.id, p_texto: analise });
       return doc.id;
+    }
+
+    // FALTA NA ESCALA → DESCONTO PARA O RH CONFIRMAR (regra de 26/10/2026)
+    // valor = salário-base / 30 + DSR da semana (1 por semana); o RH só muda o valor com justificativa e escolhe contábil ou não contábil
+    const ACAO_FALTA = { CRIADO: 'criado', DSR: 'DSR', APROVADO: 'aprovado', RECUSADO: 'recusado', CANCELADO: 'cancelado', ESTORNADO: 'estornado' };
+    function histFalta(fd) {
+      const h = Array.isArray(fd.historico) ? fd.historico : [];
+      if (!h.length) return '';
+      return `<details class="mt-0.5 text-[10px] text-slate-600"><summary class="cursor-pointer">histórico (${h.length})</summary>`
+        + h.map(e => `<div>${e.em ? new Date(e.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''} · <b>${ACAO_FALTA[e.acao] || escaparHtml(e.acao || '')}</b> · ${escaparHtml(e.por || '')}${e.detalhe ? ' · ' + escaparHtml(e.detalhe) : ''}</div>`).join('') + '</details>';
+    }
+    function caixaFaltaPendente(o, cab, bt) {
+      const fd = o.fd, id = fd.id, v = Number(fd.valor_calculado || 0);
+      const vtxt = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return `<div class="bg-white border-2 border-rose-300 rounded p-1.5">⚠ ${cab} · <b class="text-rose-700">desconto aguardando o RH</b>`
+        + `<div class="text-[10px] text-slate-600 mt-0.5">Cálculo: salário-base ${fmtMoeda(fd.salario_base)} ÷ 30 = ${fmtMoeda(fd.valor_dia)} (1 dia)${Number(fd.valor_dsr) > 0 ? ' + DSR ' + fmtMoeda(fd.valor_dsr) : ' · DSR da semana já está em outra falta'} = <b>${fmtMoeda(v)}</b> · competência ${escaparHtml(fd.competencia)}${fd.marcado_por ? ' · marcado por ' + escaparHtml(fd.marcado_por) : ''}</div>`
+        + `<div class="mt-1 flex flex-wrap items-end gap-1.5">`
+        + `<label class="text-[10px] font-bold">Valor R$<br><input id="fdv_${id}" type="text" inputmode="decimal" value="${vtxt}" data-calc="${vtxt}" oninput="faltaValorMudou('${id}')" class="w-24 border border-slate-300 rounded px-1 py-0.5 text-[11px]"></label>`
+        + `<label class="text-[10px] font-bold">Natureza<br><select id="fdn_${id}" class="border border-slate-300 rounded px-1 py-0.5 text-[11px]"><option value="">escolha…</option><option value="CONTABIL">Contábil (2060)</option><option value="NAO_CONTABIL">Não contábil (3003)</option></select></label>`
+        + `<label id="fdjl_${id}" class="hidden text-[10px] font-bold flex-1 min-w-[160px]">Justificativa do valor<br><input id="fdj_${id}" type="text" maxlength="200" placeholder="por que o valor mudou" class="w-full border border-amber-400 rounded px-1 py-0.5 text-[11px]"></label>`
+        + `</div><div class="mt-1 flex flex-wrap gap-1">`
+        + bt('✓ Aprovar desconto', `aprovarFalta('${id}')`, 'bg-rose-600 text-white')
+        + bt('✗ Recusar → banco de horas', `recusarFalta('${id}','${o.fid}','${o.data}','BANCO_HORAS')`, 'bg-sky-600 text-white')
+        + bt('✗ Recusar → abonar com atestado', `recusarFalta('${id}','${o.fid}','${o.data}','ABONADO')`, 'bg-emerald-600 text-white')
+        + `</div>${histFalta(fd)}</div>`;
+    }
+    function numFalta(txt) { const n = parseFloat(String(txt || '').replace(/\./g, '').replace(',', '.')); return isNaN(n) ? null : Math.round(n * 100) / 100; }
+    function faltaValorMudou(id) {
+      const inp = document.getElementById('fdv_' + id);
+      const mudou = numFalta(inp.value) !== numFalta(inp.dataset.calc);
+      document.getElementById('fdjl_' + id).classList.toggle('hidden', !mudou);
+    }
+    async function aposDecisaoFalta(fid) {
+      await carregarOcorrenciasEscala();
+      renderAlertaEscala(fid);
+      carregarLancamentosNovo();
+    }
+    async function aprovarFalta(id) {
+      const o = ocorrEscala.find(x => x.fd && x.fd.id === id); if (!o) return;
+      const valor = numFalta(document.getElementById('fdv_' + id).value);
+      const natureza = document.getElementById('fdn_' + id).value;
+      const just = (document.getElementById('fdj_' + id).value || '').trim();
+      if (!(valor > 0)) return alert('Informe um valor maior que zero.');
+      if (!natureza) return alert('Escolha se o desconto é contábil (2060) ou não contábil (3003).');
+      const mudou = valor !== Number(o.fd.valor_calculado);
+      if (mudou && just.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('O valor é diferente do calculado (' + fmtMoeda(o.fd.valor_calculado) + '). Escreva a justificativa.');
+      if (!confirm(`Aprovar o desconto da falta de ${dmEscala(o.data)}?
+
+${natureza === 'CONTABIL' ? '2060 - FALTAS (contábil)' : '3003 - FALTAS (não contábil)'} · ${fmtMoeda(valor)} · competência ${o.fd.competencia}${mudou ? '\nValor ajustado: ' + just : ''}
+
+Entra na folha e no holerite.`)) return;
+      const { error } = await _supabase.rpc('fn_falta_decidir', { p_id: id, p_acao: 'APROVAR', p_valor: valor, p_justificativa: mudou ? just : null, p_natureza: natureza });
+      if (error) return alert('Não foi possível aprovar: ' + error.message);
+      await aposDecisaoFalta(o.fid);
+    }
+    async function recusarFalta(id, fid, data, trat) {
+      const motivo = (prompt(`Recusar o desconto da falta de ${dmEscala(data)}.
+
+Motivo da recusa (fica no histórico):`) || '').trim();
+      if (motivo.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('Recusa não feita: escreva o motivo.');
+      let horas = null, documento = null;
+      if (trat === 'BANCO_HORAS') {
+        let sug = 8;
+        if (ECL) { try { await ECL.garantir(data, data); const r = ECL.dia(fid, data, { previsto: true }); if (r.tipo === 'TRABALHO') sug = ECL.horasTurno(r, fid); } catch (e) { } }
+        const txt = prompt(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\nPela escala o turno era de ${String(sug).replace('.', ',')}h:`, String(sug).replace('.', ','));
+        if (txt === null) return;
+        horas = parseFloat(String(txt).replace(',', '.'));
+        if (!(horas > 0)) return alert('Horas inválidas.');
+      } else {
+        documento = await anexarAtestadoAbono(fid, data);
+        if (!documento) return;
+      }
+      const { error } = await _supabase.rpc('fn_falta_decidir', { p_id: id, p_acao: 'RECUSAR', p_recusa: trat, p_horas: horas, p_documento: documento, p_motivo: motivo });
+      if (error) return alert('Não foi possível recusar: ' + error.message);
+      await aposDecisaoFalta(fid);
+      carregarExtrasFreelance(fid, competenciaRegraLancamento);
+    }
+    async function estornarFalta(id) {
+      const o = ocorrEscala.find(x => x.fd && x.fd.id === id); if (!o) return;
+      const motivo = (prompt(`Estornar o desconto aprovado da falta de ${dmEscala(o.data)} (${fmtMoeda(o.fd.valor_final)})?
+
+O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').trim();
+      if (motivo.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('Estorno não feito: escreva o motivo.');
+      const { error } = await _supabase.rpc('fn_falta_decidir', { p_id: id, p_acao: 'ESTORNAR', p_motivo: motivo });
+      if (error) return alert('Não foi possível estornar: ' + error.message);
+      await aposDecisaoFalta(o.fid);
     }
 
     async function tratarEscala(fid, data, trat) {
