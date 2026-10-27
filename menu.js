@@ -20,10 +20,10 @@
     ['Loja e jornada', [['freelance_solicitacao.html', 'Solicitações da loja', '✚'], ['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑'], ['holerite_entrega.html', 'Entrega de holerites', '✉'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'],
       ['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['cadastro_solicitacoes.html', 'Solicitações de cadastro', '☰'], ['organograma.html', 'Organograma', '⌂']]],
     ['Financeiro', [['financeiro.html', 'Pagamentos', '$'], ['fluxo_caixa.html', 'Fluxo de caixa', '≋'], ['fin_saldos.html', 'Saldos e aplicações', '▤'], ['conciliacao.html', 'Conciliação bancária', '⇄'], ['fin_importar.html', 'Importar Alpha7 · Financeiro', '⇪'], ['fin_base.html', 'Base do fluxo', '⚙']]],
-    ['Relatórios', [['resumo_folha.html', 'Resumo da competência', '≡'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['recibo_pagamento.html', 'Recibos', '▯'], ['relatorio_faltas.html', 'Relatório de faltas', '☷'], ['relatorio_quinto_dia.html', 'Pagamento do 5º dia útil', '$']]],
+    ['Relatórios', [['resumo_folha.html', 'Resumo da competência', '≡'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['recibo_pagamento.html', 'Recibos', '▯'], ['relatorio_faltas.html', 'Relatório de faltas', '☷'], ['relatorio_quinto_dia.html', 'Pagamento do 5º dia útil', '$'], ['contabilidade.html', 'Envio à contabilidade', '⇪']]],
     ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
     ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
-    ['Segurança', [['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]]
+    ['Segurança', [['conduta_rh.html', 'Conduta do RH', '◉'], ['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]]
   ];
   const telas = new Set((window.ACESSO.telas || []).map(t => String(t).toLowerCase()));
   const L = 232;

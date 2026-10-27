@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Envio à contabilidade - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fin_estilo.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <style>
+    .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .barra h1 { margin: 0 10px 0 0; font-size: 18px; font-weight: 700; }
+    .barra .inp, .barra .btn { height: 32px; min-height: 32px; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpis .card.p { padding: 8px 12px; }
+    .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-top: 2px; }
+    .kpis .v.verm { color: var(--verm); }
+    @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .q { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
+    .q th, .q td { padding: 5px 9px; white-space: nowrap; border-bottom: 1px solid var(--linha); text-align: left; }
+    .q th { font-size: 10.5px; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; background: #fff; position: sticky; top: 0; z-index: 1; }
+    .q .n { text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .q .cod { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; }
+    .q tr.emp td { background: #EEF4FF; color: #1E3A8A; font-weight: 700; border-top: 1px solid #D6E2FF; }
+    .q tr.fun td { font-weight: 600; background: #FAFBFC; border-top: 1px solid #E4E7EC; }
+    .q tr.ev td.l1 { padding-left: 28px; color: var(--sub); }
+    .q .deb { color: var(--verm); }
+    .q .cred { color: var(--verde-tx); }
+    .falta { display: inline-block; background: var(--verm-bg); color: var(--verm-tx); border-radius: 5px; padding: 1px 7px; font-size: 11px; font-weight: 700; cursor: pointer; }
+    .edit { cursor: pointer; border-bottom: 1px dashed #98A2B3; }
+    .edit:hover { color: var(--azul); }
+    .horas { display: inline-block; background: var(--amar-bg); color: var(--amar-tx); border-radius: 5px; padding: 0 6px; font-size: 10.5px; font-weight: 700; margin-left: 4px; }
+    .q td.cp { cursor: copy; }
+    .q td.cp:hover { outline: 1px solid var(--azul); outline-offset: -2px; }
+    .q td.copiado { background: #DCFAE6 !important; }
+    #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--escuro); color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 12.5px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60; }
+    .pend { margin-bottom: 10px; padding: 10px 14px; }
+    .pend h2 { font-size: 13px; margin: 0 0 6px; }
+    .pend .lin { font-size: 12px; color: var(--sub); margin: 3px 0; line-height: 1.7; }
+    .nota { font-size: 11.5px; color: var(--sub); margin-top: 8px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="barra">
+    <h1>Envio à contabilidade</h1>
+    <label class="desc">Competência <input id="fComp" type="month" class="inp mono" onchange="carregar()"></label>
+    <select id="fEmp" class="inp" onchange="render()"><option value="">Todas as empresas</option></select>
+    <input id="fBusca" class="inp" placeholder="funcionário" oninput="render()" style="width: 180px">
+    <label class="desc" title="INSS, IRRF, férias, rescisão, 13º, estouro e líquido: verbas que a própria contabilidade calcula"><input type="checkbox" id="fCalc" onchange="render()"> esconder verbas calculadas pela contabilidade</label>
+    <button type="button" class="btn" style="margin-left: auto" onclick="baixar()">⬇ Excel para a contabilidade</button>
+  </div>
+  <div id="aviso" class="alerta verm"></div>
+  <div class="kpis" id="kpis"></div>
+  <section class="card pend" id="pend" style="display: none"></section>
+  <section class="card rola" style="max-height: 64vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td>Carregando…</td></tr></tbody></table></section>
+  <p class="nota">Lançamentos de natureza <b>contábil</b> da competência, sem o salário (2000 e 2024 dias normais), por empresa e funcionário.
+    Mesmo evento no mês para a mesma pessoa vem somado numa linha. <b>Crédito</b> = provento, <b>débito</b> = desconto.
+    Código contábil, código do empregado e código da empresa vêm do cadastro: clique num código (ou em “sem código”) para gravar ou corrigir.
+    Eventos marcados <span class="horas">HORAS</span> a contabilidade recebe em horas (adicional noturno, faltas): o Excel traz o valor em reais e a referência, para a contabilidade conferir as horas.
+    Clique num valor para copiar.</p>
+  <div id="toast"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
+    const so = t => String(t || '').replace(/\D/g, '');
+    const compDe = ym => ym ? ym.slice(5, 7) + '/' + ym.slice(0, 4) : '';
+    const SALARIO = ['2000', '2024'];
+    const CALCULADA = /INSS|IRRF|IRPF|FERIAS|RESCIS|13|AVISO|ESTOURO|LIQUIDO|PAGAMENTO DE/;
+    let eventos = {}, funcs = {}, empresas = [], linhas = [], podeEditar = false;
+
+    function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
+    async function tudo(q) { let out = [], de = 0; for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; } }
+    const empDe = f => {
+      if (!f) return null;
+      const c = so(f.cnpj); const porCnpj = c ? empresas.find(e => so(e.cnpj) === c) : null;
+      if (porCnpj) return porCnpj;
+      const r = String(f.empresa_registro || ''); return empresas.find(e => e.razao_social && r.includes(e.razao_social)) || null;
+    };
+
+    async function iniciar() {
+      const { data: comp } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1);
+      const c = (comp || [])[0], hoje = new Date();
+      $('fComp').value = c ? `${c.ano}-${String(c.mes).padStart(2, '0')}` : `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+      const espera = () => window.ACESSO ? Promise.resolve() : new Promise(ok => setTimeout(() => ok(espera()), 150));
+      await espera();
+      podeEditar = ['RH', 'GESTOR'].includes(String((window.ACESSO || {}).perfil || '').toUpperCase());
+      carregar();
+    }
+
+    async function carregar() {
+      aviso(''); const comp = compDe($('fComp').value); if (!comp) return;
+      $('tab').innerHTML = '<tbody><tr><td>Carregando…</td></tr></tbody>';
+      try {
+        const [li, lf, re, rt] = await Promise.all([
+          tudo(() => _supabase.from('folha_itens').select('funcionario_id, rubrica, tipo, valor, referencia').eq('competencia', comp)),
+          tudo(() => _supabase.from('funcionarios').select('id, nome_registro, cnpj, empresa_registro, codigo_contabil, status')),
+          _supabase.from('empresas').select('id, razao_social, nome_fantasia, cnpj, cod_contabil'),
+          _supabase.from('tipos_eventos').select('id, codigo_evento, descricao_do_evento, tipo_evento, natureza_do_evento, codigo_contabil, unidade_contabil')]);
+        if (re.error) throw re.error; if (rt.error) throw rt.error;
+        empresas = re.data || [];
+        funcs = {}; lf.forEach(f => funcs[f.id] = f);
+        eventos = {}; (rt.data || []).forEach(e => eventos[String(e.codigo_evento)] = e);
+        if (lf.length && !('codigo_contabil' in lf[0])) aviso('Falta rodar o SQL DL (código contábil) no banco.');
+        const soma = {};
+        li.forEach(i => {
+          const cod = (String(i.rubrica || '').match(/^\s*(\d+)/) || [])[1]; const ev = eventos[cod];
+          if (!ev || ev.natureza_do_evento !== 'CONTABIL' || SALARIO.includes(cod)) return;
+          const k = i.funcionario_id + '|' + cod;
+          const o = soma[k] || (soma[k] = { fid: i.funcionario_id, cod, valor: 0, n: 0, refs: new Set() });
+          o.valor += Number(i.valor || 0) * (ev.tipo_evento === 'DESCONTO' || i.tipo === 'DESCONTO' ? -1 : 1); o.n++;
+          if (i.referencia) o.refs.add(i.referencia);
+        });
+        linhas = Object.values(soma).map(o => ({ ...o, valor: r2(o.valor) }));
+        const sel = $('fEmp'), atual = sel.value;
+        const usadas = [...new Set(linhas.map(l => (empDe(funcs[l.fid]) || {}).id || '-'))];
+        sel.innerHTML = '<option value="">Todas as empresas</option>' + usadas.map(id => { const e = empresas.find(x => x.id === id); return `<option value="${id}">${esc(e ? (e.nome_fantasia || e.razao_social) : '(sem empresa no cadastro)')}</option>`; }).join('');
+        if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
+        render();
+      } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); }
+    }
+
+    function visiveis() {
+      const emp = $('fEmp').value, termo = $('fBusca').value.trim().toUpperCase(), semCalc = $('fCalc').checked;
+      return linhas.filter(l => {
+        const f = funcs[l.fid], e = empDe(f), ev = eventos[l.cod];
+        if (emp && (e ? e.id : '-') !== emp) return false;
+        if (termo && !String((f || {}).nome_registro || '').toUpperCase().includes(termo)) return false;
+        if (semCalc && CALCULADA.test(ev.descricao_do_evento || '')) return false;
+        return true;
+      });
+    }
+
+    const semCod = (txt, tipo, id) => podeEditar ? `<span class="falta" onclick="editarCodigo('${tipo}','${id}')">${txt}</span>` : `<span class="falta">${txt}</span>`;
+    const codEd = (v, tipo, id) => podeEditar ? `<span class="cod edit" title="clique para corrigir" onclick="editarCodigo('${tipo}','${id}')">${esc(v)}</span>` : `<span class="cod">${esc(v)}</span>`;
+
+    function render() {
+      const ls = visiveis();
+      // grupos: empresa → funcionário
+      const g = {};
+      ls.forEach(l => { const f = funcs[l.fid] || {}, e = empDe(f); const ke = e ? e.id : '-';
+        const ge = g[ke] || (g[ke] = { e, funcs: {} }); (ge.funcs[l.fid] = ge.funcs[l.fid] || []).push(l); });
+      const ordemEmp = Object.values(g).sort((a, b) => ((a.e || {}).razao_social || 'zz').localeCompare((b.e || {}).razao_social || 'zz'));
+      let cred = 0, deb = 0; ls.forEach(l => l.valor >= 0 ? cred += l.valor : deb += -l.valor);
+      const pessoas = new Set(ls.map(l => l.fid)).size;
+      const evSem = [...new Set(ls.filter(l => !eventos[l.cod].codigo_contabil).map(l => l.cod))];
+      const fSem = [...new Set(ls.filter(l => !(funcs[l.fid] || {}).codigo_contabil).map(l => l.fid))];
+      const eSem = ordemEmp.filter(x => !x.e || !x.e.cod_contabil);
+      const faltam = evSem.length + fSem.length + eSem.length;
+      $('kpis').innerHTML = [['Funcionários', pessoas], ['Lançamentos (linhas)', ls.length], ['Créditos (proventos)', brl(cred)], ['Débitos (descontos)', brl(deb)], ['Códigos faltando', faltam, faltam ? 'verm' : '']]
+        .map(([t, v, c]) => `<div class="card p"><div class="desc">${t}</div><div class="v ${c || ''}">${v}</div></div>`).join('');
+      // códigos faltando
+      if (faltam) {
+        const nomeEv = c => `${c} - ${esc(eventos[c].descricao_do_evento)}`;
+        $('pend').style.display = '';
+        $('pend').innerHTML = `<h2>⚠ Códigos que faltam para a contabilidade importar</h2>`
+          + (evSem.length ? `<div class="lin"><b>Eventos sem código contábil:</b> ${evSem.map(c => semCod(nomeEv(c), 'EVENTO', eventos[c].id)).join(' ')}</div>` : '')
+          + (eSem.length ? `<div class="lin"><b>Empresas sem código:</b> ${eSem.map(x => x.e ? semCod(esc(x.e.nome_fantasia || x.e.razao_social), 'EMPRESA', x.e.id) : '<span class="falta">funcionários sem empresa no cadastro</span>').join(' ')}</div>` : '')
+          + (fSem.length ? `<div class="lin"><b>Funcionários sem código do empregado:</b> ${fSem.map(id => semCod(esc((funcs[id] || {}).nome_registro || '?'), 'FUNCIONARIO', id)).join(' ')}</div>` : '');
+      } else { $('pend').style.display = 'none'; }
+      // tabela
+      let h = `<thead><tr><th>Empresa / funcionário</th><th>Cód. contábil</th><th>Evento no sistema</th><th>Tipo</th><th>Referência</th><th class="n">Valor</th></tr></thead><tbody>`;
+      ordemEmp.forEach(ge => {
+        const e = ge.e; const todos = Object.values(ge.funcs).flat();
+        const c = r2(todos.filter(l => l.valor > 0).reduce((a, l) => a + l.valor, 0)), d = r2(todos.filter(l => l.valor < 0).reduce((a, l) => a - l.valor, 0));
+        h += `<tr class="emp"><td colspan="3">${esc(e ? (e.nome_fantasia || e.razao_social) : '(sem empresa no cadastro)')}${e ? ` · ${esc(e.razao_social || '')} · ${esc(e.cnpj || '')}` : ''}</td>
+          <td colspan="2">cód. empresa ${e ? (e.cod_contabil ? codEd(e.cod_contabil, 'EMPRESA', e.id) : semCod('sem código', 'EMPRESA', e.id)) : '-'}</td>
+          <td class="n">crédito ${brl(c)} · débito ${brl(d)}</td></tr>`;
+        Object.entries(ge.funcs).sort((a, b) => String((funcs[a[0]] || {}).nome_registro).localeCompare(String((funcs[b[0]] || {}).nome_registro))).forEach(([fid, ls2]) => {
+          const f = funcs[fid] || {};
+          h += `<tr class="fun"><td colspan="6">${esc(f.nome_registro || '?')}${f.status && f.status !== 'ATIVO' ? ' <span class="desc">(inativo)</span>' : ''} · cód. empregado ${f.codigo_contabil ? codEd(f.codigo_contabil, 'FUNCIONARIO', fid) : semCod('sem código', 'FUNCIONARIO', fid)}</td></tr>`;
+          ls2.sort((a, b) => (a.valor < 0) - (b.valor < 0) || a.cod.localeCompare(b.cod)).forEach(l => {
+            const ev = eventos[l.cod];
+            h += `<tr class="ev"><td class="l1">${l.n > 1 ? l.n + ' lançamentos somados' : ''}</td>
+              <td>${ev.codigo_contabil ? codEd(ev.codigo_contabil, 'EVENTO', ev.id) : semCod('sem código', 'EVENTO', ev.id)}${ev.unidade_contabil === 'HORAS' ? '<span class="horas">HORAS</span>' : ''}</td>
+              <td>${esc(l.cod + ' - ' + ev.descricao_do_evento)}</td>
+              <td class="${l.valor < 0 ? 'deb' : 'cred'}">${l.valor < 0 ? 'Débito' : 'Crédito'}</td>
+              <td class="desc">${esc([...l.refs].join(' · '))}</td>
+              <td class="n cp ${l.valor < 0 ? 'deb' : ''}" onclick="copiar(this, ${Math.abs(l.valor)})">${brl(Math.abs(l.valor))}</td></tr>`;
+          });
+        });
+      });
+      $('tab').innerHTML = h + (ls.length ? '' : '<tr><td colspan="6" class="desc">Nenhum lançamento contábil nesta competência (fora o salário).</td></tr>') + '</tbody>';
+    }
+
+    async function editarCodigo(tipo, id) {
+      if (!podeEditar) return;
+      let atual = '', nome = '';
+      if (tipo === 'EVENTO') { const e = Object.values(eventos).find(x => x.id === id); atual = e.codigo_contabil || ''; nome = `evento ${e.codigo_evento} - ${e.descricao_do_evento}`; }
+      if (tipo === 'FUNCIONARIO') { atual = funcs[id].codigo_contabil || ''; nome = `empregado ${funcs[id].nome_registro}`; }
+      if (tipo === 'EMPRESA') { const e = empresas.find(x => x.id === id); atual = e.cod_contabil || ''; nome = `empresa ${e.nome_fantasia || e.razao_social}`; }
+      const v = prompt(`Código na contabilidade para ${nome}.\n(só números; deixe vazio para apagar)`, atual);
+      if (v === null) return;
+      const { error } = await _supabase.rpc('fn_contabil_codigo_salvar', { p_tipo: tipo, p_id: id, p_codigo: v });
+      if (error) return alert('Não foi possível gravar: ' + error.message);
+      const novo = v.replace(/\s/g, '') || null;
+      if (tipo === 'EVENTO') Object.values(eventos).find(x => x.id === id).codigo_contabil = novo;
+      if (tipo === 'FUNCIONARIO') funcs[id].codigo_contabil = novo;
+      if (tipo === 'EMPRESA') empresas.find(x => x.id === id).cod_contabil = novo;
+      render();
+    }
+
+    async function copiar(td, v) {
+      const txt = Number(v).toFixed(2).replace('.', ',');
+      try { await navigator.clipboard.writeText(txt); } catch (e) { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+      td.classList.add('copiado'); setTimeout(() => td.classList.remove('copiado'), 900);
+      const s = $('toast'); s.textContent = 'copiado: ' + txt; s.style.opacity = 1; clearTimeout(s._t); s._t = setTimeout(() => s.style.opacity = 0, 1200);
+    }
+
+    function baixar() {
+      if (!window.XLSX) return alert('O gerador de Excel não carregou. Recarregue a página.');
+      const comp = compDe($('fComp').value), aaaamm = $('fComp').value.replace('-', '');
+      const ls = visiveis();
+      const base = ls.map(l => { const f = funcs[l.fid] || {}, e = empDe(f) || {}, ev = eventos[l.cod]; return { l, f, e, ev }; })
+        .sort((a, b) => String(a.e.cod_contabil || '').localeCompare(String(b.e.cod_contabil || ''), undefined, { numeric: true }) || String(a.f.nome_registro).localeCompare(String(b.f.nome_registro)));
+      const lista = base.map(({ l, f, e, ev }) => ({
+        'Cód Epr': f.codigo_contabil ? Number(f.codigo_contabil) : '', 'Nome': f.nome_registro || '', 'Competência': comp,
+        'Código do Evento': ev.codigo_contabil ? Number(ev.codigo_contabil) : '', 'valor/hora': Math.abs(l.valor), 'Cód Emp': e.cod_contabil ? Number(e.cod_contabil) : '',
+        'Tipo': l.valor < 0 ? 'Débito' : 'Crédito', 'Unidade na contabilidade': ev.unidade_contabil === 'HORAS' ? 'HORAS (conferir)' : 'valor',
+        'Evento no sistema': `${l.cod} - ${ev.descricao_do_evento}`, 'Referência': [...l.refs].join(' · '), 'Empresa': e.nome_fantasia || e.razao_social || '' }));
+      const completos = base.filter(({ f, e, ev }) => f.codigo_contabil && e.cod_contabil && ev.codigo_contabil && ev.unidade_contabil !== 'HORAS');
+      const modelo = completos.map(({ l, f, e, ev }) => ({ 'fixo': 10, 'cód empregado': Number(f.codigo_contabil), 'competencia': Number(aaaamm),
+        'código rubrica': Number(ev.codigo_contabil), 'Tipo do processo': 11, 'valor': Math.round(Math.abs(l.valor) * 100), 'empresa': Number(e.cod_contabil) }));
+      const conferir = base.filter(x => !completos.includes(x)).map(({ l, f, e, ev }) => ({ 'Nome': f.nome_registro || '', 'Evento no sistema': `${l.cod} - ${ev.descricao_do_evento}`, 'Valor': Math.abs(l.valor),
+        'Motivo': [!f.codigo_contabil && 'sem código do empregado', !e.cod_contabil && 'sem código da empresa', !ev.codigo_contabil && 'evento sem código contábil', ev.unidade_contabil === 'HORAS' && 'contabilidade recebe em horas'].filter(Boolean).join(' · ') }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista), 'INFORMAÇÕES FOLHA');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modelo.length ? modelo : [{ 'fixo': '', 'cód empregado': '', 'competencia': '', 'código rubrica': '', 'Tipo do processo': '', 'valor': '', 'empresa': '' }]), 'MODELO');
+      if (conferir.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conferir), 'CONFERIR');
+      XLSX.writeFile(wb, `VARIAVEL_FOLHA_${aaaamm.slice(4)}${aaaamm.slice(0, 4)}.xlsx`);
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

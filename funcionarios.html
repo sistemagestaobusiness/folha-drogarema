@@ -634,9 +634,7 @@
   </script>
   <!-- Bloqueio por inatividade (15 minutos) -->
   <script>
-    let tempoInatividade;
-    function resetarTemporizador() { clearTimeout(tempoInatividade); tempoInatividade = setTimeout(() => { localStorage.removeItem('usuario_drogarema'); alert('Sessão expirada por inatividade. Faça login novamente.'); window.location.href = 'login.html'; }, 15 * 60 * 1000); }
-    ['load','mousemove','keypress','click','scroll'].forEach(ev => window.addEventListener(ev, resetarTemporizador));
+    // inatividade: controle único no acesso.js (regra de 26/10/2026: conta o uso em todas as abas)
   </script>
 </body>
 </html>

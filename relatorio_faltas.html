@@ -163,7 +163,7 @@
       // desconto automático da falta (SQL DI, regra de 26/10/2026): etapas e histórico (só RH/Gestor leem a tabela)
       if (comValores()) {
         const { data: dfs } = await _supabase.from('escala_faltas_desconto').select('*').gte('data', ini).lte('data', fim).order('criado_em');
-        const ACAO = { CRIADO: '🧮 desconto calculado', DSR: '🧮 DSR', APROVADO: '✓ RH aprovou', RECUSADO: '✗ RH recusou', CANCELADO: '⊘ cancelado', ESTORNADO: '↩ estornado' };
+        const ACAO = { CRIADO: '🧮 desconto calculado', RECRIADO: '🧮 voltou a aguardar o RH', DSR: '🧮 DSR', APROVADO: '✓ RH aprovou', RECUSADO: '✗ RH recusou', CANCELADO: '⊘ cancelado', ESTORNADO: '↩ estornado' };
         (dfs || []).forEach(x => {
           const o = mapa[x.funcionario_id + '|' + x.data]; if (!o) return;
           (Array.isArray(x.historico) ? x.historico : []).forEach(e => o.passos.push(`${ACAO[e.acao] || esc(e.acao || '')} · ${esc(e.por || '')} em ${dh(e.em)}${e.detalhe ? ' · ' + esc(e.detalhe) : ''}`));

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conduta do RH - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fin_estilo.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <style>
+    .cab2 { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 10px; }
+    .cab2 h1 { margin: 0; font-size: 19px; font-weight: 700; }
+    .cab2 .desc { flex: 1 1 320px; }
+    .filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; padding: 10px 12px; margin-bottom: 10px; }
+    .filtros label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; }
+    .filtros .inp { height: 32px; }
+    .chk { flex-direction: row !important; align-items: center; gap: 6px !important; text-transform: none !important; font-size: 12.5px !important; letter-spacing: 0 !important; padding-bottom: 7px; cursor: pointer; }
+    .abas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .abas button { border: 1px solid #D0D5DD; background: #fff; border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; font-weight: 600; color: var(--cinza-tx); cursor: pointer; }
+    .abas button .c { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--sub); margin-left: 4px; }
+    .abas button.on { background: var(--escuro); color: #fff; border-color: var(--escuro); }
+    .abas button.on .c { color: #C9CED6; }
+    .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpis .card { padding: 8px 12px; cursor: pointer; }
+    .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 17px; margin-top: 2px; }
+    .kpis .v.verm { color: var(--verm); } .kpis .v.amar { color: var(--amar-tx); }
+    @media (max-width: 1000px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .usu { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .usu th { text-align: right; font-size: 10.5px; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; padding: 6px 10px; }
+    .usu td { text-align: right; padding: 5px 10px; border-top: 1px solid var(--linha); font-family: 'JetBrains Mono', monospace; }
+    .usu th:first-child, .usu td:first-child { text-align: left; font-family: Inter, sans-serif; }
+    .usu tr { cursor: pointer; } .usu tbody tr:hover td { background: #F5F8FF; }
+    .usu tr.sel td { background: #EEF4FF; font-weight: 700; }
+    .dia { font-size: 12px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 6px; display: flex; gap: 8px; align-items: center; }
+    .dia span { font-family: 'JetBrains Mono', monospace; font-weight: 500; text-transform: none; letter-spacing: 0; }
+    .lin { display: grid; grid-template-columns: 52px 170px minmax(0, 1fr); gap: 10px; padding: 8px 14px; border-top: 1px solid var(--linha); font-size: 12.5px; cursor: pointer; }
+    .lin:first-child { border-top: 0; }
+    .lin:hover { background: #FAFBFC; }
+    .lin.aten { box-shadow: inset 3px 0 0 #D92D20; }
+    .lin .h { font-family: 'JetBrains Mono', monospace; color: var(--sub); font-size: 12px; }
+    .lin .quem { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lin .quem small { display: block; font-weight: 500; color: var(--sub); font-size: 10.5px; }
+    .lin .o b.verbo { font-weight: 700; }
+    .lin .tag { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--cinza-bg); color: var(--cinza-tx); margin-right: 6px; }
+    .lin .mud { margin-top: 3px; font-size: 12px; color: var(--sub); }
+    .lin .mud .de { color: var(--verm); text-decoration: line-through; }
+    .lin .mud .para { color: var(--verde-tx); font-weight: 600; }
+    .lin .just { margin-top: 4px; font-size: 12px; background: #FFFAEB; border-left: 3px solid #F79009; padding: 3px 8px; border-radius: 4px; color: #7A2E0E; }
+    .lin .fl { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--verm-bg); color: var(--verm-tx); margin: 4px 4px 0 0; }
+    .lin .fl.am { background: var(--amar-bg); color: var(--amar-tx); }
+    .vazio { padding: 26px; text-align: center; color: var(--sub); font-size: 13px; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(16, 24, 40, .55); z-index: 70; padding: 30px 16px; overflow: auto; }
+    .modal .card { max-width: 860px; margin: 0 auto; padding: 16px 18px; }
+    .modal table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .modal td, .modal th { padding: 4px 8px; border-top: 1px solid var(--linha); text-align: left; vertical-align: top; }
+    .modal tr.mudou td { background: #FFFAEB; font-weight: 600; }
+    .nota { font-size: 11.5px; color: var(--sub); margin-top: 10px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="cab2">
+    <h1>Conduta do RH</h1>
+    <div class="desc">Quem fez o quê, quando, o que era e o que ficou, e com qual justificativa — em todas as telas, num lugar só. Para verificar conduta: só o Gestor vê esta tela.</div>
+    <button type="button" class="btn" onclick="exportarCsv()">⬇ CSV</button>
+  </div>
+
+  <section class="card filtros">
+    <label>De <input type="date" id="fDe" class="inp mono" onchange="carregar()"></label>
+    <label>Até <input type="date" id="fAte" class="inp mono" onchange="carregar()"></label>
+    <label>Quem fez <select id="fUsu" class="inp" onchange="render()"></select></label>
+    <label>Empresa <select id="fEmp" class="inp" onchange="render()"><option value="">Todas</option></select></label>
+    <label>Funcionário <input id="fFunc" class="inp" list="lFuncs" placeholder="nome" oninput="render()" style="width: 200px"><datalist id="lFuncs"></datalist></label>
+    <label>Procurar <input id="fTxt" class="inp" placeholder="evento, valor, motivo…" oninput="render()" style="width: 180px"></label>
+    <label class="chk"><input type="checkbox" id="fAten" onchange="render()"> só pontos de atenção</label>
+    <label class="chk"><input type="checkbox" id="fJust" onchange="render()"> só com justificativa</label>
+  </section>
+
+  <div id="aviso" class="alerta verm"></div>
+  <div class="abas" id="abas"></div>
+  <div class="kpis" id="kpis"></div>
+  <section class="card rola" style="margin-bottom: 10px"><table class="usu" id="usuarios"></table></section>
+  <div id="lista"></div>
+  <p class="nota">Fonte: a auditoria do banco (toda inclusão, alteração e exclusão fica gravada com o e-mail de quem fez, e não pode ser apagada pelas telas).
+    <b>Pontos de atenção</b>: exclusão, valor alterado, valor diferente do calculado, alteração em item já aprovado ou pago, lançamento em mês anterior ao aberto, mexer na própria ficha, duplicidade justificada, ação fora do horário (antes das 7h, depois das 20h ou domingo).
+    Clique numa linha para ver todos os campos antes e depois.</p>
+
+  <div class="modal" id="modal" onclick="if (event.target === this) this.style.display = 'none'"><div class="card" id="mCorpo"></div></div>
+
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const so = t => String(t || '').replace(/\D/g, '');
+    const isoLocal = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+    const ASSUNTOS = [
+      ['folha', 'Lançamentos da folha', ['folha_itens', 'alteracoes_pendentes', 'folha_envios']],
+      ['falta', 'Faltas, escala e banco de horas', ['escala_dias', 'escala_faltas_desconto', 'escala_funcionario', 'escala_loja_horario', 'banco_horas_movimentos', 'funcionarios_documentos']],
+      ['freela', 'Freelance e hora extra', ['freelance_solicitacoes']],
+      ['ferias', 'Férias', ['ferias_solicitacoes', 'ferias_periodos']],
+      ['decimo', '13º salário', ['decimo_antecipacoes', 'decimo_baixas']],
+      ['cadastro', 'Cadastro de pessoas', ['cadastro_solicitacoes', 'funcionarios']],
+      ['holerite', 'Holerites', ['holerite_entregas']],
+      ['abat', 'Abatimentos e empréstimos', ['abatimentos', 'abatimento_parcelas', 'emprestimos']],
+      ['benef', 'VT, planos e adiantamento', ['vt_mes', 'vt_config', 'plano_mes', 'adiantamento_mes', 'adiantamento_config']],
+      ['pag', 'Pagamentos', ['pagamentos_extras', 'pagamentos_dinheiro']],
+      ['fech', 'Competência e fechamento', ['competencias', 'conferencia_justificativas', 'fechamento_financeiro', 'fechamento_bonus_regras']],
+      ['cad', 'Cadastros e acessos', ['empresas', 'empresas_contas', 'lojas', 'cargos', 'tipos_eventos', 'rubricas', 'feriados', 'usuarios_sistema', 'perfis', 'perfil_telas', 'usuario_telas_extra', 'avisos_lideres', 'supervisor_checklist']]
+    ];
+    const ASSUNTO_DA = {}; ASSUNTOS.forEach(([k, , ts]) => ts.forEach(t => ASSUNTO_DA[t] = k));
+    const NOME_ASSUNTO = Object.fromEntries(ASSUNTOS.map(([k, n]) => [k, n]));
+    const ROTULO = { rubrica: 'Evento', valor: 'Valor', valor_bruto: 'Valor bruto', abatimento_sigiloso: 'Abatimento', tipo: 'Tipo', competencia: 'Competência', status: 'Situação',
+      vencimento_pagamento: 'Vencimento', vencimento: 'Vencimento', motivo_ajuste: 'Motivo', parcela_atual: 'Parcela', total_parcelas: 'Parcelas', fixo: 'Fixo', tratamento: 'Tratamento',
+      tratado_horas: 'Horas', data: 'Data', data_servico: 'Data do serviço', hora_inicio: 'Início', hora_fim: 'Fim', valor_pago: 'Valor pago', forma_pagamento: 'Forma de pagamento',
+      salario_base: 'Salário-base', salario_adicional: 'Salário adicional', cargo: 'Cargo', loja_id: 'Loja', data_contratacao: 'Admissão', data_rescisao: 'Rescisão',
+      pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', perfil: 'Perfil', ativo: 'Ativo', valor_final: 'Valor final', natureza: 'Natureza',
+      valor_calculado: 'Valor calculado', entrada: 'Entrada', saida: 'Saída', dias: 'Dias', data_inicio: 'Início', horas: 'Horas', desconto_tipo: 'Desconto', codigo_contabil: 'Código contábil', funcionario_id: 'Funcionário', funcionario_ausente_id: 'Quem faltou', justificativa_valor: 'Justificativa do valor', observacao: 'Observação', observacao_rh: 'Observação do RH' };
+    const JUST = ['motivo_ajuste', 'justificativa', 'justificativa_valor', 'motivo', 'observacao_rh', 'cancelado_motivo', 'desconto_justif', 'liberado_motivo', 'pagamento_obs', 'motivo_recusa', 'observacao'];
+    const OCULTOS = ['id', 'created_at', 'criado_em', 'updated_at', 'atualizado_em', 'historico', 'ajustes', 'criado_por', 'tratado_em', 'tratado_por', 'decidido_em', 'decidido_por', 'rh_em', 'rh_por', 'supervisor_em', 'supervisor_por'];
+    const DINHEIRO = /valor|salario|abatimento|adicional|desconto_valor|liquido/;
+
+    let regs = [], usuarios = {}, funcs = {}, empresas = [], compAberta = null, aba = '', usuSel = null, motivosExcl = {};
+
+    function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
+    async function tudo(q) { let out = [], de = 0; for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000 || out.length >= 30000) return out; de += 1000; } }
+    const nomeF = id => (funcs[id] || {}).nome_registro || '';
+    const empDe = f => { if (!f) return null; const c = so(f.cnpj); return (c && empresas.find(e => so(e.cnpj) === c)) || empresas.find(e => e.razao_social && String(f.empresa_registro || '').includes(e.razao_social)) || null; };
+    const compNum = c => { const m = String(c || '').match(/^(\d{2})\/(\d{4})$/); return m ? Number(m[2]) * 100 + Number(m[1]) : null; };
+    function legivel(campo, v) {
+      if (v === null || v === undefined || v === '') return '(vazio)';
+      if (campo === 'natureza') return v === 'CONTABIL' ? 'contábil' : v === 'NAO_CONTABIL' ? 'não contábil' : v;
+      if (campo === 'funcionario_id' || campo === 'funcionario_ausente_id') return nomeF(v) || v;
+      if (typeof v === 'boolean') return v ? 'sim' : 'não';
+      if (typeof v === 'number' && DINHEIRO.test(campo)) return brl(v);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.split('-').reverse().join('/');
+      if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+      if (typeof v === 'object') return JSON.stringify(v).slice(0, 140);
+      return String(v);
+    }
+
+    async function iniciar() {
+      const hoje = new Date();
+      const { data: rc } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano').order('mes').limit(1);
+      compAberta = (rc || [])[0] ? rc[0].ano * 100 + rc[0].mes : null;
+      $('fDe').value = compAberta ? `${String(compAberta).slice(0, 4)}-${String(compAberta).slice(4)}-01` : isoLocal(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+      $('fAte').value = isoLocal(hoje);
+      const [ru, rf, re] = await Promise.all([
+        _supabase.from('usuarios_sistema').select('email, perfil, funcionario_id, ativo'),
+        tudo(() => _supabase.from('funcionarios').select('id, nome_registro, cnpj, empresa_registro')),
+        _supabase.from('empresas').select('id, razao_social, nome_fantasia, cnpj')]);
+      (ru.data || []).forEach(u => usuarios[String(u.email || '').toLowerCase()] = u);
+      rf.forEach(f => funcs[f.id] = f); empresas = re.data || [];
+      $('lFuncs').innerHTML = Object.values(funcs).map(f => `<option value="${esc(f.nome_registro)}">`).join('');
+      $('fEmp').innerHTML = '<option value="">Todas</option>' + empresas.filter((e, i, a) => a.findIndex(x => x.razao_social === e.razao_social) === i)
+        .sort((a, b) => a.razao_social.localeCompare(b.razao_social)).map(e => `<option value="${esc(e.razao_social)}">${esc(e.razao_social)}</option>`).join('');
+      carregar();
+    }
+
+    async function carregar() {
+      aviso(''); $('lista').innerHTML = '<div class="card vazio">Carregando…</div>';
+      try {
+        const de = $('fDe').value, ate = $('fAte').value;
+        const dados = await tudo(() => _supabase.from('vw_auditoria').select('*').gte('changed_at', de + 'T00:00:00-03:00').lte('changed_at', ate + 'T23:59:59-03:00').order('changed_at', { ascending: false }));
+        motivosExcl = {};
+        dados.filter(r => r.operation === 'MOTIVO_EXCLUSAO').forEach(r => motivosExcl[r.table_name + '|' + r.record_id] = (r.new_data || {}).motivo);
+        regs = dados.filter(r => r.operation !== 'MOTIVO_EXCLUSAO').map(preparar).filter(Boolean);
+        if (dados.length >= 30000) aviso('Período muito grande: mostrando as 30.000 ações mais recentes. Diminua o período.');
+        montarUsuarios(); render();
+      } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); $('lista').innerHTML = ''; }
+    }
+
+    function verboDe(r, campos) {
+      const n = r.new_data || {}, o = r.old_data || {}, t = r.table_name;
+      if (r.operation === 'INSERT') return { folha_itens: 'lançou', freelance_solicitacoes: 'pediu', cadastro_solicitacoes: 'solicitou', ferias_solicitacoes: 'solicitou', escala_dias: 'marcou na escala', escala_faltas_desconto: 'gerou desconto de falta', banco_horas_movimentos: 'lançou no banco de horas', holerite_entregas: 'registrou entrega' }[t] || 'incluiu';
+      if (r.operation === 'DELETE') return t === 'escala_dias' ? 'desmarcou na escala' : 'excluiu';
+      if (campos.includes('status')) {
+        const s = String(n.status || '').toUpperCase();
+        if (/ESTORN/.test(s)) return 'estornou'; if (/CANCEL/.test(s)) return 'cancelou'; if (/REJEIT|RECUS/.test(s)) return 'recusou';
+        if (/PAGO/.test(s)) return 'pagou'; if (/APROV|CONFIRM|LANCAD|CALCULAD|CONCLU|ENTREG|FECHAD|ABERTO/.test(s)) return 'aprovou';
+        return 'mudou a situação';
+      }
+      if (campos.includes('tratamento')) return n.tratamento ? 'tratou a falta' : 'desfez o tratamento';
+      return 'alterou';
+    }
+
+    function preparar(r) {
+      const n = r.new_data || {}, o = r.old_data || {}, d = r.operation === 'DELETE' ? o : n;
+      const campos = (r.campos || []).filter(c => !OCULTOS.includes(c));
+      if (r.operation === 'UPDATE' && !campos.length) return null;   // só carimbo de data/hora
+      const quem = String(r.changed_by || '').toLowerCase(), u = usuarios[quem] || {};
+      const fid = r.funcionario_id || d.funcionario_id || d.funcionario_ausente_id || (r.table_name === 'funcionarios' ? r.record_id : null);
+      const f = funcs[fid], e = empDe(f);
+      const assunto = ASSUNTO_DA[r.table_name] || 'cad';
+      const quando = new Date(r.changed_at);
+      // justificativas
+      const just = [];
+      JUST.forEach(k => { const v = d[k]; if (v && String(v).trim() && (r.operation !== 'UPDATE' || campos.includes(k))) just.push(String(v).trim()); });
+      const mx = motivosExcl[r.table_name + '|' + r.record_id]; if (r.operation === 'DELETE' && mx) just.unshift('Motivo da exclusão: ' + mx);
+      // de → para
+      const mud = r.operation === 'UPDATE' ? campos.filter(c => !JUST.includes(c)).slice(0, 6).map(c => ({ c, de: legivel(c, o[c]), para: legivel(c, n[c]) })) : [];
+      // resumo do objeto
+      let obj = '';
+      if (d.rubrica) obj = `${d.rubrica} · ${brl(d.valor)}${d.competencia ? ' · ' + d.competencia : ''}`;
+      else if (r.table_name === 'escala_faltas_desconto') obj = `falta de ${legivel('data', d.data)} · calculado ${brl(d.valor_calculado)}${d.valor_final ? ' · final ' + brl(d.valor_final) : ''}${d.natureza ? ' · ' + (d.natureza === 'CONTABIL' ? 'contábil' : 'não contábil') : ''}`;
+      else if (r.table_name === 'escala_dias') obj = `${legivel('data', d.data)} · ${String(d.tipo || '').toLowerCase()}${d.tratamento ? ' · ' + d.tratamento.toLowerCase() : ''}`;
+      else if (r.table_name === 'freelance_solicitacoes') obj = `${d.tipo_solicitacao === 'HORA_EXTRA' ? 'hora extra' : 'freelance'} · serviço ${legivel('data', d.data_servico)}${d.valor_pago ? ' · ' + brl(d.valor_pago) : ''}${d.funcionario_ausente_id ? ' · cobrindo ' + nomeF(d.funcionario_ausente_id) : ''}`;
+      else if (d.valor !== undefined && d.valor !== null) obj = brl(d.valor) + (d.competencia ? ' · ' + d.competencia : '') + (d.tipo ? ' · ' + String(d.tipo).toLowerCase() : '');
+      else if (d.status) obj = 'situação ' + String(d.status).toLowerCase();
+      else if (d.nome_registro || d.nome || d.email) obj = d.nome_registro || d.nome || d.email;
+      // pontos de atenção
+      const fl = [];
+      if (r.operation === 'DELETE' && !['escala_dias', 'perfil_telas'].includes(r.table_name)) fl.push(['exclusão' + (mx ? '' : ' sem motivo'), '']);
+      if (r.operation === 'UPDATE' && campos.some(c => /^(valor|valor_bruto|valor_final|valor_pago|abatimento_sigiloso|salario_base|salario_adicional)$/.test(c) && o[c] !== null && o[c] !== undefined && Number(o[c]) !== 0)) fl.push(['valor alterado', '']);   // de vazio para um valor é preenchimento, não alteração
+      if (r.table_name === 'escala_faltas_desconto' && n.justificativa_valor && campos.includes('justificativa_valor')) fl.push(['valor diferente do calculado', '']);
+      if (r.operation === 'UPDATE' && /^(APROVAD|PAGO|CONFIRM|LANCAD)/i.test(String(o.status || '')) && !campos.includes('status')) fl.push(['mexeu em item já aprovado/pago', '']);
+      if (r.table_name === 'folha_itens' && compAberta && compNum(d.competencia) && compNum(d.competencia) < compAberta) fl.push(['mês anterior ao aberto', '']);
+      if (u.funcionario_id && fid && u.funcionario_id === fid && r.table_name !== 'usuarios_sistema') fl.push(['na própria ficha', '']);
+      if (String(d.motivo_ajuste || '').startsWith('DUPLICIDADE JUSTIFICADA') && (r.operation !== 'UPDATE' || campos.includes('motivo_ajuste'))) fl.push(['duplicidade justificada', 'am']);
+      const h = quando.getHours(); if (h < 7 || h >= 20 || quando.getDay() === 0) fl.push(['fora do horário', 'am']);
+      return { r, quem, perfil: u.perfil || (quem.includes('@') ? '?' : 'sistema'), quando, dia: isoLocal(quando), assunto, verbo: verboDe(r, campos), obj, mud, just, fl, fid, emp: e ? e.razao_social : (f ? f.empresa_registro : ''), campos };
+    }
+
+    function montarUsuarios() {
+      const sel = $('fUsu'), atual = sel.value || 'RH';
+      const emails = [...new Set(regs.map(x => x.quem))].sort();
+      sel.innerHTML = '<option value="RH">Equipe do RH</option><option value="*">Todos os usuários</option>' + emails.map(m => `<option value="${esc(m)}">${esc(m)} (${esc((usuarios[m] || {}).perfil || 'sistema')})</option>`).join('');
+      sel.value = [...sel.options].some(o => o.value === atual) ? atual : 'RH';
+    }
+
+    function filtrar(ignorarAba) {
+      const usu = $('fUsu').value, emp = $('fEmp').value, nf = $('fFunc').value.trim().toUpperCase(), t = $('fTxt').value.trim().toLowerCase();
+      return regs.filter(x => {
+        if (usu === 'RH' ? x.perfil !== 'RH' : usu !== '*' && x.quem !== usu) return false;
+        if (usuSel && x.quem !== usuSel) return false;
+        if (!ignorarAba && aba && x.assunto !== aba) return false;
+        if (emp && x.emp !== emp && !String(x.emp || '').includes(emp)) return false;
+        if (nf && !nomeF(x.fid).toUpperCase().includes(nf)) return false;
+        if ($('fAten').checked && !x.fl.some(f => f[1] === '')) return false;
+        if ($('fJust').checked && !x.just.length) return false;
+        if (t && !(x.obj + ' ' + x.just.join(' ') + ' ' + nomeF(x.fid) + ' ' + x.verbo + ' ' + x.mud.map(m => m.de + ' ' + m.para).join(' ')).toLowerCase().includes(t)) return false;
+        return true;
+      });
+    }
+
+    function render() {
+      const base = filtrar(true), ls = filtrar(false);
+      // abas por assunto
+      const cont = {}; base.forEach(x => cont[x.assunto] = (cont[x.assunto] || 0) + 1);
+      $('abas').innerHTML = `<button type="button" class="${aba ? '' : 'on'}" onclick="aba='';render()">Tudo<span class="c">${base.length}</span></button>`
+        + ASSUNTOS.filter(([k]) => cont[k]).map(([k, nome]) => `<button type="button" class="${aba === k ? 'on' : ''}" onclick="aba='${k}';render()">${esc(nome)}<span class="c">${cont[k]}</span></button>`).join('');
+      // indicadores
+      const nAten = ls.filter(x => x.fl.some(f => f[1] === '')).length;
+      const k = [['Ações', ls.length, ''], ['Valores alterados', ls.filter(x => x.fl.some(f => f[0] === 'valor alterado')).length, 'amar'],
+        ['Exclusões', ls.filter(x => x.r.operation === 'DELETE').length, 'amar'], ['Com justificativa', ls.filter(x => x.just.length).length, ''],
+        ['Fora do horário', ls.filter(x => x.fl.some(f => f[0] === 'fora do horário')).length, 'amar'], ['Pontos de atenção', nAten, nAten ? 'verm' : '']];
+      $('kpis').innerHTML = k.map(([t, v, c], i) => `<div class="card" onclick="${i === 5 ? "$('fAten').checked=!$('fAten').checked;render()" : i === 3 ? "$('fJust').checked=!$('fJust').checked;render()" : ''}"><div class="desc">${t}</div><div class="v ${v ? c : ''}">${v}</div></div>`).join('');
+      // por usuário
+      const pu = {}; filtrar(true).filter(x => !aba || x.assunto === aba).forEach(x => {
+        const o = pu[x.quem] || (pu[x.quem] = { n: 0, lan: 0, alt: 0, exc: 0, apr: 0, rec: 0, aten: 0, ult: x.quando });
+        o.n++; if (x.r.operation === 'INSERT') o.lan++; if (x.verbo === 'alterou') o.alt++; if (x.r.operation === 'DELETE') o.exc++;
+        if (/aprovou/.test(x.verbo)) o.apr++; if (/recusou|cancelou|estornou/.test(x.verbo)) o.rec++; if (x.fl.some(f => f[1] === '')) o.aten++; if (x.quando > o.ult) o.ult = x.quando; });
+      $('usuarios').innerHTML = `<thead><tr><th>Quem fez${usuSel ? ' · <a href="#" onclick="usuSel=null;render();return false">ver todos</a>' : ''}</th><th>Ações</th><th>Incluiu</th><th>Alterou</th><th>Excluiu</th><th>Aprovou</th><th>Recusou / cancelou</th><th>Atenção</th><th>Última ação</th></tr></thead><tbody>`
+        + Object.entries(pu).sort((a, b) => b[1].n - a[1].n).map(([m, o]) => `<tr class="${usuSel === m ? 'sel' : ''}" onclick="usuSel=usuSel==='${esc(m)}'?null:'${esc(m)}';render()"><td>${esc(m)} <span class="desc">${esc((usuarios[m] || {}).perfil || 'sistema')}</span></td><td>${o.n}</td><td>${o.lan}</td><td>${o.alt}</td><td>${o.exc}</td><td>${o.apr}</td><td>${o.rec}</td><td style="color:${o.aten ? 'var(--verm)' : 'inherit'}">${o.aten}</td><td>${o.ult.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</td></tr>`).join('')
+        + (Object.keys(pu).length ? '' : '<tr><td colspan="9" class="desc">Nenhuma ação no filtro.</td></tr>') + '</tbody>';
+      // linha do tempo por dia
+      const dias = {}; ls.forEach(x => (dias[x.dia] = dias[x.dia] || []).push(x));
+      const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+      const corte = 1500; let mostrados = 0;
+      $('lista').innerHTML = Object.keys(dias).sort().reverse().map(dia => {
+        if (mostrados >= corte) return '';
+        const itens = dias[dia].slice(0, corte - mostrados); mostrados += itens.length;
+        const dt = new Date(dia + 'T12:00:00');
+        return `<div class="dia">${SEM[dt.getDay()]} ${dia.split('-').reverse().join('/')} <span>${dias[dia].length} ação(ões)</span></div><section class="card">`
+          + itens.map(x => linha(x)).join('') + '</section>';
+      }).join('') + (ls.length > corte ? `<p class="nota">Mostrando ${corte} de ${ls.length} ações. Use os filtros ou baixe o CSV para ver tudo.</p>` : '')
+        || '<div class="card vazio">Nenhuma ação neste filtro.</div>';
+    }
+
+    function linha(x) {
+      const idx = regs.indexOf(x);
+      const fun = x.fid && nomeF(x.fid) ? ` · <b>${esc(nomeF(x.fid))}</b>` : '';
+      return `<div class="lin ${x.fl.some(f => f[1] === '') ? 'aten' : ''}" onclick="detalhe(${idx})">
+        <div class="h">${x.quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+        <div class="quem">${esc(x.quem.split('@')[0])}<small>${esc(x.perfil)}</small></div>
+        <div class="o"><span class="tag">${esc(NOME_ASSUNTO[x.assunto])}</span><b class="verbo">${esc(x.verbo)}</b>${fun}${x.obj ? ' · ' + esc(x.obj) : ''}
+          ${x.mud.length ? `<div class="mud">${x.mud.map(m => `${esc(ROTULO[m.c] || m.c)}: <span class="de">${esc(m.de)}</span> → <span class="para">${esc(m.para)}</span>`).join(' · ')}</div>` : ''}
+          ${x.just.map(j => `<div class="just">“${esc(j)}”</div>`).join('')}
+          ${x.fl.length ? '<div>' + x.fl.map(f => `<span class="fl ${f[1]}">${esc(f[0])}</span>`).join('') + '</div>' : ''}</div></div>`;
+    }
+
+    function detalhe(i) {
+      const x = regs[i]; if (!x) return; const r = x.r, o = r.old_data || {}, n = r.new_data || {};
+      const campos = [...new Set([...Object.keys(o), ...Object.keys(n)])].filter(c => c !== 'historico').sort();
+      $('mCorpo').innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:15px">${esc(x.verbo)} · ${esc(NOME_ASSUNTO[x.assunto])}</h2>
+        <div class="desc">${x.quando.toLocaleString('pt-BR')} · ${esc(r.changed_by)} (${esc(x.perfil)})${x.fid ? ' · ' + esc(nomeF(x.fid)) : ''}${x.emp ? ' · ' + esc(x.emp) : ''}</div></div>
+        <button class="btn" onclick="$('modal').style.display='none'">Fechar</button></div>
+        ${x.just.map(j => `<div class="alerta neutro" style="margin-top:8px">“${esc(j)}”</div>`).join('')}
+        <table style="margin-top:10px"><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead><tbody>
+        ${campos.map(c => `<tr class="${r.operation === 'UPDATE' && JSON.stringify(o[c]) !== JSON.stringify(n[c]) ? 'mudou' : ''}"><td>${esc(ROTULO[c] || c)}</td><td>${r.operation === 'INSERT' ? '' : esc(legivel(c, o[c]))}</td><td>${r.operation === 'DELETE' ? '' : esc(legivel(c, n[c]))}</td></tr>`).join('')}
+        </tbody></table>
+        ${Array.isArray(n.historico || o.historico) ? `<h2 style="font-size:13px;margin:12px 0 4px">Histórico do registro</h2>${(n.historico || o.historico).map(h => `<div class="desc">${h.em ? new Date(h.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''} · <b>${esc(h.acao || '')}</b> · ${esc(h.por || '')}${h.detalhe ? ' · ' + esc(h.detalhe) : ''}</div>`).join('')}` : ''}`;
+      $('modal').style.display = 'block';
+    }
+
+    function exportarCsv() {
+      const ls = filtrar(false);
+      const linhas = ls.map(x => [x.quando.toLocaleString('pt-BR'), x.quem, x.perfil, NOME_ASSUNTO[x.assunto], x.verbo, nomeF(x.fid), x.emp || '', x.obj,
+        x.mud.map(m => `${ROTULO[m.c] || m.c}: ${m.de} -> ${m.para}`).join(' | '), x.just.join(' | '), x.fl.map(f => f[0]).join(', ')]);
+      const csv = [['Quando', 'Quem', 'Perfil', 'Assunto', 'Ação', 'Funcionário', 'Empresa', 'Registro', 'De -> para', 'Justificativa', 'Pontos de atenção'], ...linhas]
+        .map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `conduta_rh_${$('fDe').value}_${$('fAte').value}.csv`; a.click();
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

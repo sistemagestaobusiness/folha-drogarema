@@ -7,12 +7,14 @@ Sistema de RH, folha e financeiro da Drogarema. Telas HTML com JavaScript puro (
 - **Nunca** alterar banco ou dados (SQL, lançamentos) sem autorização formal para aquela ação. Consulta só de leitura pode.
 - Commit só local, para a cópia bater com o que foi entregue.
 
-## Como uma entrega funciona (desde 21/10/2026, conectores do GitHub e do Supabase desligados)
-1. O Claude altera as telas aqui e testa (abaixo).
+## Como uma entrega funciona (desde 26/10/2026 com os conectores do GitHub e do Supabase ligados)
+1. O Claude altera as telas aqui e testa (abaixo). Consulta só de leitura no banco pode ser feita direto pelo conector.
 2. Monta `pacote_<RODADA>_github.zip` só com os arquivos mudados e, se houver banco, um `<RODADA>_<assunto>.sql`. Rodadas em ordem: CS, CT, CU… DA, DB… (use `/entrega`).
-3. O Alexandre roda o SQL no SQL Editor e sobe os arquivos no GitHub.
-4. Lembrar: a publicação do GitHub Pages leva de 1 a 15 min (aba Actions, ✓ verde) e a aba da tela no sistema guarda a versão antiga, então é preciso fechar e abrir de novo pelo menu.
-5. Dados do banco: o Claude escreve a consulta, o Alexandre cola o resultado (CSV).
+3. Mostra o que muda e espera a autorização formal do Alexandre para cada parte ("autorizo o SQL X", "autorizo subir o pacote X").
+4. Com a autorização: aplica o SQL pelo conector do Supabase e confere; sobe as telas num commit só em `main` (git push pela URL do repositório) e confere se o GitHub ficou igual à cópia. Sem conector, volta ao modo manual: o Alexandre roda o SQL no SQL Editor e sobe os arquivos.
+5. Teste de rotina com dados reais sem gravar: bloco `do $$ ... raise exception 'SIMULACAO_DESFEITA' $$` (tudo é desfeito no fim), simulando o usuário com `set_config('request.jwt.claims', ...)` e `set local role authenticated`.
+6. Lembrar: a publicação do GitHub Pages leva de 1 a 15 min (aba Actions, ✓ verde) e a aba da tela no sistema guarda a versão antiga, então é preciso fechar e abrir de novo pelo menu.
+
 
 ## Banco (Supabase)
 - O SQL Editor roda o script inteiro como uma coisa só: qualquer erro desfaz tudo. Conferência no fim do script com `select`.
@@ -27,9 +29,10 @@ Sistema de RH, folha e financeiro da Drogarema. Telas HTML com JavaScript puro (
 
 ## Telas
 - Todas carregam `acesso.js` (controle por perfil e menu), menos `login.html`. O que a tela bloqueia é conforto; a proteção real é o banco.
-- Script compartilhado vai com versão no nome (`fluxo_core.js?v=6`, `menu.js?v=26` dentro de `acesso.js`): subir a versão ao alterar.
+- Script compartilhado vai com versão no nome (`fluxo_core.js?v=6`, `menu.js?v=28` dentro de `acesso.js`, `pendencias_core.js?v=3`): subir a versão ao alterar.
 - Lançamentos usa sempre o período ABERTO (tabela `competencias`), não o mês do Painel.
-- Telas antigas sem uso: `folha.html`, `pagamentos_extras.html`, `financeiro_freelance.html`.
+- Telas antigas `folha.html`, `pagamentos_extras.html`, `financeiro_freelance.html` foram apagadas em 26/10/2026.
+- Inatividade: controle único no `acesso.js` (30 min sem uso em qualquer aba, aviso 2 min antes). Não criar timer de inatividade nas telas.
 - Textos em português, datas dd/mm/aaaa, valores 1.234,56.
 
 ## Testar antes de entregar

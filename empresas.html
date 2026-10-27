@@ -301,29 +301,7 @@
   </script>
 <!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
   <script>
-    let tempoInatividade;
-    const TEMPO_LIMITE = 15 * 60 * 1000; // 15 minutos em milissegundos
-
-    function resetarTemporizador() {
-      clearTimeout(tempoInatividade);
-      tempoInatividade = setTimeout(fazerLogoutPorInatividade, TEMPO_LIMITE);
-    }
-
-    function fazerLogoutPorInatividade() {
-      // Remove a credencial salva
-      localStorage.removeItem('usuario_drogarema');
-      
-      // Alerta o usuário e redireciona para o login
-      alert('Sessão expirada por inatividade. Faça login novamente.');
-      window.location.href = 'login.html';
-    }
-
-    // Monitora eventos de movimento do mouse, cliques e digitação
-    window.onload = resetarTemporizador;
-    window.onmousemove = resetarTemporizador;
-    window.onkeypress = resetarTemporizador;
-    window.onclick = resetarTemporizador;
-    window.onscroll = resetarTemporizador;
+    // inatividade: controle único no acesso.js (regra de 26/10/2026: conta o uso em todas as abas)
   </script>
 </body>
 </html>
