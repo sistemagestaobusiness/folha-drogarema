@@ -1538,7 +1538,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       try {
         const [rf, rb] = await Promise.all([
           _supabase.from('freelance_solicitacoes')
-            .select('id, data_servico, horas_trabalhadas, forma_pagamento, valor_pago, pagamento_status, pago_em, pago_por, loja_solicitante, tipo_solicitacao, solicitante_email, created_at, supervisor_por, supervisor_em, supervisor_forcado, rh_por, rh_em')
+            .select('id, data_servico, horas_trabalhadas, forma_pagamento, valor_pago, pagamento_status, pago_em, pago_por, loja_solicitante, tipo_solicitacao, solicitante_email, created_at, supervisor_por, supervisor_em, supervisor_forcado, rh_por, rh_em, motivo, cargo_exercido, observacao_lider, supervisor_obs, observacao_rh, ciencia_supervisor_em, ciencia_supervisor_por, ciencia_supervisor_justif')
             .eq('funcionario_id', funcionarioId).eq('status', 'APROVADA').eq('competencia_folha', competencia)
             .in('forma_pagamento', ['SEMANAL', 'QUINZENAL']).order('data_servico'),
           _supabase.from('vw_banco_horas_saldo').select('saldo_horas').eq('funcionario_id', funcionarioId)
@@ -1556,6 +1556,15 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
               .in('solicitacao_id', pagos.map(i => i.id)).eq('status', 'PAGO');
             (pe || []).forEach(p => { bancos[p.solicitacao_id] = p.banco_pagador; });
           }
+          // justificativas de cada etapa, para ver tudo num lugar só (regra de 28/10/2026)
+          const MOT = { ALTA_DEMANDA: 'alta demanda', ESCALA: 'escala', AUSENCIA: 'cobrir ausência', COMPENSAR: 'compensação', FERIADO: 'feriado', COMPLEMENTO_JORNADA: 'complemento de jornada' };
+          const justifs = i => { const l = [];
+            if (i.motivo || i.cargo_exercido) l.push(`<b>Motivo:</b> ${escaparHtml(MOT[i.motivo] || String(i.motivo || '').toLowerCase())}${i.cargo_exercido ? ' · ' + escaparHtml(i.cargo_exercido) : ''}`);
+            if (i.observacao_lider) l.push(`<b>Pedido:</b> "${escaparHtml(i.observacao_lider)}"`);
+            if (i.supervisor_obs) l.push(`<b>${i.supervisor_forcado ? 'No lugar do supervisor' : 'Supervisor'}:</b> "${escaparHtml(i.supervisor_obs)}"`);
+            if (i.observacao_rh) l.push(`<b>RH:</b> "${escaparHtml(i.observacao_rh)}"`);
+            if (i.supervisor_forcado && i.ciencia_supervisor_justif) l.push(`<b>Ciência do supervisor:</b> "${escaparHtml(i.ciencia_supervisor_justif)}"`);
+            return l.length ? `<div class="text-[10px] leading-snug ${i.supervisor_forcado ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50 border border-slate-200'} rounded px-2 py-1 text-slate-700">${l.join(' &nbsp;·&nbsp; ')}</div>` : ''; };
           const passo = (rot, pessoa, data, extra) => `<span class="whitespace-nowrap"><b class="text-slate-500">${rot}</b> ${pessoa} ${dbr(data)}${extra || ''}</span>`;
           const total = pagos.reduce((a, i) => a + parseFloat(i.valor_pago || 0), 0);
           lista.innerHTML = pagos.map(i => `
@@ -1570,6 +1579,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
                 ${passo('③ RH', quem(i.rh_por), i.rh_em)} <span class="text-slate-300">→</span>
                 ${passo('④ Financeiro', quem(i.pago_por), i.pago_em, bancos[i.id] ? ' · ' + escaparHtml(bancos[i.id]) : '')}
               </div>
+              ${justifs(i)}
             </div>`).join('')
             + (pagos.length ? `<div class="flex justify-between px-3 py-1.5 bg-slate-50 font-bold"><span>${pagos.length} pagamento(s) confirmado(s) pelo Financeiro</span><span class="font-mono">${fmt(total)}</span></div>` : '')
             + (aguardando.length ? `<div class="px-3 py-1.5 text-[10px] text-amber-800 bg-amber-50">⏳ ${aguardando.length} aprovado(s) aguardando o Financeiro (${fmt(aguardando.reduce((a, i) => a + parseFloat(i.valor_pago || 0), 0))}) · aparece(m) aqui após a confirmação do pagamento.</div>` : '');
