@@ -85,6 +85,61 @@ window.Rascunho = window.Rascunho || {
     el.innerHTML = `<span style="flex:1">💾 <b>${n} preenchimento(s) guardado(s) neste computador</b> (ainda não confirmados). Pode fechar e voltar depois: nada se perde até confirmar.${dh ? ' Guardado em ' + dh + '.' : ''}</span><button type="button" style="background:#fff;border:1px solid #FEC84B;border-radius:6px;padding:3px 8px;font-weight:700;cursor:pointer" onclick="${acaoDescartar}">descartar o que foi digitado</button>`;
   }
 };
+// Dia útil para pagamento (regra de 28/10/2026): sábado, domingo e feriado NACIONAL ou ESTADUAL (tabela feriados, sem loja)
+// não têm pagamento; antecipa para o dia útil anterior. Feriado municipal (com loja) não entra: o Financeiro trabalha normal.
+window.DiaUtil = window.DiaUtil || {
+  _fer: null, _carregando: null,
+  carregar(cli) {
+    if (this._fer) return Promise.resolve();
+    if (this._carregando) return this._carregando;
+    const c = cli || window.ACESSO_CLI || window._supabase;
+    if (!c || !c.from) { this._fer = new Map(); return Promise.resolve(); }
+    this._carregando = (async () => {
+      try { const { data } = await c.from('feriados').select('data, nome').is('loja_id', null); this._fer = new Map((data || []).map(f => [String(f.data).slice(0, 10), f.nome])); }
+      catch (e) { this._fer = new Map(); }
+    })();
+    return this._carregando;
+  },
+  _d(iso) { const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number); return new Date(a, m - 1, d); },
+  _iso(dt) { return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; },
+  _br(iso) { return String(iso).slice(0, 10).split('-').reverse().join('/'); },
+  // null = dia útil; senão o motivo ("sábado", "domingo", "feriado: NATAL")
+  motivo(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(String(iso))) return null;
+    const dow = this._d(iso).getDay();
+    if (dow === 6) return 'sábado'; if (dow === 0) return 'domingo';
+    const f = this._fer && this._fer.get(String(iso).slice(0, 10));
+    return f ? 'feriado: ' + f : null;
+  },
+  anterior(iso) {
+    if (!iso) return iso;
+    const dt = this._d(iso);
+    for (let i = 0; i < 15 && this.motivo(this._iso(dt)); i++) dt.setDate(dt.getDate() - 1);
+    return this._iso(dt);
+  },
+  // confere a data escolhida pelo RH: se não for dia útil, pergunta se usa o dia útil anterior. Devolve a data final ou null (cancelou).
+  async conferir(iso, cli) {
+    if (!iso) return iso;
+    await this.carregar(cli);
+    const mot = this.motivo(iso); if (!mot) return iso;
+    const ant = this.anterior(iso);
+    const SEM = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+    const diaAnt = SEM[this._d(ant).getDay()];
+    return new Promise(resolve => {
+      const f = document.createElement('div');
+      f.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(16,24,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:70px 16px;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif';
+      f.innerHTML = `<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.35);overflow:hidden">
+        <div style="background:#B54708;color:#fff;padding:12px 18px;font-weight:800;font-size:15px">📅 ${this._br(iso)} é ${mot}</div>
+        <div style="padding:14px 18px;font-size:13.5px;color:#1e293b;line-height:1.5">Nesse dia não há pagamento. O dia útil anterior é <b>${diaAnt}, ${this._br(ant)}</b>.<br><span style="font-size:12px;color:#475569">Pagar antes não tem problema; pagar depois é atraso.</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 16px">
+          <button type="button" data-a="ant" style="flex:1;border:0;background:#059669;color:#fff;border-radius:8px;padding:10px 12px;font:inherit;font-size:13px;font-weight:800;cursor:pointer">✓ Usar ${diaAnt} ${this._br(ant)}</button>
+          <button type="button" data-a="manter" style="border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:8px;padding:10px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer">Manter ${this._br(iso)}</button>
+          <button type="button" data-a="cancelar" style="border:0;background:none;color:#64748b;padding:10px 6px;font:inherit;font-size:12.5px;cursor:pointer">Cancelar</button></div></div>`;
+      f.addEventListener('click', e => { const b = e.target.closest('button[data-a]'); if (!b) return; f.remove(); resolve(b.dataset.a === 'ant' ? ant : b.dataset.a === 'manter' ? iso : null); });
+      document.body.appendChild(f);
+    });
+  }
+};
 if (!window.__alertTraduzido) {
   window.__alertTraduzido = true;
   const alertaOriginal = window.alert.bind(window);

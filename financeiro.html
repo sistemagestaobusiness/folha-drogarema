@@ -302,8 +302,12 @@
       const de = document.getElementById('fDe').value, ate = document.getElementById('fAte').value;
       const campoData = aba === 'PAGO' ? 'pago_em' : 'vencimento';
       let q = _supabase.from('pagamentos_extras').select('*').eq('status', aba);
+      await DiaUtil.carregar(_supabase);
+      // "até" inclui os dias seguintes sem expediente (ex.: até sexta traz o que vence no sábado e no domingo)
+      let ateEf = ate;
+      if (ate && aba !== 'PAGO') { const d = new Date(ate + 'T12:00:00'); for (let k = 0; k < 10; k++) { d.setDate(d.getDate() + 1); const iso = d.toISOString().slice(0, 10); if (!DiaUtil.motivo(iso)) break; ateEf = iso; } }
       if (de) q = q.gte(campoData, de);
-      if (ate) q = q.lte(campoData, ate);
+      if (ateEf) q = q.lte(campoData, ateEf);
       q = aba === 'PENDENTE' ? q.order('vencimento') : q.order(campoData, { ascending: false }).limit(500);
       const [rLista, rPend, rProb] = await Promise.all([
         q,
@@ -312,12 +316,14 @@
       ]);
       if (rLista.error) { document.getElementById('lista').innerHTML = `<div class="p-4 text-rose-600">${esc(rLista.error.message)}</div>`; return; }
       itens = rLista.data || [];
-      await carregarMesAnterior(itens);
+      await Promise.all([carregarMesAnterior(itens), DiaUtil.carregar(_supabase)]);
 
       // aviso importante: vencidos e de hoje (sempre sobre tudo que está a pagar)
       const pend = rPend.data || [], h = hoje();
       const soma = l => l.reduce((a, i) => a + parseFloat(i.valor), 0);
-      const venc = pend.filter(i => i.vencimento < h), deHoje = pend.filter(i => i.vencimento === h);
+      // data em sábado, domingo ou feriado conta como o dia útil anterior (regra de 28/10/2026)
+      const ef = v => DiaUtil.anterior(v);
+      const venc = pend.filter(i => ef(i.vencimento) < h), deHoje = pend.filter(i => ef(i.vencimento) === h);
       document.getElementById('qPend').innerText = pend.length;
       const av = document.getElementById('avisoVenc');
       if (venc.length || deHoje.length) {
@@ -411,7 +417,7 @@
       const linhas = grupos.map(g => {
         const banco = g.itens.filter(i => i.meio !== 'DINHEIRO').reduce((a, i) => a + parseFloat(i.valor), 0);
         const din = g.itens.filter(i => i.meio === 'DINHEIRO').reduce((a, i) => a + parseFloat(i.valor), 0);
-        const ateHoje = g.itens.filter(i => i.vencimento <= h).reduce((a, i) => a + parseFloat(i.valor), 0);
+        const ateHoje = g.itens.filter(i => DiaUtil.anterior(i.vencimento) <= h).reduce((a, i) => a + parseFloat(i.valor), 0);
         const prox = g.itens.map(i => i.vencimento).sort()[0];
         tB += banco; tD += din; tH += ateHoje;
         return `<tr class="border-t border-slate-100">
@@ -434,7 +440,9 @@
     }
 
     function linhaAPagar(i, h, comSelecao) {
-      const sit = i.vencimento < h ? '<span class="chip bg-rose-600 text-white">vencido</span>' : i.vencimento === h ? '<span class="chip bg-amber-200 text-amber-900">hoje</span>' : '';
+      const efv = DiaUtil.anterior(i.vencimento), mot = DiaUtil.motivo(i.vencimento);
+      const sit = (efv < h ? '<span class="chip bg-rose-600 text-white">vencido</span>' : efv === h ? '<span class="chip bg-amber-200 text-amber-900">hoje</span>' : '')
+        + (mot && efv >= h ? ` <span class="chip bg-orange-100 text-orange-800" title="Nesse dia não há pagamento">⚠ ${esc(mot)} · pagar ${dbr(efv)}</span>` : '');
       const acoes = [
         podePagar() ? `<span class="lnk" onclick="abrirProblema('${i.id}')">não consegui pagar</span>` : '',
         podeResolver() ? `<span class="lnk" onclick="abrirResolver('${i.id}')">${i.origem !== 'SOLICITACAO' ? 'mudar data' : 'corrigir / cancelar'}</span>` : ''
@@ -813,6 +821,10 @@ Confirmar mesmo assim?`)) return;
       document.getElementById('modalResolver').classList.remove('hidden');
     }
     async function resolver(acao) {
+      if (acao === 'REENVIAR' && document.getElementById('rsVenc').value) {
+        const d = await DiaUtil.conferir(document.getElementById('rsVenc').value, _supabase); if (d === null) return;
+        document.getElementById('rsVenc').value = d;
+      }
       const { error } = await _supabase.rpc('fn_pagamento_resolver', {
         p_id: atual.id, p_acao: acao, p_obs: document.getElementById('rsObs').value.trim() || null,
         p_valor: atual.origem !== 'SOLICITACAO' ? null : (parseFloat(document.getElementById('rsValor').value) || null),

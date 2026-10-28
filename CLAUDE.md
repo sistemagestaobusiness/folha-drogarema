@@ -33,6 +33,7 @@ Sistema de RH, folha e financeiro da Drogarema. Telas HTML com JavaScript puro (
 - Lançamentos usa sempre o período ABERTO (tabela `competencias`), não o mês do Painel.
 - Telas antigas `folha.html`, `pagamentos_extras.html`, `financeiro_freelance.html` foram apagadas em 26/10/2026.
 - Inatividade: controle único no `acesso.js` (30 min sem uso em qualquer aba, aviso 2 min antes). Não criar timer de inatividade nas telas.
+- Data de pagamento: sábado, domingo e feriado nacional/estadual (tabela `feriados` sem loja) antecipam para o dia útil anterior. Usar `DiaUtil` do `acesso.js` (`anterior`, `motivo`, `conferir`). Feriado municipal não entra.
 - Textos em português, datas dd/mm/aaaa, valores 1.234,56.
 
 ## Testar antes de entregar

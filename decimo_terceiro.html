@@ -318,9 +318,11 @@
       $('aAviso').innerHTML = acima ? `Valor acima do saldo do 13º em ${fmtR(v - Math.max(saldo, 0))}. ${perfil === 'GESTOR' ? 'Você é Gestor: lança direto (justifique).' : 'Vai para o Gestor aprovar antes do Financeiro — informe a justificativa.'}` : '';
     }
     async function salvarAnt() {
-      const v = num($('aValor').value), venc = $('aVenc').value, mot = $('aMotivo').value.trim();
+      const v = num($('aValor').value), mot = $('aMotivo').value.trim();
       if (!(v > 0)) return alert('Informe o valor.');
-      if (!venc) return alert('Informe a data do pagamento.');
+      if (!$('aVenc').value) return alert('Informe a data do pagamento.');
+      const venc = await DiaUtil.conferir($('aVenc').value, _supabase); if (venc === null) return;
+      $('aVenc').value = venc;
       if (v > num(atual.saldo_a_pagar) + 0.005 && mot.length < 10) return alert('Valor acima do saldo: informe a justificativa (mínimo 10 letras).');
       if (!confirm(`Lançar antecipação de 13º de ${fmtR(v)} para ${atual.nome}, pagamento em ${dbr(venc)}?`)) return;
       $('aBtn').disabled = true;

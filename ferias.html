@@ -509,7 +509,8 @@
       if (acao === 'CALCULADA') {
         const f = func(atual.funcionario_id);
         $('cInfo').innerText = `${f.nome_registro} · ${dbr(atual.data_inicio)} a ${dbr(atual.data_fim)} (${atual.dias} dias)`;
-        $('cValor').value = atual.valor_liquido || ''; $('cData').value = atual.data_pagamento || addDias(atual.data_inicio, -2); $('cArquivo').value = '';
+        $('cValor').value = atual.valor_liquido || ''; $('cData').value = atual.data_pagamento || addDias(atual.data_inicio, -2);
+        DiaUtil.carregar(_supabase).then(() => { if (!atual.data_pagamento) $('cData').value = DiaUtil.anterior(addDias(atual.data_inicio, -2)); }); $('cArquivo').value = '';
         $('mCalc').classList.remove('hidden'); return;
       }
       let obs = null;
@@ -521,6 +522,7 @@
       await carregar(); renderizar();
     }
     async function salvarCalculo() {
+      if ($('cData').value) { const d = await DiaUtil.conferir($('cData').value, _supabase); if (d === null) return; $('cData').value = d; }
       const btn = $('cBtn'); btn.disabled = true;
       let caminho = null;
       const arq = $('cArquivo').files[0];

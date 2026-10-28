@@ -973,6 +973,12 @@
         });
         if (irmao) campo.value = mapaPagExtras[irmao.id].vencimento;
       }
+      // 13º sem data: sugere o prazo da lei (1ª parcela até 30/11, 2ª até 20/12), já no dia útil anterior
+      if (extra === 'DECIMO_TERCEIRO' && !campo.value && ev && ev.tipo_evento === 'PROVENTO') {
+        const [mm, aa] = String(competenciaRegraLancamento || '').split('/');
+        const lim = mm === '11' ? `${aa}-11-30` : mm === '12' ? `${aa}-12-20` : null;
+        if (lim) DiaUtil.carregar(_supabase).then(() => { if (!campo.value) campo.value = DiaUtil.anterior(lim); });
+      }
       if (extra === 'DECIMO_TERCEIRO') mostrarInfo13();
       else if (extra === 'RESCISAO' && saldo13.valor > 0.009) {
         const box = document.getElementById('info13');
@@ -2027,7 +2033,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           motivo: `NOTURNO ${String(calcNoturno.horas).replace('.', ',')}H (CALCULO R$ ${calcNoturno.adicional.toFixed(2)})` + (editado ? ` · VALOR EDITADO: ${just}` : '') };
       }
 
-      const vencimentoPag = document.getElementById('inputVencimentoPag').value || null;
+      let vencimentoPag = document.getElementById('inputVencimentoPag').value || null;
       // 13º: mesma parcela já lançada no ano? (evita pagar duas vezes)
       if (!idEdicao && eventoSel && eventoSel.pagamento_extra_tipo === 'DECIMO_TERCEIRO' && eventoSel.tipo_evento === 'PROVENTO') {
         const ano = competenciaRegraLancamento.split('/')[1];
@@ -2042,6 +2048,11 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         document.getElementById('boxVencimentoPag').classList.remove('hidden');
         document.getElementById('inputVencimentoPag').focus();
         return;
+      }
+      // sábado, domingo ou feriado nacional/estadual: oferece o dia útil anterior (regra de 28/10/2026)
+      if (ehPagExtra && vencimentoPag) {
+        const d = await DiaUtil.conferir(vencimentoPag, _supabase); if (d === null) return;
+        vencimentoPag = d; document.getElementById('inputVencimentoPag').value = d;
       }
 
       // Reembolso: dias obrigatórios, valor = soma dos dias
@@ -2224,6 +2235,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
 
       const chavesAtuais = new Set((itensAtuais || []).map(i => `${i.rubrica}|${i.tipo}`));
 
+      await DiaUtil.carregar(_supabase);
       let inseridosCount = 0;
       const falhasImport = [];
       for (const item of itensFixos) {
@@ -2265,7 +2277,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
             parcela_atual: novaParcela,
             total_parcelas: totalP,
             fixo: true,
-            vencimento_pagamento: somarUmMes(item.vencimento_pagamento),
+            vencimento_pagamento: item.vencimento_pagamento ? DiaUtil.anterior(somarUmMes(item.vencimento_pagamento)) : null,
             competencia: competenciaRegraLancamento
           }]);
           if (!errIns) inseridosCount++;

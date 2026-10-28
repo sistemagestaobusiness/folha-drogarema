@@ -121,7 +121,8 @@
     }
 
     async function mudouMes() {
-      const [a, m] = $('fMes').value.split('-'); $('fVenc').value = `${a}-${m}-15`;
+      // dia 15; se cair em sábado, domingo ou feriado, o dia útil anterior (regra de 28/10/2026)
+      const [a, m] = $('fMes').value.split('-'); await DiaUtil.carregar(_supabase); $('fVenc').value = DiaUtil.anterior(`${a}-${m}-15`);
       await carregar();
     }
 
@@ -274,8 +275,9 @@
     }
 
     async function confirmar() {
-      const venc = $('fVenc').value;
-      if (!venc) return alert('Informe a data do pagamento.');
+      if (!$('fVenc').value) return alert('Informe a data do pagamento.');
+      const venc = await DiaUtil.conferir($('fVenc').value, _supabase); if (venc === null) return;
+      $('fVenc').value = venc;
       const pend = prontosA();
       if (!pend.length) return alert('Nenhum adiantamento completo para confirmar.');
       const ficam = lista.filter(f => !f.trava && mudou(f)).length - pend.length;

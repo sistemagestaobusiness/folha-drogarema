@@ -149,7 +149,9 @@
 
     async function mudouMes() {
       const [a, m] = $('fMes').value.split('-');
-      $('fVenc').value = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);   // último dia do mês
+      // último dia do mês; se cair em sábado, domingo ou feriado, o dia útil anterior (regra de 28/10/2026)
+      await DiaUtil.carregar(_supabase);
+      $('fVenc').value = DiaUtil.anterior(new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10));
       await carregar();
     }
 
@@ -319,7 +321,9 @@
     }
 
     async function confirmar() {
-      const venc = $('fVenc').value, dComp = mes();
+      const venc = await DiaUtil.conferir($('fVenc').value, _supabase), dComp = mes();
+      if (venc === null) return;
+      if (venc) $('fVenc').value = venc;
       const pend = prontosConfirmar();
       if (!pend.length) return alert('Nenhum vale transporte completo para confirmar.');
       const ficam = lista.filter(mudou).length - pend.length;
