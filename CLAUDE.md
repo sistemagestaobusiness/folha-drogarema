@@ -29,7 +29,7 @@ Sistema de RH, folha e financeiro da Drogarema. Telas HTML com JavaScript puro (
 
 ## Telas
 - Todas carregam `acesso.js` (controle por perfil e menu), menos `login.html`. O que a tela bloqueia é conforto; a proteção real é o banco.
-- Script compartilhado vai com versão no nome (`fluxo_core.js?v=6`, `menu.js?v=28` dentro de `acesso.js`, `pendencias_core.js?v=3`): subir a versão ao alterar.
+- Script compartilhado vai com versão no nome (`fluxo_core.js?v=6`, `menu.js?v=33` dentro de `acesso.js`, `pendencias_core.js?v=4`): subir a versão ao alterar.
 - Lançamentos usa sempre o período ABERTO (tabela `competencias`), não o mês do Painel.
 - Telas antigas `folha.html`, `pagamentos_extras.html`, `financeiro_freelance.html` foram apagadas em 26/10/2026.
 - Inatividade: controle único no `acesso.js` (30 min sem uso em qualquer aba, aviso 2 min antes). Não criar timer de inatividade nas telas.

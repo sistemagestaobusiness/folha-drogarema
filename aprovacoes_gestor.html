@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aprovações do Gestor - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1100px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">✅ Aprovações do Gestor</h1>
+        <p class="text-xs text-slate-500">Tudo o que o RH mandou e só o senhor pode liberar, num lugar só. Os pagamentos só vão para o Financeiro depois da sua aprovação.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
+        <b>Como usar:</b> em cada item, confira o valor <b>de antes → o novo</b> e o motivo que o RH escreveu.
+        Clique em <span class="inline-block bg-emerald-600 text-white rounded px-2 font-bold">✓ Aprovar</span> para liberar
+        ou em <span class="inline-block border border-rose-300 text-rose-700 rounded px-2 font-bold">✕ Recusar</span> para devolver ao RH (pede o motivo).
+        Os itens com pagamento <b>hoje</b> ou <b>amanhã</b> ficam no topo, em vermelho.
+      </div>
+      <div id="topo" class="flex flex-wrap items-center gap-2"></div>
+      <div id="lista" class="space-y-5"></div>
+      <div id="vazio" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-6 text-center">
+        <div class="text-3xl">✓</div><div class="font-bold text-base mt-1">Nada aguardando a sua aprovação.</div>
+        <div class="text-xs mt-1">Quando o RH mandar algo, aparece aqui, no Painel e no menu com bolha vermelha.</div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .chip { display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px; white-space: nowrap; text-transform: uppercase; letter-spacing: .02em; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+    .card.urgente { border: 2px solid #dc2626; }
+    .bt-ok { background: #059669; color: #fff; border-radius: 10px; padding: 10px 18px; font-weight: 800; font-size: 14px; cursor: pointer; border: 0; }
+    .bt-ok:hover { background: #047857; }
+    .bt-nao { background: #fff; color: #be123c; border: 1px solid #fda4af; border-radius: 10px; padding: 8px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
+    .bt-nao:hover { background: #fff1f2; }
+    button:disabled { opacity: .5; cursor: wait; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-';
+    const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const brl = v => v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const TIPO = {
+      VT:           { nome: 'Vale transporte',        rpc: 'fn_vt_decidir',             tela: 'vale_transporte.html?aba=aprovacao',  cor: 'bg-sky-100 text-sky-800' },
+      ADIANTAMENTO: { nome: 'Adiantamento salarial',  rpc: 'fn_adiant_decidir',         tela: 'adiantamento.html?aba=aprovacao',     cor: 'bg-violet-100 text-violet-800' },
+      DECIMO:       { nome: '13º antecipado',         rpc: 'fn_decimo_antecip_decidir', tela: 'decimo_terceiro.html?aba=aprovacao',  cor: 'bg-amber-100 text-amber-800' },
+      PLANOS:       { nome: 'Planos (desconto)',      rpc: 'fn_plano_decidir',          tela: 'planos.html?aba=aprovacao',           cor: 'bg-teal-100 text-teal-800' },
+      ALTERACAO:    { nome: 'Alteração na ficha do RH', rpc: 'fn_alteracao_decidir',    tela: 'conferencia_fechamento.html',          cor: 'bg-slate-200 text-slate-700' }
+    };
+    let itens = [];
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
+      const perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (perfil !== 'GESTOR') { $('aviso').innerText = perfil ? 'Somente o Gestor aprova estes itens.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+      setInterval(carregar, 120000);
+    }
+
+    async function carregar() {
+      const { data, error } = await rpcRetentar(_supabase, 'fn_aprovacoes_gestor_lista');
+      if (error) { $('lista').innerHTML = `<div class="bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold">Não foi possível carregar as aprovações: ${esc(traduzirErro ? traduzirErro(error.message) : error.message)}</div>`; return; }
+      itens = data || [];
+      render();
+    }
+
+    function faixa(i) {
+      const hoje = iso(new Date()), am = new Date(); am.setDate(am.getDate() + 1); const amanha = iso(am);
+      if (!i.vencimento) return 3;
+      const v = String(i.vencimento).slice(0, 10);
+      return v <= hoje ? 0 : v === amanha ? 1 : 2;
+    }
+    const GRUPO = [
+      ['🔴 Pagamento HOJE (ou já passou da data)', 'text-rose-700'],
+      ['🟠 Pagamento AMANHÃ', 'text-orange-700'],
+      ['Pagamentos nos próximos dias', 'text-slate-700'],
+      ['Descontos e ajustes da folha (sem data de pagamento)', 'text-slate-700']
+    ];
+
+    function render() {
+      $('vazio').classList.toggle('hidden', itens.length > 0);
+      const urg = itens.filter(i => faixa(i) <= 1);
+      $('topo').innerHTML = itens.length ? `
+        <span class="text-sm font-bold text-slate-800">${itens.length} item(ns) aguardando</span>
+        ${urg.length ? `<span class="chip bg-rose-600 text-white">${urg.length} para pagar hoje/amanhã</span>` : ''}
+        <span class="flex-1"></span>
+        ${urg.length && urg.length < itens.length ? `<button class="bt-ok !text-[13px] !py-2" onclick="aprovarVarios(true)">✓ Aprovar os de hoje e amanhã (${urg.length})</button>` : ''}
+        <button class="bt-ok !text-[13px] !py-2 !bg-slate-800 hover:!bg-slate-900" onclick="aprovarVarios(false)">✓ Aprovar todos (${itens.length})</button>` : '';
+      const ord = [...itens].sort((a, b) => faixa(a) - faixa(b) || String(a.vencimento || '').localeCompare(String(b.vencimento || '')) || String(a.funcionario).localeCompare(String(b.funcionario)));
+      let html = '';
+      for (let g = 0; g < 4; g++) {
+        const doGrupo = ord.filter(i => faixa(i) === g); if (!doGrupo.length) continue;
+        html += `<section class="space-y-2"><h2 class="text-sm font-extrabold ${GRUPO[g][1]}">${GRUPO[g][0]} · ${doGrupo.length}</h2>${doGrupo.map(i => cartao(i, g <= 1)).join('')}</section>`;
+      }
+      $('lista').innerHTML = html;
+    }
+
+    function cartao(i, urgente) {
+      const t = TIPO[i.tipo] || { nome: i.tipo, cor: 'bg-slate-100 text-slate-700', tela: '#' };
+      const dif = (i.atual != null && i.anterior != null) ? Number(i.atual) - Number(i.anterior) : null;
+      const difTxt = dif == null ? '' : `<span class="text-[11px] font-bold ${dif > 0 ? 'text-rose-700' : 'text-emerald-700'}">${dif > 0 ? '+' : ''}${brl(dif)}</span>`;
+      return `<div class="card ${urgente ? 'urgente' : ''}" id="c_${i.id}">
+        <div class="flex-1 min-w-[260px] space-y-1">
+          <div class="flex flex-wrap items-center gap-2"><span class="chip ${t.cor}">${esc(t.nome)}</span>
+            ${i.vencimento ? `<span class="chip ${urgente ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'}">pagar em ${dbr(i.vencimento)}</span>` : ''}
+            ${i.competencia ? `<span class="text-[11px] text-slate-400">ref. ${esc(i.competencia)}</span>` : ''}</div>
+          <div class="text-base font-bold text-slate-900">${esc(i.funcionario)} <span class="text-xs font-normal text-slate-500">· ${esc(i.loja || '-')}</span></div>
+          <div class="text-sm"><span class="text-slate-500">Antes</span> <b>${brl(i.anterior)}</b> <span class="text-slate-400">→</span> <span class="text-slate-500">Agora</span> <b class="text-lg">${brl(i.atual)}</b> ${difTxt}</div>
+          <div class="text-xs text-slate-600">${esc(i.detalhe || '')}</div>
+          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><b>Motivo do RH:</b> ${esc(i.motivo || '(sem motivo escrito)')}</div>
+          <div class="text-[11px] text-slate-400">Enviado por ${esc(i.enviado_por || '-')} · ${dh(i.enviado_em)} · <a href="${t.tela}" class="underline hover:text-slate-600">ver na tela de origem</a></div>
+        </div>
+        <div class="flex flex-col gap-2 min-w-[150px]">
+          <button class="bt-ok" onclick="decidir('${i.tipo}', '${i.id}', true)">✓ Aprovar</button>
+          <button class="bt-nao" onclick="decidir('${i.tipo}', '${i.id}', false)">✕ Recusar</button>
+        </div></div>`;
+    }
+
+    async function decidir(tipo, id, aprovar) {
+      const i = itens.find(x => x.id === id); const t = TIPO[tipo]; if (!i || !t) return;
+      let obs = null;
+      if (!aprovar) {
+        obs = await pedirTexto(`Recusar ${t.nome} de ${i.funcionario}.\nEscreva o motivo da recusa (o RH vai ver):`);
+        if (obs == null) return;
+        obs = obs.trim(); if (obs.length < 5) return alert('Escreva o motivo da recusa (mínimo 5 letras).');
+      }
+      const c = $('c_' + id); if (c) c.querySelectorAll('button').forEach(b => b.disabled = true);
+      const { error } = await _supabase.rpc(t.rpc, { p_id: id, p_aprovar: aprovar, p_obs: obs });
+      if (error) { if (c) c.querySelectorAll('button').forEach(b => b.disabled = false); return alert('Não foi possível ' + (aprovar ? 'aprovar' : 'recusar') + ': ' + error.message); }
+      await carregar();
+    }
+
+    async function aprovarVarios(soUrgentes) {
+      const alvo = itens.filter(i => !soUrgentes || faixa(i) <= 1);
+      if (!alvo.length) return;
+      const total = alvo.reduce((s, i) => s + Number(i.atual || 0), 0);
+      if (!confirm(`Aprovar ${alvo.length} item(ns)${soUrgentes ? ' com pagamento hoje/amanhã' : ''}? Total dos valores novos: ${brl(total)}.\nOs pagamentos vão para o Financeiro.`)) return;
+      $('topo').querySelectorAll('button').forEach(b => b.disabled = true);
+      const falhas = [];
+      for (const i of alvo) { const { error } = await _supabase.rpc(TIPO[i.tipo].rpc, { p_id: i.id, p_aprovar: true, p_obs: null }); if (error) falhas.push(`${i.funcionario} (${TIPO[i.tipo].nome}): ${error.message}`); }
+      if (falhas.length) alert('Não aprovados:\n' + falhas.join('\n'));
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

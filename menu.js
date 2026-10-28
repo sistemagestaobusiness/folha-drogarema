@@ -15,7 +15,7 @@
   const MARCA = 'Business';   // nome exibido no topo do menu (o logo entra aqui)
   // organização de 28/10/2026: no topo o que o RH resolve todo dia; depois, na ordem do mês (aprovar → lançar → jornada → fechar)
   const GRUPOS = [
-    ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['contabilidade.html', 'Envio à contabilidade', '⇪'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
+    ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['aprovacoes_gestor.html', 'Aprovações do Gestor', '✅'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['contabilidade.html', 'Envio à contabilidade', '⇪'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
     ['Aprovações', [['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['cadastro_solicitacoes.html', 'Pedidos de cadastro', '☰'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑']]],
     ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
       ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Consumo farmácia', '⇪']]],
@@ -297,6 +297,10 @@
         if (item && !item.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = r.qtd; item.appendChild(b);
           const sec = item.closest('.sec'); if (sec) sec.classList.add('aberto'); }
       }
+      const totAp = pend.reduce((t, p) => t + (p.qtd || 0), 0);
+      const itAp = document.querySelector('#menuSistema a.it[data-menu="aprovacoes_gestor.html"]');
+      if (totAp && itAp && !itAp.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = totAp; itAp.appendChild(b); }
+      if (PAGINA === 'aprovacoes_gestor.html') return;
       const mostrar = pend.filter(p => p.tela !== PAGINA); if (!mostrar.length) return;
       let visto = ''; try { visto = sessionStorage.getItem('adiant_aviso_visto') || ''; } catch (e) {}
       const chave = mostrar.map(p => p.tela + p.qtd + '|' + p.total).join(';'); if (visto === chave) return;
@@ -307,9 +311,9 @@
         <div style="background:#dc2626;color:#fff;padding:16px 22px;font-weight:800;font-size:16px">⚠️ Pagamentos aguardando a sua aprovação</div>
         <div style="padding:18px 22px;font-size:14px;color:#0f172a;line-height:1.5">
           ${mostrar.map(p => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9"><div style="flex:1"><b>${p.nome}</b> · ${p.m}<br><span style="font-size:12px;color:#475569">${p.qtd} funcionário(s) com valor diferente do mês anterior · ${brl(p.total)}</span></div>
-            <a href="${p.tela}?aba=aprovacao" class="irAprov" style="background:#dc2626;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800;font-size:12px;text-decoration:none;white-space:nowrap">Aprovar →</a></div>`).join('')}
+            <a href="${telas.has('aprovacoes_gestor.html') ? 'aprovacoes_gestor.html' : p.tela + '?aba=aprovacao'}" class="irAprov" style="background:#dc2626;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800;font-size:12px;text-decoration:none;white-space:nowrap">Aprovar →</a></div>`).join('')}
           <div style="margin-top:10px;color:#b91c1c;font-weight:700;font-size:13px">Enquanto não for aprovado, o Financeiro não recebe esses pagamentos.</div>
-          <div style="margin-top:10px;font-size:12px;color:#475569;background:#f8fafc;border-radius:8px;padding:10px">Se fechar agora, o caminho é: <b>Painel → faixa vermelha no topo</b> ou <b>menu Lançar na folha → a tela com a bolha vermelha → aba "Aprovação do Gestor"</b>.</div>
+          <div style="margin-top:10px;font-size:12px;color:#475569;background:#f8fafc;border-radius:8px;padding:10px">Se fechar agora, o caminho é: <b>menu → Aprovações do Gestor</b> (bolha vermelha) ou <b>Painel → faixa vermelha no topo</b>.</div>
         </div>
         <div style="display:flex;padding:0 22px 20px"><button type="button" style="flex:1;background:#f1f5f9;color:#334155;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">Depois</button></div></div>`;
       const fechar = () => { try { sessionStorage.setItem('adiant_aviso_visto', chave); } catch (e) {} m.remove(); };
@@ -317,6 +321,121 @@
       m.querySelectorAll('a.irAprov').forEach(a => a.addEventListener('click', () => setTimeout(fechar, 0)));
       document.body.appendChild(m);
     } catch (e) { console.warn('aprovações do Gestor', e); }
+  }
+
+  // cobrança das aprovações do Gestor (regra de 28/10/2026): o RH não avisa o Gestor, então o Financeiro cobra.
+  // Financeiro: notificação fixa no menu enquanto houver algo aguardando o Gestor (+ faixa no topo do Financeiro) e,
+  // quando o pagamento é HOJE ou AMANHÃ, alerta piscando com som; ✕ ou "Já avisei" escondem por 5 min e ele volta enquanto o Gestor não decidir.
+  // Gestor: o mesmo alerta com som para os pagamentos de hoje/amanhã, levando direto à tela "Aprovações do Gestor".
+  let somCtx = null;
+  function prepararSom() { try { if (!somCtx) somCtx = new (window.AudioContext || window.webkitAudioContext)(); if (somCtx.state === 'suspended') somCtx.resume(); } catch (e) { } }
+  function tocarAlerta() {
+    try { prepararSom(); if (!somCtx) return;
+      [0, 0.28, 0.56].forEach(t => { const o = somCtx.createOscillator(), g = somCtx.createGain(); o.type = 'square'; o.frequency.value = t === 0.28 ? 660 : 880;
+        g.gain.setValueAtTime(0.0001, somCtx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.18, somCtx.currentTime + t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, somCtx.currentTime + t + 0.22);
+        o.connect(g); g.connect(somCtx.destination); o.start(somCtx.currentTime + t); o.stop(somCtx.currentTime + t + 0.24); });
+    } catch (e) { }
+  }
+  async function cobrancaAprovacoes() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['FINANCEIRO', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window) return;
+    if (pf === 'GESTOR' && PAGINA === 'aprovacoes_gestor.html') return;
+    ['click', 'keydown'].forEach(ev => document.addEventListener(ev, prepararSom, { once: true, capture: true }));
+    const CHAVE = 'cobranca_gestor_pausa_ate', PAUSA = 5 * 60e3;
+    const pausaAte = () => { try { return Number(localStorage.getItem(CHAVE)) || 0; } catch (e) { return 0; } };
+    const pausar = () => { try { localStorage.setItem(CHAVE, String(Date.now() + PAUSA)); } catch (e) { } };
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '';
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isoD = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!document.getElementById('cobrancaCss')) { const st = document.createElement('style'); st.id = 'cobrancaCss';
+      st.textContent = '@keyframes cobrancaPisca{0%,100%{box-shadow:0 0 0 4px rgba(220,38,38,.95),0 20px 50px rgba(0,0,0,.35)}50%{box-shadow:0 0 0 12px rgba(220,38,38,.25),0 20px 50px rgba(0,0,0,.35)}}'
+        + '@keyframes cobrancaTitulo{0%,100%{background:#dc2626}50%{background:#991b1b}}'
+        + '#cobrancaAlerta button{font-family:inherit;cursor:pointer}';
+      document.head.appendChild(st); }
+    let ultimoSom = 0;
+    async function ciclo() {
+      let linhas = [];
+      try { const { data, error } = await window.ACESSO_CLI.rpc('fn_aprovacoes_gestor_resumo'); if (error) return; linhas = data || []; } catch (e) { return; }
+      const hoje = isoD(new Date()), am = new Date(); am.setDate(am.getDate() + 1); const amanha = isoD(am);
+      const urg = linhas.filter(r => r.pagamento && r.vencimento && String(r.vencimento).slice(0, 10) <= amanha);
+      const qtdTot = linhas.reduce((t, r) => t + (r.qtd || 0), 0);
+      const quando = r => { const v = String(r.vencimento || '').slice(0, 10); return !v ? '' : v < hoje ? `ATRASADO (era ${dbr(v)})` : v === hoje ? `HOJE ${dbr(v)}` : v === amanha ? `AMANHÃ ${dbr(v)}` : dbr(v); };
+      // 1. notificação fixa (Financeiro): no menu lateral, acima do usuário; some sozinha quando o Gestor decide
+      if (pf === 'FINANCEIRO') {
+        let n = document.getElementById('cobrancaNotif');
+        if (!qtdTot) { if (n) n.remove(); }
+        else {
+          if (!n) { n = document.createElement('div'); n.id = 'cobrancaNotif';
+            const pe = document.querySelector('#menuSistema .pe');
+            n.style.cssText = pe ? 'margin:0 10px 8px;background:' + (urg.length ? '#dc2626' : '#B54708') + ';color:#fff;border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.35;cursor:pointer'
+              : 'position:fixed;left:16px;bottom:16px;z-index:99990;color:#fff;border-radius:12px;padding:10px 14px;font-size:12.5px;max-width:300px;line-height:1.35;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.3)';
+            n.title = 'Clique para ver o alerta'; n.onclick = () => { try { localStorage.removeItem(CHAVE); } catch (e) { } mostrarAlerta(true); };
+            if (pe) pe.parentNode.insertBefore(n, pe); else document.body.appendChild(n); }
+          n.style.background = urg.length ? '#dc2626' : '#B54708';
+          n.innerHTML = `<b style="display:block;font-size:12.5px">⏳ Aguardando o Gestor aprovar</b>${linhas.map(r => `${esc(r.nome)}: ${r.qtd}${r.pagamento ? ' · ' + brl(r.total) : ''}${r.vencimento ? ' · ' + quando(r) : ''}`).join('<br>')}`;
+        }
+        // faixa no topo da tela principal do Financeiro
+        if (PAGINA === 'financeiro.html') {
+          let f = document.getElementById('cobrancaFaixa');
+          if (!linhas.some(r => r.pagamento)) { if (f) f.remove(); }
+          else {
+            if (!f) { f = document.createElement('div'); f.id = 'cobrancaFaixa'; document.body.insertBefore(f, document.body.firstChild); }
+            const pg = linhas.filter(r => r.pagamento);
+            f.style.cssText = 'position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 18px;color:#fff;font-size:13.5px;background:' + (urg.length ? '#dc2626' : '#B54708');
+            f.innerHTML = `<span style="font-size:18px">${urg.length ? '🔴' : '⏳'}</span><span style="flex:1;min-width:220px"><b>Pagamentos travados aguardando a aprovação do Gestor.</b> ${pg.map(r => `${esc(r.nome)}: ${r.qtd} · ${brl(r.total)} · pagar ${quando(r)}`).join(' &nbsp;|&nbsp; ')}<br><span style="font-size:12px;opacity:.9">Sem a aprovação eles não aparecem para pagar. Avise o Gestor (ligação ou WhatsApp).</span></span>
+              <button type="button" style="background:#fff;color:#991b1b;border:0;border-radius:8px;padding:8px 12px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">📋 Copiar mensagem para o Gestor</button>`;
+            f.querySelector('button').onclick = () => copiarMensagem(pg);
+          }
+        }
+      }
+      // 2. alerta piscando com som (pagamento hoje/amanhã)
+      urgentes = urg;
+      if (!urg.length) { const a = document.getElementById('cobrancaAlerta'); if (a) a.remove(); return; }
+      mostrarAlerta(false);
+    }
+    let urgentes = [];
+    function mensagem(lista) {
+      return 'Gestor, há pagamento(s) aguardando a sua aprovação no sistema (menu "Aprovações do Gestor"):\n'
+        + lista.map(r => `• ${r.nome}: ${r.qtd} funcionário(s) · ${brl(r.total)}${r.vencimento ? ' · pagar em ' + dbr(r.vencimento) : ''}`).join('\n')
+        + '\nSem a aprovação o Financeiro não consegue pagar.';
+    }
+    async function copiarMensagem(lista) {
+      const txt = mensagem(lista);
+      try { await navigator.clipboard.writeText(txt); alert('Mensagem copiada. Cole no WhatsApp do Gestor.'); }
+      catch (e) { await (window.pedirTexto ? window.pedirTexto('Copie a mensagem abaixo (Ctrl+C) e mande para o Gestor:', txt) : Promise.resolve(prompt('Copie a mensagem:', txt))); }
+    }
+    function mostrarAlerta(forcar) {
+      if (!urgentes.length) return;
+      if (!forcar && Date.now() < pausaAte()) return;
+      if (document.getElementById('adiantGestorModal')) return;   // a janela de entrada do Gestor já está aberta
+      let a = document.getElementById('cobrancaAlerta');
+      const novo = !a;
+      if (!a) { a = document.createElement('div'); a.id = 'cobrancaAlerta'; document.body.appendChild(a); }
+      a.style.cssText = 'position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:99997;width:min(560px,calc(100vw - 32px));background:#fff;border-radius:16px;overflow:hidden;animation:cobrancaPisca 1s ease-in-out infinite;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif';
+      const gestor = pf === 'GESTOR';
+      const tot = urgentes.reduce((t, r) => t + Number(r.total || 0), 0);
+      const hoje = isoD(new Date());
+      a.innerHTML = `<div style="animation:cobrancaTitulo 1s ease-in-out infinite;color:#fff;padding:14px 46px 14px 20px;font-weight:800;font-size:16px;position:relative">🔔 ${gestor ? 'Pagamentos aguardando a SUA aprovação' : 'O Gestor ainda não aprovou estes pagamentos'}
+          <button type="button" data-a="x" title="Fechar por 5 minutos" aria-label="Fechar" style="position:absolute;top:10px;right:12px;background:rgba(255,255,255,.18);border:0;color:#fff;font-size:16px;font-weight:800;border-radius:8px;width:30px;height:30px">✕</button></div>
+        <div style="padding:14px 20px;font-size:14px;color:#0f172a;line-height:1.5">
+          ${urgentes.map(r => { const v = String(r.vencimento).slice(0, 10); const tag = v < hoje ? 'ATRASADO' : v === hoje ? 'HOJE' : 'AMANHÃ';
+            return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9"><span style="background:${tag === 'AMANHÃ' ? '#ea580c' : '#dc2626'};color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800">${tag} ${dbr(v)}</span><span style="flex:1"><b>${esc(r.nome)}</b> · ${r.qtd} funcionário(s)</span><b>${brl(r.total)}</b></div>`; }).join('')}
+          <div style="margin-top:10px;font-weight:700;color:#b91c1c">${gestor ? 'Enquanto o senhor não aprovar, o Financeiro não consegue pagar.' : 'Sem a aprovação do Gestor esses pagamentos não aparecem para pagar. Avise o Gestor agora (ligação ou WhatsApp).'}</div>
+          <div style="margin-top:4px;font-size:12px;color:#475569">Total: ${brl(tot)} · ${gestor ? 'se fechar, o aviso volta em 5 minutos.' : 'se fechar, o aviso volta em 5 minutos enquanto o Gestor não decidir.'}</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 18px">
+          ${gestor ? `<a href="aprovacoes_gestor.html" data-a="ir" style="flex:1;text-align:center;background:#059669;color:#fff;border-radius:10px;padding:12px;font-weight:800;font-size:14px;text-decoration:none">✓ Abrir e aprovar agora →</a>`
+                   : `<button type="button" data-a="copiar" style="flex:1;background:#12161C;color:#fff;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:13px">📋 Copiar mensagem para o Gestor</button>
+                      <button type="button" data-a="avisei" style="flex:1;background:#059669;color:#fff;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:13px">✓ Já avisei o Gestor</button>`}
+        </div>`;
+      a.onclick = e => { const b = e.target.closest('[data-a]'); if (!b) return;
+        if (b.dataset.a === 'copiar') { copiarMensagem(urgentes); return; }
+        pausar(); a.remove(); };
+      if (novo || Date.now() - ultimoSom > 30e3) { ultimoSom = Date.now(); tocarAlerta(); }
+    }
+    await ciclo();
+    setInterval(ciclo, 60000);
   }
 
   // pendências no menu (regra de 21/10/2026): bolha com o número em cada tela onde se resolve;
@@ -470,6 +589,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

@@ -164,7 +164,7 @@ if (!window.__alertTraduzido) {
       window.ACESSO = data; window.ACESSO.email = user.email; window.ACESSO_CLI = cli;
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {
-        const sm = document.createElement('script'); sm.src = 'menu.js?v=32'; (document.head || document.documentElement).appendChild(sm);
+        const sm = document.createElement('script'); sm.src = 'menu.js?v=33'; (document.head || document.documentElement).appendChild(sm);
       }
       const telas = new Set((data.telas || []).map(t => String(t).toLowerCase()));
       if (!telas.has(PAGINA)) {
