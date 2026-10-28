@@ -26,7 +26,8 @@
     ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
     ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['organograma.html', 'Organograma', '⌂'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
     ['Segurança', [['conduta_rh.html', 'Conduta do RH', '◉'], ['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]],
-    ['Marketing', [['marketing_pedidos.html', 'Pedidos ao Marketing', '✎'], ['marketing_comunicados.html', 'Comunicados e enquetes', '✉']]]
+    ['Marketing', [['marketing_pedidos.html', 'Pedidos ao Marketing', '✎'], ['marketing_comunicados.html', 'Comunicados e enquetes', '✉']]],
+    ['Entregas', [['motoboys.html', 'Motoboys', '➤']]]
   ];
   const telas = new Set((window.ACESSO.telas || []).map(t => String(t).toLowerCase()));
   const L = 232;

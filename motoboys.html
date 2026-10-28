@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Motoboys - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 3px; }
+    .inp { width: 100%; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 9px; font-size: 13px; }
+    .inp:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+    .tb th { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; text-align: left; padding: 7px 8px; background: #f8fafc; position: sticky; top: 0; }
+    .tb td { padding: 6px 8px; border-top: 1px solid #f1f5f9; font-size: 12.5px; vertical-align: middle; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  </style>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">🛵 Motoboys</h1>
+        <p class="text-xs text-slate-500">Relatório quinzenal das entregas por bairro (Alpha7 · Análise de Entrega) · PDF para cada motoboy emitir a NF · o pagamento é lançado no Alpha7</p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div id="abas" class="flex gap-5 border-b border-slate-300 px-1"></div>
+
+      <!-- ================= QUINZENAS ================= -->
+      <div data-painel="quinzena" class="painel space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="lg:col-span-1 bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="font-black text-sm text-slate-800">⇪ Importar relatório do Alpha7</h2>
+            <p class="text-[11px] text-slate-500 leading-relaxed">No Alpha7: <b>Análise de Entrega</b>, período de <b>01 a 15</b> ou de <b>16 ao fim do mês</b>, exportar em Excel. Envie o arquivo do jeito que sai, sem mexer. Importar de novo a mesma quinzena (aberta) substitui as linhas.</p>
+            <label class="relative flex flex-col items-center justify-center border-2 border-dashed border-indigo-300 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl p-4 cursor-pointer text-center">
+              <span class="text-2xl">📄</span>
+              <span class="text-xs font-bold text-indigo-800 mt-1">Escolher o arquivo .xls</span>
+              <span id="lblArquivo" class="text-[10px] text-slate-500 mt-0.5">nenhum arquivo</span>
+              <input type="file" id="inArquivo" accept=".xls,.xlsx" class="absolute inset-0 opacity-0 cursor-pointer" onchange="lerArquivo(event)">
+            </label>
+            <div id="previaImport" class="hidden text-xs space-y-2"></div>
+          </div>
+          <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+            <h2 class="font-black text-sm text-slate-800">📅 Quinzenas</h2>
+            <div id="listaQuinzenas" class="flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+
+        <div id="boxQuinzena" class="hidden space-y-4"></div>
+      </div>
+
+      <!-- ================= BAIRROS ================= -->
+      <div data-painel="bairros" class="painel hidden space-y-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <div class="flex flex-wrap items-end gap-3">
+            <div><label class="lbl">Cidade</label><select id="bCidadeF" class="inp" onchange="montarBairros()"><option value="">Todas</option><option value="MOGI">Mogi</option><option value="GUARAREMA">Guararema</option></select></div>
+            <div class="flex-1 min-w-[200px]"><label class="lbl">Busca</label><input id="bBusca" class="inp" placeholder="nome do bairro..." oninput="montarBairros()"></div>
+            <label class="flex items-center gap-1.5 text-xs font-bold text-slate-600 pb-2"><input type="checkbox" id="bZero" onchange="montarBairros()"> só valor 0</label>
+            <span id="bResumo" class="text-[11px] text-slate-500 pb-2"></span>
+          </div>
+          <div class="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
+            <div class="sm:col-span-5 text-xs font-black text-slate-700">＋ Novo bairro</div>
+            <div><label class="lbl">Cidade *</label><select id="nbCidade" class="inp"><option value="">-</option><option value="MOGI">Mogi</option><option value="GUARAREMA">Guararema</option></select></div>
+            <div class="sm:col-span-2"><label class="lbl">Bairro * (como vem no Alpha7)</label><input id="nbBairro" class="inp uppercase"></div>
+            <div><label class="lbl">Taxa por entrega (R$) *</label><input id="nbValor" class="inp" inputmode="decimal" placeholder="0,00"></div>
+            <button onclick="novoBairro()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold cursor-pointer">Salvar bairro</button>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto max-h-[70vh]"><table class="tb w-full"><thead><tr><th>Cidade</th><th>Bairro</th><th class="num">Taxa (R$)</th><th>Ativo</th><th>Atualizado</th><th></th></tr></thead><tbody id="tbBairros"></tbody></table></div>
+      </div>
+
+      <!-- ================= MOTOBOYS ================= -->
+      <div data-painel="motoboys" class="painel hidden space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
+            <table class="tb w-full"><thead><tr><th>Nome no Alpha7</th><th>Nome no PDF / NF</th><th>CNPJ/CPF</th><th>PIX</th><th>Paga por aqui?</th><th></th></tr></thead><tbody id="tbMotoboys"></tbody></table>
+          </div>
+          <div class="space-y-4">
+            <div id="formMotoboy" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2"></div>
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+              <h3 class="font-black text-xs text-slate-800">🏪 Lojas (Un. Neg. do Alpha7)</h3>
+              <p class="text-[11px] text-slate-500">A cidade da loja escolhe a tabela de bairros. Loja que "não paga por aqui" fica fora da conta (ex.: loja 07).</p>
+              <div id="tbLojas" class="space-y-1"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const rs = v => 'R$ ' + brl(v);
+    const dbr = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '-';
+    const dh = ts => ts ? new Date(ts).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+    const num = t => { const s = String(t ?? '').trim().replace(/\s/g, ''); if (!s) return null; const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s); return isFinite(n) ? n : null; };
+    const SEM = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+    const SIT = {
+      OK: ['entra na conta', 'text-emerald-700'], ND: ['bairro sem valor (ND)', 'text-rose-700'], NAO_CADASTRADO: ['entregador sem cadastro', 'text-rose-700'],
+      LOJA_SEM_CIDADE: ['loja sem cidade', 'text-rose-700'], NAO_PAGA: ['não se paga por aqui', 'text-slate-400'], LOJA_NAO_PAGA: ['loja não paga por aqui', 'text-slate-400'],
+      SEM_ENTREGADOR: ['sem entregador', 'text-slate-400'], FORA: ['ficou fora no fechamento', 'text-slate-400']
+    };
+
+    let D = { perfil: null, lojas: [], bairros: [], motoboys: [], quinzenas: [] }, Q = null, qSel = null, aba = 'quinzena', importando = null, editMot = null;
+    const gestor = () => D.perfil === 'GESTOR';
+    const motoboy = id => D.motoboys.find(m => m.id === id) || {};
+    const nomePdf = m => m.nome_pdf || m.nome_alpha7 || '-';
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      $('lblUsuario').innerText = (user.email || '').toLowerCase();
+      await DiaUtil.carregar(_supabase);
+      if (!(await recarregar())) return;
+      $('lblPerfil').innerText = D.perfil || '-';
+      $('abas').innerHTML = [['quinzena', '🛵 Quinzenas'], ['bairros', '📍 Bairros e taxas'], ['motoboys', '👤 Motoboys e lojas']]
+        .map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t}</button>`).join('');
+      $('conteudo').classList.remove('hidden');
+      trocarAba('quinzena');
+      if (D.quinzenas.length) abrirQuinzena(D.quinzenas[0].id);
+    }
+
+    async function recarregar() {
+      const { data, error } = await rpcRetentar(_supabase, 'fn_mot_dados');
+      if (error) { $('aviso').innerText = /Sem acesso/.test(error.message) ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível carregar: ' + traduzirErro(error.message); $('aviso').classList.remove('hidden'); return false; }
+      D = data; montarQuinzenas(); montarBairros(); montarMotoboys(); montarLojas();
+      return true;
+    }
+
+    function trocarAba(a) {
+      aba = a;
+      document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-400'}`);
+      document.querySelectorAll('.painel').forEach(p => p.classList.toggle('hidden', p.dataset.painel !== a));
+    }
+
+    // ---------- pagamento: dia 20 / dia 5, antecipa para dia útil ----------
+    function pagamento(q) {
+      const util = DiaUtil.anterior(q.pagamento), mot = DiaUtil.motivo(q.pagamento);
+      return { util, txt: `${SEM[DiaUtil._d(util).getDay()]}, ${dbr(util)}`, obs: mot ? `(dia ${dbr(q.pagamento).slice(0, 5)} é ${mot}: antecipa)` : '' };
+    }
+    const periodo = q => `${dbr(q.periodo_ini).slice(0, 5)} a ${dbr(q.periodo_fim)}`;
+
+    function montarQuinzenas() {
+      $('listaQuinzenas').innerHTML = D.quinzenas.length ? D.quinzenas.map(q => {
+        const p = pagamento(q), on = qSel === q.id;
+        return `<button onclick="abrirQuinzena('${q.id}')" class="text-left px-3 py-2 rounded-xl border cursor-pointer ${on ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200' : 'border-slate-200 bg-white hover:bg-slate-50'}">
+          <div class="text-[13px] font-black text-slate-800">${periodo(q)}</div>
+          <div class="text-[10.5px] ${q.status === 'FECHADA' ? 'text-emerald-700' : 'text-amber-700'} font-bold">${q.status === 'FECHADA' ? '✓ fechada · ' + rs(q.total) : '● aberta'} · pagar ${dbr(p.util).slice(0, 5)}</div></button>`;
+      }).join('') : '<div class="text-xs text-slate-400">Nenhuma quinzena importada ainda. Comece importando o relatório do Alpha7.</div>';
+    }
+
+    // ---------- importação ----------
+    function lerArquivo(ev) {
+      const f = ev.target.files[0]; if (!f) return;
+      $('lblArquivo').innerText = f.name;
+      const rd = new FileReader();
+      rd.onload = e => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null });
+          const hi = rows.findIndex(r => r && r.some(c => String(c || '').trim() === 'Entregador') && r.some(c => String(c || '').trim() === 'Bairro'));
+          if (hi < 0) throw new Error('Não achei o cabeçalho (Data, Entregador, Un. Neg., Bairro...). Confira se é o relatório "Análise de Entrega".');
+          const H = rows[hi].map(c => String(c || '').trim());
+          const ix = n => H.indexOf(n);
+          const cD = ix('Data'), cE = ix('Entregador'), cL = ix('Un. Neg.'), cB = ix('Bairro'), cV = ix('Valor'), cN = ix('Entregas'), cI = ix('Itens');
+          if ([cD, cE, cL, cB, cN].some(i => i < 0)) throw new Error('Faltam colunas no arquivo (preciso de Data, Entregador, Un. Neg., Bairro e Entregas).');
+          const linhas = []; let ultData = null;
+          for (const r of rows.slice(hi + 1)) {
+            if (!r || String(r[cD] || '').trim().toLowerCase() === 'total') continue;
+            let d = r[cD];
+            if (d instanceof Date) d = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            else if (/^\d{2}\/\d{2}\/\d{4}/.test(String(d || ''))) d = String(d).slice(0, 10).split('/').reverse().join('-');
+            else if (typeof d === 'number') { const o = XLSX.SSF.parse_date_code(d); d = `${o.y}-${String(o.m).padStart(2, '0')}-${String(o.d).padStart(2, '0')}`; }
+            else d = null;
+            if (!d) { if (r[cL] == null) continue; d = ultData; } else ultData = d;
+            if (!d || r[cL] == null) continue;
+            linhas.push({ data: d, entregador: r[cE] ? String(r[cE]).trim() : null, loja: String(r[cL]).trim().padStart(2, '0'), bairro: r[cB] ? String(r[cB]).trim() : null,
+                          valor: cV >= 0 ? num(r[cV]) : null, entregas: Math.round(num(r[cN]) || 0), itens: cI >= 0 ? Math.round(num(r[cI]) || 0) : null });
+          }
+          if (!linhas.length) throw new Error('O arquivo não tem linhas de entrega.');
+          const ds = linhas.map(l => l.data).sort();
+          importando = { arquivo: f.name, linhas };
+          const ents = new Set(linhas.map(l => l.entregador).filter(Boolean));
+          $('previaImport').innerHTML = `<div class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+              <div><b>${linhas.length}</b> linha(s) · <b>${linhas.reduce((t, l) => t + l.entregas, 0)}</b> entrega(s) · ${ents.size} entregador(es)</div>
+              <div>Datas de <b>${dbr(ds[0])}</b> a <b>${dbr(ds[ds.length - 1])}</b></div></div>
+            <button onclick="importar()" id="btnImportar" class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-extrabold cursor-pointer">Importar esta quinzena</button>`;
+          $('previaImport').classList.remove('hidden');
+        } catch (err) { importando = null; $('previaImport').innerHTML = `<div class="bg-rose-50 border border-rose-300 text-rose-800 rounded-lg p-3 font-bold">${esc(err.message)}</div>`; $('previaImport').classList.remove('hidden'); }
+        ev.target.value = '';
+      };
+      rd.readAsArrayBuffer(f);
+    }
+
+    async function importar() {
+      if (!importando) return;
+      const b = $('btnImportar'); b.disabled = true; b.innerText = 'Importando...';
+      const { data, error } = await _supabase.rpc('fn_mot_importar', { p: importando });
+      if (error) { b.disabled = false; b.innerText = 'Importar esta quinzena'; alert(traduzirErro(error.message)); return; }
+      importando = null; $('previaImport').classList.add('hidden'); $('lblArquivo').innerText = 'nenhum arquivo';
+      await recarregar(); abrirQuinzena(data);
+    }
+
+    // ---------- quinzena ----------
+    async function abrirQuinzena(id) {
+      qSel = id; montarQuinzenas();
+      $('boxQuinzena').classList.remove('hidden'); $('boxQuinzena').innerHTML = '<div class="text-xs text-slate-400 p-4">Carregando...</div>';
+      const { data, error } = await rpcRetentar(_supabase, 'fn_mot_quinzena', { p_id: id });
+      if (error) { $('boxQuinzena').innerHTML = `<div class="bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold">${esc(traduzirErro(error.message))}</div>`; return; }
+      Q = data; montarQuinzena();
+    }
+
+    function resumir() {
+      const ok = Q.linhas.filter(l => l.situacao === 'OK');
+      const por = new Map();
+      const pega = id => { if (!por.has(id)) por.set(id, { id, qtd: 0, val: 0, mais: 0, menos: 0, lojas: {} }); return por.get(id); };
+      ok.forEach(l => { const r = pega(l.motoboy_id); r.qtd += l.entregas; r.val += Number(l.total); r.lojas[l.loja] = (r.lojas[l.loja] || 0) + Number(l.total); });
+      Q.ajustes.forEach(a => { const r = pega(a.motoboy_id); if (a.tipo === 'TRANSF_PAO') r.mais += Number(a.valor); else r.menos += Number(a.valor); });
+      const lista = [...por.values()].map(r => ({ ...r, m: motoboy(r.id), total: r.val + r.mais - r.menos })).sort((a, b) => b.total - a.total);
+      return lista;
+    }
+
+    function montarQuinzena() {
+      const q = Q.quinzena, aberta = q.status === 'ABERTA', p = pagamento(q);
+      const L = Q.linhas;
+      const nd = new Map(), nc = new Map(), fora = new Map();
+      L.forEach(l => {
+        if (l.situacao === 'ND') { const k = l.cidade + '|' + (l.bairro || ''); const r = nd.get(k) || { cidade: l.cidade, bairro: l.bairro, qtd: 0, ents: new Set(), lojas: new Set() }; r.qtd += l.entregas; r.ents.add(l.entregador); r.lojas.add(l.loja); nd.set(k, r); }
+        if (l.situacao === 'NAO_CADASTRADO') { const r = nc.get(l.entregador) || { nome: l.entregador, qtd: 0, lojas: new Set() }; r.qtd += l.entregas; r.lojas.add(l.loja); nc.set(l.entregador, r); }
+        if (['NAO_PAGA', 'LOJA_NAO_PAGA', 'SEM_ENTREGADOR', 'FORA'].includes(l.situacao)) { const k = l.situacao === 'LOJA_NAO_PAGA' ? 'Loja ' + l.loja + ' (não paga por aqui)' : l.situacao === 'SEM_ENTREGADOR' ? 'Sem entregador (retirada/balcão)' : l.situacao === 'FORA' ? (l.entregador + ' · loja ' + l.loja + ' (fora no fechamento)') : (l.entregador + ' (não se paga por aqui)'); fora.set(k, (fora.get(k) || 0) + l.entregas); }
+      });
+      const res = resumir();
+      const tot = res.reduce((t, r) => ({ qtd: t.qtd + r.qtd, val: t.val + r.val, mais: t.mais + r.mais, menos: t.menos + r.menos, total: t.total + r.total }), { qtd: 0, val: 0, mais: 0, menos: 0, total: 0 });
+      const lojasUsadas = [...new Set(res.flatMap(r => Object.keys(r.lojas)))].sort();
+      const pend = nd.size + nc.size;
+
+      const cab = `<div class="bg-white border ${aberta ? 'border-amber-300' : 'border-emerald-300'} rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="space-y-0.5">
+          <div class="flex flex-wrap items-center gap-2"><span class="text-lg font-black text-slate-900">Quinzena ${periodo(q)}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-black ${aberta ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${aberta ? '● ABERTA' : '✓ FECHADA'}</span></div>
+          <div class="text-xs text-slate-600">💰 Pagamento: <b>${p.txt}</b> <span class="text-amber-700">${p.obs}</span> · NF dos motoboys para esta data · lançar no Alpha7 (contas a pagar)</div>
+          <div class="text-[11px] text-slate-400">📄 ${esc(q.arquivo || '-')} · ${q.linhas} linha(s) · importado por ${esc(q.importado_por || '-')} em ${dh(q.importado_em)}${q.fechado_em ? ` · fechado por ${esc(q.fechado_por)} em ${dh(q.fechado_em)}` : ''}</div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="imprimirResumo()" class="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold cursor-pointer">🖨 Resumo</button>
+          ${aberta ? `<button onclick="fechar()" class="px-4 py-2 ${pend ? 'bg-slate-300 text-slate-600' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} rounded-lg text-xs font-extrabold cursor-pointer" ${pend ? 'title="Resolva as pendências antes de fechar"' : ''}>✓ Fechar quinzena</button>`
+                   : gestor() ? `<button onclick="reabrir()" class="px-3 py-2 bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-bold cursor-pointer">↺ Reabrir (Gestor)</button>` : ''}
+        </div></div>`;
+
+      const pendHtml = !aberta || !pend ? '' : `<div class="bg-rose-50 border border-rose-300 rounded-xl p-4 space-y-3">
+        <div class="text-sm font-black text-rose-800">⚠ Pendências: resolva para fechar a quinzena</div>
+        ${nd.size ? `<div><div class="text-xs font-bold text-rose-900 mb-1">Bairro sem valor (ND): cadastre a taxa e a conta refaz sozinha</div>
+          <div class="bg-white rounded-lg border border-rose-200 overflow-auto"><table class="tb w-full"><thead><tr><th>Cidade</th><th>Bairro (como veio)</th><th>Lojas</th><th>Entregador(es)</th><th class="num">Entregas</th><th>Taxa (R$)</th><th></th></tr></thead><tbody>
+          ${[...nd.values()].map((r, i) => `<tr><td>${esc(r.cidade)}</td><td class="font-bold">${esc(r.bairro || '(vazio)')}</td><td>${[...r.lojas].sort().join(', ')}</td><td class="text-[11px]">${[...r.ents].map(esc).join('<br>')}</td><td class="num">${r.qtd}</td>
+            <td><input id="nd_${i}" class="inp w-24" inputmode="decimal" placeholder="0,00"></td>
+            <td><button onclick="salvarND(${i})" data-cid="${esc(r.cidade)}" data-bai="${esc(r.bairro || '')}" id="ndb_${i}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">Salvar</button></td></tr>`).join('')}
+          </tbody></table></div></div>` : ''}
+        ${nc.size ? `<div><div class="text-xs font-bold text-rose-900 mb-1">Entregador que ainda não está no cadastro</div>
+          <div class="flex flex-wrap gap-2">${[...nc.values()].map(r => `<div class="bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"><b>${esc(r.nome)}</b> · ${r.qtd} entrega(s) · loja(s) ${[...r.lojas].sort().join(', ')}
+            <div class="mt-1 flex gap-2"><button onclick="cadastrarRapido('${esc(r.nome).replace(/'/g, '&#39;')}', true)" class="text-[11px] px-2 py-1 bg-emerald-600 text-white rounded font-bold cursor-pointer">Cadastrar: paga por aqui</button>
+            <button onclick="cadastrarRapido('${esc(r.nome).replace(/'/g, '&#39;')}', false)" class="text-[11px] px-2 py-1 bg-slate-200 text-slate-700 rounded font-bold cursor-pointer">Não se paga por aqui</button></div></div>`).join('')}</div></div>` : ''}
+      </div>`;
+
+      const resHtml = `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
+        <div class="px-4 pt-4 pb-2 flex flex-wrap items-baseline justify-between gap-2"><h3 class="font-black text-sm text-slate-800">Resumo por motoboy</h3><span class="text-[11px] text-slate-500">taxa do bairro × nº de entregas${aberta ? ' · valores da tabela de bairros de hoje' : ' · valores congelados no fechamento'}</span></div>
+        <table class="tb w-full"><thead><tr><th>Motoboy</th><th class="num">Entregas</th>${lojasUsadas.map(l => `<th class="num">Loja ${l}</th>`).join('')}<th class="num">Valor entregas</th><th class="num">Transf./Pão</th><th class="num">Abatimento</th><th class="num">Total</th><th></th></tr></thead><tbody>
+        ${res.map(r => `<tr><td><div class="font-bold">${esc(r.m.nome_alpha7)}</div>${r.m.nome_pdf ? `<div class="text-[10.5px] text-slate-400">${esc(r.m.nome_pdf)}</div>` : ''}</td><td class="num">${r.qtd}</td>
+          ${lojasUsadas.map(l => `<td class="num text-slate-500">${r.lojas[l] ? brl(r.lojas[l]) : '-'}</td>`).join('')}
+          <td class="num">${brl(r.val)}</td><td class="num">${r.mais ? brl(r.mais) : '-'}</td><td class="num text-rose-700">${r.menos ? '−' + brl(r.menos) : '-'}</td><td class="num font-black">${rs(r.total)}</td>
+          <td class="text-right"><button onclick="pdfMotoboy('${r.id}')" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold cursor-pointer whitespace-nowrap">📄 PDF</button></td></tr>`).join('') || `<tr><td colspan="${7 + lojasUsadas.length}" class="text-center text-slate-400 py-6">Nenhuma entrega para pagar.</td></tr>`}
+        </tbody><tfoot><tr class="bg-slate-50 font-black"><td class="px-2 py-2">Total</td><td class="num px-2">${tot.qtd}</td>${lojasUsadas.map(l => `<td class="num px-2 text-slate-500">${brl(res.reduce((t, r) => t + (r.lojas[l] || 0), 0))}</td>`).join('')}<td class="num px-2">${brl(tot.val)}</td><td class="num px-2">${brl(tot.mais)}</td><td class="num px-2 text-rose-700">${tot.menos ? '−' + brl(tot.menos) : '-'}</td><td class="num px-2 text-base">${rs(tot.total)}</td><td></td></tr></tfoot></table></div>`;
+
+      const pagaveis = D.motoboys.filter(m => m.paga && m.ativo);
+      const ajHtml = `<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+        <h3 class="font-black text-sm text-slate-800">± Ajustes da quinzena</h3>
+        <p class="text-[11px] text-slate-500">Transf./Pão soma ao motoboy (transferência entre lojas, compra de pão); Abatimento desconta. Sempre com o motivo.</p>
+        ${Q.ajustes.length ? `<div class="space-y-1">${Q.ajustes.map(a => `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1.5">
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-black ${a.tipo === 'TRANSF_PAO' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'}">${a.tipo === 'TRANSF_PAO' ? '+ TRANSF./PÃO' : '− ABATIMENTO'}</span>
+          <b>${esc(a.motoboy)}</b> · ${rs(a.valor)} · <span class="text-slate-600">${esc(a.motivo)}</span><span class="ml-auto text-[10px] text-slate-400">${esc(a.criado_por)} · ${dh(a.criado_em)}</span>
+          ${aberta ? `<button onclick="excluirAjuste('${a.id}')" class="text-[10px] text-rose-600 underline cursor-pointer">excluir</button>` : ''}</div>`).join('')}</div>` : '<div class="text-xs text-slate-400">Nenhum ajuste.</div>'}
+        ${aberta ? `<div class="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <div class="sm:col-span-2"><label class="lbl">Motoboy *</label><select id="ajMot" class="inp"><option value="">-</option>${pagaveis.map(m => `<option value="${m.id}">${esc(m.nome_alpha7)}</option>`).join('')}</select></div>
+          <div><label class="lbl">Tipo *</label><select id="ajTipo" class="inp"><option value="TRANSF_PAO">+ Transf./Pão</option><option value="ABATIMENTO">− Abatimento</option></select></div>
+          <div><label class="lbl">Valor (R$) *</label><input id="ajValor" class="inp" inputmode="decimal" placeholder="0,00"></div>
+          <div class="sm:col-span-2"><label class="lbl">Motivo *</label><input id="ajMotivo" class="inp" placeholder="ex.: 3 transferências loja 01 → 03"></div>
+          <div class="sm:col-span-6 text-right"><button onclick="salvarAjuste()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold cursor-pointer">Lançar ajuste</button></div></div>` : ''}
+      </div>`;
+
+      const foraHtml = `<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+        <h3 class="font-black text-sm text-slate-800">Fora da conta</h3>
+        ${fora.size ? `<div class="space-y-1 text-xs">${[...fora.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="flex justify-between gap-2 border-b border-slate-100 py-1"><span class="text-slate-600">${esc(k)}</span><b>${v} entrega(s)</b></div>`).join('')}</div>` : '<div class="text-xs text-slate-400">Nada.</div>'}
+        <h3 class="font-black text-sm text-slate-800 pt-2">Histórico</h3>
+        <div class="space-y-1 text-[11px]">${(q.historico || []).slice().reverse().map(h => `<div class="border-l-2 ${h.acao === 'REABRIU' ? 'border-rose-400' : h.acao === 'FECHOU' ? 'border-emerald-400' : 'border-slate-300'} pl-2"><b>${esc(h.acao)}</b> · ${esc(h.por)} · ${dh(h.em)}<div class="text-slate-500">${esc(h.obs || '')}</div></div>`).join('') || '<div class="text-slate-400">-</div>'}</div>
+      </div>`;
+
+      $('boxQuinzena').innerHTML = cab + pendHtml + resHtml + `<div class="grid grid-cols-1 lg:grid-cols-3 gap-4"><div class="lg:col-span-2">${ajHtml}</div>${foraHtml}</div>`;
+    }
+
+    async function salvarND(i) {
+      const b = $('ndb_' + i), v = num($('nd_' + i).value);
+      if (v == null || v < 0) { alert('Informe a taxa do bairro (pode ser 0).'); return; }
+      b.disabled = true;
+      const { error } = await _supabase.rpc('fn_mot_bairro_salvar', { p: { cidade: b.dataset.cid, bairro: b.dataset.bai, valor: v } });
+      if (error) { b.disabled = false; alert(traduzirErro(error.message)); return; }
+      await recarregar(); abrirQuinzena(qSel);
+    }
+
+    async function cadastrarRapido(nome, paga) {
+      let motivo = null;
+      if (!paga) { motivo = await pedirTexto(`${nome}\n\nPor que este entregador não se paga por aqui? (ex.: iFood, funcionário)`, ''); if (!motivo) return; }
+      const { error } = await _supabase.rpc('fn_mot_motoboy_salvar', { p: { nome_alpha7: nome, paga, motivo_nao_paga: motivo } });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      await recarregar(); abrirQuinzena(qSel);
+    }
+
+    async function salvarAjuste() {
+      const p = { quinzena_id: qSel, motoboy_id: $('ajMot').value, tipo: $('ajTipo').value, valor: num($('ajValor').value), motivo: $('ajMotivo').value.trim() };
+      if (!p.motoboy_id) { alert('Escolha o motoboy.'); return; }
+      if (!p.valor || p.valor <= 0) { alert('Informe o valor do ajuste.'); return; }
+      if (p.motivo.replace(/[^A-Za-zÀ-ÿ]/g, '').length < 10) { alert('Explique o ajuste (pelo menos 10 letras).'); return; }
+      const { error } = await _supabase.rpc('fn_mot_ajuste_salvar', { p });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      abrirQuinzena(qSel);
+    }
+    async function excluirAjuste(id) {
+      if (!confirm('Excluir este ajuste?')) return;
+      const { error } = await _supabase.rpc('fn_mot_ajuste_excluir', { p_id: id });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      abrirQuinzena(qSel);
+    }
+
+    async function fechar() {
+      const res = resumir(), tot = res.reduce((t, r) => t + r.total, 0);
+      if (!confirm(`Fechar a quinzena ${periodo(Q.quinzena)}?\n\n${res.length} motoboy(s) · total ${rs(tot)}\n\nAo fechar, a taxa de cada entrega fica congelada (mudar a tabela de bairros depois não altera esta quinzena). Só o Gestor reabre.`)) return;
+      const { error } = await _supabase.rpc('fn_mot_fechar', { p_id: qSel });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      await recarregar(); abrirQuinzena(qSel);
+    }
+    async function reabrir() {
+      const m = await pedirTexto(`Reabrir a quinzena ${periodo(Q.quinzena)}?\n\nA taxa volta a seguir a tabela de bairros e o fechamento precisa ser refeito. Explique o motivo (pelo menos 15 letras):`, '');
+      if (!m) return;
+      const { error } = await _supabase.rpc('fn_mot_reabrir', { p_id: qSel, p_motivo: m });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      await recarregar(); abrirQuinzena(qSel);
+    }
+
+    // ---------- PDF (impressão) ----------
+    function janelaImpressao(titulo, corpo) {
+      const w = window.open('', '_blank');
+      if (!w) { alert('O navegador bloqueou a janela do PDF. Libere pop-ups para o sistema e tente de novo.'); return; }
+      w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:18px;font-size:11px} h1{font-size:15px;margin:0} .sub{color:#555;margin:2px 0 10px}
+        table{width:100%;border-collapse:collapse} th{background:#eee;text-align:left;padding:4px 5px;font-size:10px;text-transform:uppercase} td{padding:3px 5px;border-bottom:1px solid #e5e5e5}
+        .n{text-align:right;white-space:nowrap} .tot{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:8px}
+        .tot b{font-size:18px} .box{border:1px solid #ccc;border-radius:6px;padding:8px;margin-top:10px} @page{size:A4;margin:12mm} thead{display:table-header-group}
+        </style></head><body>${corpo}<script>window.onload=()=>{window.print();}<\/script></body></html>`);
+      w.document.close();
+    }
+    function pdfMotoboy(id) {
+      const m = motoboy(id), q = Q.quinzena, p = pagamento(q);
+      const L = Q.linhas.filter(l => l.situacao === 'OK' && l.motoboy_id === id);
+      const aj = Q.ajustes.filter(a => a.motoboy_id === id);
+      const val = L.reduce((t, l) => t + Number(l.total), 0), mais = aj.filter(a => a.tipo === 'TRANSF_PAO').reduce((t, a) => t + Number(a.valor), 0), menos = aj.filter(a => a.tipo === 'ABATIMENTO').reduce((t, a) => t + Number(a.valor), 0);
+      const corpo = `<div class="tot"><div><h1>Análise de Entrega · ${esc(nomePdf(m))}</h1><div class="sub">Período ${periodo(q)} · ${L.reduce((t, l) => t + l.entregas, 0)} entrega(s)${m.documento ? ' · ' + esc(m.documento) : ''} · NF para pagamento em ${dbr(p.util)}${q.status === 'ABERTA' ? ' · PRÉVIA (quinzena ainda aberta)' : ''}</div></div><b>${rs(val + mais - menos)}</b></div>
+        <table><thead><tr><th>Data</th><th>Entregador</th><th>Un. Neg.</th><th>Bairro</th><th class="n">Entregas</th><th class="n">Valor taxa</th><th class="n">Valor total</th></tr></thead><tbody>
+        ${L.map(l => `<tr><td>${dbr(l.data)}</td><td>${esc(l.entregador)}</td><td>${esc(l.loja)}</td><td>${esc(l.bairro)}</td><td class="n">${l.entregas}</td><td class="n">${brl(l.taxa)}</td><td class="n">${brl(l.total)}</td></tr>`).join('')}
+        </tbody></table>
+        <div class="box"><table><tr><td>Entregas</td><td class="n">${rs(val)}</td></tr>${aj.map(a => `<tr><td>${a.tipo === 'TRANSF_PAO' ? '+ Transf./Pão' : '− Abatimento'}: ${esc(a.motivo)}</td><td class="n">${a.tipo === 'TRANSF_PAO' ? '' : '−'}${rs(a.valor)}</td></tr>`).join('')}
+        <tr><td><b>Total a faturar (NF)</b></td><td class="n"><b>${rs(val + mais - menos)}</b></td></tr></table></div>`;
+      janelaImpressao(`${nomePdf(m)} ${periodo(q)}`, corpo);
+    }
+    function imprimirResumo() {
+      const q = Q.quinzena, p = pagamento(q), res = resumir(), tot = res.reduce((t, r) => t + r.total, 0);
+      const corpo = `<div class="tot"><div><h1>Motoboys · quinzena ${periodo(q)}</h1><div class="sub">${q.status === 'FECHADA' ? 'Fechada por ' + esc(q.fechado_por) + ' em ' + dh(q.fechado_em) : 'PRÉVIA (quinzena aberta)'} · pagamento ${p.txt}</div></div><b>${rs(tot)}</b></div>
+        <table><thead><tr><th>Motoboy</th><th>Nome NF</th><th class="n">Entregas</th><th class="n">Valor entregas</th><th class="n">Transf./Pão</th><th class="n">Abatimento</th><th class="n">Total</th></tr></thead><tbody>
+        ${res.map(r => `<tr><td>${esc(r.m.nome_alpha7)}</td><td>${esc(r.m.nome_pdf || '')}</td><td class="n">${r.qtd}</td><td class="n">${brl(r.val)}</td><td class="n">${brl(r.mais)}</td><td class="n">${brl(r.menos)}</td><td class="n"><b>${brl(r.total)}</b></td></tr>`).join('')}
+        </tbody></table>`;
+      janelaImpressao(`Motoboys ${periodo(q)}`, corpo);
+    }
+
+    // ---------- bairros ----------
+    function montarBairros() {
+      const c = $('bCidadeF').value, b = (window.DiaUtil, $('bBusca').value || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''), z = $('bZero').checked;
+      const L = D.bairros.filter(x => (!c || x.cidade === c) && (!z || Number(x.valor) === 0) && (!b || x.chave.includes(b)));
+      $('bResumo').innerText = `${L.length} de ${D.bairros.length} bairro(s) · ${D.bairros.filter(x => Number(x.valor) === 0).length} com valor 0`;
+      $('tbBairros').innerHTML = L.map(x => `<tr class="${x.ativo ? '' : 'opacity-50'}"><td>${x.cidade === 'MOGI' ? 'Mogi' : 'Guararema'}</td><td class="font-bold">${esc(x.bairro)}</td>
+        <td class="num"><input id="bv_${x.id}" class="inp w-24 text-right ${Number(x.valor) === 0 ? 'border-amber-400 bg-amber-50' : ''}" value="${brl(x.valor)}" inputmode="decimal"></td>
+        <td><input type="checkbox" id="ba_${x.id}" ${x.ativo ? 'checked' : ''}></td><td class="text-[10.5px] text-slate-400">${x.atualizado_em ? esc(x.atualizado_por) + ' · ' + dh(x.atualizado_em) : 'planilha'}</td>
+        <td class="text-right"><button onclick="salvarBairro(${x.id})" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 rounded text-[11px] font-bold cursor-pointer">Salvar</button></td></tr>`).join('');
+    }
+    async function salvarBairro(id) {
+      const x = D.bairros.find(b => b.id === id), v = num($('bv_' + id).value);
+      if (v == null || v < 0) { alert('Valor inválido.'); return; }
+      const { error } = await _supabase.rpc('fn_mot_bairro_salvar', { p: { id, cidade: x.cidade, bairro: x.bairro, valor: v, ativo: $('ba_' + id).checked } });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      await recarregar(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
+    }
+    async function novoBairro() {
+      const p = { cidade: $('nbCidade').value, bairro: $('nbBairro').value.trim(), valor: num($('nbValor').value) };
+      if (!p.cidade || !p.bairro || p.valor == null) { alert('Preencha cidade, bairro e taxa.'); return; }
+      const { error } = await _supabase.rpc('fn_mot_bairro_salvar', { p });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      $('nbBairro').value = ''; $('nbValor').value = '';
+      await recarregar(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
+    }
+
+    // ---------- motoboys e lojas ----------
+    function montarMotoboys() {
+      $('tbMotoboys').innerHTML = D.motoboys.map(m => `<tr class="${m.ativo ? '' : 'opacity-50'}"><td class="font-bold">${esc(m.nome_alpha7)}${m.obs ? `<div class="text-[10.5px] font-normal text-slate-400">${esc(m.obs)}</div>` : ''}</td><td>${esc(m.nome_pdf || '-')}</td><td class="text-[11.5px]">${esc(m.documento || '-')}</td><td class="text-[11.5px]">${esc(m.pix || '-')}</td>
+        <td>${m.paga ? '<span class="text-emerald-700 font-bold text-xs">✓ sim</span>' : `<span class="text-slate-500 text-xs">não · ${esc(m.motivo_nao_paga || '')}</span>`}</td>
+        <td class="text-right"><button onclick="editarMotoboy('${m.id}')" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 rounded text-[11px] font-bold cursor-pointer">Editar</button></td></tr>`).join('');
+      montarFormMotoboy();
+    }
+    function editarMotoboy(id) { editMot = id; montarFormMotoboy(); $('formMotoboy').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    function montarFormMotoboy() {
+      const m = editMot ? motoboy(editMot) : { paga: true, ativo: true };
+      $('formMotoboy').innerHTML = `<h3 class="font-black text-xs text-slate-800">${editMot ? '✎ Editar motoboy' : '＋ Novo motoboy'}</h3>
+        <div><label class="lbl">Nome no Alpha7 * (igual ao relatório)</label><input id="mNome" class="inp uppercase" value="${esc(m.nome_alpha7 || '')}"></div>
+        <div><label class="lbl">Nome no PDF / razão social da NF</label><input id="mPdf" class="inp" value="${esc(m.nome_pdf || '')}"></div>
+        <div class="grid grid-cols-2 gap-2"><div><label class="lbl">CNPJ / CPF</label><input id="mDoc" class="inp" value="${esc(m.documento || '')}"></div><div><label class="lbl">Telefone</label><input id="mTel" class="inp" value="${esc(m.telefone || '')}"></div></div>
+        <div><label class="lbl">PIX</label><input id="mPix" class="inp" value="${esc(m.pix || '')}"></div>
+        <div class="flex gap-4 text-xs font-bold text-slate-700"><label class="flex items-center gap-1.5"><input type="checkbox" id="mPaga" ${m.paga ? 'checked' : ''} onchange="$('boxNaoPaga').classList.toggle('hidden', this.checked)"> paga por aqui</label>
+          <label class="flex items-center gap-1.5"><input type="checkbox" id="mAtivo" ${m.ativo ? 'checked' : ''}> ativo</label></div>
+        <div id="boxNaoPaga" class="${m.paga ? 'hidden' : ''}"><label class="lbl">Por que não se paga por aqui? *</label><input id="mMotivo" class="inp" value="${esc(m.motivo_nao_paga || '')}" placeholder="iFood, funcionário..."></div>
+        <div><label class="lbl">Observação</label><input id="mObs" class="inp" value="${esc(m.obs || '')}"></div>
+        <div class="flex gap-2 justify-end">${editMot ? `<button onclick="editMot=null;montarFormMotoboy()" class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold cursor-pointer">Cancelar</button>` : ''}
+          <button onclick="salvarMotoboy()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold cursor-pointer">Salvar</button></div>`;
+    }
+    async function salvarMotoboy() {
+      const p = { id: editMot, nome_alpha7: $('mNome').value, nome_pdf: $('mPdf').value, documento: $('mDoc').value, telefone: $('mTel').value, pix: $('mPix').value,
+                  paga: $('mPaga').checked, ativo: $('mAtivo').checked, motivo_nao_paga: $('mMotivo').value, obs: $('mObs').value };
+      const { error } = await _supabase.rpc('fn_mot_motoboy_salvar', { p });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      editMot = null; await recarregar(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
+    }
+    function montarLojas() {
+      $('tbLojas').innerHTML = D.lojas.map(l => `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1.5">
+        <b class="w-14">Loja ${esc(l.loja_num)}</b>
+        <select id="lc_${l.loja_num}" class="inp !w-32 !py-1"><option value="MOGI" ${l.cidade === 'MOGI' ? 'selected' : ''}>Mogi</option><option value="GUARAREMA" ${l.cidade === 'GUARAREMA' ? 'selected' : ''}>Guararema</option></select>
+        <label class="flex items-center gap-1"><input type="checkbox" id="lp_${l.loja_num}" ${l.paga ? 'checked' : ''}> paga por aqui</label>
+        <button onclick="salvarLoja('${l.loja_num}')" class="ml-auto px-2 py-1 bg-white border border-slate-300 rounded text-[11px] font-bold cursor-pointer">Salvar</button></div>`).join('');
+    }
+    async function salvarLoja(n) {
+      const { error } = await _supabase.rpc('fn_mot_loja_salvar', { p_loja: n, p_cidade: $('lc_' + n).value, p_paga: $('lp_' + n).checked });
+      if (error) { alert(traduzirErro(error.message)); return; }
+      await recarregar(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
