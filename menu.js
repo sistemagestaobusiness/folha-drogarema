@@ -267,12 +267,18 @@
       if (item && !item.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = tot; item.appendChild(b);
         const sec = item.closest('.sec'); if (sec) sec.classList.add('aberto'); }
       if (PAGINA === 'holerite_entrega.html') return;
-      const c = data[0].competencia;
-      const a = document.createElement('a'); a.id = 'avisoHolerite'; a.href = `holerite_entrega.html?comp=${encodeURIComponent(c)}&pend=1`;
-      a.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;background:#dc2626;color:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-family:inherit;font-size:13px;text-decoration:none;max-width:340px;line-height:1.35';
-      a.innerHTML = `<b style="display:block;font-size:14px">🧾 Holerites aguardando a SUA confirmação</b>${data.map(r => `${r.qtd} funcionário(s) · holerite ${r.competencia}`).join('<br>')}
-        <span style="display:block;margin-top:6px;font-weight:800;text-decoration:underline">Confirmar entrega${pf === 'RH' ? ' (lado do RH)' : ' (lado da loja)'} →</span>`;
+      // aviso que pode ser fechado (regra de 28/10/2026): some por 30 min e volta enquanto não confirmar; a pendência fica na Central de pendências
+      const c = data[0].competencia, CHAVE = 'aviso_holerite_fechado_ate', PAUSA = 30 * 60e3;
+      const fechadoAte = () => { try { return Number(localStorage.getItem(CHAVE)) || 0; } catch (e) { return 0; } };
+      const a = document.createElement('div'); a.id = 'avisoHolerite';
+      a.style.cssText = 'position:fixed;right:16px;top:64px;z-index:99990;background:#dc2626;color:#fff;border-radius:12px;padding:10px 34px 10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-family:inherit;font-size:12.5px;max-width:300px;line-height:1.35';
+      a.innerHTML = `<button type="button" title="Fechar por 30 minutos (a pendência continua na Central de pendências)" aria-label="Fechar" style="position:absolute;top:6px;right:8px;background:none;border:0;color:#fff;font-size:16px;font-weight:700;cursor:pointer;line-height:1">✕</button>
+        <a href="holerite_entrega.html?comp=${encodeURIComponent(c)}&pend=1" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:13px">🧾 Holerites aguardando a SUA confirmação</b>${data.map(r => `${r.qtd} funcionário(s) · holerite ${r.competencia}`).join('<br>')}
+        <span style="display:block;margin-top:5px;font-weight:800;text-decoration:underline">Confirmar entrega${pf === 'RH' ? ' (lado do RH)' : ' (lado da loja)'} →</span></a>`;
+      a.querySelector('button').onclick = () => { try { localStorage.setItem(CHAVE, String(Date.now() + PAUSA)); } catch (e) { } a.style.display = 'none'; };
+      const ver = () => { a.style.display = Date.now() < fechadoAte() ? 'none' : ''; };
       document.body.appendChild(a);
+      ver(); setInterval(ver, 60000);
     } catch (e) { console.warn('holerites', e); }
   }
 
