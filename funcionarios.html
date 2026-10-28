@@ -512,8 +512,15 @@
       }
     }
 
+    // trava contra gravar a mesma ficha 2 vezes (duplo clique / Enter): em 14/10 a ficha da Maria Eduarda foi criada em dobro (regra de 28/10/2026)
+    let salvandoFicha = false;
     async function salvarFicha(e) {
       e.preventDefault();
+      if (salvandoFicha) return;
+      salvandoFicha = true;
+      try { await salvarFichaAgora(); } finally { salvandoFicha = false; }
+    }
+    async function salvarFichaAgora() {
       const payload = {};
       CAMPOS.forEach(c => {
         const el = $(c); if (!el) return;

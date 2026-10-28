@@ -37,12 +37,14 @@
     </div>
 
     <div id="avisoForcado" class="hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs">
-      <span id="txtForcado">⚠️ Você não é o supervisor. Como <b>Gestor</b>, aqui você decide <b>no lugar dele</b>: a observação é obrigatória e a decisão fica marcada nos relatórios.</span>
+      <span id="txtForcado">⚠️ Você não é o supervisor. Como <b>Gestor</b>, aqui você decide <b>no lugar dele</b>: a justificativa é obrigatória (mínimo 15 letras), o supervisor recebe a notificação para dar ciência e a decisão fica marcada nos relatórios.</span>
     </div>
     <div id="avisoSemAcesso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold">
       Seu perfil não tem acesso a esta tela.
     </div>
 
+    <!-- decididos no lugar do supervisor: ciência obrigatória com justificativa (regra de 28/10/2026) -->
+    <div id="boxCiencia" class="hidden bg-rose-50 border-2 border-rose-400 rounded-xl p-4 space-y-3"></div>
     <a id="avisoAtestados" href="atestados_conferencia.html" class="hidden block bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-sm font-bold hover:bg-amber-100"></a>
     <div id="conteudo" class="hidden space-y-4">
     <div class="flex gap-4 border-b border-slate-200">
@@ -130,13 +132,41 @@
         av.classList.remove('hidden'); return;
       }
       if (perfil !== 'SUPERVISOR') document.getElementById('avisoForcado').classList.remove('hidden');
-      if (perfil === 'RH') document.getElementById('txtForcado').innerHTML = 'ℹ️ Tela só de consulta para o RH. A aprovação desta etapa é do <b>supervisor</b> (ou do Gestor). O RH aprova depois, na tela <b>Aprovação do RH</b>.';
+      if (perfil === 'RH') document.getElementById('txtForcado').innerHTML = 'ℹ️ Tela só de consulta para o RH. A aprovação desta etapa é do <b>supervisor</b>. Em caso urgente, o RH decide no lugar dele na tela <b>Aprovação do RH</b> (aba do supervisor), com justificativa obrigatória que vai para o supervisor. Pedido criado por você não pode ser decidido por você.';
 
       const { data: f } = await _supabase.from('vw_funcionarios_basico').select('id, nome_registro');
       (f || []).forEach(x => funcs[x.id] = x.nome_registro);
       document.getElementById('conteudo').classList.remove('hidden');
       carregar();
       avisoAtestados();
+      carregarCiencia();
+    }
+    // ---------- ciência do que foi decidido no lugar do supervisor ----------
+    let ciencias = [];
+    async function carregarCiencia() {
+      const box = document.getElementById('boxCiencia');
+      if (perfil !== 'SUPERVISOR') { box.classList.add('hidden'); return; }
+      const { data, error } = await _supabase.from('freelance_solicitacoes').select('id, data_servico, hora_inicio, hora_fim, horas_trabalhadas, funcionario_id, loja_solicitante, tipo_solicitacao, status, supervisor_por, supervisor_em, supervisor_obs, valor_pago')
+        .eq('supervisor_forcado', true).is('ciencia_supervisor_em', null).order('supervisor_em');
+      ciencias = error ? [] : (data || []);
+      if (!ciencias.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      box.innerHTML = `<div class="font-bold text-rose-800 text-sm">🔔 ${ciencias.length} pedido(s) decidido(s) no seu lugar: confira e dê ciência</div>
+        <div class="text-xs text-rose-900">Alguém do RH ou o Gestor decidiu sem esperar a sua aprovação. Confira se estava certo e explique por que não foi decidido a tempo (obrigatório).</div>
+        ${ciencias.map(c => `<div class="bg-white border border-rose-200 rounded-lg p-3 text-xs space-y-1.5">
+          <div class="flex flex-wrap gap-2 items-baseline"><b class="text-sm text-slate-900">${esc(nome(c.funcionario_id))}</b><span class="text-slate-500">${esc(c.loja_solicitante || '')} · ${c.tipo_solicitacao === 'HORA_EXTRA' ? 'Hora extra' : 'Freelance'} ${dataBR(c.data_servico)} · ${String(c.hora_inicio || '').slice(0, 5)} às ${String(c.hora_fim || '').slice(0, 5)} · ${fmtHoras(c.horas_trabalhadas)}</span>
+            <span class="font-bold ${c.status === 'REJEITADA' ? 'text-rose-700' : 'text-emerald-700'}">${c.status === 'REJEITADA' ? 'recusado' : 'aprovado'} no seu lugar</span></div>
+          <div>Por <b>${esc(c.supervisor_por || '')}</b> em ${dh(c.supervisor_em)} · justificativa: <i>"${esc(c.supervisor_obs || '')}"</i></div>
+          <div class="flex flex-wrap gap-2 items-start"><textarea id="ci_${c.id}" rows="2" class="flex-1 min-w-[240px] border border-slate-300 rounded p-2" placeholder="Por que não foi decidido a tempo? (mínimo 15 letras)"></textarea>
+            <button onclick="darCiencia('${c.id}')" class="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg font-bold cursor-pointer">✓ Dar ciência</button></div></div>`).join('')}`;
+      box.classList.remove('hidden');
+    }
+    async function darCiencia(id) {
+      const t = (document.getElementById('ci_' + id).value || '').trim();
+      if (t.replace(/[^A-Za-zÀ-ÿ]/g, '').length < 15) return alert('Explique por que não foi decidido a tempo (mínimo 15 letras).');
+      const { error } = await _supabase.rpc('fn_freelance_ciencia_supervisor', { p_id: id, p_justif: t });
+      if (error) return alert(error.message);
+      carregarCiencia();
     }
     // atestados anexados nos abonos aguardando a conferência do supervisor
     async function avisoAtestados() {

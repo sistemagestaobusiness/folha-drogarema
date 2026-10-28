@@ -297,7 +297,9 @@
         if (item && !item.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = r.qtd; item.appendChild(b);
           const sec = item.closest('.sec'); if (sec) sec.classList.add('aberto'); }
       }
-      const totAp = pend.reduce((t, p) => t + (p.qtd || 0), 0);
+      let totAp = pend.reduce((t, p) => t + (p.qtd || 0), 0);
+      // pedidos de freelance criados pelo RH esperando o Gestor na etapa do RH (regra de 28/10/2026)
+      try { const { data: rs } = await window.ACESSO_CLI.rpc('fn_aprovacoes_gestor_resumo'); const fr = (rs || []).find(r => r.tipo === 'FREELANCE_RH'); if (fr) { totAp += fr.qtd || 0; pend.push({ tela: 'aprovacoes_gestor.html', nome: 'Freelance criado pelo RH (o RH não aprova o próprio pedido)', qtd: fr.qtd, total: 0, m: 'aguardando a etapa do RH' }); } } catch (e) { }
       const itAp = document.querySelector('#menuSistema a.it[data-menu="aprovacoes_gestor.html"]');
       if (totAp && itAp && !itAp.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = totAp; itAp.appendChild(b); }
       if (PAGINA === 'aprovacoes_gestor.html') return;
@@ -436,6 +438,25 @@
     }
     await ciclo();
     setInterval(ciclo, 60000);
+  }
+
+  // supervisor: decisões tomadas no lugar dele aguardando ciência com justificativa (regra de 28/10/2026)
+  async function cienciaSupervisor() {
+    if (String(window.ACESSO.perfil || '').toUpperCase() !== 'SUPERVISOR' || !window.ACESSO_CLI || window.top !== window) return;
+    try {
+      const { count, error } = await window.ACESSO_CLI.from('freelance_solicitacoes').select('id', { count: 'exact', head: true }).eq('supervisor_forcado', true).is('ciencia_supervisor_em', null);
+      if (error || !count) return;
+      const item = document.querySelector('#menuSistema a.it[data-menu="supervisor_freelance.html"]');
+      if (item && !item.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = count; item.appendChild(b);
+        const sec = item.closest('.sec'); if (sec) sec.classList.add('aberto'); }
+      if (document.getElementById('avisoCiencia')) return;
+      const pe = document.querySelector('#menuSistema .pe');
+      const a = document.createElement('a'); a.id = 'avisoCiencia'; a.href = 'supervisor_freelance.html';
+      a.style.cssText = pe ? 'display:block;margin:0 10px 8px;background:#dc2626;color:#fff;border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.35;text-decoration:none'
+        : 'position:fixed;left:16px;bottom:16px;z-index:99990;display:block;background:#dc2626;color:#fff;border-radius:12px;padding:10px 14px;font-size:12.5px;max-width:280px;line-height:1.35;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.3)';
+      a.innerHTML = `<b style="display:block;font-size:12.5px">🔔 ${count} decisão(ões) tomada(s) no seu lugar</b>Confira e dê ciência com a justificativa →`;
+      if (pe) pe.parentNode.insertBefore(a, pe); else document.body.appendChild(a);
+    } catch (e) { console.warn('ciência do supervisor', e); }
   }
 
   // pendências no menu (regra de 21/10/2026): bolha com o número em cada tela onde se resolve;
@@ -589,6 +610,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
