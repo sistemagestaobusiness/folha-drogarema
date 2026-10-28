@@ -13,16 +13,18 @@
   // tela aberta dentro de uma aba do sistema (regra de 16/10/2026): sem menu próprio; links abrem nova aba no topo
   const EM_ABA = (() => { try { return window.top !== window && !!window.top.__abasSistema; } catch (e) { return false; } })();
   const MARCA = 'Business';   // nome exibido no topo do menu (o logo entra aqui)
+  // organização de 28/10/2026: no topo o que o RH resolve todo dia; depois, na ordem do mês (aprovar → lançar → jornada → fechar)
   const GRUPOS = [
-    ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
-    ['Folha do mês', [['lancamentos.html', 'Lançamentos', '✎'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['planos.html', 'Planos', '✚'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
-      ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Importar consumo farmácia', '⇪']]],
-    ['Loja e jornada', [['freelance_solicitacao.html', 'Solicitações da loja', '✚'], ['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑'], ['holerite_entrega.html', 'Entrega de holerites', '✉'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'],
-      ['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['cadastro_solicitacoes.html', 'Solicitações de cadastro', '☰'], ['organograma.html', 'Organograma', '⌂']]],
+    ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['contabilidade.html', 'Envio à contabilidade', '⇪'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
+    ['Aprovações', [['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['cadastro_solicitacoes.html', 'Pedidos de cadastro', '☰'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑']]],
+    ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
+      ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Consumo farmácia', '⇪']]],
+    ['Jornada', [['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['freelance_solicitacao.html', 'Solicitações da loja', '✚']]],
+    ['Fechar o mês', [['resumo_folha.html', 'Resumo da competência', '≡'], ['recibo_pagamento.html', 'Recibos', '▯'], ['holerite_entrega.html', 'Entrega de holerites', '✉']]],
     ['Financeiro', [['financeiro.html', 'Pagamentos', '$'], ['fluxo_caixa.html', 'Fluxo de caixa', '≋'], ['fin_saldos.html', 'Saldos e aplicações', '▤'], ['conciliacao.html', 'Conciliação bancária', '⇄'], ['fin_importar.html', 'Importar Alpha7 · Financeiro', '⇪'], ['fin_base.html', 'Base do fluxo', '⚙']]],
-    ['Relatórios', [['resumo_folha.html', 'Resumo da competência', '≡'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['recibo_pagamento.html', 'Recibos', '▯'], ['relatorio_faltas.html', 'Relatório de faltas', '☷'], ['relatorio_quinto_dia.html', 'Pagamento do 5º dia útil', '$'], ['contabilidade.html', 'Envio à contabilidade', '⇪']]],
+    ['Relatórios', [['relatorio_faltas.html', 'Relatório de faltas', '☷'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['relatorio_quinto_dia.html', 'Pagamento do 5º dia útil', '$']]],
     ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
-    ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
+    ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['organograma.html', 'Organograma', '⌂'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
     ['Segurança', [['conduta_rh.html', 'Conduta do RH', '◉'], ['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]]
   ];
   const telas = new Set((window.ACESSO.telas || []).map(t => String(t).toLowerCase()));
@@ -298,7 +300,7 @@
           ${mostrar.map(p => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9"><div style="flex:1"><b>${p.nome}</b> · ${p.m}<br><span style="font-size:12px;color:#475569">${p.qtd} funcionário(s) com valor diferente do mês anterior · ${brl(p.total)}</span></div>
             <a href="${p.tela}?aba=aprovacao" class="irAprov" style="background:#dc2626;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800;font-size:12px;text-decoration:none;white-space:nowrap">Aprovar →</a></div>`).join('')}
           <div style="margin-top:10px;color:#b91c1c;font-weight:700;font-size:13px">Enquanto não for aprovado, o Financeiro não recebe esses pagamentos.</div>
-          <div style="margin-top:10px;font-size:12px;color:#475569;background:#f8fafc;border-radius:8px;padding:10px">Se fechar agora, o caminho é: <b>Painel → faixa vermelha no topo</b> ou <b>menu Folha do mês → a tela com a bolha vermelha → aba "Aprovação do Gestor"</b>.</div>
+          <div style="margin-top:10px;font-size:12px;color:#475569;background:#f8fafc;border-radius:8px;padding:10px">Se fechar agora, o caminho é: <b>Painel → faixa vermelha no topo</b> ou <b>menu Lançar na folha → a tela com a bolha vermelha → aba "Aprovação do Gestor"</b>.</div>
         </div>
         <div style="display:flex;padding:0 22px 20px"><button type="button" style="flex:1;background:#f1f5f9;color:#334155;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">Depois</button></div></div>`;
       const fechar = () => { try { sessionStorage.setItem('adiant_aviso_visto', chave); } catch (e) {} m.remove(); };
