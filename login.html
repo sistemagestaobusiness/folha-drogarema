@@ -15,6 +15,8 @@
     // só pula o login se a sessão do Supabase ainda vale de verdade (22/10/2026).
     // Antes bastava a marca no navegador: com a sessão vencida, login → painel → login ficava em laço (tela azul piscando).
     (async () => {
+      // chegando pelo link do e-mail de recuperação (ou com erro do link): fica no login para definir a senha nova (28/10/2026)
+      if (/type=recovery|error=|error_code=/.test(location.hash + location.search)) return;
       if (!localStorage.getItem('usuario_drogarema')) return;
       try {
         const c = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
@@ -92,6 +94,25 @@
       </button>
     </form>
 
+    <!-- MODO 4: NOVA SENHA (chegou pelo link do e-mail de recuperação) -->
+    <form id="novaSenhaForm" class="space-y-3 hidden">
+      <p class="text-[12px] text-slate-300">Link confirmado<span id="novaSenhaEmail"></span>. Escolha a sua nova senha.</p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">NOVA SENHA</label>
+        <input type="password" id="novaSenhaRec" required placeholder="Mínimo 6 caracteres" autocomplete="new-password"
+          class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">REPITA A NOVA SENHA</label>
+        <input type="password" id="novaSenhaRec2" required placeholder="Igual à de cima" autocomplete="new-password"
+          class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500">
+      </div>
+      <button type="submit" id="btnNovaSenha"
+        class="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-bold py-2.5 rounded transition text-sm mt-2 flex justify-center items-center cursor-pointer">
+        <span>SALVAR NOVA SENHA E ENTRAR</span>
+      </button>
+    </form>
+
     <!-- Links de Navegação entre os Modos -->
     <div class="mt-5 pt-4 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center text-xs gap-2">
       <button onclick="alternarModo('login')" id="linkLogin" class="text-cyan-400 hover:underline hidden cursor-pointer">← Voltar ao Login</button>
@@ -126,6 +147,7 @@
     const formLogin = document.getElementById('loginForm');
     const formRecuperar = document.getElementById('recuperarForm');
     const formPrimeiro = document.getElementById('primeiroAcessoForm');
+    const formNovaSenha = document.getElementById('novaSenhaForm');
     
     const msg = document.getElementById('mensagem');
     const subtitulo = document.getElementById('subtituloTopo');
@@ -139,6 +161,7 @@
       formLogin.classList.add('hidden');
       formRecuperar.classList.add('hidden');
       formPrimeiro.classList.add('hidden');
+      formNovaSenha.classList.add('hidden');
       linkLogin.classList.add('hidden');
       linkRecuperar.classList.remove('hidden');
       linkPrimeiro.classList.remove('hidden');
@@ -152,6 +175,10 @@
         linkRecuperar.classList.add('hidden');
         linkLogin.classList.remove('hidden');
         subtitulo.innerText = 'Recuperação de Senha por E-mail';
+      } else if (modo === 'novaSenha') {
+        formNovaSenha.classList.remove('hidden');
+        linkLogin.classList.remove('hidden');
+        subtitulo.innerText = 'Definir Nova Senha';
       } else if (modo === 'primeiroAcesso') {
         formPrimeiro.classList.remove('hidden');
         linkPrimeiro.classList.add('hidden');
@@ -210,7 +237,7 @@
 
       try {
         const { error } = await _supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.href,
+          redirectTo: window.location.origin + window.location.pathname,
         });
 
         if (error) {
@@ -227,6 +254,43 @@
         btn.disabled = false;
         btn.innerText = 'ENVIAR LINK DE RECUPERAÇÃO';
       }
+    });
+
+    // 2b. Volta do link do e-mail de recuperação (28/10/2026). Antes a tela não tratava a volta:
+    //     o link abria logado, sem pedir a senha nova. Link vencido/usado chega com #error=... e vira aviso claro.
+    function avisar(cls, texto) { msg.classList.remove('hidden'); msg.className = 'mt-4 text-center text-xs font-semibold ' + cls; msg.innerText = texto; }
+    (function voltaDoEmail() {
+      const h = new URLSearchParams((location.hash || '').replace(/^#/, '') + '&' + (location.search || '').replace(/^\?/, ''));
+      if (h.get('error') || h.get('error_code')) {
+        history.replaceState(null, '', location.pathname);
+        alternarModo('recuperar');
+        avisar('text-rose-400', h.get('error_code') === 'otp_expired'
+          ? 'Este link de recuperação venceu ou já foi usado (vale 1 hora e só o último e-mail funciona). Peça um novo link abaixo.'
+          : 'Não foi possível usar o link: ' + (h.get('error_description') || h.get('error')) + '. Peça um novo link abaixo.');
+        return;
+      }
+      const mostrar = async () => { alternarModo('novaSenha');
+        try { const { data } = await _supabase.auth.getUser(); if (data && data.user) document.getElementById('novaSenhaEmail').innerText = ' para ' + data.user.email; } catch (e) { } };
+      if (/type=recovery/.test(location.hash)) mostrar();
+      _supabase.auth.onAuthStateChange(ev => { if (ev === 'PASSWORD_RECOVERY') mostrar(); });
+    })();
+    formNovaSenha.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const s1 = document.getElementById('novaSenhaRec').value, s2 = document.getElementById('novaSenhaRec2').value;
+      if (s1.length < 6) return avisar('text-rose-500', 'A nova senha deve ter pelo menos 6 caracteres.');
+      if (s1 !== s2) return avisar('text-rose-500', 'As duas senhas não são iguais.');
+      const btn = document.getElementById('btnNovaSenha'); btn.disabled = true; btn.innerText = 'SALVANDO...';
+      try {
+        const { data: u } = await _supabase.auth.getUser();
+        if (!u || !u.user) { btn.disabled = false; btn.innerText = 'SALVAR NOVA SENHA E ENTRAR'; alternarModo('recuperar'); return avisar('text-rose-400', 'O link venceu antes de salvar. Peça um novo link abaixo.'); }
+        const { error } = await _supabase.auth.updateUser({ password: s1 });
+        if (error) { btn.disabled = false; btn.innerText = 'SALVAR NOVA SENHA E ENTRAR'; return avisar('text-rose-500', 'Erro ao salvar a senha: ' + error.message); }
+        history.replaceState(null, '', location.pathname);
+        avisar('text-emerald-400', 'Senha alterada! Entrando no sistema...');
+        localStorage.setItem('usuario_drogarema', JSON.stringify(u.user));
+        const destino = await destinoPorPerfil(u.user.email);
+        setTimeout(() => { window.location.href = destino; }, 900);
+      } catch (err) { btn.disabled = false; btn.innerText = 'SALVAR NOVA SENHA E ENTRAR'; avisar('text-rose-500', 'Erro: ' + err.message); }
     });
 
     // 3. Ação de Trocar Senha no Primeiro Acesso
