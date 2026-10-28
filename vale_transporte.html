@@ -205,7 +205,10 @@
     const descEfetivo = (f, e) => e.dt === 'ISENTO' ? 0 : (e.dv != null ? e.dv : calcDesc(f, e));
     const precisaJustDesc = (f, e) => { const c = calcDesc(f, e), d = descEfetivo(f, e); return c != null && c > 0 && (e.dt === 'ISENTO' || r2(d) !== r2(c) || e.dt === 'NAO_CONTABIL'); };
     const vdMudou = (f, e) => !f.trava && f.valor_dia_cfg != null && e.vd != null && r2(e.vd) !== r2(f.valor_dia_cfg);
-    const difere = f => { const e = ed[f.funcionario_id]; const v = valorVT(f, e); return !f.trava && e.recebe && v != null && r2(v) !== r2(f.ant_valor); };
+    // variação de até 1 dia com o mesmo valor por dia passa direto ao Financeiro, sem o Gestor (regra de 28/10/2026, igual ao banco)
+    const umDia = (f, e, v) => Number(f.ant_valor) > 0 && e.vd != null && Math.abs(v - Number(f.ant_valor)) <= Number(e.vd) + 0.005 && (f.valor_dia_cfg == null || r2(e.vd) === r2(f.valor_dia_cfg));
+    const variou = f => { const e = ed[f.funcionario_id]; const v = valorVT(f, e); return !f.trava && e.recebe && v != null && r2(v) !== r2(f.ant_valor); };
+    const difere = f => variou(f) && !umDia(f, ed[f.funcionario_id], valorVT(f, ed[f.funcionario_id]));
     const falta = f => { const e = ed[f.funcionario_id]; return !f.trava && e.recebe && (e.vd == null || e.dias == null); };
     const descPendente = f => f.trava && !f.fora && Number(f.valor) > 0 && !f.desconto_lancado && f.desconto_tipo !== 'ISENTO';
     const mudou = f => { const e = ed[f.funcionario_id];
@@ -266,7 +269,7 @@
             <td class="px-2 py-1.5"><input class="inp val !py-1 !w-14 ${e.recebe && e.dias == null ? '!border-red-400 !bg-red-50' : ''}" value="${e.dias ?? ''}" placeholder="dias" onchange="setDias('${id}',this)">${e.sugDias ? '<div class="text-[9px] text-amber-700 font-bold">pela escala</div>' : ''}</td>`;
         return cab + `<tr class="lin ${dif ? 'bg-red-50/40' : ''}">${nomeTd}${chk}${ant}${vdTd}
           <td class="px-2 py-1.5 text-right font-mono font-bold ${dif ? 'text-red-700' : 'text-slate-800'}">${v == null ? '-' : num(v)}
-            ${dif ? `<div class="text-[10px] font-sans font-bold text-red-700">${v - f.ant_valor > 0 ? '+' : ''}${brl(v - f.ant_valor)} → Gestor</div>${perfil === 'GESTOR' ? '<div class="text-[10px] font-sans font-normal text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 mt-1 text-[10px] !w-40 font-sans" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value; salvarRascunho(); resumo()">`}` : ''}</td>
+            ${!dif && variou(f) ? `<div class="text-[10px] font-sans font-bold text-emerald-700">${v - f.ant_valor > 0 ? '+' : ''}${brl(v - f.ant_valor)} · até 1 dia: vai direto</div>` : ''}${dif ? `<div class="text-[10px] font-sans font-bold text-red-700">${v - f.ant_valor > 0 ? '+' : ''}${brl(v - f.ant_valor)} → Gestor</div>${perfil === 'GESTOR' ? '<div class="text-[10px] font-sans font-normal text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 mt-1 text-[10px] !w-40 font-sans" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value; salvarRascunho(); resumo()">`}` : ''}</td>
           <td class="px-2 py-1.5 whitespace-nowrap">${f.fora ? `<span class="font-mono text-[11px]">${num(f.desconto_valor)}</span> <span class="text-[10px] text-slate-500">${f.desconto_tipo === 'NAO_CONTABIL' ? 'não contábil' : 'contábil'} · folha ${esc(f.desconto_comp || '')}</span>` : `
             <input class="inp val !py-1 ${e.dt === 'ISENTO' ? 'hidden' : ''}" value="${d == null ? '' : num(d)}" placeholder="3%" onchange="setNum('${id}','dv',this)">
             <select class="inp !py-0.5 !w-auto text-[10px] ${e.dt === 'NAO_CONTABIL' ? '!bg-amber-200 font-bold' : e.dt === 'ISENTO' ? '!bg-red-200 font-bold' : ''}" onchange="ed['${id}'].dt=this.value; salvarRascunho(); render()"><option value="CONTABIL" ${e.dt === 'CONTABIL' ? 'selected' : ''}>contábil 3019</option><option value="NAO_CONTABIL" ${e.dt === 'NAO_CONTABIL' ? 'selected' : ''}>não contábil 3032</option><option value="ISENTO" ${e.dt === 'ISENTO' ? 'selected' : ''}>sem desconto</option></select>`}
