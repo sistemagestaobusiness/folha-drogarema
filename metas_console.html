@@ -93,7 +93,7 @@
     const fxTexto = l => (faixas[l] || []).map(f => String(f.ini).replace('.', ',') + '=' + String(f.pct).replace('.', ',')).join('; ');
     async function carregarFaixas() {
       const { data, error } = await _supabase.from('loja_faixas').select('loja_num, faixas').eq('categoria', 'SIMGEN');
-      if (error) { $('fxCorpo').innerHTML = '<div class="text-amber-800">Rode o SQL BB (faixas de premiação) para usar este quadro.</div>'; return; }
+      if (error) { $('fxCorpo').innerHTML = '<div class="text-amber-800">Quadro ainda não disponível: avise o administrador.</div>'; return; }
       faixas = {}; (data || []).forEach(d => faixas[d.loja_num] = d.faixas || []);
       $('fxCorpo').innerHTML = M.LOJAS.map(l => `<label class="flex items-center gap-3"><span class="w-14 font-semibold">Loja ${l}</span><input id="fx${l}" value="${fxTexto(l)}" class="flex-1 border border-slate-300 rounded px-2 py-1.5 font-mono"></label>`).join('');
     }
@@ -111,11 +111,11 @@
       if (!error) carregarFaixas();
     }
     async function inicializar() {
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       if (!u || u.perfil !== 'GESTOR') { $('semAcesso').innerText = 'Esta tela é exclusiva do perfil Gestor.'; $('semAcesso').classList.remove('hidden'); return; }
       const [rr, rm] = await Promise.all([_supabase.from('loja_resultados').select('competencia, loja_num, dados'), _supabase.from('loja_metas').select('*')]);
       $('conteudo').classList.remove('hidden');
-      if (rr.error || rm.error) { $('aviso').innerHTML = `<div class="text-rose-700 font-bold">Rode o SQL AZ (resultado da loja e metas) antes de usar esta tela. ${(rr.error || rm.error).message}</div>`; return; }
+      if (rr.error || rm.error) { $('aviso').innerHTML = `<div class="text-rose-700 font-bold">Esta tela ainda não está disponível: avise o administrador. ${(rr.error || rm.error).message}</div>`; return; }
       resultados = rr.data || []; metas = rm.data || [];
       const comps = [...new Set(resultados.map(r => r.competencia))].sort((a, b) => M.ordem(a) - M.ordem(b));
       if (!comps.length) { $('aviso').innerHTML = '<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3">Ainda não há resultado publicado. Salve o fechamento financeiro de pelo menos um mês: é ele que alimenta a meta.</div>'; return; }

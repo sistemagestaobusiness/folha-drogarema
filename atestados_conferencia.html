@@ -9,7 +9,7 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1100px] mx-auto space-y-4">
 
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
@@ -59,10 +59,10 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null;
       $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!['SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
       if (!podeConferir()) $('subtitulo').innerText = 'Acompanhamento da conferência dos atestados feita pelo supervisor (somente consulta).';
       $('conteudo').classList.remove('hidden');
       await carregar();
@@ -70,7 +70,7 @@
 
     async function carregar() {
       const { data, error } = await _supabase.from('vw_atestados_conferencia').select('*').order('enviado_em', { ascending: false });
-      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL BO foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      if (error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(error.message); $('aviso').classList.remove('hidden'); return; }
       docs = data || [];
       const lojas = [...new Map(docs.filter(d => d.loja_id).map(d => [d.loja_id, d.nome_loja])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
       const atual = $('fLoja').value;
@@ -128,9 +128,9 @@
       let obs = null;
       if (valido) {
         if (!confirm(`Confirmar que o documento de ${d.nome_registro} é um ATESTADO VÁLIDO?`)) return;
-        obs = prompt('Observação (opcional):', '') ?? null; if (obs === null) return;
+        obs = await pedirTexto('Observação (opcional):', '') ?? null; if (obs === null) return;
       } else {
-        obs = prompt('O que há de errado? (ex.: não é atestado, ilegível, data não confere)'); if (!obs) return;
+        obs = await pedirTexto('O que há de errado? (ex.: não é atestado, ilegível, data não confere)'); if (!obs) return;
       }
       const { error } = await _supabase.rpc('fn_atestado_conferir', { p_id: id, p_valido: valido, p_obs: obs.trim() || null });
       if (error) return alert(error.message);

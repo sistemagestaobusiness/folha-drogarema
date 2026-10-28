@@ -462,7 +462,7 @@
     (async () => {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario'); perfil = u ? String(u.perfil || '').toUpperCase() : null;
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario'); perfil = u ? String(u.perfil || '').toUpperCase() : null;
       if (!podeEditar()) $('legEdit').style.display = 'none';
       try { await carregarCadastros(); } catch (e) { aviso('Não foi possível carregar o cadastro do fluxo: ' + esc(e.message || e)); return; }
       alertas(); carregar();

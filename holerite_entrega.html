@@ -9,7 +9,7 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1000px] mx-auto space-y-4">
 
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
@@ -65,10 +65,10 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null;
       $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
       if (perfil !== 'LIDER') {
         const { data: l } = await _supabase.from('lojas').select('*').order('nome_loja');
         $('fLoja').innerHTML = '<option value="">Todas</option>' + (l || []).filter(x => x.ativo !== false).map(x => `<option value="${x.id}">${esc(x.nome_loja)}</option>`).join('');
@@ -90,7 +90,7 @@
     async function carregar() {
       sel.clear();
       const { data, error } = await _supabase.rpc('fn_holerite_lista', { p_competencia: comp(), p_loja: $('fLoja').value || null });
-      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL CC foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      if (error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(error.message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
       lista = data || [];
       render();
@@ -137,7 +137,7 @@
       const f = lista.find(x => x.funcionario_id === fid);
       let motivo = null;
       if (!data) {
-        motivo = (prompt(`Desfazer a sua confirmação (${LADO_TXT[lado()]}) do holerite de ${f.nome}?\n\nInforme o motivo (mínimo 10 letras):`) || '').trim();
+        motivo = (await pedirTexto(`Desfazer a sua confirmação (${LADO_TXT[lado()]}) do holerite de ${f.nome}?\n\nInforme o motivo (mínimo 10 letras):`) || '').trim();
         if (!motivo) return render();
       }
       const { error } = await _supabase.rpc('fn_holerite_registrar', { p_funcionario: fid, p_competencia: comp(), p_data: data || null, p_motivo: motivo, p_lado: perfil === 'GESTOR' ? lado() : null });

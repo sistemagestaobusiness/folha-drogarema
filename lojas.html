@@ -9,20 +9,19 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
 
   <!-- Proteção de Acesso -->
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
+            (window.top !== window ? window.top : window).location.href = 'login.html';
     }
   </script>
 
   <div class="max-w-6xl mx-auto space-y-6">
 
     <!-- Cabeçalho Fixo (Sticky Header) - Apenas com Painel Principal -->
-    <div class="sticky top-0 z-50 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+    <div class="sticky top-0 z-50 bg-[#F4F5F7]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">CADASTRO DE LOJAS</h1>
         <p class="text-xs text-slate-500">Gerenciamento de unidades e pontos de venda</p>

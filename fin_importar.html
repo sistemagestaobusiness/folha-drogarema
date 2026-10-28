@@ -256,7 +256,7 @@
     async function iniciar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario'); perfil = u ? String(u.perfil || '').toUpperCase() : null;
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario'); perfil = u ? String(u.perfil || '').toUpperCase() : null;
       const { data: f } = await _supabase.rpc('fn_fin_fixo'); if (f) fixo = String(f).slice(0, 10);
       const drop = $('drop'), inp = $('arquivo');
       inp.addEventListener('change', () => lerArquivo(inp.files[0]));

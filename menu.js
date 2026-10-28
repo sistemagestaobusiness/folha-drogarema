@@ -271,13 +271,16 @@
       const c = data[0].competencia, CHAVE = 'aviso_holerite_fechado_ate', PAUSA = 30 * 60e3;
       const fechadoAte = () => { try { return Number(localStorage.getItem(CHAVE)) || 0; } catch (e) { return 0; } };
       const a = document.createElement('div'); a.id = 'avisoHolerite';
-      a.style.cssText = 'position:fixed;right:16px;top:64px;z-index:99990;background:#dc2626;color:#fff;border-radius:12px;padding:10px 34px 10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-family:inherit;font-size:12.5px;max-width:300px;line-height:1.35';
+      // dentro do menu lateral, acima do usuário: não cobre nada da tela (regra de 28/10/2026); sem menu, no canto de baixo à esquerda
+      const noMenu = document.querySelector('#menuSistema .pe');
+      a.style.cssText = noMenu ? 'position:relative;margin:0 10px 8px;background:#dc2626;color:#fff;border-radius:10px;padding:8px 26px 8px 10px;font-family:inherit;font-size:11.5px;line-height:1.35'
+        : 'position:fixed;left:16px;bottom:16px;z-index:99990;background:#dc2626;color:#fff;border-radius:12px;padding:10px 34px 10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-family:inherit;font-size:12.5px;max-width:280px;line-height:1.35';
       a.innerHTML = `<button type="button" title="Fechar por 30 minutos (a pendência continua na Central de pendências)" aria-label="Fechar" style="position:absolute;top:6px;right:8px;background:none;border:0;color:#fff;font-size:16px;font-weight:700;cursor:pointer;line-height:1">✕</button>
-        <a href="holerite_entrega.html?comp=${encodeURIComponent(c)}&pend=1" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:13px">🧾 Holerites aguardando a SUA confirmação</b>${data.map(r => `${r.qtd} funcionário(s) · holerite ${r.competencia}`).join('<br>')}
+        <a href="holerite_entrega.html?comp=${encodeURIComponent(c)}&pend=1" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:12.5px">🧾 Holerites aguardando a sua confirmação</b>${data.map(r => `${r.qtd} funcionário(s) · holerite ${r.competencia}`).join('<br>')}
         <span style="display:block;margin-top:5px;font-weight:800;text-decoration:underline">Confirmar entrega${pf === 'RH' ? ' (lado do RH)' : ' (lado da loja)'} →</span></a>`;
       a.querySelector('button').onclick = () => { try { localStorage.setItem(CHAVE, String(Date.now() + PAUSA)); } catch (e) { } a.style.display = 'none'; };
       const ver = () => { a.style.display = Date.now() < fechadoAte() ? 'none' : ''; };
-      document.body.appendChild(a);
+      if (noMenu) noMenu.parentNode.insertBefore(a, noMenu); else document.body.appendChild(a);
       ver(); setInterval(ver, 60000);
     } catch (e) { console.warn('holerites', e); }
   }
@@ -440,7 +443,7 @@
     function fechar(t) {
       if (t.nativa) {   // a primeira aba é a própria página: a próxima aba assume o lugar dela
         const prox = lista.find(x => !x.nativa); if (!prox) return;
-        lista = lista.filter(x => x !== t && x !== prox); salvar(); location.href = prox.url; return;
+        lista = lista.filter(x => x !== t); salvar(); ativar(prox); return;   // sem recarregar: as outras abas continuam como estão (regra de 28/10/2026)
       }
       const i = lista.indexOf(t); if (t.frame) t.frame.remove();
       lista = lista.filter(x => x !== t); salvar();

@@ -11,24 +11,23 @@
   <script src="emprestimo_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
 
   <!-- Proteção de Acesso -->
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
+            (window.top !== window ? window.top : window).location.href = 'login.html';
     }
   </script>
 
   <div class="max-w-7xl mx-auto space-y-6">
     
     <!-- Cabeçalho Fixo (Sticky Header) -->
-    <div class="sticky top-0 z-50 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs px-2">
+    <div class="sticky top-0 z-50 bg-[#F4F5F7]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs px-2">
       <div>
         <a href="index.html" class="text-xs text-emerald-700 hover:underline mb-1 inline-block font-bold">← VOLTAR AO DASHBOARD</a>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">LANÇAMENTOS DE PROVENTOS E DESCONTOS</h1>
-        <p class="text-xs text-slate-500">Gerenciamento e Consulta na tabela <span class="font-mono text-emerald-700">folha_itens</span></p>
+        <p class="text-xs text-slate-500">Lançamentos do período aberto, por funcionário</p>
       </div>
       <div class="bg-white border border-slate-200 px-4 py-2 rounded-lg text-right shadow-2xs">
         <span class="text-[10px] text-slate-400 block uppercase font-semibold">COMPETÊNCIA DE LANÇAMENTO</span>
@@ -149,7 +148,7 @@
                 <label class="block text-xs font-bold text-slate-600 uppercase">4. Valor do Lançamento (R$) *</label>
                 <button type="button" onclick="alternarCampoAbatimento()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-1.5 py-0.5 rounded cursor-pointer" title="">+</button>
               </div>
-              <input type="number" step="0.01" id="valorLancamento" required placeholder="0.00" oninput="calcularNoturno(false)" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+              <input type="number" step="0.01" id="valorLancamento" required placeholder="0,00" oninput="calcularNoturno(false)" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
             </div>
 
             <!-- Painel Oculto 1 -->
@@ -501,7 +500,7 @@
     // RH: alterar/excluir item da própria ficha vira solicitação para o Gestor (regra de 16/10/2026)
     const ehPropriaFicha = fid => perfilUsuarioLogado === 'RH' && minhaFicha && fid === minhaFicha;
     async function solicitarAoGestor(itemId, acao, dados) {
-      const motivo = (prompt(`Este lançamento é da SUA ficha: ${acao === 'DELETE' ? 'a exclusão' : 'a alteração'} vai para o Gestor aprovar.\n\nMotivo (obrigatório):`) || '').trim();
+      const motivo = (await pedirTexto(`Este lançamento é da SUA ficha: ${acao === 'DELETE' ? 'a exclusão' : 'a alteração'} vai para o Gestor aprovar.\n\nMotivo (obrigatório):`) || '').trim();
       if (motivo.length < 5) { alert('Motivo obrigatório (mínimo 5 letras). Nada foi enviado.'); return false; }
       const { error } = await _supabase.rpc('fn_alteracao_solicitar', { p_item: itemId, p_acao: acao, p_dados: dados, p_motivo: motivo });
       if (error) { alert('Não foi enviado: ' + error.message); return false; }
@@ -512,7 +511,7 @@
       try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user || !user.email) return;
-        const { data } = await _supabase.rpc('fn_meu_usuario');
+        const { data } = await rpcRetentar(_supabase, 'fn_meu_usuario');
         perfilUsuarioLogado = data ? String(data.perfil || '').toUpperCase() : null;
         const { data: mf } = await _supabase.rpc('fn_minha_ficha'); minhaFicha = mf || null;
       } catch (err) {
@@ -1012,7 +1011,7 @@
       const ehRescisao = eventoSel.pagamento_extra_tipo === 'RESCISAO';
       if (!ehParcela && !ehRescisao) return;
       const rubricaDesc = saldo13.eventos[ehRescisao ? 'COMPENSACAO_RESCISAO' : 'COMPENSACAO_DECIMO_TERCEIRO'];
-      if (!rubricaDesc) return alert('Evento de desconto da antecipação não encontrado. Rode o SQL da etapa do 13º.');
+      if (!rubricaDesc) return alert('Evento de desconto da antecipação não encontrado. Avise o administrador do sistema.');
       const valor = Math.round(Math.min(saldo13.valor, parseFloat(valorLancado || 0)) * 100) / 100;
       if (!(valor > 0)) return;
       const resto = saldo13.valor - valor;
@@ -1106,7 +1105,7 @@
       box.innerHTML = `<div class="font-black uppercase">📅 Escala de ${competenciaRegraLancamento}: ${pend.length ? pend.length + ' falta(s)/atestado(s) sem tratamento' : 'faltas aguardando o freelance'}</div>`
         + (pend.length ? `<div class="mt-1">${pend.map(item).join('')}</div><div class="text-[10px]">Clique no nome para abrir o funcionário: a falta já vem com o desconto calculado (1 dia + DSR) para o RH aprovar, ajustar com justificativa ou recusar (banco de horas / abono).</div>` : '')
         + (aguard.length ? `<div class="mt-1 text-[10px]">⏳ ${aguard.length} aguardando a aprovação do freelance (o RH decide o tratamento lá): ${aguard.map(o => escaparHtml(nomeFuncEscala(o.fid)) + ' ' + dmEscala(o.data)).join(', ')}</div>` : '')
-        + (escalaSemTratamento ? '<div class="mt-1 font-bold text-rose-700">Rode o SQL AC_escala_tratamento_faltas para poder marcar o tratamento.</div>' : '');
+        + (escalaSemTratamento ? '<div class="mt-1 font-bold text-rose-700">O tratamento de faltas ainda não está disponível: avise o administrador.</div>' : '');
       box.classList.remove('hidden');
     }
     function abrirFuncionarioEscala(fid) {
@@ -1237,7 +1236,7 @@ Entra na folha e no holerite.`)) return;
       await aposDecisaoFalta(o.fid);
     }
     async function recusarFalta(id, fid, data, trat) {
-      const motivo = (prompt(`Recusar o desconto da falta de ${dmEscala(data)}.
+      const motivo = (await pedirTexto(`Recusar o desconto da falta de ${dmEscala(data)}.
 
 Motivo da recusa (fica no histórico):`) || '').trim();
       if (motivo.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('Recusa não feita: escreva o motivo.');
@@ -1245,7 +1244,7 @@ Motivo da recusa (fica no histórico):`) || '').trim();
       if (trat === 'BANCO_HORAS') {
         let sug = 8;
         if (ECL) { try { await ECL.garantir(data, data); const r = ECL.dia(fid, data, { previsto: true }); if (r.tipo === 'TRABALHO') sug = ECL.horasTurno(r, fid); } catch (e) { } }
-        const txt = prompt(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\nPela escala o turno era de ${String(sug).replace('.', ',')}h:`, String(sug).replace('.', ','));
+        const txt = await pedirTexto(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\nPela escala o turno era de ${String(sug).replace('.', ',')}h:`, String(sug).replace('.', ','));
         if (txt === null) return;
         horas = parseFloat(String(txt).replace(',', '.'));
         if (!(horas > 0)) return alert('Horas inválidas.');
@@ -1260,7 +1259,7 @@ Motivo da recusa (fica no histórico):`) || '').trim();
     }
     async function estornarFalta(id) {
       const o = ocorrEscala.find(x => x.fd && x.fd.id === id); if (!o) return;
-      const motivo = (prompt(`Estornar o desconto aprovado da falta de ${dmEscala(o.data)} (${fmtMoeda(o.fd.valor_final)})?
+      const motivo = (await pedirTexto(`Estornar o desconto aprovado da falta de ${dmEscala(o.data)} (${fmtMoeda(o.fd.valor_final)})?
 
 O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').trim();
       if (motivo.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('Estorno não feito: escreva o motivo.');
@@ -1270,7 +1269,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
     }
 
     async function tratarEscala(fid, data, trat) {
-      if (escalaSemTratamento) return alert('Rode antes o SQL AC_escala_tratamento_faltas no Supabase.');
+      if (escalaSemTratamento) return alert('O tratamento de faltas ainda não está disponível: avise o administrador.');
       let horas = null;
       if (trat === 'DESCONTO') {
         const { data: itens } = await _supabase.from('folha_itens').select('rubrica, tipo').eq('funcionario_id', fid).eq('competencia', competenciaRegraLancamento);
@@ -1287,7 +1286,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       if (trat === 'BANCO_HORAS') {
         let sug = 8;
         if (ECL) { try { await ECL.garantir(data, data); const r = ECL.dia(fid, data, { previsto: true }); if (r.tipo === 'TRABALHO') sug = ECL.horasTurno(r, fid); } catch (e) { } }
-        const txt = prompt(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\nPela escala o turno era de ${String(sug).replace('.', ',')}h:`, String(sug).replace('.', ','));
+        const txt = await pedirTexto(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\nPela escala o turno era de ${String(sug).replace('.', ',')}h:`, String(sug).replace('.', ','));
         if (txt === null) return;
         horas = parseFloat(String(txt).replace(',', '.'));
         if (!(horas > 0)) return alert('Horas inválidas.');
@@ -1926,8 +1925,27 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       document.getElementById('btnCancelarEdicao').classList.add('hidden');
     }
 
+    // botão com "Gravando…" e aviso de gravado (regra de 28/10/2026): evita clicar duas vezes e deixa claro que salvou
+    let gravandoLanc = false;
     async function salvarLancamento(e) {
       e.preventDefault();
+      if (gravandoLanc) return;
+      const b = document.getElementById('btnSalvar'), txt = b ? b.innerHTML : '';
+      gravandoLanc = true; window.__lancGravou = false;
+      if (b) { b.disabled = true; b.innerText = 'Gravando…'; }
+      try { await salvarLancamentoInterno(e); }
+      finally {
+        gravandoLanc = false;
+        if (b) { b.disabled = !!competenciaEstaFechada; if (b.innerText === 'Gravando…') b.innerHTML = txt; }
+        if (window.__lancGravou) avisoGravado('✓ Lançamento gravado');
+      }
+    }
+    function avisoGravado(t) {
+      let el = document.getElementById('avisoGravado');
+      if (!el) { el = document.createElement('div'); el.id = 'avisoGravado'; el.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:9999;background:#05603A;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:0 8px 20px rgba(0,0,0,.25);transition:opacity .3s'; document.body.appendChild(el); }
+      el.textContent = t; el.style.opacity = 1; clearTimeout(el._t); el._t = setTimeout(() => el.style.opacity = 0, 2200);
+    }
+    async function salvarLancamentoInterno(e) {
       if (competenciaEstaFechada) {
         alert("Atenção: Este período está fechado. Alterações são proibidas.");
         return;
@@ -2114,7 +2132,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         const listaIg = iguais.map(x => `• ${x.rubrica} · R$ ${Number(x.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join('\n');
         if (iguais.length && eventoSel && eventoSel.unico_no_mes) {
           // evento que só pode existir uma vez no mês: bloqueia, a não ser com justificativa
-          const j = (prompt(`🚫 DUPLICIDADE BLOQUEADA\n\nO evento ${codNovo} só pode ser lançado uma vez por mês e já existe em ${competenciaRegraLancamento}:\n${listaIg}\n\nSe for mesmo outro lançamento, escreva a justificativa (mínimo 10 letras). Para cancelar, deixe em branco.`) || '').trim();
+          const j = (await pedirTexto(`🚫 DUPLICIDADE BLOQUEADA\n\nO evento ${codNovo} só pode ser lançado uma vez por mês e já existe em ${competenciaRegraLancamento}:\n${listaIg}\n\nSe for mesmo outro lançamento, escreva a justificativa (mínimo 10 letras). Para cancelar, deixe em branco.`) || '').trim();
           if (j.length < 10) { alert('Não foi lançado (duplicidade sem justificativa).'); return; }
           payload.motivo_ajuste = 'DUPLICIDADE JUSTIFICADA: ' + j + (payload.motivo_ajuste ? ' · ' + payload.motivo_ajuste : '');
         } else if (iguais.length && !confirm(`⚠ POSSÍVEL DUPLICIDADE\n\nEste funcionário já tem ${iguais.length} lançamento(s) do evento ${codNovo} em ${competenciaRegraLancamento}:\n${listaIg}\n\nLançar mais um mesmo assim?`)) return;
@@ -2127,6 +2145,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       }
       if (!idEdicao) await oferecerDesconto13(eventoSel, valorFinal, funcionario_id, vencimentoPag);
       if (noturno) await lancarDsrNoturno(funcionario_id, valorFinal, noturno);
+      window.__lancGravou = true;
       cancelarEdicao();
       carregarLancamentosNovo();
     }
@@ -2278,7 +2297,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
                               : 'Deseja realmente remover este lançamento?';
       const itemExc = mapaItensRenderizados[id] || {};
       if (ehPropriaFicha(itemExc.funcionario_id)) { if (await solicitarAoGestor(id, 'DELETE', null)) { if (abaAtiva === 'novo') carregarLancamentosNovo(); else dispararConsultaHistorico(); } return; }
-      const motivoExc = (prompt(msgConf + '\n\nMotivo da exclusão (obrigatório, fica registrado):') || '').trim();
+      const motivoExc = (await pedirTexto(msgConf + '\n\nMotivo da exclusão (obrigatório, fica registrado):') || '').trim();
       if (motivoExc) {
         if (motivoExc.length < 5) return alert('Motivo obrigatório (mínimo 5 letras). Nada foi excluído.');
         const { error } = await _supabase.rpc('fn_folha_excluir', { p_id: id, p_motivo: motivoExc });

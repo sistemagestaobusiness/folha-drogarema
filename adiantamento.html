@@ -9,7 +9,7 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1300px] mx-auto space-y-4">
 
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
@@ -36,9 +36,11 @@
         <div><label class="lbl">Loja / setor</label><select id="fLoja" onchange="render()" class="inp !py-1.5"><option value="">Todas</option></select></div>
         <div class="flex-1 min-w-[160px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
         <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fOcultarNao" onchange="render()"> ocultar quem não recebe</label>
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 pb-2 cursor-pointer"><input type="checkbox" id="fFalta" onchange="render()"> só o que falta preencher</label>
       </div>
 
       <!-- ABA LANÇAMENTO -->
+      <div id="boxRascunho" style="display:none"></div>
       <div id="pLanc" class="space-y-2">
         <div id="resumo" class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600 bg-white rounded-lg px-3 py-2"></div>
         <div id="grade" class="bg-white rounded-lg overflow-auto" style="max-height: calc(100vh - 290px)">
@@ -103,10 +105,10 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null;
       $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
       const d = new Date();
       $('fMes').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       $('conteudo').classList.remove('hidden');
@@ -125,7 +127,7 @@
 
     async function carregar() {
       const { data, error } = await _supabase.rpc('fn_adiant_lista', { p_comp: comp() });
-      if (error) { $('aviso').innerText = 'Erro ao carregar (o SQL BV foi rodado?): ' + error.message; $('aviso').classList.remove('hidden'); return; }
+      if (error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(error.message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
       lista = data || []; ed = {};
       const venc = lista.find(f => f.vencimento); if (venc) $('fVenc').value = venc.vencimento;
@@ -140,6 +142,11 @@
         const recebe = f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe;
         ed[f.funcionario_id] = { recebe, c: base.c, n: base.n, meio: base.meio || 'BANCO', motivo: f.motivo_rh || '' };
       });
+      // rascunho guardado neste computador (regra de 28/10/2026)
+      const rasc = Rascunho.ler(chaveRasc()); let nR = 0;
+      if (rasc && rasc.itens) lista.forEach(f => { const r = rasc.itens[f.funcionario_id];
+        if (!r || f.trava || f.status === 'LANCADO' || f.status === 'AGUARDANDO_GESTOR') return; Object.assign(ed[f.funcionario_id], r); nR++; });
+      Rascunho.faixa($('boxRascunho'), nR, rasc && rasc.em, 'descartarRasc()');
       const lojas = [...new Map(lista.map(f => [f.loja_id || '', f.nome_loja || 'sem loja'])).entries()];
       const sel = $('fLoja').value;
       $('fLoja').innerHTML = '<option value="">Todas</option>' + lojas.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('');
@@ -153,7 +160,7 @@
       $('pLanc').classList.toggle('hidden', a !== 'lanc'); $('pApr').classList.toggle('hidden', a !== 'aprovacao');
       $('boxVenc').classList.toggle('hidden', a !== 'lanc');
       const q = lista.filter(f => f.status === 'AGUARDANDO_GESTOR').length;
-      $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q);
+      $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q); $('qtdApr').classList.toggle('bg-red-600', perfil === 'GESTOR'); $('qtdApr').classList.toggle('bg-slate-400', perfil !== 'GESTOR');   // para o RH é só informativo: quem aprova é o Gestor
       if (a === 'lanc') render(); else renderAprovacao();
     }
 
@@ -182,7 +189,7 @@
 
     function render() {
       const fl = $('fLoja').value, fn = $('fNome').value.trim().toUpperCase(), ocultar = $('fOcultarNao').checked;
-      const vis = lista.filter(f => (!fl || (f.loja_id || '') === fl) && (!fn || String(f.nome).toUpperCase().includes(fn)) && (!ocultar || ed[f.funcionario_id].recebe));
+      const vis = lista.filter(f => (!fl || (f.loja_id || '') === fl) && (!fn || String(f.nome).toUpperCase().includes(fn)) && (!ocultar || ed[f.funcionario_id].recebe) && (!$('fFalta').checked || (!f.trava && ed[f.funcionario_id].recebe && !preenchido(ed[f.funcionario_id])) || semMotivoA(f)));
       let lojaAnt = null;
       $('tabela').innerHTML = vis.length ? vis.map(f => {
         const e = ed[f.funcionario_id], id = f.funcionario_id, dis = f.trava ? 'disabled' : '';
@@ -204,7 +211,7 @@
         if (falta) obs = antTot(f) > 0 ? `<button onclick="repetir('${id}')" class="text-[10px] font-bold text-sky-700 hover:underline cursor-pointer">↺ repetir o mês anterior (${num(antTot(f))})</button>` : '<span class="text-[10px] font-bold text-amber-600">informar os valores</span>';
         else if (!f.trava && divisaoMudou(f)) obs = '<div class="text-[10px] font-bold text-sky-700">Mesmo total, só mudou a divisão · vai direto</div>';
         else if (!f.trava && dif) obs = `<div class="text-[10px] font-bold text-red-700 mb-0.5">Total ${tot(e) - antTot(f) > 0 ? '+' : ''}${brl(tot(e) - antTot(f))} vs mês anterior → Gestor</div>`
-          + (perfil === 'GESTOR' ? '<div class="text-[10px] text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 text-[11px]" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value">`);
+          + (perfil === 'GESTOR' ? '<div class="text-[10px] text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 text-[11px]" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value; salvarRasc(); resumo()">`);
         return cab + `<tr class="lin ${dif ? 'bg-red-50/40' : ''}">
           <td class="px-3 py-1.5"><div class="font-bold text-slate-900">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.registrado ? '' : ' · sem registro'}</div></td>
           <td class="px-2 py-1.5 text-center"><input type="checkbox" class="w-4 h-4 accent-emerald-600" checked ${dis} onchange="setRecebe('${id}', this.checked)" title="Desmarque se este funcionário não recebe adiantamento"></td>
@@ -220,20 +227,30 @@
       resumo();
     }
 
-    function setRecebe(id, v) { ed[id].recebe = v; render(); }
-    function setMeio(id, v) { ed[id].meio = v; render(); }
+    const chaveRasc = () => 'drogarema_adiant_rascunho_' + comp();
+    let tRasc = null;
+    function salvarRasc() { clearTimeout(tRasc); tRasc = setTimeout(() => {
+      const itens = {}; lista.forEach(f => { if (f.trava || !mudou(f)) return; const e = ed[f.funcionario_id];
+        if (e.c === null && e.n === null && !e.motivo && e.recebe === (f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe)) return;
+        itens[f.funcionario_id] = { recebe: e.recebe, c: e.c, n: e.n, meio: e.meio, motivo: e.motivo }; });
+      Rascunho.gravar(chaveRasc(), itens); const r = Rascunho.ler(chaveRasc()); Rascunho.faixa($('boxRascunho'), Object.keys(itens).length, r && r.em, 'descartarRasc()'); }, 300); }
+    async function descartarRasc() { if (!confirm('Descartar tudo o que foi digitado e não confirmado nesta competência?')) return; Rascunho.apagar(chaveRasc()); await carregar(); }
+    function setRecebe(id, v) { ed[id].recebe = v; salvarRasc(); render(); }
+    function setMeio(id, v) { ed[id].meio = v; salvarRasc(); render(); }
     function setVal(id, k, el) {
-      if (!String(el.value).trim()) { ed[id][k] = null; render(); return; }
+      if (!String(el.value).trim()) { ed[id][k] = null; salvarRasc(); render(); return; }
       const n = lerNum(el.value);
       if (isNaN(n) || n < 0) { alert('Valor inválido: adiantamento não tem valor negativo. Informe o valor a pagar (ex.: 1.888,92) ou 0.'); el.value = ed[id][k] === null ? '' : num(ed[id][k]); return; }
-      ed[id][k] = n; render();
+      ed[id][k] = n; salvarRasc(); render();
     }
     function repetir(id) {
       const f = lista.find(x => x.funcionario_id === id);
       ed[id].c = r2(f.ant_contabil); ed[id].n = r2(f.ant_nao_contabil);
-      render();
+      salvarRasc(); render();
     }
 
+    const semMotivoA = f => perfil !== 'GESTOR' && !f.trava && difere(f) && String(ed[f.funcionario_id].motivo || '').trim().length < 5;
+    const prontosA = () => lista.filter(f => !f.trava && mudou(f) && !(ed[f.funcionario_id].recebe && !preenchido(ed[f.funcionario_id])) && !semMotivoA(f));
     function resumo() {
       const rec = lista.filter(f => ed[f.funcionario_id].recebe);
       const sum = fn => rec.reduce((s, f) => s + fn(ed[f.funcionario_id]), 0);
@@ -246,28 +263,30 @@
         + it('Total', brl(totAgora), 'text-emerald-700') + it('Mês anterior', brl(totAnt), 'text-slate-500')
         + it('Diferença', `${difs.length} pessoa(s)`, difs.length ? 'text-red-600' : 'text-slate-400')
         + it('A preencher', `${faltam.length}`, faltam.length ? 'text-amber-600' : 'text-slate-400');
-      $('lblConfirma').innerText = faltam.length
-        ? `Faltam ${faltam.length} funcionário(s) sem valor informado (preencha ou desmarque "Recebe").`
-        : pend.length
-        ? `${pend.length} alteração(ões) a confirmar · ${pend.length - difs.length} vão direto para o Financeiro${difs.length ? ` · ${difs.length} ${perfil === 'GESTOR' ? 'com diferença (você é Gestor: lança direto)' : 'vão para o Gestor aprovar'}` : ''}`
-        : 'Nada a confirmar: tudo já está lançado.';
-      $('btnConfirmar').disabled = !pend.length || faltam.length > 0;
+      const prontos = prontosA(), semMot = pend.filter(f => !faltam.includes(f) && semMotivoA(f));
+      const nomes = ls => ls.slice(0, 4).map(f => String(f.nome).split(' ').slice(0, 2).join(' ')).join(', ') + (ls.length > 4 ? ` e mais ${ls.length - 4}` : '');
+      const travados = [faltam.length && `${faltam.length} sem valor (${nomes(faltam)})`, semMot.length && `${semMot.length} sem motivo da diferença para o Gestor (${nomes(semMot)})`].filter(Boolean);
+      const dp = prontos.filter(difere).length;
+      $('lblConfirma').innerHTML = (prontos.length ? `<span class="text-emerald-700">${prontos.length} pronto(s) para confirmar · ${prontos.length - dp} vão direto para o Financeiro${dp ? ` · ${dp} ${perfil === 'GESTOR' ? 'com diferença (você é Gestor: lança direto)' : 'vão para o Gestor aprovar'}` : ''}.</span>` : pend.length ? '' : 'Nada a confirmar: tudo já está lançado.')
+        + (travados.length ? ` <span class="text-amber-700">Ficam para depois: ${travados.join(' · ')}. <a href="#" class="underline" onclick="$('fFalta').checked=true;render();return false">ver só esses</a></span>` : '');
+      $('btnConfirmar').disabled = !prontos.length;
+      $('btnConfirmar').innerText = prontos.length ? `✓ Confirmar ${prontos.length} adiantamento(s)` : '✓ Confirmar adiantamento';
     }
 
     async function confirmar() {
       const venc = $('fVenc').value;
       if (!venc) return alert('Informe a data do pagamento.');
-      const pend = lista.filter(f => !f.trava && mudou(f));
-      if (perfil !== 'GESTOR') {
-        const semMotivo = pend.filter(f => difere(f) && (ed[f.funcionario_id].motivo || '').trim().length < 5);
-        if (semMotivo.length) return alert('Informe o motivo da diferença (mínimo 5 letras) para:\n' + semMotivo.map(f => '• ' + f.nome).join('\n'));
-      }
-      if (!confirm(`Confirmar o adiantamento de ${comp()} com pagamento em ${dbr(venc)}?\n\n${$('lblConfirma').innerText}`)) return;
+      const pend = prontosA();
+      if (!pend.length) return alert('Nenhum adiantamento completo para confirmar.');
+      const ficam = lista.filter(f => !f.trava && mudou(f)).length - pend.length;
+      if (!confirm(`Confirmar ${pend.length} adiantamento(s) de ${comp()} com pagamento em ${dbr(venc)}?${ficam ? `\n\n${ficam} ficam para depois (incompletos): o que foi digitado neles continua guardado.` : ''}`)) return;
       const itens = pend.map(f => { const e = ed[f.funcionario_id]; return { funcionario_id: f.funcionario_id, recebe: e.recebe, contabil: e.c || 0, nao_contabil: e.n || 0, meio: e.meio, motivo: e.motivo || null }; });
       const b = $('btnConfirmar'); b.disabled = true; b.innerText = 'Gravando...';
       const { data, error } = await _supabase.rpc('fn_adiant_confirmar', { p_comp: comp(), p_venc: venc, p_itens: itens });
       b.innerText = '✓ Confirmar adiantamento';
       if (error) { b.disabled = false; return alert('Não foi gravado: ' + error.message); }
+      const comErro = new Set((data.erros || []).map(x => x.nome));
+      Rascunho.tirar(chaveRasc(), pend.filter(f => !comErro.has(f.nome)).map(f => f.funcionario_id));
       let msg = `Lançados (foram para o Financeiro): ${data.lancados}\nAguardando o Gestor: ${data.aguardando_gestor}\nNão recebe: ${data.nao_recebe}`;
       if ((data.erros || []).length) msg += '\n\nNão gravados:\n' + data.erros.map(x => `• ${x.nome}: ${x.erro}`).join('\n');
       alert(msg);

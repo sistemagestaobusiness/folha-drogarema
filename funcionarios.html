@@ -9,18 +9,17 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
 
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
+            (window.top !== window ? window.top : window).location.href = 'login.html';
     }
   </script>
 
   <div class="max-w-7xl mx-auto space-y-5">
 
-    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">CADASTRO DE FUNCIONÁRIOS</h1>
         <p class="text-xs text-slate-500">Dados pessoais · contrato · lotação e acesso · dados bancários · histórico · documentos</p>
@@ -155,7 +154,7 @@
                 <button type="button" onclick="salvarExtras()" class="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded cursor-pointer">Salvar telas extras</button></div>
               <div id="gradeExtras" class="grid grid-cols-2 md:grid-cols-3 gap-x-3 text-[11px]"></div>
             </div>
-            <p class="text-[10px] text-slate-400">O login (senha) continua sendo criado no Supabase: Authentication › Users › Add user, com o mesmo e-mail. Somente o GESTOR define o perfil.</p>
+            <p class="text-[10px] text-slate-400">O login (senha) desta pessoa é criado pelo administrador do sistema, com o mesmo e-mail. Somente o GESTOR define o perfil.</p>
           </div>
         </div>
 
@@ -272,7 +271,7 @@
     }
 
     async function inicializar() {
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null;
       meuEmail = u ? String(u.email || '').toLowerCase() : '';
       _supabase.rpc('fn_funcionarios_aplicar_rescisoes').then(() => {});
@@ -460,9 +459,18 @@
       $('btnSalvar').classList.toggle('hidden', !!soGestor);
       mostrarEmpresa(); atualizarCaixa(); mostrarAcesso();
       $('modalFicha').classList.remove('hidden');
+      fichaAlterada = false;
       trocarAba(aba || 'pessoal');
     }
-    function fecharFicha() { $('modalFicha').classList.add('hidden'); }
+    // aviso antes de fechar com alteração não salva (regra de 28/10/2026)
+    let fichaAlterada = false;
+    document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#modalFicha form')) fichaAlterada = true; }, true);
+    document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#modalFicha form')) fichaAlterada = true; }, true);
+    function fecharFicha() {
+      if ($('modalFicha').classList.contains('hidden')) return;
+      if (fichaAlterada && !confirm('Há alterações nesta ficha que ainda não foram salvas.\n\nOK = fechar e perder as alterações · Cancelar = voltar para a ficha')) return;
+      fichaAlterada = false; $('modalFicha').classList.add('hidden');
+    }
 
     function mostrarEmpresa() {
       const e = empresas.find(x => x.id === $('empresa_id').value);
@@ -548,6 +556,7 @@
         : await _supabase.from('funcionarios').insert([payload]).select().single();
       btn.disabled = false;
       if (error) return alert('Erro ao salvar: ' + error.message);
+      fichaAlterada = false;
       await carregar();
       alert(id ? 'Cadastro atualizado.' : `Funcionário cadastrado. Matrícula ${data.matricula}.`);
       abrirFicha(data.id, id ? undefined : 'lotacao');
@@ -576,7 +585,7 @@
       await _supabase.from('funcionarios').update({ email_acesso: email }).eq('id', $('fId').value);
       const { data } = await _supabase.from('usuarios_sistema').select('*'); usuarios = data || [];
       mostrarAcesso();
-      alert(p ? `Acesso salvo: ${email} como ${p}. Lembre de criar o login no Supabase (Authentication › Users) se ainda não existir.` : 'Acesso desativado.');
+      alert(p ? `Acesso salvo: ${email} como ${p}. Se a pessoa ainda não tem senha, peça ao administrador do sistema para criar o login.` : 'Acesso desativado.');
     }
 
     async function carregarHistorico() {

@@ -9,10 +9,10 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1200px] mx-auto space-y-4">
 
-    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+    <div class="sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">👤 SOLICITAÇÕES DE CADASTRO</h1>
         <p id="subtitulo" class="text-xs text-slate-500">Pessoa nova na loja: pede-se o cadastro, o RH aprova e a ficha é criada automaticamente.</p>
@@ -92,7 +92,7 @@
     const podePedir = () => ['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil);
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
     const SEM_SQL = e => /fn_cadastro_(solicitar_v2|aprovar_criar|cpf_verificar)|does not exist|Could not find the function/i.test(e && e.message || '');
-    const msgErro = e => SEM_SQL(e) ? 'O banco ainda não tem a versão nova do pedido de cadastro. Rode o SQL BJ no Supabase.' : (e && e.message || 'erro');
+    const msgErro = e => SEM_SQL(e) ? 'O banco ainda não tem a versão nova do pedido de cadastro. Avise o administrador do sistema.' : (e && e.message || 'erro');
 
     function mascaraTel(el) {
       const d = dig(el.value).slice(0, 11);
@@ -124,10 +124,10 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null; meuEmail = (user.email || '').toLowerCase();
       $('lblUsuario').innerText = meuEmail; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!podePedir()) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!podePedir()) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
       if (perfil === 'LIDER' && !minhaLoja) { $('aviso').innerText = 'Seu usuário de líder não está ligado a uma loja. Peça ao RH.'; $('aviso').classList.remove('hidden'); return; }
       if (rh()) { $('btnPainel').classList.remove('hidden'); $('lnkFuncionarios').classList.remove('hidden'); }
       else { $('btnVoltar').href = perfil === 'LIDER' ? 'freelance_solicitacao.html' : 'supervisor_freelance.html'; $('btnVoltar').classList.remove('hidden'); }
@@ -272,7 +272,7 @@
       }
       if (!pergunta) pergunta = `Criar a ficha de ${p.nome}?\n\n• Cargo: FREELANCE\n• Loja: ${loja}\n• Admissão: ${inicio}\n• CPF: ${p.cpf}\n• Celular: ${p.telefone}\n• PIX: ${p.pix_tipo || '-'} ${p.pix_chave || ''}\n\nA matrícula é gerada automaticamente.`;
       if (!confirm(pergunta)) return;
-      const obs = prompt('Observação para quem pediu (opcional):', '') ?? null;
+      const obs = await pedirTexto('Observação para quem pediu (opcional):', '') ?? null;
       if (obs === null) return;
       const { data: r, error } = await _supabase.rpc('fn_cadastro_aprovar_criar', { p_id: id, p_modo: modo, p_funcionario: alvo, p_obs: obs.trim() || null });
       if (error) return alert('Não aprovado: ' + msgErro(error));
@@ -281,7 +281,7 @@
       if (confirm(`${txt}: ${r.nome} · matrícula ${r.matricula || '-'}.\n\nAbrir a ficha agora?`)) location.href = `funcionarios.html?id=${encodeURIComponent(r.funcionario_id)}&aba=pessoal`;
     }
     async function recusar(id) {
-      const motivo = prompt('Motivo da recusa (quem pediu vê no histórico):'); if (!motivo) return;
+      const motivo = await pedirTexto('Motivo da recusa (quem pediu vê no histórico):'); if (!motivo) return;
       const { error } = await _supabase.rpc('fn_cadastro_decidir', { p_id: id, p_cadastrado: false, p_obs: motivo, p_funcionario: null });
       if (error) return alert(error.message);
       await carregar();

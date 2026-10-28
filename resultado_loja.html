@@ -171,7 +171,7 @@
         <p class="rot mt-1">Estimativa para a loja inteira, pela venda do mês. O valor de cada pessoa é calculado individualmente no Alpha7 e a soma pode ser menor (nem toda venda entra na premiação).</p></details></div>`;
     }
     async function inicializar() {
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : '';
       const [rr, rm] = await Promise.all([_supabase.from('loja_resultados').select('competencia, loja_num, dados'), _supabase.from('loja_metas').select('*')]);
       if (rr.error || rm.error) { $('aviso').innerHTML = `<div class="cartao text-rose-800 font-semibold">Tela ainda não configurada no banco (SQL AZ). ${esc((rr.error || rm.error).message)}</div>`; return; }

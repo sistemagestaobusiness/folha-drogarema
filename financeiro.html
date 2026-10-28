@@ -261,13 +261,13 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
-      const { data: u, error } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u, error } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null;
       document.getElementById('lblUsuario').innerText = (user.email || '').toLowerCase();
       document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
       if (!['FINANCEIRO', 'GESTOR', 'RH'].includes(perfil)) {
         const av = document.getElementById('avisoSemAcesso');
-        av.innerText = error ? 'Erro ao ler o perfil: ' + error.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
+        av.innerText = error ? 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página. Detalhe: ' + traduzirErro(error.message) : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
         av.classList.remove('hidden');
         document.getElementById('btnSair').classList.remove('hidden');
         return;

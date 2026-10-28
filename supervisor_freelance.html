@@ -118,7 +118,7 @@
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
       const email = (user.email || '').toLowerCase();
-      const { data: p, error: errPerfil } = await _supabase.rpc('fn_meu_usuario');
+      const { data: p, error: errPerfil } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = p ? p.perfil : null;
       document.getElementById('lblUsuario').innerText = email;
       document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
@@ -126,7 +126,7 @@
 
       if (!['SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) {
         const av = document.getElementById('avisoSemAcesso');
-        av.innerText = errPerfil ? 'Erro ao ler o perfil: ' + errPerfil.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
+        av.innerText = errPerfil ? 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página. Detalhe: ' + traduzirErro(errPerfil.message) : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
         av.classList.remove('hidden'); return;
       }
       if (perfil !== 'SUPERVISOR') document.getElementById('avisoForcado').classList.remove('hidden');

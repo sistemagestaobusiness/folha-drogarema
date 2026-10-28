@@ -10,18 +10,17 @@
   <script src="emprestimo_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
 
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
+            (window.top !== window ? window.top : window).location.href = 'login.html';
     }
   </script>
 
   <div class="max-w-7xl mx-auto space-y-6">
     
-    <div class="sticky top-0 z-50 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs px-2">
+    <div class="sticky top-0 z-50 bg-[#F4F5F7]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs px-2">
       <div>
         <a href="lancamentos.html" class="text-xs text-amber-700 hover:underline mb-1 inline-block font-bold">← VOLTAR AOS LANÇAMENTOS</a>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">CONTROLE DE EMPRÉSTIMOS</h1>
@@ -476,10 +475,10 @@
       if (emprestimoAtualNoModal) abrirCronograma(id);
       if (aviso) alert('Alteração aplicada.' + aviso);
     }
-    function descontoMenor(id, comp, devido) {
-      const t = prompt(`Competência ${comp}: o desconto previsto era R$ ${devido.toFixed(2).replace('.', ',')}.\n\nQuanto o governo descontou de fato? (o saldo passa para o mês seguinte)`, '');
+    async function descontoMenor(id, comp, devido) {
+      const t = await pedirTexto(`Competência ${comp}: o desconto previsto era R$ ${devido.toFixed(2).replace('.', ',')}.\n\nQuanto o governo descontou de fato? (o saldo passa para o mês seguinte)`, '');
       if (t === null || t.trim() === '') return;
-      const v = parseFloat(t.replace(/\./g, '').replace(',', '.'));
+      const v = lerValor(t);
       if (isNaN(v) || v < 0) return alert('Valor inválido.');
       if (v >= devido - 0.004) return alert('O valor informado não é menor que o previsto. Nada foi alterado.');
       if (v === 0) return mesPulado(id, comp);
@@ -489,10 +488,10 @@
       if (confirm(`O governo NÃO cobrou a parcela em ${comp}?\n\nNada será descontado nesse mês e a parcela passa para o mês seguinte (o contrato termina um mês depois).`)) excecaoMes(id, comp, { tipo: 'PULADO' });
     }
 
-    function editarParcela(id, parcela, valorAtual) {
-      const novoValor = prompt(`Digite o novo valor para a parcela ${parcela}:`, valorAtual);
+    async function editarParcela(id, parcela, valorAtual) {
+      const novoValor = await pedirTexto(`Digite o novo valor para a parcela ${parcela}:`, Number(valorAtual).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
       if (novoValor !== null && novoValor.trim() !== '') {
-        const valorNumerico = parseFloat(novoValor.replace(',', '.'));
+        const valorNumerico = lerValor(novoValor);
         if (!isNaN(valorNumerico)) {
           salvarExcecao(id, parcela, { valor: valorNumerico });
         } else {

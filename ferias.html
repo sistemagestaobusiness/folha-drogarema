@@ -10,10 +10,10 @@
   <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
   <div class="max-w-[1400px] mx-auto space-y-5">
 
-    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">🏖 FÉRIAS</h1>
         <p id="subtitulo" class="text-xs text-slate-500">Líder solicita · Supervisor dá ciência · RH aprova, envia à contabilidade e lança · Financeiro paga</p>
@@ -177,11 +177,11 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null; meuEmail = (user.email || '').toLowerCase();
       $('lblUsuario').innerText = meuEmail; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
       if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) {
-        $('avisoSemAcesso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('avisoSemAcesso').classList.remove('hidden'); $('btnSair').classList.remove('hidden'); return;
+        $('avisoSemAcesso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('avisoSemAcesso').classList.remove('hidden'); $('btnSair').classList.remove('hidden'); return;
       }
       const rhg = ['RH', 'GESTOR'].includes(perfil);
       $(rhg ? 'btnPainel' : 'btnSair').classList.remove('hidden');
@@ -499,7 +499,7 @@
       await carregar(); renderizar();
     }
     async function cancelar(id) {
-      const motivo = prompt('Motivo do cancelamento:'); if (!motivo) return;
+      const motivo = await pedirTexto('Motivo do cancelamento:'); if (!motivo) return;
       const { error } = await _supabase.rpc('fn_ferias_cancelar', { p_id: id, p_motivo: motivo });
       if (error) return alert(error.message);
       await carregar(); renderizar();
@@ -513,8 +513,8 @@
         $('mCalc').classList.remove('hidden'); return;
       }
       let obs = null;
-      if (acao === 'RECUSAR') { obs = prompt('Motivo da recusa (volta para o líder):'); if (!obs) return; }
-      if (acao === 'PRE_APROVAR') { obs = prompt('Observação / restrição (opcional):', '') ; if (obs === null) return; }
+      if (acao === 'RECUSAR') { obs = await pedirTexto('Motivo da recusa (volta para o líder):'); if (!obs) return; }
+      if (acao === 'PRE_APROVAR') { obs = await pedirTexto('Observação / restrição (opcional):', '') ; if (obs === null) return; }
       if (acao === 'LANCAR' && !confirm(`Lançar ${fmtR(atual.valor_liquido)} no evento 2061 (pagamento de férias) na competência aberta, com pagamento previsto em ${dbr(atual.data_pagamento)}?\n\nO valor vai para a tela do Financeiro.`)) return;
       const { error } = await _supabase.rpc('fn_ferias_rh', { p_id: id, p_acao: acao, p_obs: obs || null });
       if (error) return alert(error.message);

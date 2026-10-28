@@ -100,7 +100,7 @@
       $('lblData').innerText = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? String(u.perfil || '').toUpperCase() : null;
       if (!perfil) { $('aviso').innerText = 'Seu usuário não tem perfil ativo.'; $('aviso').style.display = 'block'; return; }
       $('titulo').innerText = perfil === 'GESTOR' ? 'Central de pendências' : 'Suas pendências';
@@ -192,7 +192,7 @@
       const aberta = lista.find(c => c.status === 'ABERTO');
       let atual = localStorage.getItem('competencia_ativa') || '';
       if (!lista.some(c => txt(c) === atual.toUpperCase()) && aberta) { atual = txt(aberta); localStorage.setItem('competencia_ativa', atual); }
-      box.innerHTML = `<label style="font-size:12px;color:var(--sub);margin-left:6px">Trabalhando em <select class="comp" onchange="localStorage.setItem('competencia_ativa', this.value); competenciaTrabalho()">
+      box.innerHTML = `<label style="font-size:12px;color:var(--sub);margin-left:6px" title="Vale para o Painel e os Recibos. Lançamentos, Resumo e Conferência usam sempre o período aberto.">Mês do Painel e Recibos <select class="comp" onchange="localStorage.setItem('competencia_ativa', this.value); competenciaTrabalho()">
         ${lista.map(c => `<option value="${txt(c)}" ${txt(c) === atual.toUpperCase() ? 'selected' : ''}>${String(c.mes).padStart(2, '0')}/${c.ano} · ${c.status === 'ABERTO' ? 'aberta' : 'fechada'}</option>`).join('')}</select></label>`;
     }
 

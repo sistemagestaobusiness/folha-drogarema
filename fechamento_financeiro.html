@@ -133,7 +133,7 @@
     const lojaNum = id => { const l = lojas.find(x => x.id === id); const m = l && /LOJA\s*0*(\d+)/i.exec(l.nome_loja || ''); return m ? parseInt(m[1], 10) : null; };
 
     async function inicializar() {
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       if (!u || u.perfil !== 'GESTOR') { $('semAcesso').innerText = 'Esta tela é exclusiva do perfil Gestor.'; $('semAcesso').classList.remove('hidden'); return; }
       const MESES = { JANEIRO: '01', FEVEREIRO: '02', 'MARÇO': '03', MARCO: '03', ABRIL: '04', MAIO: '05', JUNHO: '06', JULHO: '07', AGOSTO: '08', SETEMBRO: '09', OUTUBRO: '10', NOVEMBRO: '11', DEZEMBRO: '12' };
       const [m, a] = String(localStorage.getItem('competencia_ativa') || '').split('/').map(s => s.trim().toUpperCase());
@@ -164,7 +164,7 @@
       ]);
       anterior = ra.data || null; window._cmpInit = false;
       fpMapa = {}; (rm.data || []).forEach(x => { fpMapa[norm(x.usuario)] = x.loja_num; });
-      if (rr.error) { $('avisos').innerHTML = `<div class="text-rose-700">Rode o SQL AU (fechamento financeiro) antes de usar esta tela. ${esc(rr.error.message)}</div>`; return; }
+      if (rr.error) { $('avisos').innerHTML = `<div class="text-rose-700">Esta tela ainda não está disponível: avise o administrador. ${esc(rr.error.message)}</div>`; return; }
       regras = rr.data || []; salvo = rs.data || null;
       comissoes = {}; comissaoSistema = {}; lancados2015 = {}; let semLoja = 0;
       (ri.data || []).forEach(i => {

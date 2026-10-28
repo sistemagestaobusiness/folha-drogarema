@@ -55,7 +55,7 @@
   <div class="kpis" id="kpis"></div>
   <section class="card pend" id="pend" style="display: none"></section>
   <section class="card rola" style="max-height: 64vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td>Carregando…</td></tr></tbody></table></section>
-  <p class="nota">Lançamentos de natureza <b>contábil</b> da competência, sem o salário (2000 e 2024 dias normais), por empresa e funcionário.
+  <p class="nota">Lançamentos de natureza <b>contábil</b> da competência, sem o salário (eventos 2000 – Salário e 2024 – Dias normais), por empresa e funcionário.
     Mesmo evento no mês para a mesma pessoa vem somado numa linha. <b>Crédito</b> = provento, <b>débito</b> = desconto.
     Código contábil, código do empregado e código da empresa vêm do cadastro: clique num código (ou em “sem código”) para gravar ou corrigir.
     Eventos marcados <span class="horas">HORAS</span> a contabilidade recebe em horas (adicional noturno, faltas): o Excel traz o valor em reais e a referência, para a contabilidade conferir as horas.
@@ -85,10 +85,11 @@
     };
 
     async function iniciar() {
-      const { data: comp } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1);
+      const { data: comp } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano').order('mes').limit(1);
       const c = (comp || [])[0], hoje = new Date();
       $('fComp').value = c ? `${c.ano}-${String(c.mes).padStart(2, '0')}` : `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-      const espera = () => window.ACESSO ? Promise.resolve() : new Promise(ok => setTimeout(() => ok(espera()), 150));
+      const ini = Date.now();
+      const espera = () => (window.ACESSO || Date.now() - ini > 6000) ? Promise.resolve() : new Promise(ok => setTimeout(() => ok(espera()), 150));
       await espera();
       podeEditar = ['RH', 'GESTOR'].includes(String((window.ACESSO || {}).perfil || '').toUpperCase());
       carregar();
@@ -107,7 +108,7 @@
         empresas = re.data || [];
         funcs = {}; lf.forEach(f => funcs[f.id] = f);
         eventos = {}; (rt.data || []).forEach(e => eventos[String(e.codigo_evento)] = e);
-        if (lf.length && !('codigo_contabil' in lf[0])) aviso('Falta rodar o SQL DL (código contábil) no banco.');
+        if (lf.length && !('codigo_contabil' in lf[0])) aviso('Códigos contábeis ainda não disponíveis: avise o administrador.');
         const soma = {};
         li.forEach(i => {
           const cod = (String(i.rubrica || '').match(/^\s*(\d+)/) || [])[1]; const ev = eventos[cod];
@@ -195,7 +196,7 @@
       if (tipo === 'EVENTO') { const e = Object.values(eventos).find(x => x.id === id); atual = e.codigo_contabil || ''; nome = `evento ${e.codigo_evento} - ${e.descricao_do_evento}`; }
       if (tipo === 'FUNCIONARIO') { atual = funcs[id].codigo_contabil || ''; nome = `empregado ${funcs[id].nome_registro}`; }
       if (tipo === 'EMPRESA') { const e = empresas.find(x => x.id === id); atual = e.cod_contabil || ''; nome = `empresa ${e.nome_fantasia || e.razao_social}`; }
-      const v = prompt(`Código na contabilidade para ${nome}.\n(só números; deixe vazio para apagar)`, atual);
+      const v = await pedirTexto(`Código na contabilidade para ${nome}.\n(só números; deixe vazio para apagar)`, atual);
       if (v === null) return;
       const { error } = await _supabase.rpc('fn_contabil_codigo_salvar', { p_tipo: tipo, p_id: id, p_codigo: v });
       if (error) return alert('Não foi possível gravar: ' + error.message);

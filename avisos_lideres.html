@@ -9,7 +9,7 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1000px] mx-auto space-y-4">
 
     <div class="cab-sis py-3 border-b border-slate-200">
@@ -49,7 +49,7 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       meuEmail = (user.email || '').toLowerCase();
       if (!u || u.perfil !== 'GESTOR') { $('aviso').innerText = 'Somente o Gestor publica avisos.'; $('aviso').classList.remove('hidden'); return; }
       const [rl, ru] = await Promise.all([_supabase.from('lojas').select('*').order('nome_loja'), _supabase.from('usuarios_sistema').select('email, perfil, loja_id, ativo')]);
@@ -65,7 +65,7 @@
         _supabase.from('avisos_lideres').select('*').order('criado_em', { ascending: false }).limit(200),
         _supabase.from('avisos_leitura').select('*')
       ]);
-      if (ra.error) { $('aviso').innerText = 'Erro ao carregar (o SQL BP foi rodado?): ' + ra.error.message; $('aviso').classList.remove('hidden'); return; }
+      if (ra.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(ra.error.message); $('aviso').classList.remove('hidden'); return; }
       avisos = ra.data || []; leituras = rl.data || [];
       render();
     }

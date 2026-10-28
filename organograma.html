@@ -10,10 +10,10 @@
   <script src="escala_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1600px] mx-auto space-y-4">
 
-    <div class="noprint sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+    <div class="noprint sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">🏛 ORGANOGRAMA</h1>
         <p class="text-xs text-slate-500">Montado automaticamente pelo cadastro: cargo (ou função no organograma), loja/setor e líder da loja</p>
@@ -167,10 +167,10 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null;
       $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || '-';
-      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
       $(rh() ? 'btnPainel' : 'btnVoltar').classList.remove('hidden');
       if (perfil === 'SUPERVISOR') $('btnVoltar').href = 'supervisor_freelance.html';
       $('btnConfig').classList.toggle('hidden', !rh());

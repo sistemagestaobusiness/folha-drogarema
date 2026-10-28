@@ -9,10 +9,10 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1300px] mx-auto space-y-4">
 
-    <div class="sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+    <div class="sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">💸 ABATIMENTOS</h1>
         <p id="subtitulo" class="text-xs text-slate-500">Produto vencido · fechamento de caixa · outros — desconto em folha com aprovação do líder da loja</p>
@@ -147,10 +147,10 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null; meuEmail = (user.email || '').toLowerCase();
       $('lblUsuario').innerText = meuEmail; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['LIDER', 'SUPERVISOR', 'FINANCEIRO', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
+      if (!['LIDER', 'SUPERVISOR', 'FINANCEIRO', 'RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
       if (perfil === 'LIDER' && !minhaLoja) { $('aviso').innerText = 'Seu usuário de líder não está ligado a uma loja. Peça ao RH.'; $('aviso').classList.remove('hidden'); return; }
       if (rh()) $('btnPainel').classList.remove('hidden');
       else { const v = { LIDER: 'freelance_solicitacao.html', SUPERVISOR: 'supervisor_freelance.html', FINANCEIRO: 'financeiro.html' }[perfil]; $('btnVoltar').href = v; $('btnVoltar').classList.remove('hidden'); }
@@ -185,7 +185,7 @@
         _supabase.from('abatimento_parcelas').select('*').order('parcela_num'),
         _supabase.from('abatimento_historico').select('*').order('id')
       ]);
-      if (ra.error) { $('aviso').innerText = 'Erro ao carregar (rode o SQL AF_abatimentos no Supabase): ' + ra.error.message; $('aviso').classList.remove('hidden'); }
+      if (ra.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(ra.error.message); $('aviso').classList.remove('hidden'); }
       abats = ra.data || []; parcelas = rp.data || []; hist = rhis.data || [];
     }
     function atualizarBadges() {
@@ -340,7 +340,7 @@
     async function cancelar(id) {
       const a = abats.find(x => x.id === id);
       const txt = a.status === 'APROVADO' ? 'Cancelar as parcelas FUTURAS deste abatimento? (as já lançadas continuam na folha)\n\nMotivo:' : 'Cancelar este pedido? Motivo:';
-      const motivo = prompt(txt); if (!motivo) return;
+      const motivo = await pedirTexto(txt); if (!motivo) return;
       const { error } = await _supabase.rpc('fn_abatimento_cancelar', { p_id: id, p_motivo: motivo });
       if (error) return alert(error.message);
       await recarregar();
@@ -348,11 +348,11 @@
 
     async function reduzir(pid) {
       const p = parcelas.find(x => x.id === pid);
-      const v = prompt(`${nomeF(p.funcionario_id)} · parcela ${p.parcela_num}/${p.total_parcelas} (${p.competencia}) de ${fmtR(p.valor)}.\n\nNovo valor desta parcela (menor que o atual). A diferença vai para as próximas parcelas:`, '');
+      const v = await pedirTexto(`${nomeF(p.funcionario_id)} · parcela ${p.parcela_num}/${p.total_parcelas} (${p.competencia}) de ${fmtR(p.valor)}.\n\nNovo valor desta parcela (menor que o atual). A diferença vai para as próximas parcelas:`, '');
       if (v === null) return;
       const novo = parseFloat(String(v).replace(/\./g, '').replace(',', '.'));
       if (!(novo >= 0) || novo >= parseFloat(p.valor)) return alert('Informe um valor menor que o atual.');
-      const motivo = prompt('Motivo (ex.: holerite ficaria negativo):', 'Holerite ficaria negativo'); if (!motivo) return;
+      const motivo = await pedirTexto('Motivo (ex.: holerite ficaria negativo):', 'Holerite ficaria negativo'); if (!motivo) return;
       const { error } = await _supabase.rpc('fn_abatimento_parcela_valor', { p_parcela: pid, p_valor: novo, p_motivo: motivo });
       if (error) return alert(error.message);
       await recarregar();
@@ -432,7 +432,7 @@
       alert('Aprovado. As parcelas foram criadas e a 1ª já está na tela de lançamentos.');
     }
     async function recusar() {
-      const motivo = prompt('Motivo da recusa (volta para quem registrou):'); if (!motivo) return;
+      const motivo = await pedirTexto('Motivo da recusa (volta para quem registrou):'); if (!motivo) return;
       const { error } = await _supabase.rpc('fn_abatimento_recusar', { p_id: atual.id, p_obs: motivo });
       if (error) return alert(error.message);
       fechar('mAprovar'); await recarregar();

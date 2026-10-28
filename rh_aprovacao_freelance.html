@@ -176,13 +176,13 @@
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { alert('Faça login para acessar.'); window.location.href = 'login.html'; return; }
       const email = (user.email || '').toLowerCase();
-      const { data: p, error: errPerfil } = await _supabase.rpc('fn_meu_usuario');
+      const { data: p, error: errPerfil } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       const perfil = p ? p.perfil : null; window.perfilAtual = perfil;
       document.getElementById('lblUsuario').innerText = email;
       document.getElementById('lblPerfil').innerText = perfil || 'SEM PERFIL';
       if (!['RH', 'GESTOR'].includes(perfil)) {
         const av = document.getElementById('avisoSemAcesso');
-        av.innerText = errPerfil ? 'Erro ao ler o perfil: ' + errPerfil.message : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
+        av.innerText = errPerfil ? 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página. Detalhe: ' + traduzirErro(errPerfil.message) : 'Seu perfil (' + (perfil || 'não cadastrado') + ') não tem acesso a esta tela.';
         av.classList.remove('hidden'); return;
       }
       document.getElementById('conteudo').classList.remove('hidden');
@@ -398,14 +398,14 @@
     }
 
     async function abrirAprovacao(id) {
-      const { data: r } = await _supabase.from('freelance_solicitacoes').select('*').eq('id', id).single();
-      if (!r) return;
+      const { data: r, error: er } = await _supabase.from('freelance_solicitacoes').select('*').eq('id', id).single();
+      if (!r) return alert('Não foi possível abrir este pedido' + (er ? ': ' + er.message : '') + '. Recarregue a página e tente de novo.');
       if (!confirmaAntecedencia(r)) return;
       // complemento de jornada: só confirma; não tem pagamento, lançamento na folha nem banco de horas
       if (r.motivo === 'COMPLEMENTO_JORNADA') {
         if (!confirm(`Aprovar o COMPLEMENTO DE JORNADA de ${nome(r.funcionario_id)} em ${dataBR(r.data_servico)} (${r.horas_trabalhadas}h, ${r.loja_solicitante || ''})?\n\nConta na escala da loja. Não gera pagamento, lançamento na folha nem banco de horas.`)) return;
         const { error } = await _supabase.rpc('fn_freelance_decisao_rh', { p_id: r.id, p_aprovar: true, p_modo_freelancer: 'COMPLEMENTO', p_horas: r.horas_trabalhadas });
-        if (error) return alert('Não aprovado: ' + error.message + (/inválid|COMPLEMENTO/i.test(error.message) ? ' (rode o SQL BI)' : ''));
+        if (error) return alert('Não aprovado: ' + error.message + (/inválid|COMPLEMENTO/i.test(error.message) ? '' : ''));
         return carregar();
       }
       atual = r;
@@ -503,7 +503,7 @@
 
     // ---------- Estorno: aprovado, mas a pessoa não veio ----------
     async function estornar(id) {
-      const motivo = prompt('ESTORNAR este freelance / hora extra aprovado?\n\nO sistema tira os lançamentos da folha (provento e desconto da falta), cancela o pagamento pendente no Financeiro e o banco de horas.\nSe já foi pago, o estorno não é feito: lance um desconto na tela de Lançamentos.\n\nMotivo (ex.: a pessoa não compareceu):');
+      const motivo = await pedirTexto('ESTORNAR este freelance / hora extra aprovado?\n\nO sistema tira os lançamentos da folha (provento e desconto da falta), cancela o pagamento pendente no Financeiro e o banco de horas.\nSe já foi pago, o estorno não é feito: lance um desconto na tela de Lançamentos.\n\nMotivo (ex.: a pessoa não compareceu):');
       if (!motivo) return;
       const { error } = await _supabase.rpc('fn_freelance_estornar', { p_id: id, p_motivo: motivo });
       if (error) return alert('Não estornado: ' + error.message);

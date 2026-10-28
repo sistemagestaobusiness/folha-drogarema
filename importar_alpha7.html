@@ -14,8 +14,7 @@
 
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
+            (window.top !== window ? window.top : window).location.href = 'login.html';
     }
   </script>
 

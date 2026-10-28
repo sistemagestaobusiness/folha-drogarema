@@ -9,7 +9,7 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1300px] mx-auto space-y-4">
 
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
@@ -59,7 +59,7 @@
 
     const CATS = {
       FIXOS:        ['Fixos do mês anterior não lançados', 'Quem tinha lançamento fixo no mês anterior e ainda não tem neste mês.', 'lancamentos.html'],
-      SALARIO:      ['Salário diferente do cadastro', 'Salário (2024 dias normais) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html'],
+      SALARIO:      ['Salário diferente do cadastro', 'Salário (evento 2024 – Dias normais) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html'],
       DUPLICADO:    ['Evento lançado mais de uma vez', 'Evento que só pode existir uma vez no mês (salário, INSS, IRPF, plano, alimentação, combustível, adicionais).', 'lancamentos.html'],
       FALTA:        ['Falta na escala sem desconto nem abono', 'Falta registrada na escala do mês sem desconto de falta/DSR e sem abono.', 'relatorio_faltas.html'],
       VT:           ['Vale transporte × desconto', 'VT pago sem desconto, desconto sem VT, ou "sem desconto" por acordo.', 'vale_transporte.html'],
@@ -76,11 +76,11 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null;
       $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
-      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = 'Seu perfil não tem acesso a esta tela.'; $('aviso').classList.remove('hidden'); return; }
-      const { data: c } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1);
+      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('aviso').classList.remove('hidden'); return; }
+      const { data: c } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano').order('mes').limit(1);
       const d = new Date(), ab = c && c[0];
       $('fMes').value = ab ? `${ab.ano}-${String(ab.mes).padStart(2, '0')}` : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       aba = new URLSearchParams(location.search).get('aba') === 'aprovacao' ? 'aprovacao' : 'conf';
@@ -93,7 +93,7 @@
         _supabase.rpc('fn_conferencia', { p_comp: comp() }),
         _supabase.from('alteracoes_pendentes').select('*').order('solicitado_em', { ascending: false }).limit(200)
       ]);
-      if (r1.error) { $('aviso').innerText = 'Erro ao carregar (o SQL BZ foi rodado?): ' + r1.error.message; $('aviso').classList.remove('hidden'); return; }
+      if (r1.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(r1.error.message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
       linhas = r1.data || []; alts = r2.data || [];
       const ids = [...new Set(alts.map(a => a.funcionario_id))];
@@ -134,18 +134,21 @@
             return `<tr class="border-b border-slate-50 align-top"><td class="px-4 py-1.5 w-56"><div class="font-bold text-slate-800">${esc(l.nome || '-')}</div><div class="text-[10px] text-slate-400">${esc(l.nome_loja || '')}</div></td>
               <td class="px-2 py-1.5 text-[11px] text-slate-700">${esc(l.detalhe)}${l.justificativa ? `<div class="text-[10px] text-emerald-700 mt-0.5">✓ ${esc(l.justificativa)} · ${esc(l.justificado_por || '')}</div>` : ''}</td>
               <td class="px-2 py-1.5 w-24"><span class="px-2 py-0.5 rounded font-bold text-[10px] ${cor(l.gravidade)}">${rot(l.gravidade)}</span></td>
-              <td class="px-4 py-1.5 w-72">${['VERMELHO', 'JUSTIFICADO'].includes(l.gravidade) && l.categoria !== 'PENDENCIA' ? `<div class="flex gap-1"><input id="j_${k}" class="inp !py-1 text-[11px]" placeholder="justificativa (mín. 10)" value="${esc(l.justificativa || '')}">
-                <button onclick="justificar('${l.categoria}','${l.funcionario_id}','${esc(l.chave || '')}','j_${k}')" class="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-2 text-[10px] font-bold cursor-pointer">ok</button></div>` : ''}</td></tr>`; }).join('')}</table>`
+              <td class="px-4 py-1.5 w-72">${['VERMELHO', 'JUSTIFICADO'].includes(l.gravidade) && l.categoria !== 'PENDENCIA' ? `<div class="flex gap-1"><input id="j_${k}" class="inp !py-1 text-[11px]" placeholder="justificativa (mín. 10 letras)" value="${esc(digitado[k] ?? l.justificativa ?? '')}" oninput="digitado['${k}']=this.value">
+                <button onclick="justificar('${l.categoria}','${l.funcionario_id}','${esc(l.chave || '')}','j_${k}')" class="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-3 py-1 text-[11px] font-bold cursor-pointer whitespace-nowrap">Salvar</button></div>` : ''}</td></tr>`; }).join('')}</table>`
             : '<div class="px-4 py-2 text-[11px] text-slate-400">Nada pendente nesta categoria.</div>'}
         </div>`;
       }).join('') || '<div class="bg-white rounded-xl p-8 text-center text-slate-400">Nenhum alerta neste mês.</div>';
     }
 
+    // o que foi digitado nas outras justificativas não se perde ao salvar uma (regra de 28/10/2026)
+    const digitado = {};
     async function justificar(cat, fid, chave, inp) {
       const t = ($(inp).value || '').trim();
       if (t.length < 10) return alert('Justificativa com no mínimo 10 letras.');
       const { error } = await _supabase.rpc('fn_conferencia_justificar', { p_comp: comp(), p_categoria: cat, p_func: fid, p_chave: chave, p_texto: t });
-      if (error) return alert(error.message);
+      if (error) return alert('Não foi possível salvar a justificativa: ' + error.message);
+      delete digitado[inp.slice(2)];
       await carregar();
     }
 

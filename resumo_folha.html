@@ -19,19 +19,18 @@
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   </style>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen font-sans">
 
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
+            (window.top !== window ? window.top : window).location.href = 'login.html';
     }
   </script>
 
   <div class="sticky top-0 z-[70] bg-white/95 backdrop-blur-sm py-4 px-6 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xs">
     <div>
       <h1 class="text-xl font-black text-slate-900 tracking-wide uppercase">Resumo Geral de Lançamentos</h1>
-      <p class="text-xs text-slate-500 font-medium">Competência Ativa: <span id="labelCompetencia" class="text-emerald-600 font-bold font-mono">...</span></p>
+      <p class="text-xs text-slate-500 font-medium flex items-center gap-2">Competência: <select id="selCompetencia" onchange="trocarCompetencia(this.value)" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs font-bold font-mono text-emerald-700 cursor-pointer"></select><span id="labelCompetencia" class="hidden">...</span><span id="labelCompetenciaObs" class="text-[10px] text-slate-400"></span></p>
     </div>
     
     <div class="flex items-center gap-2 w-full md:w-auto flex-wrap">
@@ -817,12 +816,12 @@
 
     async function carregarEnvio() {
       try {
-        if (meuPerfil === null) { const { data: u } = await _supabase.rpc('fn_meu_usuario'); meuPerfil = (Array.isArray(u) ? u[0] : u)?.perfil || ''; }
+        if (meuPerfil === null) { const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario'); meuPerfil = (Array.isArray(u) ? u[0] : u)?.perfil || ''; }
         const [rE, rP] = await Promise.all([
           _supabase.from('folha_envios').select('*').eq('competencia', competenciaRegra).order('versao', { ascending: false }).limit(1),
           _supabase.from('pagamentos_extras').select('id, status, valor, funcionario_id').eq('tipo', 'QUINTO_DIA').eq('competencia', competenciaRegra)
         ]);
-        if (rE.error) { document.getElementById('barraEnvio').innerHTML = `<div class="bg-slate-100 border border-slate-300 rounded-xl p-3 text-xs text-slate-600">Envio ao Financeiro ainda não instalado no banco (rode o SQL AN). ${escH(rE.error.message)}</div>`; return; }
+        if (rE.error) { document.getElementById('barraEnvio').innerHTML = `<div class="bg-slate-100 border border-slate-300 rounded-xl p-3 text-xs text-slate-600">Envio ao Financeiro ainda não instalado no banco. ${escH(rE.error.message)}</div>`; return; }
         ultimoEnvio = (rE.data || [])[0] || null;
         pagosQuinto = (rP.data || []);
       } catch (e) { return; }
@@ -915,7 +914,29 @@
       carregarEnvio();
     }
 
-    processarDadosBanco();
+    // competência (regra de 28/10/2026): abre no período ABERTO, a mesma de Lançamentos; o RH pode olhar outro mês pelo seletor
+    const NOMES_MES = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+    function trocarCompetencia(mmYYYY) {
+      const [m, a] = mmYYYY.split('/');
+      competenciaAtivaTexto = `${NOMES_MES[Number(m) - 1]} / ${a}`;
+      processarDadosBanco();
+    }
+    async function iniciarCompetencia() {
+      try {
+        const { data } = await _supabase.from('competencias').select('mes, ano, status, liberado_ate');
+        const ls = data || [], ord = (a, b) => (a.ano - b.ano) || (a.mes - b.mes), agora = new Date();
+        const lib = ls.filter(c => c.status === 'FECHADO' && c.liberado_ate && new Date(c.liberado_ate) > agora).sort(ord);
+        const alvo = lib[0] || ls.filter(c => c.status === 'ABERTO').sort(ord)[0];
+        const cod = c => `${String(c.mes).padStart(2, '0')}/${c.ano}`;
+        if (alvo) competenciaAtivaTexto = `${NOMES_MES[alvo.mes - 1]} / ${alvo.ano}`;
+        const sel = document.getElementById('selCompetencia');
+        sel.innerHTML = ls.slice().sort((a, b) => ord(b, a)).map(c => `<option value="${cod(c)}">${cod(c)} · ${c.status === 'ABERTO' ? 'aberto' : 'fechado'}</option>`).join('');
+        sel.value = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
+        document.getElementById('labelCompetenciaObs').innerText = alvo ? '' : 'nenhum período aberto';
+      } catch (e) { }
+      processarDadosBanco();
+    }
+    iniciarCompetencia();
   
     // A área da tabela vai exatamente até o fim da janela: a barra de rolagem horizontal fica sempre à vista
     function ajustarAlturaTabela() {

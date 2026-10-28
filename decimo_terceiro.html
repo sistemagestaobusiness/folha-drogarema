@@ -9,10 +9,10 @@
   <script src="acesso.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#e4e9ef] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
   <div class="max-w-[1500px] mx-auto space-y-4">
 
-    <div class="noprint sticky top-0 z-40 bg-[#e4e9ef]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+    <div class="noprint sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <div>
         <h1 class="text-xl font-bold text-slate-900 tracking-wide">🎄 CONTROLE DO 13º SALÁRIO</h1>
         <p class="text-xs text-slate-500">Quanto cada um tem de 13º, quanto já recebeu (cada antecipação separada) e o saldo que falta pagar</p>
@@ -172,7 +172,7 @@
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
-      const { data: u } = await _supabase.rpc('fn_meu_usuario');
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null;
       $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || '-';
       const [rl, re] = await Promise.all([
@@ -194,7 +194,7 @@
     async function carregar() {
       $('lblAno').innerText = ano;
       const [{ data, error }, rm] = await Promise.all([_supabase.rpc('fn_decimo_resumo', { p_ano: ano }), _supabase.rpc('fn_decimo_movimentos', { p_ano: ano })]);
-      if (error || rm.error) { $('aviso').innerText = 'Erro ao carregar (o SQL CB foi rodado?): ' + (error || rm.error).message; $('aviso').classList.remove('hidden'); return; }
+      if (error || rm.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro((error || rm.error).message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
       linhas = data || []; movs = rm.data || [];
       trocarAba(aba);
@@ -204,7 +204,7 @@
       ['saldo', 'mensal', 'aprovacao'].forEach(x => $('tab_' + x).classList.toggle('on', x === a));
       $('pSaldo').classList.toggle('hidden', a !== 'saldo'); $('pMensal').classList.toggle('hidden', a !== 'mensal'); $('pApr').classList.toggle('hidden', a !== 'aprovacao');
       const q = movs.filter(m => m.status === 'AGUARDANDO_GESTOR').length;
-      $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q);
+      $('qtdApr').innerText = q; $('qtdApr').classList.toggle('hidden', !q); $('qtdApr').classList.toggle('bg-red-600', perfil === 'GESTOR'); $('qtdApr').classList.toggle('bg-slate-400', perfil !== 'GESTOR');   // para o RH é só informativo: quem aprova é o Gestor
       renderizar();
     }
     function mudarAno(n) { ano += n; carregar(); }
@@ -331,7 +331,7 @@
       fechar('mAnt'); carregar();
     }
     async function cancelarAnt(id) {
-      const mot = (prompt('Cancelar esta antecipação (ainda não paga)? Informe o motivo (mínimo 10 letras):') || '').trim();
+      const mot = (await pedirTexto('Cancelar esta antecipação (ainda não paga)? Informe o motivo (mínimo 10 letras):') || '').trim();
       if (!mot) return;
       const { error } = await _supabase.rpc('fn_decimo_antecip_cancelar', { p_id: id, p_motivo: mot });
       if (error) return alert(error.message);

@@ -72,7 +72,7 @@
     let perfil = '', lojaSel = null, mesSel = hojeComp(), aba = 'resumo', reg = null, regAnt = null, eqAnt = null, partTab = [], editPart = false, todas = [], metas = [], podeSubir = false;
 
     async function inicializar() {
-      const { data: u } = await _supabase.rpc('fn_meu_usuario'); perfil = u ? u.perfil : '';
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario'); perfil = u ? u.perfil : '';
       let lojas = M.LOJAS;
       if (perfil === 'LIDER') { const { data: n } = await _supabase.rpc('fn_minha_loja_num'); lojas = n ? [n] : []; }
       if (!lojas.length) { $('aviso').innerHTML = '<div class="cartao text-slate-600">Seu usuário não está ligado a uma loja no cadastro.</div>'; return; }

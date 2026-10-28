@@ -46,8 +46,7 @@
 
   <script>
     if (!localStorage.getItem('usuario_drogarema')) {
-      alert('Acesso negado! Faça login primeiro.');
-      window.location.href = 'login.html';
+            (window.top !== window ? window.top : window).location.href = 'login.html';
     }
   </script>
 
@@ -292,7 +291,7 @@
       try {
         const { data: { user } } = await _supabase.auth.getUser();
         if (!user) return;
-        const { data } = await _supabase.rpc('fn_meu_usuario');
+        const { data } = await rpcRetentar(_supabase, 'fn_meu_usuario');
         const perfil = data ? data.perfil : null;
         perfilIndex = perfil; emailIndex = (user.email || '').toLowerCase();
         document.getElementById('btnBackup').classList.toggle('hidden', !['RH', 'GESTOR'].includes(perfil));
@@ -588,7 +587,7 @@
     //   férias: crítico até 15 dias para começar · atenção até 30 dias
     // ---------------------------------------------------------------------
     async function carregarUrgentes() {
-      if (!perfilIndex) { try { const { data } = await _supabase.rpc('fn_meu_usuario'); perfilIndex = data ? data.perfil : null; } catch (e) { } }
+      if (!perfilIndex) { try { const { data } = await rpcRetentar(_supabase, 'fn_meu_usuario'); perfilIndex = data ? data.perfil : null; } catch (e) { } }
       if (!['RH', 'GESTOR'].includes(perfilIndex)) return;
       carregarStatusEnvio();
       // regra de 21/10/2026: o painel do Gestor é analítico; das pendências da equipe fica só uma linha (o detalhe está na Central de pendências)
