@@ -35,7 +35,9 @@
         <div class="flex-1 min-w-[150px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
         <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fOcultarNao" checked onchange="render()"> ocultar quem não recebe</label>
         <label class="flex items-center gap-1.5 text-[11px] font-bold text-red-700 pb-2 cursor-pointer"><input type="checkbox" id="fAlertas" onchange="render()"> só com alerta</label>
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 pb-2 cursor-pointer"><input type="checkbox" id="fFalta" onchange="render()"> só o que falta preencher</label>
       </div>
+      <div id="boxRascunho" class="hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-lg px-3 py-2 text-[11px] flex flex-wrap items-center gap-3"></div>
 
       <div id="pLanc" class="space-y-2">
         <div id="resumo" class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600 bg-white rounded-lg px-3 py-2"></div>
@@ -100,6 +102,35 @@
     const somaMes = (c, n) => { const [m, a] = c.split('/').map(Number); const d = new Date(a, m - 1 + n, 1); return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
 
     let perfil = null, lista = [], ed = {}, aba = 'lanc';
+    // RASCUNHO (regra de 28/10/2026): o que o RH digita fica guardado neste computador até confirmar; fechar ou recarregar a tela não perde nada
+    const chaveRascunho = () => 'drogarema_vt_rascunho_' + mes();
+    let rascunhoInfo = null, tRasc = null;
+    const CAMPOS_RASC = ['recebe', 'vd', 'jvd', 'dias', 'motivo', 'dv', 'dt', 'dj'];
+    function salvarRascunho() {
+      clearTimeout(tRasc);
+      tRasc = setTimeout(() => {
+        const itens = {};
+        lista.forEach(f => { const e = ed[f.funcionario_id]; if (f.trava || f.fora || !mudou(f)) return;
+          if (e.vd == null && (e.dias == null || e.sugDias) && e.recebe === !!(f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe) && !e.jvd && !e.motivo && !e.dj && e.dv == null) return;   /* nada digitado */ itens[f.funcionario_id] = Object.fromEntries(CAMPOS_RASC.map(k => [k, e[k]])); });
+        try {
+          if (Object.keys(itens).length) localStorage.setItem(chaveRascunho(), JSON.stringify({ em: new Date().toISOString(), itens }));
+          else localStorage.removeItem(chaveRascunho());
+        } catch (e) { }
+        mostrarRascunho(Object.keys(itens).length);
+      }, 300);
+    }
+    function lerRascunho() { try { return JSON.parse(localStorage.getItem(chaveRascunho()) || 'null'); } catch (e) { return null; } }
+    function mostrarRascunho(n) {
+      const b = $('boxRascunho');
+      if (!n) { b.classList.add('hidden'); return; }
+      b.innerHTML = `<span class="flex-1">💾 <b>${n} preenchimento(s) guardado(s) neste computador</b> (ainda não confirmados). Pode fechar e voltar depois: nada se perde até clicar em Confirmar.${rascunhoInfo ? ' Recuperado de ' + dh(rascunhoInfo) + '.' : ''}</span><button type="button" onclick="descartarRascunho()" class="px-2 py-1 rounded bg-white border border-amber-300 font-bold cursor-pointer">descartar o que foi digitado</button>`;
+      b.classList.remove('hidden');
+    }
+    async function descartarRascunho() {
+      if (!confirm('Descartar tudo o que foi digitado e não confirmado neste mês?')) return;
+      try { localStorage.removeItem(chaveRascunho()); } catch (e) { }
+      rascunhoInfo = null; await carregar();
+    }
     const mes = () => compDe($('fMes').value);
 
     async function inicializar() {
@@ -140,6 +171,16 @@
           dj: f.desconto_justif || (f.isento_cfg ? (f.isento_justif_cfg || '') : '')
         };
       });
+      // dias sugeridos pela escala do mês de uso (o RH confere)
+      lista.forEach(f => { const e = ed[f.funcionario_id]; if (!f.trava && !f.fora && e.recebe && e.dias == null && f.escala_uso && f.trabalho_uso != null) { e.dias = f.trabalho_uso; e.sugDias = true; } });
+      const rasc = lerRascunho(); rascunhoInfo = null;
+      if (rasc && rasc.itens) {
+        let n = 0;
+        lista.forEach(f => { const r = rasc.itens[f.funcionario_id]; if (!r || f.trava || f.fora || f.status === 'LANCADO' || f.status === 'AGUARDANDO_GESTOR') return;
+          Object.assign(ed[f.funcionario_id], r); ed[f.funcionario_id].sugDias = false; n++; });
+        if (n) rascunhoInfo = rasc.em;
+        mostrarRascunho(n);
+      } else mostrarRascunho(0);
       const lojas = [...new Map(lista.map(f => [f.loja_id || '', f.nome_loja || 'sem loja'])).entries()];
       const sel = $('fLoja').value;
       $('fLoja').innerHTML = '<option value="">Todas</option>' + lojas.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('');
@@ -208,7 +249,7 @@
       const vis = lista.filter(f => { const e = ed[f.funcionario_id];
         return (!fl || (f.loja_id || '') === fl) && (!fn || String(f.nome).toUpperCase().includes(fn))
           && (!ocultar || e.recebe || Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil) > 0)
-          && (!soAl || alertas(f, e).includes('bg-red')); });
+          && (!soAl || alertas(f, e).includes('bg-red')) && (!$('fFalta').checked || falta(f) || semJustF(f)); });
       let lojaAnt = null;
       $('tabela').innerHTML = vis.length ? vis.map(f => {
         const e = ed[f.funcionario_id], id = f.funcionario_id, dis = f.trava ? 'disabled' : '';
@@ -220,17 +261,17 @@
           <td class="px-2 py-1.5">${alertas(f, e)}</td><td class="px-3 py-1.5">${situacao(f)}</td></tr>`;
         const v = valorVT(f, e), dif = difere(f), c = calcDesc(f, e), d = descEfetivo(f, e), pj = precisaJustDesc(f, e);
         const vdTd = f.trava ? `<td class="px-2 py-1.5 font-mono text-[11px] text-slate-500">${f.valor_dia != null ? num(f.valor_dia) : '-'}</td><td class="px-2 py-1.5 font-mono text-[11px] text-slate-500">${f.dias ?? '-'}</td>`
-          : `<td class="px-2 py-1.5"><input class="inp val !py-1" value="${e.vd == null ? '' : num(e.vd)}" placeholder="informar" onchange="setNum('${id}','vd',this)">
-              ${vdMudou(f, e) ? `<input class="inp !py-1 mt-1 text-[10px] !w-40" placeholder="Justificativa (mín. 10) *" value="${esc(e.jvd)}" oninput="ed['${id}'].jvd=this.value">` : ''}</td>
-            <td class="px-2 py-1.5"><input class="inp val !py-1 !w-14" value="${e.dias ?? ''}" placeholder="dias" onchange="setDias('${id}',this)"></td>`;
+          : `<td class="px-2 py-1.5"><input class="inp val !py-1 ${e.recebe && e.vd == null ? '!border-red-400 !bg-red-50' : ''}" value="${e.vd == null ? '' : num(e.vd)}" placeholder="informar" onchange="setNum('${id}','vd',this)">
+              ${vdMudou(f, e) ? `<input class="inp !py-1 mt-1 text-[10px] !w-40" placeholder="Justificativa (mín. 10) *" value="${esc(e.jvd)}" oninput="ed['${id}'].jvd=this.value; salvarRascunho(); resumo()">` : ''}</td>
+            <td class="px-2 py-1.5"><input class="inp val !py-1 !w-14 ${e.recebe && e.dias == null ? '!border-red-400 !bg-red-50' : ''}" value="${e.dias ?? ''}" placeholder="dias" onchange="setDias('${id}',this)">${e.sugDias ? '<div class="text-[9px] text-amber-700 font-bold">pela escala</div>' : ''}</td>`;
         return cab + `<tr class="lin ${dif ? 'bg-red-50/40' : ''}">${nomeTd}${chk}${ant}${vdTd}
           <td class="px-2 py-1.5 text-right font-mono font-bold ${dif ? 'text-red-700' : 'text-slate-800'}">${v == null ? '-' : num(v)}
-            ${dif ? `<div class="text-[10px] font-sans font-bold text-red-700">${v - f.ant_valor > 0 ? '+' : ''}${brl(v - f.ant_valor)} → Gestor</div>${perfil === 'GESTOR' ? '<div class="text-[10px] font-sans font-normal text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 mt-1 text-[10px] !w-40 font-sans" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value">`}` : ''}</td>
+            ${dif ? `<div class="text-[10px] font-sans font-bold text-red-700">${v - f.ant_valor > 0 ? '+' : ''}${brl(v - f.ant_valor)} → Gestor</div>${perfil === 'GESTOR' ? '<div class="text-[10px] font-sans font-normal text-slate-500">Você é Gestor: lança direto.</div>' : `<input class="inp !py-1 mt-1 text-[10px] !w-40 font-sans" placeholder="Motivo para o Gestor *" value="${esc(e.motivo)}" oninput="ed['${id}'].motivo=this.value; salvarRascunho(); resumo()">`}` : ''}</td>
           <td class="px-2 py-1.5 whitespace-nowrap">${f.fora ? `<span class="font-mono text-[11px]">${num(f.desconto_valor)}</span> <span class="text-[10px] text-slate-500">${f.desconto_tipo === 'NAO_CONTABIL' ? 'não contábil' : 'contábil'} · folha ${esc(f.desconto_comp || '')}</span>` : `
             <input class="inp val !py-1 ${e.dt === 'ISENTO' ? 'hidden' : ''}" value="${d == null ? '' : num(d)}" placeholder="3%" onchange="setNum('${id}','dv',this)">
-            <select class="inp !py-0.5 !w-auto text-[10px] ${e.dt === 'NAO_CONTABIL' ? '!bg-amber-200 font-bold' : e.dt === 'ISENTO' ? '!bg-red-200 font-bold' : ''}" onchange="ed['${id}'].dt=this.value; render()"><option value="CONTABIL" ${e.dt === 'CONTABIL' ? 'selected' : ''}>contábil 3019</option><option value="NAO_CONTABIL" ${e.dt === 'NAO_CONTABIL' ? 'selected' : ''}>não contábil 3032</option><option value="ISENTO" ${e.dt === 'ISENTO' ? 'selected' : ''}>sem desconto</option></select>`}
+            <select class="inp !py-0.5 !w-auto text-[10px] ${e.dt === 'NAO_CONTABIL' ? '!bg-amber-200 font-bold' : e.dt === 'ISENTO' ? '!bg-red-200 font-bold' : ''}" onchange="ed['${id}'].dt=this.value; salvarRascunho(); render()"><option value="CONTABIL" ${e.dt === 'CONTABIL' ? 'selected' : ''}>contábil 3019</option><option value="NAO_CONTABIL" ${e.dt === 'NAO_CONTABIL' ? 'selected' : ''}>não contábil 3032</option><option value="ISENTO" ${e.dt === 'ISENTO' ? 'selected' : ''}>sem desconto</option></select>`}
             <div class="text-[10px] text-slate-400">3% salário = ${num(Number(f.salario_base) * 0.03)}${(f.faltas_mes || []).length ? ` · com ${(f.faltas_mes || []).length} falta(s): ≈ ${num(Number(f.salario_base) * 0.03 * Math.max(0, 30 - (f.faltas_mes || []).length) / 30)}` : ''}</div>
-            ${pj && !f.fora ? `<input class="inp !py-1 mt-1 text-[10px] !w-44" placeholder="${e.dt === 'ISENTO' ? 'Por que não desconta? (mín. 10) *' : 'Justificativa do desconto (mín. 10) *'}" value="${esc(e.dj)}" oninput="ed['${id}'].dj=this.value">` : ''}</td>
+            ${pj && !f.fora ? `<input class="inp !py-1 mt-1 text-[10px] !w-44" placeholder="${e.dt === 'ISENTO' ? 'Por que não desconta? (mín. 10) *' : 'Justificativa do desconto (mín. 10) *'}" value="${esc(e.dj)}" oninput="ed['${id}'].dj=this.value; salvarRascunho(); resumo()">` : ''}</td>
           <td class="px-2 py-1.5 text-[10px]">${f.desconto_lancado ? `<span class="font-bold text-emerald-700">✓ na folha ${esc(f.desconto_comp)}</span>` : e.dt === 'ISENTO' ? '<span class="font-bold text-red-700">sem desconto</span>' : f.fora ? '<span class="font-bold text-red-700">⚠ não teve desconto</span>' : (f.trava ? '<span class="font-bold text-red-700">⚠ desconto a lançar</span>' : `<span class="text-slate-400">lança na folha ${mes()}</span>`)}
             ${Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil) > 0 ? `<div class="text-slate-500">na folha: ${num(Number(f.desc_folha_contabil) + Number(f.desc_folha_nao_contabil))}</div>` : ''}</td>
           <td class="px-2 py-1.5">${alertas(f, e)}</td>
@@ -239,45 +280,58 @@
       resumo();
     }
 
-    function setRecebe(id, v) { ed[id].recebe = v; render(); }
+    function setRecebe(id, v) { ed[id].recebe = v; salvarRascunho(); render(); }
     function setNum(id, k, el) {
       const n = lerNum(el.value);
       if (n !== null && (isNaN(n) || n < 0)) { alert('Valor inválido (não pode ser negativo).'); el.value = ed[id][k] == null ? '' : num(ed[id][k]); return; }
-      ed[id][k] = n; render();
+      ed[id][k] = n; salvarRascunho(); render();
     }
-    function setDias(id, el) { const t = String(el.value).trim(); if (!t) { ed[id].dias = null; render(); return; }
-      const n = parseInt(t, 10); if (isNaN(n) || n < 0 || n > 31) { alert('Dias: de 0 a 31.'); el.value = ed[id].dias ?? ''; return; } ed[id].dias = n; render(); }
+    function setDias(id, el) { const t = String(el.value).trim(); if (!t) { ed[id].dias = null; ed[id].sugDias = false; salvarRascunho(); render(); return; }
+      const n = parseInt(t, 10); if (isNaN(n) || n < 0 || n > 31) { alert('Dias: de 0 a 31.'); el.value = ed[id].dias ?? ''; return; } ed[id].dias = n; ed[id].sugDias = false; salvarRascunho(); render(); }
+
+    const semJustF = f => { const e = ed[f.funcionario_id]; return mudou(f) && ((vdMudou(f, e) && String(e.jvd || '').trim().length < 10) || (precisaJustDesc(f, e) && String(e.dj || '').trim().length < 10)); };
+    const semMotivoF = f => perfil !== 'GESTOR' && difere(f) && String(ed[f.funcionario_id].motivo || '').trim().length < 5;
+    const prontosConfirmar = () => lista.filter(f => mudou(f) && !falta(f) && !semJustF(f) && !semMotivoF(f));
 
     function resumo() {
       const rec = lista.filter(f => ed[f.funcionario_id].recebe);
       const tot = rec.reduce((s, f) => s + (valorVT(f, ed[f.funcionario_id]) || 0), 0), ant = lista.reduce((s, f) => s + Number(f.ant_valor || 0), 0);
       const desc = rec.reduce((s, f) => s + (descEfetivo(f, ed[f.funcionario_id]) || 0), 0);
       const pend = lista.filter(mudou), difs = pend.filter(difere), faltam = lista.filter(falta);
-      const semJust = pend.filter(f => { const e = ed[f.funcionario_id]; return (vdMudou(f, e) && e.jvd.trim().length < 10) || (precisaJustDesc(f, e) && e.dj.trim().length < 10); });
+      const semJust = pend.filter(semJustF);
+      const prontos = prontosConfirmar();
       const comAlerta = lista.filter(f => alertas(f, ed[f.funcionario_id]).includes('bg-red')).length;
       const it = (t, v, c = 'text-slate-900') => `<span>${t} <b class="${c}">${v}</b></span>`;
       $('resumo').innerHTML = it('Recebem', `${rec.length}`) + it('VT do mês', brl(tot), 'text-emerald-700') + it('Mês anterior', brl(ant), 'text-slate-500')
         + it('Descontos vinculados', brl(desc), 'text-sky-700') + it('Diferença', `${difs.length} pessoa(s)`, difs.length ? 'text-red-600' : 'text-slate-400')
         + it('A preencher', `${faltam.length}`, faltam.length ? 'text-amber-600' : 'text-slate-400') + it('Com alerta', `${comAlerta}`, comAlerta ? 'text-red-600' : 'text-slate-400');
-      $('lblConfirma').innerText = faltam.length ? `Faltam ${faltam.length} funcionário(s) sem valor/dia ou dias (preencha ou desmarque "Recebe").`
-        : semJust.length ? `Falta justificativa para ${semJust.length} funcionário(s) (valor/dia ou desconto diferente).`
-        : pend.length ? `${pend.length} alteração(ões) a confirmar${difs.length ? ` · ${difs.length} ${perfil === 'GESTOR' ? 'com diferença (você é Gestor: lança direto)' : 'vão para o Gestor aprovar'}` : ''}`
-        : 'Nada a confirmar.';
-      $('btnConfirmar').disabled = !pend.length || faltam.length > 0 || semJust.length > 0;
+      const nomes = ls => ls.slice(0, 4).map(f => String(f.nome).split(' ').slice(0, 2).join(' ')).join(', ') + (ls.length > 4 ? ` e mais ${ls.length - 4}` : '');
+      const semMot = pend.filter(f => !falta(f) && !semJustF(f) && semMotivoF(f));
+      const travados = [faltam.length && `${faltam.length} sem valor/dia ou dias (${nomes(faltam)})`, semJust.length && `${semJust.length} sem justificativa (${nomes(semJust)})`,
+        semMot.length && `${semMot.length} sem motivo da diferença para o Gestor (${nomes(semMot)})`].filter(Boolean);
+      $('lblConfirma').innerHTML = (prontos.length ? `<span class="text-emerald-700">${prontos.length} pronto(s) para confirmar${difs.filter(f => prontos.includes(f)).length ? ` · ${difs.filter(f => prontos.includes(f)).length} ${perfil === 'GESTOR' ? 'com diferença (você é Gestor: lança direto)' : 'vão para o Gestor aprovar'}` : ''}.</span>` : pend.length ? '' : 'Nada a confirmar.')
+        + (travados.length ? ` <span class="text-amber-700">Ficam para depois: ${travados.join(' · ')}. <a href="#" class="underline" onclick="$('fFalta').checked=true;render();return false">ver só esses</a></span>` : '');
+      $('btnConfirmar').disabled = !prontos.length;
+      $('btnConfirmar').innerText = prontos.length ? `✓ Confirmar ${prontos.length} vale(s) transporte` : '✓ Confirmar vale transporte';
     }
 
     async function confirmar() {
       const venc = $('fVenc').value, dComp = mes();
-      const pend = lista.filter(mudou);
-      if (perfil !== 'GESTOR') { const sm = pend.filter(f => difere(f) && (ed[f.funcionario_id].motivo || '').trim().length < 5);
-        if (sm.length) return alert('Informe o motivo da diferença (mínimo 5 letras) para:\n' + sm.map(f => '• ' + f.nome).join('\n')); }
-      if (!confirm(`Confirmar o VT pago em ${dbr(venc)} com desconto na folha de ${dComp}?\n\n${$('lblConfirma').innerText}`)) return;
+      const pend = prontosConfirmar();
+      if (!pend.length) return alert('Nenhum vale transporte completo para confirmar.');
+      const ficam = lista.filter(mudou).length - pend.length;
+      if (!confirm(`Confirmar ${pend.length} vale(s) transporte pago(s) em ${dbr(venc)}, com desconto na folha de ${dComp}?${ficam ? `\n\n${ficam} ficam para depois (incompletos): o que foi digitado neles continua guardado.` : ''}`)) return;
       const itens = pend.map(f => { const e = ed[f.funcionario_id]; return { funcionario_id: f.funcionario_id, recebe: e.recebe, valor_dia: e.vd, dias: e.dias,
         justif_valor_dia: e.jvd || null, motivo: e.motivo || null, desconto_valor: descEfetivo(f, e), desconto_tipo: e.dt, desconto_justif: e.dj || null }; });
       const b = $('btnConfirmar'); b.disabled = true; b.innerText = 'Gravando...';
       const { data, error } = await _supabase.rpc('fn_vt_confirmar', { p_mes: mes(), p_venc: venc, p_itens: itens });
       b.innerText = '✓ Confirmar vale transporte';
       if (error) { b.disabled = false; return alert('Não foi gravado: ' + error.message); }
+      try { // tira do rascunho o que foi gravado sem erro
+        const rasc = lerRascunho(), comErro = new Set((data.erros || []).map(x => x.nome));
+        if (rasc && rasc.itens) { pend.forEach(f => { if (!comErro.has(f.nome)) delete rasc.itens[f.funcionario_id]; });
+          if (Object.keys(rasc.itens).length) localStorage.setItem(chaveRascunho(), JSON.stringify(rasc)); else localStorage.removeItem(chaveRascunho()); }
+      } catch (e) { }
       let msg = `VT lançados (foram para o Financeiro): ${data.lancados}\nAguardando o Gestor: ${data.aguardando_gestor}\nNão recebe: ${data.nao_recebe}\nDescontos lançados/ajustados (VT já pago): ${data.descontos}`;
       if ((data.erros || []).length) msg += '\n\nNão gravados:\n' + data.erros.map(x => `• ${x.nome}: ${x.erro}`).join('\n');
       alert(msg);

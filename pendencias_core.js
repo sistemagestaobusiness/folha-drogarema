@@ -56,7 +56,7 @@
         .in('status', ['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH']).order('data_servico'),
       cli.from('ferias_solicitacoes').select('id, funcionario_id, data_inicio, dias, status, supervisor_ciente_em')
         .in('status', ['SOLICITADA', 'PRE_APROVADA', 'CONTABILIDADE', 'CALCULADA']).order('data_inicio'),
-      veTudo || perfil === 'SUPERVISOR' ? cli.from('cadastro_solicitacoes').select('id, nome, loja, solicitado_em, status').eq('status', 'PENDENTE') : Promise.resolve({ data: [] }),
+      veTudo || perfil === 'SUPERVISOR' ? cli.from('cadastro_solicitacoes').select('id, nome, loja_id, solicitado_em, status, lojas(nome_loja)').eq('status', 'PENDENTE') : Promise.resolve({ data: [] }),
       cli.from('vw_atestados_conferencia').select('id, nome_registro, nome_loja, enviado_em, conferencia_status').is('conferencia_status', null),
       veTudo || perfil === 'SUPERVISOR' ? cli.from('abatimentos').select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE_LIDER') : Promise.resolve({ count: 0 }),
       ['LIDER', 'RH'].includes(perfil) ? cli.rpc('fn_holerite_pendentes') : Promise.resolve({ data: [] }),
@@ -123,7 +123,7 @@
     // ---- cadastro de pessoa nova (RH)
     cad.forEach(x => {
       const prazo = new Date(x.solicitado_em).getTime() + PRAZO_CADASTRO_H * H, fora = agora > prazo;
-      add({ assunto: 'cadastro', com: 'RH', tela: 'cadastro_solicitacoes.html', titulo: `Cadastro · ${titulo(curto(x.nome))}`, sub: x.loja || '',
+      add({ assunto: 'cadastro', com: 'RH', tela: 'cadastro_solicitacoes.html', titulo: `Cadastro · ${titulo(curto(x.nome))}`, sub: (x.lojas && x.lojas.nome_loja) || '',
         detalhe: `pedido em ${dataHora(x.solicitado_em)}${fora ? ' · fora do prazo há ' + tempo(agora - prazo) : ' · aprovar e criar a ficha'}`,
         nivel: fora ? 'critico' : 'atencao', data: String(x.solicitado_em).slice(0, 10), desde: x.solicitado_em, foraHa: fora ? agora - prazo : 0 });
     });
