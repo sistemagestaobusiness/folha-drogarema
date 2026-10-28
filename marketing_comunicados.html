@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comunicados e enquetes - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="marketing_core.js?v=1"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1200px] mx-auto space-y-4">
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">📣 Comunicados e enquetes</h1>
+        <p class="text-xs text-slate-500">Promoções, materiais, orientações e enquetes do Marketing e do supervisor para as lojas, com quem abriu, deu ciência, baixou e respondeu.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div id="abas" class="flex flex-wrap gap-4 border-b border-slate-200"></div>
+      <div id="pnLista" class="space-y-2"></div>
+
+      <form id="pnNovo" class="hidden bg-white border border-slate-200 rounded-xl p-4 space-y-4 text-sm" onsubmit="enviar(event)">
+        <div class="grid sm:grid-cols-3 gap-3">
+          <div><label class="lbl">Tipo *</label><select id="nTipo" class="inp" onchange="verTipo()">
+            <option value="PROMOCAO">Promoção</option><option value="MATERIAL">Material do Marketing (artes, fotos, tabloide)</option>
+            <option value="ORIENTACAO">Orientação</option><option value="INFORMATIVO">Informativo geral</option><option value="ENQUETE">Enquete</option></select></div>
+          <div class="sm:col-span-2"><label class="lbl">Título *</label><input id="nTit" class="inp" placeholder="ex.: Tabloide de novembro"></div>
+        </div>
+        <div><label class="lbl">Mensagem</label><textarea id="nTxt" rows="4" class="inp" placeholder="o que as lojas precisam saber / fazer"></textarea></div>
+        <div id="boxEnq" class="hidden space-y-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <label class="lbl">Opções da enquete (mínimo 2)</label><div id="nOpc" class="space-y-1"></div>
+          <button type="button" onclick="addOpc()" class="text-xs font-bold text-amber-800 hover:underline cursor-pointer">+ opção</button>
+          <div class="flex flex-wrap gap-4 text-xs"><label><input type="checkbox" id="nMult"> pode marcar mais de uma</label><label><input type="checkbox" id="nCom" checked> pedir comentário</label>
+            <label>encerra em <input type="date" id="nEnc" class="inp !py-1 !w-auto inline font-mono"></label></div>
+        </div>
+        <div>
+          <label class="lbl">Para quem *</label>
+          <div class="flex flex-wrap gap-2 text-xs" id="nDest"></div>
+        </div>
+        <div class="grid sm:grid-cols-3 gap-3 text-xs">
+          <div><label class="lbl">Vale até (opcional)</label><input type="date" id="nVal" class="inp font-mono"></div>
+          <label class="flex items-center gap-2 pt-5"><input type="checkbox" id="nCien" checked> exigir ciência das lojas</label>
+        </div>
+        <div><label class="lbl">Anexos (artes, fotos, PDF, vídeo) · até 50 MB cada</label><input type="file" id="nArq" multiple class="text-xs"></div>
+        <div class="flex justify-end"><button id="btnEnviar" class="px-6 py-2.5 bg-[#067647] hover:bg-[#05603A] text-white rounded-lg font-bold cursor-pointer">Enviar</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="mDet" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-4xl my-6 shadow-2xl">
+      <div class="flex justify-between items-start p-4 border-b border-slate-200"><div id="dTitulo" class="font-bold text-slate-900"></div><button onclick="fecharDet()" class="text-slate-400 hover:text-slate-700 text-xl cursor-pointer">✕</button></div>
+      <div id="dCorpo" class="p-4 space-y-4 text-sm"></div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 13px; }
+    .chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 9999px; white-space: nowrap; }
+    .bt { padding: 7px 14px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; }
+    .aba { padding-bottom: 8px; font-size: 13px; font-weight: 600; color: #5B6472; cursor: pointer; }
+    .aba.on { border-bottom: 2px solid #14181F; color: #14181F; }
+    .dest { border: 1px solid #cbd5e1; border-radius: 9999px; padding: 4px 10px; cursor: pointer; background: #fff; }
+    .dest:has(input:checked) { background: #14181F; color: #fff; border-color: #14181F; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const { esc, dbr, dh, TIPOS_ENVIO, subirArquivos, listaAnexos, nomePerfil } = window.MKT;
+    let perfil = null, eu = '', lojas = [], itens = [], aba = 'recebidos', atual = null;
+    const acompanha = () => ['GESTOR', 'MARKETING', 'SUPERVISOR'].includes(perfil);
+    const podeEnviar = () => ['GESTOR', 'MARKETING', 'SUPERVISOR'].includes(perfil);
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      eu = (user.email || '').toLowerCase();
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = eu; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['GESTOR', 'MARKETING', 'SUPERVISOR', 'LIDER'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página.'; $('aviso').classList.remove('hidden'); return; }
+      const { data: lj } = await _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja');
+      lojas = (lj || []).filter(l => l.ativo !== false && /^\s*LOJA\s*\d+/i.test(l.nome_loja));
+      const d = [`<label class="dest"><input type="checkbox" id="dTodas" class="hidden" onchange="document.querySelectorAll('.dLoja').forEach(c => { c.checked = false; c.disabled = this.checked; })"> Todas as lojas</label>`]
+        .concat(lojas.map(l => `<label class="dest"><input type="checkbox" class="dLoja hidden" value="${l.id}"> ${esc(l.nome_loja)}</label>`));
+      if (['MARKETING', 'GESTOR'].includes(perfil)) d.push('<label class="dest"><input type="checkbox" id="dSup" class="hidden"> Supervisor</label>');
+      if (['SUPERVISOR', 'GESTOR'].includes(perfil)) d.push('<label class="dest"><input type="checkbox" id="dMkt" class="hidden"> Marketing</label>');
+      $('nDest').innerHTML = d.join('');
+      addOpc(); addOpc();
+      if (perfil !== 'LIDER') aba = acompanha() ? 'todos' : 'recebidos';
+      $('conteudo').classList.remove('hidden');
+      montarAbas(); await carregar();
+      const id = new URLSearchParams(location.search).get('id'); if (id) abrir(id);
+      setInterval(() => { if ($('mDet').classList.contains('hidden')) carregar(); }, 120000);
+    }
+    function montarAbas() {
+      const L = [['recebidos', perfil === 'LIDER' ? '📥 Recebidos pela loja' : '📥 Para mim']];
+      if (acompanha()) L.push(['todos', '📊 Todos (acompanhamento)']);
+      if (podeEnviar()) L.push(['novo', '+ Novo envio']);
+      $('abas').innerHTML = L.map(([a, t]) => `<span class="aba ${aba === a ? 'on' : ''}" onclick="aba='${a}'; montarAbas(); render()">${t}</span>`).join('');
+      $('pnLista').classList.toggle('hidden', aba === 'novo'); $('pnNovo').classList.toggle('hidden', aba !== 'novo');
+    }
+    async function carregar() {
+      const { data, error } = await rpcRetentar(_supabase, 'fn_mkt_comunicados');
+      if (error) { $('pnLista').innerHTML = `<div class="text-rose-700 text-sm">${esc(traduzirErro(error.message))}</div>`; return; }
+      itens = data || []; render();
+    }
+    function render() {
+      if (aba === 'novo') return;
+      const lista = aba === 'recebidos' ? itens.filter(m => m.para_mim && !m.cancelado_em) : itens;
+      $('pnLista').innerHTML = lista.length ? lista.map(card).join('') : '<div class="bg-white border border-slate-200 rounded-xl p-6 text-center text-slate-500 text-sm">Nada por aqui.</div>';
+    }
+    function card(m) {
+      const t = TIPOS_ENVIO[m.tipo] || [m.tipo, 'bg-slate-100'];
+      const pend = m.para_mim && ((m.exige_ciencia && !m.eu_ciencia) || (m.tipo === 'ENQUETE' && !m.eu_respondi));
+      const meu = m.para_mim ? (m.tipo === 'ENQUETE' ? (m.eu_respondi ? '<span class="chip bg-emerald-100 text-emerald-800">✓ respondida</span>' : '<span class="chip bg-rose-600 text-white">responder</span>')
+        : m.eu_ciencia ? '<span class="chip bg-emerald-100 text-emerald-800">✓ ciência</span>' : m.eu_abri ? '<span class="chip bg-amber-100 text-amber-900">aberto · falta ciência</span>' : '<span class="chip bg-rose-600 text-white">NOVO</span>') : '';
+      const acomp = acompanha() || m.autor_email === eu ? `<div class="text-[11px] text-slate-600">${m.qtd_lojas ? `🏬 ${m.lojas_abriram}/${m.qtd_lojas} lojas abriram · ${m.lojas_ciencia}/${m.qtd_lojas} ciência${m.tipo === 'ENQUETE' ? ` · ${m.lojas_responderam}/${m.qtd_lojas} responderam` : ''}` : ''}${m.para_supervisor ? ' · supervisor' : ''}${m.para_marketing ? ' · Marketing' : ''}</div>` : '';
+      return `<div onclick="abrir('${m.id}')" class="bg-white border ${pend ? 'border-rose-400 border-2' : 'border-slate-200'} rounded-xl p-3 hover:shadow cursor-pointer flex flex-wrap gap-3 items-center ${m.cancelado_em ? 'opacity-50' : ''}">
+        <div class="flex-1 min-w-[260px]"><div class="flex flex-wrap gap-2 items-center"><span class="chip ${t[1]}">${t[0]}</span><b class="text-slate-900">${esc(m.titulo || '')}</b>${m.cancelado_em ? '<span class="chip bg-slate-200">retirado</span>' : ''}</div>
+          <div class="text-xs text-slate-500 truncate max-w-[640px]">${esc(m.texto)}</div>
+          <div class="text-[11px] text-slate-400">${esc(m.autor_nome || m.autor_email)} (${nomePerfil(m.autor_perfil)}) · ${dh(m.criado_em)} · para ${m.para_todas ? 'todas as lojas' : (m.destino_lojas || []).join(', ') || '-'}${m.validade_ate ? ' · vale até ' + dbr(m.validade_ate) : ''}</div>${acomp}</div>
+        <div class="text-right space-y-1">${meu}<div class="text-[11px] text-slate-400">📎 ${m.anexos}</div></div></div>`;
+    }
+
+    // ---------- novo envio ----------
+    function verTipo() { $('boxEnq').classList.toggle('hidden', $('nTipo').value !== 'ENQUETE'); }
+    function addOpc() { const d = document.createElement('div'); d.className = 'flex gap-1'; d.innerHTML = '<input class="inp !py-1 opc" placeholder="opção"><button type="button" class="text-slate-400 hover:text-rose-600 cursor-pointer px-2" onclick="this.parentNode.remove()">✕</button>'; $('nOpc').appendChild(d); }
+    async function enviar(ev) {
+      ev.preventDefault();
+      const btn = $('btnEnviar'); if (btn.disabled) return; btn.disabled = true; btn.innerText = 'Enviando…';
+      try {
+        const tipo = $('nTipo').value, todas = $('dTodas').checked;
+        const lj = [...document.querySelectorAll('.dLoja:checked')].map(c => c.value);
+        const p = { tipo, titulo: $('nTit').value, texto: $('nTxt').value, para_todas: todas, lojas: lj, para_supervisor: !!($('dSup') && $('dSup').checked), para_marketing: !!($('dMkt') && $('dMkt').checked),
+          validade_ate: $('nVal').value, exige_ciencia: $('nCien').checked };
+        if (tipo === 'ENQUETE') p.enquete = { opcoes: [...document.querySelectorAll('.opc')].map(i => i.value.trim()).filter(Boolean), multipla: $('nMult').checked, comentario: $('nCom').checked, encerra_em: $('nEnc').value || null };
+        const destinos = todas ? 'todas as lojas' : lj.length + ' loja(s)';
+        if (!confirm(`Enviar "${p.titulo}" para ${destinos}${p.para_supervisor ? ' + supervisor' : ''}${p.para_marketing ? ' + Marketing' : ''}?`)) return;
+        p.anexos = await subirArquivos(_supabase, $('nArq').files);
+        const { error } = await _supabase.rpc('fn_mkt_enviar', { p });
+        if (error) return alert(error.message);
+        $('pnNovo').reset(); $('nOpc').innerHTML = ''; addOpc(); addOpc(); verTipo(); document.querySelectorAll('.dLoja').forEach(c => c.disabled = false);
+        aba = acompanha() ? 'todos' : 'recebidos'; montarAbas(); await carregar();
+      } catch (e) { alert(e.message || String(e)); }
+      finally { btn.disabled = false; btn.innerText = 'Enviar'; }
+    }
+
+    // ---------- detalhe ----------
+    async function abrir(id) {
+      const { data, error } = await _supabase.rpc('fn_mkt_comunicado', { p_id: id });
+      if (error) return alert(error.message);
+      atual = data; desenhar(); $('mDet').classList.remove('hidden');
+    }
+    function fecharDet() { $('mDet').classList.add('hidden'); atual = null; carregar(); }
+    function desenhar() {
+      const m = atual.comunicado, t = TIPOS_ENVIO[m.tipo] || [m.tipo, ''], meu = m.autor_email === eu;
+      const enq = m.enquete || {}, resp = atual.minha_resposta, leit = atual.minha_leitura || {};
+      $('dTitulo').innerHTML = `<span class="chip ${t[1]}">${t[0]}</span> ${esc(m.titulo || '')}`;
+      let acoes = '';
+      if (!meu && m.tipo !== 'ENQUETE' && m.exige_ciencia && !m.cancelado_em) acoes = leit.ciencia_em ? `<div class="text-xs text-emerald-700 font-bold">✓ Ciência dada em ${dh(leit.ciencia_em)}</div>` : `<button class="bt bg-emerald-600 text-white" onclick="ciencia()">✓ Li e estou ciente</button>`;
+      let votacao = '';
+      if (m.tipo === 'ENQUETE' && !meu) {
+        const tipoIn = enq.multipla ? 'checkbox' : 'radio';
+        votacao = `<div class="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2"><b class="text-xs">${resp ? 'Sua resposta (pode mudar até encerrar)' : 'Responda a enquete'}${enq.encerra_em ? ' · encerra em ' + dbr(enq.encerra_em) : ''}</b>
+          ${(enq.opcoes || []).map((o, i) => `<label class="flex items-center gap-2 text-sm"><input type="${tipoIn}" name="op" value="${i}" ${resp && resp.opcoes.includes(i) ? 'checked' : ''}> ${esc(o)}</label>`).join('')}
+          ${enq.comentario ? `<textarea id="eCom" rows="2" class="inp" placeholder="comentário (opcional)">${esc(resp ? resp.comentario || '' : '')}</textarea>` : ''}
+          <button class="bt bg-amber-600 text-white" onclick="votar()">Enviar resposta</button></div>`;
+      }
+      let acomp = '';
+      if (atual.por_loja) {
+        acomp = `<div><div class="font-bold text-xs text-slate-600 mb-1">🏬 Andamento por loja</div><table class="w-full text-xs"><tr class="text-slate-500 text-left"><th class="py-1">Loja</th><th>Abriu</th><th>Ciência</th><th>Baixou</th>${m.tipo === 'ENQUETE' ? '<th>Resposta</th>' : ''}</tr>
+          ${atual.por_loja.map(l => { const ab = l.abriu || [], ci = ab.filter(a => a.ciencia), rs = l.resposta || [];
+            return `<tr class="border-t border-slate-100 ${ab.length ? '' : 'bg-rose-50'}"><td class="py-1 font-semibold">${esc(l.loja)}</td>
+              <td>${ab.length ? ab.map(a => esc(a.email.split('@')[0]) + ' ' + dh(a.em)).join('<br>') : '<b class="text-rose-700">não abriu</b>'}</td>
+              <td>${ci.length ? ci.map(a => dh(a.ciencia)).join('<br>') : m.exige_ciencia ? '<span class="text-amber-700">pendente</span>' : '-'}</td>
+              <td>${l.baixou || '-'}</td>${m.tipo === 'ENQUETE' ? `<td>${rs.map(r => r.opcoes.map(i => esc((enq.opcoes || [])[i])).join(', ') + (r.comentario ? ' · "' + esc(r.comentario) + '"' : '')).join('<br>') || '<span class="text-amber-700">não respondeu</span>'}</td>` : ''}</tr>`; }).join('')}</table>
+          ${(atual.outros || []).length ? `<div class="text-[11px] text-slate-500 mt-1">Também abriram: ${atual.outros.map(o => esc(o.email.split('@')[0]) + ' (' + nomePerfil(o.perfil) + ') ' + dh(o.em)).join(', ')}</div>` : ''}</div>`;
+        if (atual.resultado) { const tot = atual.resultado.reduce((a, r) => a + r.votos, 0) || 1;
+          acomp = `<div><div class="font-bold text-xs text-slate-600 mb-1">📊 Resultado</div>${atual.resultado.map(r => `<div class="flex items-center gap-2 text-xs"><span class="w-48 truncate">${esc(r.opcao)}</span><div class="flex-1 h-3 bg-slate-100 rounded"><div class="h-3 bg-amber-500 rounded" style="width:${Math.round(r.votos / tot * 100)}%"></div></div><b class="w-16 text-right">${r.votos} voto(s)</b></div>`).join('')}</div>` + acomp; }
+      }
+      $('dCorpo').innerHTML = `
+        <div class="text-[11px] text-slate-500">${esc(m.autor_nome || m.autor_email)} (${nomePerfil(m.autor_perfil)}) · ${dh(m.criado_em)}${m.validade_ate ? ' · vale até ' + dbr(m.validade_ate) : ''}${m.cancelado_em ? ` · <b class="text-rose-700">retirado em ${dh(m.cancelado_em)}: ${esc(m.cancelado_motivo || '')}</b>` : ''}</div>
+        <div class="whitespace-pre-wrap">${esc(m.texto)}</div>
+        ${atual.anexos.length ? `<div class="text-xs"><b>Arquivos</b> <span class="text-slate-400">(ao baixar fica registrado)</span>${listaAnexos(atual.anexos)}</div>` : ''}
+        ${votacao}${acoes ? `<div>${acoes}</div>` : ''}${acomp}
+        ${(meu || perfil === 'GESTOR') && !m.cancelado_em ? `<div class="text-right"><button class="bt text-rose-700" onclick="retirar()">Retirar comunicado</button></div>` : ''}`;
+    }
+    async function ciencia() { const { error } = await _supabase.rpc('fn_mkt_ciencia', { p_id: atual.comunicado.id }); if (error) return alert(error.message); await abrir(atual.comunicado.id); }
+    async function votar() {
+      const ops = [...document.querySelectorAll('input[name=op]:checked')].map(i => Number(i.value));
+      const { error } = await _supabase.rpc('fn_mkt_responder_enquete', { p_id: atual.comunicado.id, p_opcoes: ops, p_comentario: ($('eCom') || {}).value || null });
+      if (error) return alert(error.message); await abrir(atual.comunicado.id);
+    }
+    async function retirar() {
+      const mot = await pedirTexto('Motivo para retirar o comunicado (as lojas deixam de ver):', ''); if (mot === null) return;
+      const { error } = await _supabase.rpc('fn_mkt_cancelar_comunicado', { p_id: atual.comunicado.id, p_motivo: mot });
+      if (error) return alert(error.message); await abrir(atual.comunicado.id);
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

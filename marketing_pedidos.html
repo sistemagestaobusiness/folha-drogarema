@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedidos ao Marketing - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="marketing_core.js?v=1"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1200px] mx-auto space-y-4">
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">🎨 Pedidos ao Marketing</h1>
+        <p id="subtitulo" class="text-xs text-slate-500">Pedidos das lojas ao Marketing (artes, tabloides, ofertas, impressos, fotos...) e patrocínios, com a conversa, os arquivos e o histórico de cada pedido.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div id="abas" class="flex flex-wrap gap-4 border-b border-slate-200"></div>
+      <div id="resumo" class="flex flex-wrap gap-2"></div>
+
+      <!-- LISTA -->
+      <div id="pnLista" class="space-y-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap gap-2 items-end text-xs">
+          <div><label class="lbl">Situação</label><select id="fSit" onchange="render()" class="inp !py-1.5"><option value="abertos">Em aberto</option><option value="">Todos</option><option value="encerrados">Encerrados</option></select></div>
+          <div id="boxFLoja"><label class="lbl">Loja</label><select id="fLoja" onchange="render()" class="inp !py-1.5"><option value="">Todas</option></select></div>
+          <div class="flex-1 min-w-[160px]"><label class="lbl">Buscar</label><input id="fBusca" oninput="render()" class="inp !py-1.5" placeholder="protocolo, texto, produto"></div>
+        </div>
+        <div id="lista" class="space-y-2"></div>
+      </div>
+
+      <!-- NOVO PEDIDO -->
+      <form id="pnNovo" class="hidden bg-white border border-slate-200 rounded-xl p-4 space-y-4 text-sm" onsubmit="enviarPedido(event)">
+        <div id="boxLojaNovo" class="hidden"><label class="lbl">Loja do pedido *</label><select id="nLoja" class="inp"></select></div>
+        <div class="grid sm:grid-cols-3 gap-3">
+          <div><label class="lbl">Prazo: até quando precisa *</label><input type="date" id="nPrazo" class="inp font-mono" onchange="verPrioridade()"></div>
+          <div class="sm:col-span-2"><label class="lbl">Prioridade (pelo prazo)</label><div id="nPrior" class="text-xs text-slate-500 pt-2">Escolha o prazo.</div></div>
+        </div>
+        <div id="boxUrg" class="hidden"><label class="lbl">Por que é urgente? (prazo de 1 dia útil ou menos) *</label><input id="nUrg" class="inp" placeholder="ex.: fornecedor mandou a oferta hoje"></div>
+
+        <div id="boxTipos">
+          <label class="lbl">Tipo de material (marque um ou mais e explique cada um)</label>
+          <div id="nTipos" class="grid sm:grid-cols-2 gap-2"></div>
+          <div class="mt-2"><label class="lbl">Não achou na lista? Escreva o que precisa</label><input id="nOutro" class="inp" placeholder="o que você precisa"></div>
+        </div>
+        <div id="boxPatro" class="hidden grid sm:grid-cols-2 gap-3">
+          <div><label class="lbl">Quem pede (entidade / evento) *</label><input id="pEnt" class="inp" placeholder="ex.: Escola X · Festa junina"></div>
+          <div><label class="lbl">Data do evento</label><input type="date" id="pData" class="inp font-mono"></div>
+          <div><label class="lbl">O que estão pedindo *</label><input id="pPedido" class="inp" placeholder="ex.: brindes, kit de produtos, valor"></div>
+          <div><label class="lbl">Valor estimado (R$)</label><input id="pValor" class="inp" placeholder="ex.: 500,00"></div>
+          <div><label class="lbl">Contrapartida (o que a Drogarema ganha)</label><input id="pContra" class="inp" placeholder="ex.: banner no evento, divulgação"></div>
+          <div><label class="lbl">Contato</label><input id="pContato" class="inp" placeholder="nome e telefone"></div>
+        </div>
+
+        <div><label class="lbl">Explique o pedido em detalhe * <span class="normal-case font-normal text-slate-400">(o que precisa, para quê, onde vai usar, texto que deve aparecer)</span></label>
+          <textarea id="nDetalhe" rows="4" class="inp"></textarea></div>
+
+        <div id="boxOferta" class="space-y-2">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div><label class="lbl">Validade: de</label><input type="date" id="nVDe" class="inp font-mono"></div>
+            <div><label class="lbl">até</label><input type="date" id="nVAte" class="inp font-mono"></div>
+          </div>
+          <label class="lbl">Condições: produtos e preços <span class="normal-case font-normal text-slate-400">(obrigatório em oferta/promoção)</span></label>
+          <div id="nItens" class="space-y-1"></div>
+          <button type="button" onclick="addItem()" class="text-xs font-bold text-sky-700 hover:underline cursor-pointer">+ produto</button>
+        </div>
+
+        <div><label class="lbl">Anexos (fotos, referências, arte antiga) · até 50 MB cada</label><input type="file" id="nArq" multiple class="text-xs"></div>
+        <div class="flex justify-end"><button id="btnEnviar" class="px-6 py-2.5 bg-[#067647] hover:bg-[#05603A] text-white rounded-lg font-bold cursor-pointer">Enviar ao Marketing</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DETALHE -->
+  <div id="mDet" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-4xl my-6 shadow-2xl">
+      <div class="flex justify-between items-start p-4 border-b border-slate-200"><div id="dTitulo" class="font-bold text-slate-900"></div><button onclick="fecharDet()" class="text-slate-400 hover:text-slate-700 text-xl cursor-pointer">✕</button></div>
+      <div id="dCorpo" class="p-4 space-y-4 text-sm"></div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; font-size: 13px; }
+    .chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 9999px; white-space: nowrap; }
+    .bt { padding: 7px 14px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; }
+    .aba { padding-bottom: 8px; font-size: 13px; font-weight: 600; color: #5B6472; cursor: pointer; }
+    .aba.on { border-bottom: 2px solid #14181F; color: #14181F; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const { esc, dbr, dh, CHIP_STATUS, CHIP_PRIOR, TIPOS_MAT, subirArquivos, baixar, listaAnexos, prioridadePorPrazo } = window.MKT;
+    let perfil = null, eu = '', lojas = [], pedidos = [], aba = 'pedidos', categoria = 'MATERIAL', atual = null;
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      eu = (user.email || '').toLowerCase();
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = eu; $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['GESTOR', 'MARKETING', 'SUPERVISOR', 'LIDER'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página.'; $('aviso').classList.remove('hidden'); return; }
+      const { data: lj } = await _supabase.from('lojas').select('id, nome_loja, ativo').order('nome_loja');
+      lojas = (lj || []).filter(l => l.ativo !== false && /^\s*LOJA\s*\d+/i.test(l.nome_loja));
+      $('fLoja').innerHTML = '<option value="">Todas</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      $('nLoja').innerHTML = '<option value="">escolha</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      $('boxFLoja').classList.toggle('hidden', perfil === 'LIDER');
+      $('nTipos').innerHTML = TIPOS_MAT.map(([k, t]) => `<label class="block border border-slate-200 rounded-lg p-2 text-xs"><span class="flex items-center gap-2"><input type="checkbox" value="${k}" class="tipo" onchange="this.closest('label').querySelector('input.det').classList.toggle('hidden', !this.checked); verOferta()"> <b>${t}</b></span>
+        <input class="det hidden inp !py-1 mt-1 !text-xs" data-k="${k}" placeholder="detalhe deste item (tamanho, onde vai usar, texto...)"></label>`).join('');
+      if (/patrocinio/.test(location.search)) { categoria = 'PATROCINIO'; aba = 'pedidos'; }
+      $('conteudo').classList.remove('hidden');
+      addItem(); montarAbas(); await carregar();
+      setInterval(() => { if ($('mDet').classList.contains('hidden')) carregar(); }, 120000);
+    }
+
+    const podePedir = () => ['LIDER', 'SUPERVISOR', 'GESTOR'].includes(perfil);
+    function montarAbas() {
+      const L = [['pedidos', 'MATERIAL', '🎨 Pedidos de material'], ['pedidos', 'PATROCINIO', '🤝 Patrocínios']];
+      if (podePedir()) L.push(['novo', 'MATERIAL', '+ Novo pedido'], ['novo', 'PATROCINIO', '+ Novo patrocínio']);
+      $('abas').innerHTML = L.map(([a, c, t]) => `<span class="aba ${aba === a && categoria === c ? 'on' : ''}" onclick="trocarAba('${a}', '${c}')">${t}</span>`).join('');
+      $('pnLista').classList.toggle('hidden', aba !== 'pedidos');
+      $('pnNovo').classList.toggle('hidden', aba !== 'novo');
+      $('boxTipos').classList.toggle('hidden', categoria === 'PATROCINIO');
+      $('boxPatro').classList.toggle('hidden', categoria !== 'PATROCINIO');
+      $('boxLojaNovo').classList.toggle('hidden', perfil === 'LIDER');
+      $('btnEnviar').innerText = categoria === 'PATROCINIO' ? 'Enviar pedido de patrocínio' : 'Enviar ao Marketing';
+      verOferta();
+    }
+    async function trocarAba(a, c) { const mudou = c !== categoria; aba = a; categoria = c; montarAbas(); if (mudou || a === 'pedidos') await carregar(); }
+
+    async function carregar() {
+      const { data, error } = await rpcRetentar(_supabase, 'fn_mkt_pedidos', { p_categoria: categoria });
+      if (error) { $('lista').innerHTML = `<div class="text-rose-700 text-sm">${esc(traduzirErro(error.message))}</div>`; return; }
+      pedidos = data || []; render();
+    }
+    const ABERTOS = ['ABERTA', 'EM_PRODUCAO', 'AGUARDANDO_LOJA', 'ENTREGUE', 'AGUARDANDO_GESTOR'];
+    function render() {
+      const sit = $('fSit').value, lj = $('fLoja').value, b = $('fBusca').value.trim().toLowerCase();
+      const lista = pedidos.filter(p => (!sit || (sit === 'abertos' ? ABERTOS.includes(p.status) : !ABERTOS.includes(p.status))) && (!lj || p.loja_id === lj)
+        && (!b || JSON.stringify(p).toLowerCase().includes(b)));
+      const ab = pedidos.filter(p => ABERTOS.includes(p.status));
+      const atras = ab.filter(p => p.prazo < MKT.hoje() && !['ENTREGUE', 'AGUARDANDO_GESTOR'].includes(p.status)).length;
+      $('resumo').innerHTML = [[ab.filter(p => p.status === 'ABERTA').length, 'sem resposta do Marketing', 'bg-amber-100 text-amber-900'],
+        [ab.filter(p => p.status === 'AGUARDANDO_LOJA').length, 'aguardando a loja', 'bg-sky-100 text-sky-900'],
+        [ab.filter(p => p.status === 'ENTREGUE').length, 'entregues (falta a loja confirmar)', 'bg-emerald-100 text-emerald-900'],
+        [atras, 'com prazo vencido', 'bg-rose-600 text-white']].filter(x => x[0]).map(([n, t, c]) => `<span class="chip !text-xs !px-3 !py-1 ${c}">${n} ${t}</span>`).join('');
+      $('lista').innerHTML = lista.length ? lista.map(card).join('') : '<div class="bg-white border border-slate-200 rounded-xl p-6 text-center text-slate-500 text-sm">Nenhum pedido neste filtro.</div>';
+    }
+    function card(p) {
+      const st = CHIP_STATUS[p.status] || [p.status, 'bg-slate-100'], pr = CHIP_PRIOR[p.prioridade] || [p.prioridade, 'bg-slate-100'];
+      const venc = ABERTOS.includes(p.status) && !['ENTREGUE', 'AGUARDANDO_GESTOR'].includes(p.status) && p.prazo < MKT.hoje();
+      const tipos = p.categoria === 'PATROCINIO' ? esc((p.patrocinio || {}).entidade || 'Patrocínio') : (p.tipos || []).map(t => MKT.nomeTipo(t)).join(' · ') || esc(p.outro || '');
+      return `<div onclick="abrir('${p.id}')" class="bg-white border ${venc ? 'border-rose-400 border-2' : 'border-slate-200'} rounded-xl p-3 hover:shadow cursor-pointer flex flex-wrap gap-3 items-center">
+        <div class="font-mono text-[11px] text-slate-400 w-14">#${p.protocolo}</div>
+        <div class="flex-1 min-w-[240px]"><div class="font-bold text-slate-900">${esc(p.loja || '-')} · ${tipos}</div>
+          <div class="text-xs text-slate-500 truncate max-w-[560px]">${esc(p.detalhe)}</div>
+          <div class="text-[11px] text-slate-400">pedido por ${esc(p.solicitante_nome || p.solicitante_email)} em ${dh(p.criado_em)}${p.visto_mkt_em ? ' · Marketing abriu ' + dh(p.visto_mkt_em) : ' · <b class="text-amber-700">Marketing ainda não abriu</b>'}</div></div>
+        <div class="text-right text-xs space-y-1"><div><span class="chip ${pr[1]}">${pr[0]}</span> <span class="chip ${st[1]}">${st[0]}</span></div>
+          <div class="${venc ? 'text-rose-700 font-bold' : 'text-slate-600'}">prazo ${dbr(p.prazo)}${venc ? ' · VENCIDO' : ABERTOS.includes(p.status) ? ` · ${p.dias_uteis} dia(s) útil(eis)` : ''}</div>
+          <div class="text-slate-400">💬 ${p.mensagens} · 📎 ${p.anexos}${p.nao_lidas ? ` · <b class="text-rose-700">${p.nao_lidas} nova(s)</b>` : ''}</div></div></div>`;
+    }
+
+    // ---------- novo pedido ----------
+    function verPrioridade() {
+      const pz = $('nPrazo').value; if (!pz) { $('nPrior').innerText = 'Escolha o prazo.'; return; }
+      DiaUtil.carregar(_supabase).then(() => {
+        const { prioridade, dias } = prioridadePorPrazo(pz); const c = CHIP_PRIOR[prioridade];
+        $('nPrior').innerHTML = `<span class="chip ${c[1]}">${c[0]}</span> <span class="text-xs">${dias} dia(s) útil(eis) até o prazo · URGENTE ≤ 1 · ALTA ≤ 3 · MÉDIA ≤ 7 · NORMAL acima de 7</span>`;
+        $('boxUrg').classList.toggle('hidden', prioridade !== 'URGENTE');
+      });
+    }
+    function verOferta() { const of = categoria === 'MATERIAL' && [...document.querySelectorAll('input.tipo:checked')].some(c => c.value === 'OFERTAS_PROMOCOES'); $('boxOferta').classList.toggle('ring-2', of); $('boxOferta').classList.toggle('ring-amber-300', of); $('boxOferta').classList.toggle('hidden', categoria === 'PATROCINIO'); }
+    function addItem() {
+      const d = document.createElement('div'); d.className = 'grid grid-cols-[1fr_120px_120px_30px] gap-1 item';
+      d.innerHTML = '<input class="inp !py-1 it-p" placeholder="produto"><input class="inp !py-1 it-c" placeholder="preço cheio"><input class="inp !py-1 it-o" placeholder="preço oferta"><button type="button" class="text-slate-400 hover:text-rose-600 cursor-pointer" onclick="this.parentNode.remove()">✕</button>';
+      $('nItens').appendChild(d);
+    }
+    async function enviarPedido(ev) {
+      ev.preventDefault();
+      const btn = $('btnEnviar'); if (btn.disabled) return; btn.disabled = true; const txt = btn.innerText; btn.innerText = 'Enviando…';
+      try {
+        const tipos = [...document.querySelectorAll('input.tipo:checked')].map(c => c.value);
+        const det = {}; document.querySelectorAll('input.det').forEach(i => { if (tipos.includes(i.dataset.k) && i.value.trim()) det[i.dataset.k] = i.value.trim(); });
+        const itens = [...document.querySelectorAll('#nItens .item')].map(r => ({ produto: r.querySelector('.it-p').value.trim(), preco_cheio: r.querySelector('.it-c').value.trim(), preco_oferta: r.querySelector('.it-o').value.trim() })).filter(i => i.produto || i.preco_cheio || i.preco_oferta);
+        const anexos = await subirArquivos(_supabase, $('nArq').files);
+        const p = { categoria, prazo: $('nPrazo').value, prioridade_justif: $('nUrg').value, detalhe: $('nDetalhe').value, loja_id: $('nLoja').value || null, anexos,
+          tipos, tipos_detalhe: det, outro: $('nOutro').value, validade_de: $('nVDe').value, validade_ate: $('nVAte').value, itens };
+        if (categoria === 'PATROCINIO') p.patrocinio = { entidade: $('pEnt').value.trim(), data_evento: $('pData').value, pedido: $('pPedido').value.trim(), valor: $('pValor').value.trim(), contrapartida: $('pContra').value.trim(), contato: $('pContato').value.trim() };
+        const { error } = await _supabase.rpc('fn_mkt_solicitar', { p });
+        if (error) return alert(error.message);
+        $('pnNovo').reset(); $('nItens').innerHTML = ''; addItem(); document.querySelectorAll('input.det').forEach(i => i.classList.add('hidden'));
+        alert('Pedido enviado ao Marketing. Você acompanha a resposta aqui na lista.');
+        trocarAba('pedidos', categoria);
+      } catch (e) { alert(e.message || String(e)); }
+      finally { btn.disabled = false; btn.innerText = txt; }
+    }
+
+    // ---------- detalhe ----------
+    async function abrir(id) {
+      const { data, error } = await _supabase.rpc('fn_mkt_pedido', { p_id: id });
+      if (error) return alert(error.message);
+      atual = data; desenharDet(); $('mDet').classList.remove('hidden');
+    }
+    function fecharDet() { $('mDet').classList.add('hidden'); atual = null; carregar(); }
+    function desenharDet() {
+      const p = atual.pedido, st = CHIP_STATUS[p.status] || [p.status, ''], pr = CHIP_PRIOR[p.prioridade] || [p.prioridade, ''];
+      const ehMkt = ['MARKETING', 'GESTOR'].includes(perfil), dono = p.solicitante_email === eu || perfil === 'LIDER';
+      const aberto = !['CONCLUIDA', 'CANCELADA', 'RECUSADA', 'APROVADA'].includes(p.status);
+      $('dTitulo').innerHTML = `#${p.protocolo} · ${esc(p.loja || '-')} · ${p.categoria === 'PATROCINIO' ? 'Patrocínio' : 'Pedido de material'} <span class="chip ${pr[1]}">${pr[0]}</span> <span class="chip ${st[1]}">${st[0]}</span>`;
+      const pat = p.patrocinio || {};
+      const campos = p.categoria === 'PATROCINIO'
+        ? `<div class="grid sm:grid-cols-2 gap-2 text-xs"><div><b>Quem pede:</b> ${esc(pat.entidade)}</div><div><b>Data do evento:</b> ${dbr(pat.data_evento)}</div><div><b>O que pedem:</b> ${esc(pat.pedido)}</div><div><b>Valor estimado:</b> ${esc(pat.valor || '-')}</div><div><b>Contrapartida:</b> ${esc(pat.contrapartida || '-')}</div><div><b>Contato:</b> ${esc(pat.contato || '-')}</div></div>`
+        : `<div class="flex flex-wrap gap-1">${(p.tipos || []).map(t => `<span class="chip bg-slate-100 text-slate-700 !text-[11px]">${MKT.nomeTipo(t)}${(p.tipos_detalhe || {})[t] ? ': ' + esc(p.tipos_detalhe[t]) : ''}</span>`).join('')}${p.outro ? `<span class="chip bg-slate-100 !text-[11px]">Outro: ${esc(p.outro)}</span>` : ''}</div>
+           ${p.validade_de || p.validade_ate ? `<div class="text-xs"><b>Validade:</b> ${dbr(p.validade_de)} a ${dbr(p.validade_ate)}</div>` : ''}
+           ${(p.itens || []).length ? `<table class="text-xs w-full max-w-xl"><tr class="text-slate-500"><th class="text-left">Produto</th><th class="text-right">Preço cheio</th><th class="text-right">Preço oferta</th></tr>${p.itens.map(i => `<tr><td>${esc(i.produto)}</td><td class="text-right">${esc(i.preco_cheio)}</td><td class="text-right font-bold text-emerald-700">${esc(i.preco_oferta)}</td></tr>`).join('')}</table>` : ''}`;
+      const hist = (p.historico || []).map(h => `<div><span class="font-mono text-slate-400">${dh(h.em)}</span> · <b>${esc(h.acao)}</b> · ${esc(h.por)}${h.obs ? ' · ' + esc(h.obs) : ''}</div>`).join('');
+      const msgs = (atual.mensagens || []).map(m => `<div class="${m.autor_perfil === 'MARKETING' ? 'bg-fuchsia-50 border-fuchsia-200 ml-0 mr-10' : 'bg-slate-50 border-slate-200 ml-10'} border rounded-lg p-2.5 text-xs space-y-1">
+          <div class="flex justify-between gap-2"><b>${esc(m.autor_nome || m.autor_email)} <span class="font-normal text-slate-400">(${esc(MKT.nomePerfil(m.autor_perfil))})</span></b><span class="text-slate-400">${dh(m.criado_em)}</span></div>
+          <div class="whitespace-pre-wrap">${esc(m.texto)}</div>${listaAnexos(m.anexos)}
+          <div class="text-[10px] text-slate-400">${(m.lida_por || []).length ? 'lida por ' + m.lida_por.map(l => esc(l.email.split('@')[0]) + ' ' + dh(l.em)).join(', ') : 'ainda não lida'}</div></div>`).join('') || '<div class="text-xs text-slate-400">Sem mensagens ainda.</div>';
+      let botoes = '';
+      if (aberto && ehMkt && p.categoria === 'MATERIAL') botoes += `<button class="bt bg-fuchsia-700 text-white" onclick="responder(true)">✓ Enviar e entregar o material</button><button class="bt bg-sky-100 text-sky-800" onclick="responder(false, true)">Pedir informação à loja</button>${p.status === 'ABERTA' ? '<button class="bt bg-slate-100" onclick="acao(\'PRODUZIR\')">Marcar em produção</button>' : ''}`;
+      if (aberto && ehMkt && p.categoria === 'PATROCINIO' && p.status !== 'AGUARDANDO_GESTOR' && perfil === 'MARKETING') botoes += `<button class="bt bg-fuchsia-700 text-white" onclick="acao('PARECER', 'Parecer do Marketing para o Gestor (mínimo 15 letras):')">Enviar parecer ao Gestor</button>`;
+      if (perfil === 'GESTOR' && p.categoria === 'PATROCINIO' && p.status === 'AGUARDANDO_GESTOR') botoes += `<button class="bt bg-emerald-600 text-white" onclick="acao('APROVAR', 'Observação (opcional):', true)">✓ Aprovar patrocínio</button><button class="bt bg-rose-100 text-rose-800" onclick="acao('RECUSAR', 'Motivo da recusa:')">✕ Recusar</button>`;
+      if (dono && p.status === 'ENTREGUE') botoes += `<button class="bt bg-emerald-600 text-white" onclick="acao('CONCLUIR')">✓ Recebi, está certo</button><button class="bt bg-amber-100 text-amber-900" onclick="acao('REABRIR', 'Qual ajuste precisa?')">Pedir ajuste</button>`;
+      if (aberto && (dono || ehMkt) && p.status !== 'AGUARDANDO_GESTOR') botoes += `<button class="bt text-rose-700" onclick="acao('CANCELAR', 'Motivo do cancelamento:')">Cancelar pedido</button>`;
+      $('dCorpo').innerHTML = `
+        <div class="grid sm:grid-cols-3 gap-2 text-xs bg-slate-50 rounded-lg p-3">
+          <div><b>Pedido por:</b> ${esc(p.solicitante_nome || p.solicitante_email)}<br>${dh(p.criado_em)}</div>
+          <div><b>Prazo:</b> ${dbr(p.prazo)} (${p.dias_uteis} dia(s) útil(eis))${p.prioridade_justif ? '<br><b>Urgência:</b> ' + esc(p.prioridade_justif) : ''}</div>
+          <div><b>Marketing:</b> ${p.visto_mkt_em ? 'abriu ' + dh(p.visto_mkt_em) : '<b class="text-amber-700">ainda não abriu</b>'}${p.respondido_em ? '<br>1ª resposta ' + dh(p.respondido_em) : ''}${p.entregue_em ? '<br>entregue ' + dh(p.entregue_em) : ''}</div></div>
+        ${campos}
+        <div class="text-xs"><b>Detalhe do pedido:</b><div class="whitespace-pre-wrap bg-white border border-slate-200 rounded-lg p-2 mt-1">${esc(p.detalhe)}</div></div>
+        ${atual.anexos.length ? `<div class="text-xs"><b>Anexos do pedido:</b>${listaAnexos(atual.anexos)}</div>` : ''}
+        <div><div class="font-bold text-xs text-slate-600 mb-1">💬 Conversa</div><div class="space-y-2">${msgs}</div></div>
+        ${aberto ? `<div class="border-t border-slate-200 pt-3 space-y-2"><textarea id="dTxt" rows="2" class="inp" placeholder="${ehMkt ? 'Resposta para a loja' : 'Mensagem para o Marketing'}"></textarea>
+          <div class="flex flex-wrap gap-2 items-center"><input type="file" id="dArq" multiple class="text-xs"><button class="bt bg-slate-800 text-white" onclick="responder(false)">Enviar mensagem</button>${botoes}</div></div>` : (botoes ? `<div class="flex flex-wrap gap-2">${botoes}</div>` : '')}
+        <details class="text-xs"><summary class="cursor-pointer font-bold text-slate-600">Histórico do pedido (auditoria)</summary><div class="mt-1 space-y-0.5">${hist}</div></details>`;
+    }
+    async function responder(entregar, pedirInfo) {
+      const t = ($('dTxt') || {}).value || '', arqs = ($('dArq') || {}).files;
+      if (!t.trim() && !(arqs && arqs.length)) return alert(entregar ? 'Escreva a mensagem e anexe o material.' : 'Escreva a mensagem.');
+      if (entregar && !(arqs && arqs.length) && !confirm('Entregar sem anexar arquivo?')) return;
+      try {
+        const anexos = await subirArquivos(_supabase, arqs);
+        const { error } = await _supabase.rpc('fn_mkt_enviar', { p: { solicitacao_id: atual.pedido.id, texto: t, anexos, entregar: !!entregar, pedir_info: !!pedirInfo } });
+        if (error) return alert(error.message);
+        await abrir(atual.pedido.id);
+      } catch (e) { alert(e.message || String(e)); }
+    }
+    async function acao(a, pergunta, opcional) {
+      let obs = null;
+      if (pergunta) { obs = await pedirTexto(pergunta, ''); if (obs === null) return; if (!opcional && !obs.trim()) return alert('Escreva o texto.'); }
+      const { error } = await _supabase.rpc('fn_mkt_pedido_acao', { p_id: atual.pedido.id, p_acao: a, p_obs: obs });
+      if (error) return alert(error.message);
+      await abrir(atual.pedido.id);
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

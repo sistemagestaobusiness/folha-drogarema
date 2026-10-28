@@ -25,7 +25,8 @@
     ['Relatórios', [['relatorio_faltas.html', 'Relatório de faltas', '☷'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['relatorio_quinto_dia.html', 'Pagamento do 5º dia útil', '$']]],
     ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
     ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['organograma.html', 'Organograma', '⌂'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
-    ['Segurança', [['conduta_rh.html', 'Conduta do RH', '◉'], ['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]]
+    ['Segurança', [['conduta_rh.html', 'Conduta do RH', '◉'], ['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]],
+    ['Marketing', [['marketing_pedidos.html', 'Pedidos ao Marketing', '✎'], ['marketing_comunicados.html', 'Comunicados e enquetes', '✉']]]
   ];
   const telas = new Set((window.ACESSO.telas || []).map(t => String(t).toLowerCase()));
   const L = 232;
@@ -459,6 +460,51 @@
     } catch (e) { console.warn('ciência do supervisor', e); }
   }
 
+  // Marketing (regra de 28/10/2026): bolhas no menu e aviso fixo enquanto houver algo para abrir, dar ciência ou responder.
+  // Líder: comunicados sem ciência, enquetes, respostas do Marketing. Marketing: pedidos sem resposta / vencendo / atrasados e mensagens novas.
+  async function avisosMarketing() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['LIDER', 'MARKETING', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('marketing_pedidos.html')) return;
+    let r; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_mkt_pendencias'); if (error) return; r = data || {}; } catch (e) { return; }
+    const bolha = (tela, n, cor) => { const it = document.querySelector(`#menuSistema a.it[data-menu="${tela}"]`); if (!it) return; let b = it.querySelector('.bolha');
+      if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'bolha'; it.appendChild(b); } b.style.background = cor; b.style.color = '#fff'; b.textContent = n;
+      const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto'); };
+    let linhas = [], urg = false, destino = 'marketing_pedidos.html';
+    if (pf === 'LIDER') {
+      const c = (r.comunicados_sem_ciencia || 0) + (r.enquetes_abertas || 0), p = (r.respostas_mkt || 0) + (r.pedidos_aguardando_loja || 0);
+      bolha('marketing_comunicados.html', c, '#dc2626'); bolha('marketing_pedidos.html', p, '#dc2626');
+      if (r.comunicados_sem_ciencia) linhas.push(`${r.comunicados_sem_ciencia} comunicado(s) do Marketing aguardando a sua ciência`);
+      if (r.enquetes_abertas) linhas.push(`${r.enquetes_abertas} enquete(s) para responder`);
+      if (r.respostas_mkt) linhas.push(`${r.respostas_mkt} resposta(s) nova(s) do Marketing nos seus pedidos`);
+      if (r.pedidos_aguardando_loja) linhas.push(`${r.pedidos_aguardando_loja} pedido(s) esperando você (informação ou confirmar o recebimento)`);
+      urg = c > 0; destino = c > 0 ? 'marketing_comunicados.html' : 'marketing_pedidos.html';
+    } else {
+      const ped = (r.pedidos_sem_resposta || 0) + (r.mensagens_novas || 0) + (pf === 'GESTOR' ? (r.patrocinios || 0) : 0);
+      if (pf !== 'SUPERVISOR') bolha('marketing_pedidos.html', ped, r.pedidos_atrasados ? '#dc2626' : '#B54708');
+      bolha('marketing_comunicados.html', (r.comunicados_novos || 0) + (r.lojas_sem_abrir || 0), '#B54708');
+      if (pf === 'MARKETING') {
+        if (r.pedidos_atrasados) linhas.push(`${r.pedidos_atrasados} pedido(s) com prazo VENCIDO`);
+        if (r.pedidos_vencendo) linhas.push(`${r.pedidos_vencendo} pedido(s) vencendo hoje/amanhã`);
+        if (r.pedidos_sem_resposta) linhas.push(`${r.pedidos_sem_resposta} pedido(s) das lojas sem resposta`);
+        if (r.mensagens_novas) linhas.push(`${r.mensagens_novas} mensagem(ns) nova(s) das lojas`);
+        if (r.patrocinios) linhas.push(`${r.patrocinios} patrocínio(s) para analisar`);
+        if (r.lojas_sem_abrir) linhas.push(`${r.lojas_sem_abrir} envio(s) ainda não aberto(s) por loja há mais de 1 dia`);
+        urg = !!(r.pedidos_atrasados || r.pedidos_vencendo);
+      }
+    }
+    const CH = 'aviso_mkt_fechado_ate', fechadoAte = () => { try { return Number(localStorage.getItem(CH)) || 0; } catch (e) { return 0; } };
+    let a = document.getElementById('avisoMkt');
+    if (!linhas.length || PAGINA === destino) { if (a) a.remove(); return; }
+    const pe = document.querySelector('#menuSistema .pe');
+    if (!a) { a = document.createElement('div'); a.id = 'avisoMkt'; if (pe) pe.parentNode.insertBefore(a, pe); else document.body.appendChild(a); }
+    a.style.cssText = (pe ? 'position:relative;margin:0 10px 8px;border-radius:10px;padding:8px 26px 8px 10px;font-size:11.5px;'
+      : 'position:fixed;left:16px;bottom:16px;z-index:99990;border-radius:12px;padding:10px 34px 10px 14px;font-size:12.5px;max-width:300px;box-shadow:0 10px 30px rgba(0,0,0,.3);')
+      + 'line-height:1.35;color:#fff;background:' + (urg ? '#dc2626' : '#a21caf') + (Date.now() < fechadoAte() ? ';display:none' : '');
+    a.innerHTML = `<button type="button" title="Fechar por 30 minutos" aria-label="Fechar" style="position:absolute;top:5px;right:7px;background:none;border:0;color:#fff;font-size:15px;font-weight:700;cursor:pointer">✕</button>
+      <a href="${destino}" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:12.5px">🎨 Marketing</b>${linhas.join('<br>')}<span style="display:block;margin-top:4px;font-weight:800;text-decoration:underline">Abrir →</span></a>`;
+    a.querySelector('button').onclick = () => { try { localStorage.setItem(CH, String(Date.now() + 30 * 60e3)); } catch (e) { } a.style.display = 'none'; };
+  }
+
   // pendências no menu (regra de 21/10/2026): bolha com o número em cada tela onde se resolve;
   // vermelha piscando = fora do prazo (fica até resolver), laranja = para resolver no prazo.
   // Para o Gestor é informativo: a "Central de pendências" pisca quando alguém da equipe está fora do prazo.
@@ -610,6 +656,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

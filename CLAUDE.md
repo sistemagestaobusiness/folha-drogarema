@@ -29,12 +29,13 @@ Sistema de RH, folha e financeiro da Drogarema. Telas HTML com JavaScript puro (
 
 ## Telas
 - Todas carregam `acesso.js` (controle por perfil e menu), menos `login.html`. O que a tela bloqueia é conforto; a proteção real é o banco.
-- Script compartilhado vai com versão no nome (`fluxo_core.js?v=6`, `menu.js?v=34` dentro de `acesso.js`, `pendencias_core.js?v=4`): subir a versão ao alterar.
+- Script compartilhado vai com versão no nome (`fluxo_core.js?v=6`, `menu.js?v=35` dentro de `acesso.js`, `pendencias_core.js?v=4`, `marketing_core.js?v=1`): subir a versão ao alterar.
 - Lançamentos usa sempre o período ABERTO (tabela `competencias`), não o mês do Painel.
 - Telas antigas `folha.html`, `pagamentos_extras.html`, `financeiro_freelance.html` foram apagadas em 26/10/2026.
 - Inatividade: controle único no `acesso.js` (30 min sem uso em qualquer aba, aviso 2 min antes). Não criar timer de inatividade nas telas.
 - Data de pagamento: sábado, domingo e feriado nacional/estadual (tabela `feriados` sem loja) antecipam para o dia útil anterior. Usar `DiaUtil` do `acesso.js` (`anterior`, `motivo`, `conferir`). Feriado municipal não entra.
 - Freelance/hora extra: quem criou o pedido não decide nenhuma etapa (pedido do RH vai ao Gestor na etapa do RH). RH ou Gestor decidem no lugar do supervisor só com justificativa (15 letras) e o supervisor dá ciência com justificativa (`fn_freelance_ciencia_supervisor`).
+- Marketing (perfil MARKETING): tabelas `mkt_*` sem acesso direto (RLS sem regra); tudo pelas funções `fn_mkt_*`. Arquivos no bucket privado `marketing`; baixar sempre por `MKT.baixar` (registra o download e gera link de 2 min).
 - Textos em português, datas dd/mm/aaaa, valores 1.234,56.
 
 ## Testar antes de entregar

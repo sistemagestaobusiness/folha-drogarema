@@ -65,7 +65,8 @@
       PLANOS:       { nome: 'Planos (desconto)',      rpc: 'fn_plano_decidir',          tela: 'planos.html?aba=aprovacao',           cor: 'bg-teal-100 text-teal-800' },
       ALTERACAO:    { nome: 'Alteração na ficha do RH', rpc: 'fn_alteracao_decidir',    tela: 'conferencia_fechamento.html',          cor: 'bg-slate-200 text-slate-700' },
       // pedido de freelance criado pelo RH: o RH não aprova o próprio pedido; o Gestor decide valor e pagamento na tela Aprovação do RH (regra de 28/10/2026)
-      FREELANCE_RH: { nome: 'Freelance criado pelo RH', rpc: null, tela: 'rh_aprovacao_freelance.html',                                      cor: 'bg-orange-100 text-orange-800' }
+      FREELANCE_RH: { nome: 'Freelance criado pelo RH', rpc: null, tela: 'rh_aprovacao_freelance.html',                                      cor: 'bg-orange-100 text-orange-800' },
+      PATROCINIO:   { nome: 'Patrocínio (Marketing)', rpc: null, tela: 'marketing_pedidos.html?aba=patrocinio',                         cor: 'bg-fuchsia-100 text-fuchsia-800' }
     };
     let itens = [];
 
@@ -129,15 +130,15 @@
             ${i.vencimento ? `<span class="chip ${urgente ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'}">pagar em ${dbr(i.vencimento)}</span>` : ''}
             ${i.competencia ? `<span class="text-[11px] text-slate-400">ref. ${esc(i.competencia)}</span>` : ''}</div>
           <div class="text-base font-bold text-slate-900">${esc(i.funcionario)} <span class="text-xs font-normal text-slate-500">· ${esc(i.loja || '-')}</span></div>
-          ${i.tipo === 'FREELANCE_RH' ? '' : `<div class="text-sm"><span class="text-slate-500">Antes</span> <b>${brl(i.anterior)}</b> <span class="text-slate-400">→</span> <span class="text-slate-500">Agora</span> <b class="text-lg">${brl(i.atual)}</b> ${difTxt}</div>`}
+          ${['FREELANCE_RH', 'PATROCINIO'].includes(i.tipo) ? '' : `<div class="text-sm"><span class="text-slate-500">Antes</span> <b>${brl(i.anterior)}</b> <span class="text-slate-400">→</span> <span class="text-slate-500">Agora</span> <b class="text-lg">${brl(i.atual)}</b> ${difTxt}</div>`}
           <div class="text-xs text-slate-600">${esc(i.detalhe || '')}</div>
-          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><b>${i.tipo === 'FREELANCE_RH' ? 'Observação do pedido' : 'Motivo do RH'}:</b> ${esc(i.motivo || '(sem motivo escrito)')}</div>
+          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><b>${i.tipo === 'FREELANCE_RH' ? 'Observação do pedido' : i.tipo === 'PATROCINIO' ? 'Parecer do Marketing' : 'Motivo do RH'}:</b> ${esc(i.motivo || '(sem motivo escrito)')}</div>
           <div class="text-[11px] text-slate-400">Enviado por ${esc(i.enviado_por || '-')} · ${dh(i.enviado_em)} · <a href="${t.tela}" class="underline hover:text-slate-600">ver na tela de origem</a></div>
         </div>
         <div class="flex flex-col gap-2 min-w-[150px]">
           ${t.rpc ? `<button class="bt-ok" onclick="decidir('${i.tipo}', '${i.id}', true)">✓ Aprovar</button>
           <button class="bt-nao" onclick="decidir('${i.tipo}', '${i.id}', false)">✕ Recusar</button>`
-          : `<a href="${t.tela}" class="bt-ok text-center no-underline">Abrir e decidir →</a><div class="text-[10px] text-slate-500 text-center">valor e pagamento na Aprovação do RH</div>`}
+          : `<a href="${t.tela}" class="bt-ok text-center no-underline">Abrir e decidir →</a><div class="text-[10px] text-slate-500 text-center">${i.tipo === 'PATROCINIO' ? 'decidir em Pedidos ao Marketing' : 'valor e pagamento na Aprovação do RH'}</div>`}
         </div></div>`;
     }
 
