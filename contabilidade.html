@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="cronograma.js?v=1"></script>
   <style>
     .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
     .barra h1 { margin: 0 10px 0 0; font-size: 18px; font-weight: 700; }
@@ -52,6 +53,8 @@
     <button type="button" class="btn" style="margin-left: auto" onclick="baixar()">⬇ Excel para a contabilidade</button>
   </div>
   <div id="aviso" class="alerta verm"></div>
+  <!-- envio à contabilidade (regra de 28/10/2026): a confirmação para os avisos do cronograma; só com a Conferência sem vermelho -->
+  <section class="card" id="boxEnvio" style="display:none;padding:10px 14px;margin-bottom:10px"></section>
   <div class="kpis" id="kpis"></div>
   <section class="card pend" id="pend" style="display: none"></section>
   <section class="card rola" style="max-height: 64vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td>Carregando…</td></tr></tbody></table></section>
@@ -84,6 +87,7 @@
       const r = String(f.empresa_registro || ''); return empresas.find(e => e.razao_social && r.includes(e.razao_social)) || null;
     };
 
+    if (window.Cronograma) Cronograma.aoMudar = () => carregar();
     async function iniciar() {
       const { data: comp } = await _supabase.from('competencias').select('mes, ano').eq('status', 'ABERTO').order('ano').order('mes').limit(1);
       const c = (comp || [])[0], hoje = new Date();
@@ -95,8 +99,21 @@
       carregar();
     }
 
+    async function boxEnvio(comp) {
+      const b = $('boxEnvio'); if (!podeEditar || !window.Cronograma) return;
+      let e = null; try { const d = await Cronograma.carregar(_supabase); e = (d.etapas || []).find(x => x.etapa === 'CONTABILIDADE' && x.ref === comp); } catch (err) { }
+      if (!e) { b.style.display = 'none'; return; }
+      b.style.display = '';
+      b.innerHTML = `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px"><b>📤 Envio à contabilidade · ${comp}</b>
+        <span class="desc">prazo ${String(e.prazo).split('-').reverse().join('/')}</span>
+        ${e.marco ? `<span style="color:var(--verde,#059669);font-weight:700">✓ enviada por ${e.marco.por} em ${new Date(e.marco.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+          <button type="button" class="btn" onclick="Cronograma.desmarcar('CONTABILIDADE','${comp}')">↺ Voltou da contabilidade</button>`
+        : `<span class="desc">${(e.falta || []).join(' · ')}</span><button type="button" class="btn" style="margin-left:auto;background:#059669;color:#fff;border-color:#059669" onclick="Cronograma.marcar('CONTABILIDADE','${comp}')">✓ Folha enviada à contabilidade</button>`}</div>`;
+    }
+
     async function carregar() {
       aviso(''); const comp = compDe($('fComp').value); if (!comp) return;
+      boxEnvio(comp);
       $('tab').innerHTML = '<tbody><tr><td>Carregando…</td></tr></tbody>';
       try {
         const [li, lf, re, rt] = await Promise.all([

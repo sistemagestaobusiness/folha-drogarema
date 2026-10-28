@@ -9,7 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="pendencias_core.js?v=4"></script>
+  <script src="pendencias_core.js?v=5"></script>
+  <script src="cronograma.js?v=1"></script>
   <style>
     :root { --fundo: #F4F5F7; --card: #FFFFFF; --borda: #E3E6EB; --linha: #EEF0F3; --txt: #14181F; --sub: #5B6472; --escuro: #12161C; --ouro: #C69560;
       --verm: #B42318; --verm-bg: #FEE4E2; --verm-tx: #912018; --amar-bg: #FEF0C7; --amar-tx: #93370D; --cinza-bg: #EEF2F6; --cinza-tx: #364152; --verde-bg: #E7F6EC; --verde-tx: #05603A; --azul: #1D4ED8; }
@@ -59,6 +60,8 @@
     .desc { font-size: 12.5px; color: var(--sub); margin-top: 3px; }
     select.comp { height: 34px; border: 1px solid #D0D5DD; border-radius: 7px; padding: 0 8px; font: inherit; font-size: 13px; background: #fff; color: var(--txt); }
     .bloco { margin-bottom: 20px; }
+    .btnc { border: 1px solid #D0D5DD; background: #fff; border-radius: 7px; padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; margin-right: 6px; }
+    .btnc.verde { background: #059669; border-color: #059669; color: #fff; }
     #aviso { display: none; background: var(--verm-bg); color: var(--verm-tx); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; font-weight: 600; }
     @media (max-width: 900px) {
       body { padding: 16px 12px 24px; }
@@ -110,10 +113,14 @@
     }
 
     async function carregar() {
-      try { dados = await Pendencias.carregar(_supabase, perfil); }
+      let cron = null;
+      try { [dados, cron] = await Promise.all([Pendencias.carregar(_supabase, perfil), ['RH', 'GESTOR'].includes(perfil) ? Cronograma.carregar(_supabase).catch(() => null) : null]); }
       catch (e) { $('aviso').innerText = 'Não foi possível carregar as pendências: ' + (e.message || e); $('aviso').style.display = 'block'; return; }
       $('aviso').style.display = 'none';
       if (perfil === 'GESTOR') await desenharGestor(); else desenharPessoal();
+      // cronograma da folha (regra de 28/10/2026): prazos do mês, o que falta e as confirmações
+      if (cron) $('conteudo').insertAdjacentHTML('afterbegin', `<section class="card bloco"><div style="padding:16px 20px 6px"><h2 style="margin:0;font-size:15px;font-weight:700">📅 Cronograma da folha</h2>
+        <div class="desc">Adiantamento dia 15 · início do fechamento dia 25 · VT e envio à contabilidade no último dia útil · comissões do Gestor no 1º dia útil. Dia que não é útil antecipa. Aviso obrigatório a partir de 3 dias úteis antes, até a etapa estar feita.</div></div>${Cronograma.tabela(cron, perfil)}</section>`);
       if (perfil === 'RH') competenciaTrabalho();
     }
 
@@ -196,6 +203,7 @@
         ${lista.map(c => `<option value="${txt(c)}" ${txt(c) === atual.toUpperCase() ? 'selected' : ''}>${String(c.mes).padStart(2, '0')}/${c.ano} · ${c.status === 'ABERTO' ? 'aberta' : 'fechada'}</option>`).join('')}</select></label>`;
     }
 
+    Cronograma.aoMudar = () => carregar();
     iniciar();
   </script>
 </body>

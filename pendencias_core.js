@@ -169,11 +169,9 @@
     if (veTudo) {
       const hoje = new Date(hojeIso() + 'T12:00:00'), a = hoje.getFullYear(), m = hoje.getMonth();
       const datas = [];
-      const dia25 = new Date(a, m, 25, 12); datas.push([dia25 < hoje ? new Date(a, m + 1, 25, 12) : dia25, 'Corte de freelance e hora extra', 'o que for até o dia 25 entra na folha deste mês', 'rh_aprovacao_freelance.html']);
-      const ult = new Date(a, m + 1, 0, 12); datas.push([ult, 'Vale transporte', 'pago no último dia do mês · aprovação do Gestor antes', 'vale_transporte.html']);
+      // adiantamento (15), início do fechamento (25), VT e contabilidade (último dia útil) e comissões: agora no Cronograma da folha (cronograma.js, 28/10/2026)
       const q5 = quintoDiaUtil(a, m + 1); q5.setHours(12); const q5ant = quintoDiaUtil(a, m); q5ant.setHours(12);
       datas.push([q5ant >= hoje ? q5ant : q5, 'Fechamento · 5º dia útil', 'Conferência do fechamento sem vermelho', 'conferencia_fechamento.html']);
-      const d15 = new Date(a, m, 15, 12); datas.push([d15 < hoje ? new Date(a, m + 1, 15, 12) : d15, 'Adiantamento salarial', 'enviar ao Financeiro antes do dia 15', 'adiantamento.html']);
       const t1 = new Date(a, 10, 30, 12), t2 = new Date(a, 11, 20, 12);
       if (t1 >= hoje) datas.push([t1, '13º · 1ª parcela', 'pagar até 30/11', 'decimo_terceiro.html']);
       if (t2 >= hoje) datas.push([t2, '13º · 2ª parcela', 'pagar até 20/12', 'decimo_terceiro.html']);

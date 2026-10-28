@@ -524,6 +524,13 @@
     a.querySelector('button').onclick = () => { try { localStorage.setItem(CH, String(Date.now() + 30 * 60e3)); } catch (e) { } a.style.display = 'none'; };
   }
 
+  // cronograma da folha (regra de 28/10/2026): aviso obrigatório com ciência para RH e Gestor (cronograma.js)
+  async function cronogramaAvisos() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['RH', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window) return;
+    try { if (!window.Cronograma) await carregarScript('cronograma.js?v=1'); window.Cronograma.iniciarAvisos(window.ACESSO_CLI, pf, PAGINA); } catch (e) { console.warn('cronograma', e); }
+  }
+
   // pendências no menu (regra de 21/10/2026): bolha com o número em cada tela onde se resolve;
   // vermelha piscando = fora do prazo (fica até resolver), laranja = para resolver no prazo.
   // Para o Gestor é informativo: a "Central de pendências" pisca quando alguém da equipe está fora do prazo.
@@ -532,7 +539,7 @@
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['RH', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || !telas.has('pendencias.html')) return;
     try {
-      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=4');
+      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=5');
       const r = await window.Pendencias.carregar(window.ACESSO_CLI, pf);
       const meus = r.itens.filter(i => i.com === pf && !i.semMenu && i.nivel !== 'info');
       const por = {};
@@ -675,6 +682,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); pendenciasMenu(); setInterval(pendenciasMenu, 120000); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
