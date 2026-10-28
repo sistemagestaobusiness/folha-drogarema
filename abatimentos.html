@@ -293,7 +293,7 @@
               <span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(a.loja_id))}</span>
               <span class="${s.cls} px-2 py-0.5 rounded text-[10px] font-bold">${s.txt}</span>
             </div>
-            <div class="text-lg font-black text-slate-900">${fmtR(a.valor_total)}${a.qtd_parcelas ? ` <span class="text-xs font-bold text-slate-500">· ${pessoas.length} pessoa(s) · ${a.qtd_parcelas}x</span>` : ''}</div>
+            <div class="text-lg font-black text-slate-900">${fmtR(a.valor_total)}${a.status === 'PENDENTE_LIDER' ? ` <span class="text-xs font-bold text-amber-700">· ${perfil === 'LIDER' ? 'aguardando você escolher quem paga e em quantas parcelas' : 'aguardando o líder escolher quem paga'}</span>` : pessoas.length && a.qtd_parcelas ? ` <span class="text-xs font-bold text-slate-500">· ${pessoas.length} pessoa(s) · ${a.qtd_parcelas}x</span>` : ''}</div>
             ${a.justificativa ? `<div class="text-[11px]">Justificativa: <b>${esc(a.justificativa)}</b></div>` : ''}
             ${a.observacao ? `<div class="text-[11px] text-slate-500 italic">"${esc(a.observacao)}"</div>` : ''}
             ${a.funcionario_sugerido_id ? `<div class="text-[11px]">Funcionário indicado: <b>${esc(nomeF(a.funcionario_sugerido_id))}</b></div>` : ''}

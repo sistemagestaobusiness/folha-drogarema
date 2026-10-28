@@ -109,6 +109,13 @@
       html.menu-aberto #menuSistema { transform: none; box-shadow: 0 0 0 100vmax rgba(15,23,42,.35); }
       #menuAbre { display: block; }
     }
+    /* avisos dentro do menu (regra de 28/10/2026, DZ): uma linha só, para não cobrir os itens do menu em notebook.
+       O detalhe completo aparece ao passar o mouse; o clique abre a tela. */
+    #menuSistema > #avisoHolerite, #menuSistema > #avisoMkt, #menuSistema > #avisoCiencia, #menuSistema > #cobrancaNotif { margin: 0 10px 6px !important; padding: 6px 26px 6px 10px !important; border-radius: 8px !important; font-size: 0 !important; line-height: 1.3 !important; flex-shrink: 0; }
+    #menuSistema > #avisoCiencia, #menuSistema > #cobrancaNotif { padding-right: 10px !important; }
+    #menuSistema > #avisoHolerite b, #menuSistema > #avisoMkt b, #menuSistema > #avisoCiencia b, #menuSistema > #cobrancaNotif b { display: block; font-size: 11.5px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #menuSistema > #avisoHolerite span, #menuSistema > #avisoMkt span { display: none !important; }
+    #menuSistema > #avisoHolerite button, #menuSistema > #avisoMkt button { top: 4px !important; right: 7px !important; font-size: 14px !important; }
     @media print { #menuSistema, #menuAbre, #menuTopo, #telaCheiaAviso { display: none !important; } html.menu-on body { padding-left: 0 !important; padding-top: 0 !important; background: #fff !important; } html.menu-on .fixed.inset-x-0 { left: 0; } }
   `;
   (document.head || document.documentElement).appendChild(css);
@@ -118,7 +125,14 @@
     if (document.getElementById('menuSistema')) return;
     const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     let guard = {}; try { guard = JSON.parse(localStorage.getItem('menu_grupos') || '{}') || {}; } catch (e) {}
-    const corpo = GRUPOS.map(([g, itens]) => { const vis = itens.filter(i => telas.has(i[0])); if (!vis.length) return '';
+    // líder (DZ, 28/10/2026): "Pedidos de cadastro" é um pedido que ele faz, não uma aprovação; fica em Cadastros, antes do Organograma
+    const LIDER_MENU = String(window.ACESSO.perfil || '').toUpperCase() === 'LIDER';
+    const grupos = !LIDER_MENU ? GRUPOS : GRUPOS.map(([g, itens]) => {
+      const cad = GRUPOS[1][1].find(i => i[0] === 'cadastro_solicitacoes.html');
+      if (g === 'Aprovações') return [g, itens.filter(i => i[0] !== 'cadastro_solicitacoes.html')];
+      if (g === 'Cadastros') return [g, [cad, ...itens]];
+      return [g, itens]; });
+    const corpo = grupos.map(([g, itens]) => { const vis = itens.filter(i => telas.has(i[0])); if (!vis.length) return '';
       const its = vis.map(([arq, nome, ic]) => (arq === 'pendencias.html' && String(window.ACESSO.perfil || '').toUpperCase() === 'GESTOR' ? ['pendencias.html', 'Central de pendências', ic] : [arq, nome, ic])).map(([arq, nome, ic]) => `<a class="it ${arq === PAGINA ? 'on' : ''}" href="${arq}" data-menu="${arq}"><i>${ic}</i><span>${nome}</span></a>`).join('');
       if (!g) return its;
       const aberto = g in guard ? !!guard[g] : vis.some(i => i[0] === PAGINA);
@@ -257,6 +271,8 @@
   ];
   // holerites: dupla confirmação loja × RH (regra de 19/10/2026). Cada lado vê só o que falta confirmar DELE:
   // aviso fixo no canto da tela + bolha vermelha no menu, até confirmar.
+  // detalhe completo do aviso compacto do menu, ao passar o mouse
+  const dicaAviso = el => { try { el.title = el.textContent.replace('✕', '').replace(/\s+/g, ' ').trim(); } catch (e) { } };
   async function holeritePendente() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'RH'].includes(pf) || !window.ACESSO_CLI || window.top !== window || document.getElementById('avisoHolerite')) return;
@@ -277,12 +293,12 @@
       a.style.cssText = noMenu ? 'position:relative;margin:0 10px 8px;background:#dc2626;color:#fff;border-radius:10px;padding:8px 26px 8px 10px;font-family:inherit;font-size:11.5px;line-height:1.35'
         : 'position:fixed;left:16px;bottom:16px;z-index:99990;background:#dc2626;color:#fff;border-radius:12px;padding:10px 34px 10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-family:inherit;font-size:12.5px;max-width:280px;line-height:1.35';
       a.innerHTML = `<button type="button" title="Fechar por 30 minutos (a pendência continua na Central de pendências)" aria-label="Fechar" style="position:absolute;top:6px;right:8px;background:none;border:0;color:#fff;font-size:16px;font-weight:700;cursor:pointer;line-height:1">✕</button>
-        <a href="holerite_entrega.html?comp=${encodeURIComponent(c)}&pend=1" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:12.5px">🧾 Holerites aguardando a sua confirmação</b>${data.map(r => `${r.qtd} funcionário(s) · holerite ${r.competencia}`).join('<br>')}
+        <a href="holerite_entrega.html?comp=${encodeURIComponent(c)}&pend=1" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:12.5px">🧾 ${tot} holerite(s) para confirmar</b>${data.map(r => `${r.qtd} funcionário(s) · holerite ${r.competencia}`).join('<br>')}
         <span style="display:block;margin-top:5px;font-weight:800;text-decoration:underline">Confirmar entrega${pf === 'RH' ? ' (lado do RH)' : ' (lado da loja)'} →</span></a>`;
       a.querySelector('button').onclick = () => { try { localStorage.setItem(CHAVE, String(Date.now() + PAUSA)); } catch (e) { } a.style.display = 'none'; };
       const ver = () => { a.style.display = Date.now() < fechadoAte() ? 'none' : ''; };
       if (noMenu) noMenu.parentNode.insertBefore(a, noMenu); else document.body.appendChild(a);
-      ver(); setInterval(ver, 60000);
+      dicaAviso(a); ver(); setInterval(ver, 60000);
     } catch (e) { console.warn('holerites', e); }
   }
 
@@ -376,7 +392,8 @@
             n.title = 'Clique para ver o alerta'; n.onclick = () => { try { localStorage.removeItem(CHAVE); } catch (e) { } mostrarAlerta(true); };
             if (pe) pe.parentNode.insertBefore(n, pe); else document.body.appendChild(n); }
           n.style.background = urg.length ? '#dc2626' : '#B54708';
-          n.innerHTML = `<b style="display:block;font-size:12.5px">⏳ Aguardando o Gestor aprovar</b>${linhas.map(r => `${esc(r.nome)}: ${r.qtd}${r.pagamento ? ' · ' + brl(r.total) : ''}${r.vencimento ? ' · ' + quando(r) : ''}`).join('<br>')}`;
+          n.innerHTML = `<b style="display:block;font-size:12.5px">⏳ ${qtdTot} aguardando o Gestor${urg.length ? ' · URGENTE' : ''}</b>${linhas.map(r => `${esc(r.nome)}: ${r.qtd}${r.pagamento ? ' · ' + brl(r.total) : ''}${r.vencimento ? ' · ' + quando(r) : ''}`).join('<br>')}`;
+          dicaAviso(n);
         }
         // faixa no topo da tela principal do Financeiro
         if (PAGINA === 'financeiro.html') {
@@ -455,7 +472,7 @@
       const a = document.createElement('a'); a.id = 'avisoCiencia'; a.href = 'supervisor_freelance.html';
       a.style.cssText = pe ? 'display:block;margin:0 10px 8px;background:#dc2626;color:#fff;border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.35;text-decoration:none'
         : 'position:fixed;left:16px;bottom:16px;z-index:99990;display:block;background:#dc2626;color:#fff;border-radius:12px;padding:10px 14px;font-size:12.5px;max-width:280px;line-height:1.35;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.3)';
-      a.innerHTML = `<b style="display:block;font-size:12.5px">🔔 ${count} decisão(ões) tomada(s) no seu lugar</b>Confira e dê ciência com a justificativa →`;
+      a.innerHTML = `<b style="display:block;font-size:12.5px">🔔 ${count} decisão(ões) no seu lugar</b>Confira e dê ciência com a justificativa →`; dicaAviso(a);
       if (pe) pe.parentNode.insertBefore(a, pe); else document.body.appendChild(a);
     } catch (e) { console.warn('ciência do supervisor', e); }
   }
@@ -501,7 +518,8 @@
       : 'position:fixed;left:16px;bottom:16px;z-index:99990;border-radius:12px;padding:10px 34px 10px 14px;font-size:12.5px;max-width:300px;box-shadow:0 10px 30px rgba(0,0,0,.3);')
       + 'line-height:1.35;color:#fff;background:' + (urg ? '#dc2626' : '#a21caf') + (Date.now() < fechadoAte() ? ';display:none' : '');
     a.innerHTML = `<button type="button" title="Fechar por 30 minutos" aria-label="Fechar" style="position:absolute;top:5px;right:7px;background:none;border:0;color:#fff;font-size:15px;font-weight:700;cursor:pointer">✕</button>
-      <a href="${destino}" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:12.5px">🎨 Marketing</b>${linhas.join('<br>')}<span style="display:block;margin-top:4px;font-weight:800;text-decoration:underline">Abrir →</span></a>`;
+      <a href="${destino}" style="color:#fff;text-decoration:none;display:block"><b style="display:block;font-size:12.5px">🎨 MKT: ${linhas.map(l => l.split(' ').slice(0, 2).join(' ')).join(' · ')}</b>${linhas.join('<br>')}<span style="display:block;margin-top:4px;font-weight:800;text-decoration:underline">Abrir →</span></a>`;
+    dicaAviso(a);
     a.querySelector('button').onclick = () => { try { localStorage.setItem(CH, String(Date.now() + 30 * 60e3)); } catch (e) { } a.style.display = 'none'; };
   }
 
