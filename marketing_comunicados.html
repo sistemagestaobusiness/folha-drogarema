@@ -22,7 +22,10 @@
     <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
 
     <div id="conteudo" class="hidden space-y-4">
-      <div id="abas" class="flex flex-wrap gap-4 border-b border-slate-200"></div>
+      <div class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200">
+        <div id="abas" class="flex flex-wrap gap-4"></div>
+        <button id="btnNovoEnvio" type="button" onclick="aba='novo'; montarAbas()" class="hidden mb-2 px-5 py-2.5 bg-fuchsia-700 hover:bg-fuchsia-800 text-white rounded-xl text-[14px] font-extrabold shadow-md shadow-fuchsia-200 cursor-pointer">＋ Novo comunicado / enquete</button>
+      </div>
       <div id="pnLista" class="space-y-2"></div>
 
       <form id="pnNovo" class="hidden bg-white border border-slate-200 rounded-xl p-4 space-y-4 text-sm" onsubmit="enviar(event)">
@@ -104,7 +107,8 @@
     function montarAbas() {
       const L = [['recebidos', perfil === 'LIDER' ? '📥 Recebidos pela loja' : '📥 Para mim']];
       if (acompanha()) L.push(['todos', '📊 Todos (acompanhamento)']);
-      if (podeEnviar()) L.push(['novo', '+ Novo envio']);
+      if (aba === 'novo') L.push(['novo', '+ Novo envio']);
+      $('btnNovoEnvio').classList.toggle('hidden', !podeEnviar());
       $('abas').innerHTML = L.map(([a, t]) => `<span class="aba ${aba === a ? 'on' : ''}" onclick="aba='${a}'; montarAbas(); render()">${t}</span>`).join('');
       $('pnLista').classList.toggle('hidden', aba === 'novo'); $('pnNovo').classList.toggle('hidden', aba !== 'novo');
     }

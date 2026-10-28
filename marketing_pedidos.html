@@ -22,7 +22,13 @@
     <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
 
     <div id="conteudo" class="hidden space-y-4">
-      <div id="abas" class="flex flex-wrap gap-4 border-b border-slate-200"></div>
+      <div class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200">
+        <div id="abas" class="flex flex-wrap gap-4"></div>
+        <div id="botoesNovo" class="hidden flex gap-2 pb-2">
+          <button type="button" onclick="trocarAba('novo', 'MATERIAL')" class="px-5 py-2.5 bg-fuchsia-700 hover:bg-fuchsia-800 text-white rounded-xl text-[14px] font-extrabold shadow-md shadow-fuchsia-200 cursor-pointer">＋ Novo pedido ao Marketing</button>
+          <button type="button" onclick="trocarAba('novo', 'PATROCINIO')" class="px-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-amber-950 rounded-xl text-[13px] font-extrabold shadow-md shadow-amber-100 cursor-pointer">🤝 Novo patrocínio</button>
+        </div>
+      </div>
       <div id="resumo" class="flex flex-wrap gap-2"></div>
 
       <!-- LISTA -->
@@ -37,7 +43,7 @@
 
       <!-- NOVO PEDIDO -->
       <form id="pnNovo" class="hidden bg-white border border-slate-200 rounded-xl p-4 space-y-4 text-sm" onsubmit="enviarPedido(event)">
-        <div id="boxLojaNovo" class="hidden"><label class="lbl">Loja do pedido *</label><select id="nLoja" class="inp"></select></div>
+        <div id="boxLojaNovo" class="hidden"><label class="lbl">Loja do pedido * <span class="normal-case font-normal text-slate-400">(de qual loja veio o pedido)</span></label><select id="nLoja" class="inp"></select></div>
         <div class="grid sm:grid-cols-3 gap-3">
           <div><label class="lbl">Prazo: até quando precisa *</label><input type="date" id="nPrazo" class="inp font-mono" onchange="verPrioridade()"></div>
           <div class="sm:col-span-2"><label class="lbl">Prioridade (pelo prazo)</label><div id="nPrior" class="text-xs text-slate-500 pt-2">Escolha o prazo.</div></div>
@@ -121,10 +127,11 @@
       setInterval(() => { if ($('mDet').classList.contains('hidden')) carregar(); }, 120000);
     }
 
-    const podePedir = () => ['LIDER', 'SUPERVISOR', 'GESTOR'].includes(perfil);
+    const podePedir = () => ['LIDER', 'SUPERVISOR', 'GESTOR', 'MARKETING'].includes(perfil);   // Marketing registra pedido recebido por telefone/WhatsApp, escolhendo a loja
     function montarAbas() {
       const L = [['pedidos', 'MATERIAL', '🎨 Pedidos de material'], ['pedidos', 'PATROCINIO', '🤝 Patrocínios']];
-      if (podePedir()) L.push(['novo', 'MATERIAL', '+ Novo pedido'], ['novo', 'PATROCINIO', '+ Novo patrocínio']);
+      if (aba === 'novo') L.push(['novo', categoria, categoria === 'PATROCINIO' ? '+ Novo patrocínio' : '+ Novo pedido']);
+      $('botoesNovo').classList.toggle('hidden', !podePedir());
       $('abas').innerHTML = L.map(([a, c, t]) => `<span class="aba ${aba === a && categoria === c ? 'on' : ''}" onclick="trocarAba('${a}', '${c}')">${t}</span>`).join('');
       $('pnLista').classList.toggle('hidden', aba !== 'pedidos');
       $('pnNovo').classList.toggle('hidden', aba !== 'novo');
@@ -185,6 +192,7 @@
     }
     async function enviarPedido(ev) {
       ev.preventDefault();
+      if (perfil !== 'LIDER' && !$('nLoja').value) { $('nLoja').focus(); return alert('Escolha a loja do pedido.'); }
       const btn = $('btnEnviar'); if (btn.disabled) return; btn.disabled = true; const txt = btn.innerText; btn.innerText = 'Enviando…';
       try {
         const tipos = [...document.querySelectorAll('input.tipo:checked')].map(c => c.value);
