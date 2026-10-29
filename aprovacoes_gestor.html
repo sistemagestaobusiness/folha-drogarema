@@ -68,7 +68,9 @@
       FREELANCE_RH: { nome: 'Freelance criado pelo RH', rpc: null, tela: 'rh_aprovacao_freelance.html',                                      cor: 'bg-orange-100 text-orange-800' },
       PATROCINIO:   { nome: 'Patrocínio (Marketing)', rpc: null, tela: 'marketing_pedidos.html?aba=patrocinio',                         cor: 'bg-fuchsia-100 text-fuchsia-800' },
       // falta da escala que o RH pede para não descontar (regra de 29/10/2026): aprovar = sem desconto; recusar = volta ao RH com o motivo
-      FALTA_SEM_DESCONTO: { nome: 'Falta sem desconto', rpc: 'fn_falta_dispensa_decidir', tela: 'lancamentos.html',                  cor: 'bg-rose-100 text-rose-800', individual: true }
+      FALTA_SEM_DESCONTO: { nome: 'Falta sem desconto', rpc: 'fn_falta_dispensa_decidir', tela: 'lancamentos.html',                  cor: 'bg-rose-100 text-rose-800', individual: true },
+      // falta/atestado de dia passado que o supervisor ou o RH pede para tirar da escala (regra de 29/10/2026): aprovar = a escala muda; recusar = continua
+      RETIRADA_FALTA: { nome: 'Retirada de falta/atestado', rpc: 'fn_escala_retirada_decidir', tela: 'escala.html',                  cor: 'bg-amber-100 text-amber-800', individual: true }
     };
     let itens = [];
 
@@ -132,9 +134,9 @@
             ${i.vencimento ? `<span class="chip ${urgente ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'}">pagar em ${dbr(i.vencimento)}</span>` : ''}
             ${i.competencia ? `<span class="text-[11px] text-slate-400">ref. ${esc(i.competencia)}</span>` : ''}</div>
           <div class="text-base font-bold text-slate-900">${esc(i.funcionario)} <span class="text-xs font-normal text-slate-500">· ${esc(i.loja || '-')}</span></div>
-          ${i.tipo === 'FALTA_SEM_DESCONTO' ? `<div class="text-sm"><span class="text-slate-500">Desconto que deixa de ser feito</span> <b class="text-lg text-rose-700">${brl(i.anterior)}</b></div>` : ['FREELANCE_RH', 'PATROCINIO'].includes(i.tipo) ? '' : `<div class="text-sm"><span class="text-slate-500">Antes</span> <b>${brl(i.anterior)}</b> <span class="text-slate-400">→</span> <span class="text-slate-500">Agora</span> <b class="text-lg">${brl(i.atual)}</b> ${difTxt}</div>`}
+          ${i.tipo === 'FALTA_SEM_DESCONTO' ? `<div class="text-sm"><span class="text-slate-500">Desconto que deixa de ser feito</span> <b class="text-lg text-rose-700">${brl(i.anterior)}</b></div>` : ['FREELANCE_RH', 'PATROCINIO', 'RETIRADA_FALTA'].includes(i.tipo) ? '' : `<div class="text-sm"><span class="text-slate-500">Antes</span> <b>${brl(i.anterior)}</b> <span class="text-slate-400">→</span> <span class="text-slate-500">Agora</span> <b class="text-lg">${brl(i.atual)}</b> ${difTxt}</div>`}
           <div class="text-xs text-slate-600">${esc(i.detalhe || '')}</div>
-          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><b>${i.tipo === 'FREELANCE_RH' ? 'Observação do pedido' : i.tipo === 'PATROCINIO' ? 'Parecer do Marketing' : 'Motivo do RH'}:</b> ${esc(i.motivo || '(sem motivo escrito)')}</div>
+          <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><b>${i.tipo === 'FREELANCE_RH' ? 'Observação do pedido' : i.tipo === 'PATROCINIO' ? 'Parecer do Marketing' : i.tipo === 'RETIRADA_FALTA' ? 'Justificativa do pedido' : 'Motivo do RH'}:</b> ${esc(i.motivo || '(sem motivo escrito)')}</div>
           <div class="text-[11px] text-slate-400">Enviado por ${esc(i.enviado_por || '-')} · ${dh(i.enviado_em)} · <a href="${t.tela}" class="underline hover:text-slate-600">ver na tela de origem</a></div>
         </div>
         <div class="flex flex-col gap-2 min-w-[150px]">

@@ -49,6 +49,7 @@
         <button id="btnImprimir" onclick="window.print()" class="ml-auto px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold cursor-pointer">🖨 Imprimir</button>
       </div>
 
+      <div id="painelRetiradas" class="noprint hidden"></div>
       <div id="avisoPadrao" class="noprint hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs"></div>
 
       <div id="legenda" class="noprint flex flex-wrap gap-2 text-[10px] font-bold">
@@ -108,7 +109,8 @@
       <div><label class="lbl">Repetir até (opcional)</label><input type="date" id="dAte" class="inp font-mono"><p class="text-[10px] text-slate-400">Ex.: atestado de 5 dias. Aplica o mesmo em todos os dias do intervalo.</p>
         <label class="flex items-center gap-1 mt-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" id="dMesmoDia" class="accent-slate-700"> só neste dia da semana (ex.: todas as terças até a data)</label></div>
       <div><label class="lbl">Observação</label><input id="dObs" class="inp" placeholder="ex.: troca de folga com Fulana"></div>
-      <button onclick="salvarDia()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg cursor-pointer">SALVAR</button>
+      <div id="dRetirada" class="hidden"></div>
+      <button id="dBtnSalvar" onclick="salvarDia()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-lg cursor-pointer">SALVAR</button>
     </div>
   </div>
 
@@ -260,6 +262,7 @@
       ]);
       if (re.error) alert('Erro ao carregar a escala: ' + re.error.message);
       excecoes = re.data || [];
+      await carregarRetiradas();
       try { const { data: fe } = await _supabase.from('feriados').select('*').gte('data', ini).lte('data', fim); feriados = fe || []; } catch (e) { feriados = []; }
       ferias = (rf.data || []).filter(s => !['RECUSADA', 'CANCELADA'].includes(s.status));
       freelas = (rs.data || []).filter(s => !['REJEITADA', 'CANCELADA'].includes(s.status));
@@ -283,7 +286,8 @@
       if (fe) return { tipo: fe.status === 'SOLICITADA' ? 'FERIAS_PEDIDA' : 'FERIAS', origem: 'FERIAS' };
       const ex = excecoes.find(e => e.funcionario_id === f.id && e.data === iso);
       if (ex) {
-        if (ex.tipo !== 'TRABALHO') return { tipo: ex.tipo, origem: 'DIA', obs: ex.observacao };
+        if (ex.tipo !== 'TRABALHO') { const pr = retiradaPendente(f.id, iso);
+          return { tipo: ex.tipo, origem: 'DIA', obs: pr ? '⏳ retirada pedida' + (ex.observacao ? ' · ' + ex.observacao : '') : ex.observacao }; }
         return { tipo: 'TRABALHO', entrada: hm(ex.entrada), saida: hm(ex.saida), loja: ex.loja_id || f.loja_id, origem: 'DIA', obs: ex.observacao };
       }
       const fl = freelas.find(s => s.funcionario_ausente_id === f.id && s.data_servico === iso && AUSENCIAS_FREELA[s.motivo]);
@@ -593,6 +597,7 @@
                <div class="text-[10px] text-slate-500">Fica como folga do feriado (FD) na escala: não gera hora extra nem folga compensatória.</div></div>
              <div class="text-[10px] text-slate-500">${/^LOJA\s*0?7\b/i.test(nomeLoja(f.loja_id)) ? 'LOJA 07: evento HORA EXTRA 100% contábil.' : 'Evento 2029 HORA EXTRA 100% (não contábil), na folha do 5º dia útil.'}</div>`}</div>`;
       }
+      montarRetirada();
       escolherTipoDia(tipoDia);
       $('mDia').classList.remove('hidden');
     }
@@ -600,9 +605,13 @@
       tipoDia = k;
       document.querySelectorAll('.tdia').forEach(b => b.className = `tdia px-2 py-2 rounded-lg border font-bold cursor-pointer ${b.dataset.t === k ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-300'}`);
       $('dBoxHora').classList.toggle('hidden', k !== 'TRABALHO');
+      if (editando) { const pedir = precisaPedir(k);
+        $('dBtnSalvar').innerText = pedir ? 'PEDIR RETIRADA (vai para aprovação)' : 'SALVAR';
+        const bj = $('dJustRet'); if (bj) bj.closest('div').classList.toggle('hidden', !pedir); }
     }
     async function salvarDia() {
       const { f, iso } = editando, ate = $('dAte').value;
+      if (precisaPedir(tipoDia)) return pedirRetirada();
       if (ate && ate < iso) return alert('"Repetir até" precisa ser depois do dia escolhido.');
       const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) if (!$('dMesmoDia').checked || dow(d) === dow(iso)) datas.push(d);
       if (datas.length > 62) return alert('No máximo 62 dias de uma vez.');
@@ -610,8 +619,104 @@
       const { error } = await _supabase.rpc('fn_escala_dia', { p_funcionario: f.id, p_datas: datas, p_tipo: tipoDia,
         p_entrada: tipoDia === 'TRABALHO' ? $('dEntrada').value : null, p_saida: tipoDia === 'TRABALHO' ? $('dSaida').value : null,
         p_loja: tipoDia === 'TRABALHO' ? $('dLoja').value : null, p_obs: $('dObs').value.trim() || null });
-      if (error) return alert('Erro: ' + error.message);
+      if (error) return alert(String(error.message).startsWith('RETIRADA_PEDIR:')
+        ? String(error.message).replace('RETIRADA_PEDIR: ', '') + '\n\nAbra o dia sozinho (sem "Repetir até") para pedir a retirada.' : 'Erro: ' + error.message);
       fechar('mDia'); await garantirPeriodo(true); renderizar();
+    }
+
+    // ------------------------------------------------------------------
+    // RETIRADA DE FALTA/ATESTADO (regra de 29/10/2026)
+    // Falta/atestado de dia passado, marcado em outro dia, não muda direto: vira pedido com justificativa.
+    // Líder → supervisor (loja sem supervisor → Gestor); supervisor/RH → Gestor; o Gestor muda direto. Quem pede não decide.
+    // A proteção real é a trava no banco (trg_escala_falta_trava); aqui é só conforto.
+    // ------------------------------------------------------------------
+    let retiradas = [];
+    const diaSP = ts => ts ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date(ts)) : '';
+    const letras = t => String(t || '').replace(/[^A-Za-zÀ-ÿ]/g, '').length;
+    const retiradaPendente = (fid, iso) => retiradas.find(r => r.status === 'PENDENTE' && r.funcionario_id === fid && r.data === iso);
+    const TXT_NOVO = r => r.tipo_novo === 'PADRAO' ? 'horário padrão' : r.tipo_novo === 'TRABALHO' ? 'trabalhou ' + hm(r.entrada) + '–' + hm(r.saida) : (TIPOS[r.tipo_novo] || { txt: r.tipo_novo }).txt;
+    async function carregarRetiradas() {
+      try { const { data, error } = await _supabase.rpc('fn_escala_retiradas_lista'); retiradas = error ? [] : (data || []); } catch (e) { retiradas = []; }
+      renderRetiradas();
+    }
+    // dia travado: FALTA/ATESTADO de hoje ou antes, marcado em outro dia, ainda não tratado pelo RH (Gestor muda direto)
+    function excecaoTravada(f, iso) {
+      if (perfil === 'GESTOR') return null;
+      const ex = excecoes.find(e => e.funcionario_id === f.id && e.data === iso);
+      if (!ex || !['FALTA', 'ATESTADO'].includes(ex.tipo) || ex.tratamento || iso > hoje() || diaSP(ex.criado_em) === hoje()) return null;
+      return ex;
+    }
+    function precisaPedir(k) {
+      const ex = editando && editando.trav;
+      return !!ex && k !== ex.tipo && !(ex.tipo === 'ATESTADO' && k === 'FALTA');
+    }
+    function montarRetirada() {
+      const { f, iso } = editando, box = $('dRetirada');
+      editando.trav = excecaoTravada(f, iso);
+      const pr = retiradaPendente(f.id, iso);
+      if (pr) {
+        box.innerHTML = `<div class="bg-amber-50 border border-amber-300 rounded-lg p-2.5 text-[11px] space-y-1">
+          <div class="font-black text-amber-900">⏳ Pedido de retirada aguardando ${pr.etapa === 'SUPERVISOR' ? 'o supervisor' : 'o Gestor'}</div>
+          <div>Pedido: ${esc(TXT_NOVO(pr))} · por ${esc(pr.solicitado_por)}</div><div class="text-slate-600">Justificativa: ${esc(pr.justificativa)}</div>
+          ${botoesRetirada(pr)}</div>`;
+        box.classList.remove('hidden'); editando.trav = editando.trav ? { ...editando.trav, pendente: true } : null;
+        return;
+      }
+      if (!editando.trav) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+      const ex = editando.trav, quem = perfil === 'LIDER' && estruturaSupervisor(lojas.find(l => l.id === f.loja_id) || {}) ? 'o supervisor' : 'o Gestor';
+      box.innerHTML = `<div class="bg-rose-50 border border-rose-300 rounded-lg p-2.5 text-[11px] space-y-1.5">
+          <div class="font-black text-rose-900">🔒 ${ex.tipo === 'FALTA' ? 'Falta' : 'Atestado'} marcado${ex.criado_em ? ' em ' + dbr(diaSP(ex.criado_em)) : ' em outro dia'}</div>
+          <div class="text-slate-700">Para tirar ou trocar, escolha como o dia deve ficar e escreva a justificativa. O pedido vai para ${quem}; até a decisão o dia continua como ${ex.tipo === 'FALTA' ? 'falta (e o desconto segue com o RH)' : 'atestado'}.</div>
+          <div><label class="lbl">Justificativa (mínimo 15 letras)</label><input id="dJustRet" class="inp" maxlength="300" placeholder="ex.: a funcionária trabalhou, o ponto confirma a presença"></div></div>`;
+      box.classList.remove('hidden'); $('dObs').value = '';   // a observação da falta não vai para o dia corrigido
+    }
+    function botoesRetirada(r) {
+      return `<div class="flex flex-wrap gap-1.5 pt-1">${r.pode_decidir ? `<button onclick="decidirRetirada('${r.id}', true)" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer">✓ Aprovar</button>
+        <button onclick="decidirRetirada('${r.id}', false)" class="px-2.5 py-1 bg-white border border-rose-400 text-rose-700 hover:bg-rose-50 rounded-lg font-bold cursor-pointer">✕ Recusar</button>` : ''}
+        ${r.meu && r.status === 'PENDENTE' ? `<button onclick="cancelarRetirada('${r.id}')" class="px-2.5 py-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-lg font-bold cursor-pointer">Cancelar meu pedido</button>` : ''}</div>`;
+    }
+    async function pedirRetirada() {
+      const { f, iso } = editando, just = ($('dJustRet') && $('dJustRet').value || '').trim();
+      if (editando.trav && editando.trav.pendente) return alert('Já existe um pedido de retirada aguardando decisão para este dia.');
+      if ($('dAte').value && $('dAte').value !== iso) return alert('A retirada é pedida um dia por vez: deixe "Repetir até" vazio.');
+      if (tipoDia === 'TRABALHO' && (!$('dEntrada').value || !$('dSaida').value)) return alert('Informe entrada e saída.');
+      if (letras(just) < 15) { $('dJustRet').focus(); return alert('Escreva a justificativa (mínimo 15 letras).'); }
+      const { error } = await _supabase.rpc('fn_escala_retirada_pedir', { p_funcionario: f.id, p_data: iso, p_tipo: tipoDia,
+        p_entrada: tipoDia === 'TRABALHO' ? $('dEntrada').value : null, p_saida: tipoDia === 'TRABALHO' ? $('dSaida').value : null,
+        p_loja: tipoDia === 'TRABALHO' ? $('dLoja').value : null, p_obs: $('dObs').value.trim() || null, p_justif: just });
+      if (error) return alert('Não foi possível: ' + error.message);
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
+      alert('Pedido de retirada enviado. Até a decisão, o dia continua como ' + editando.trav.tipo.toLowerCase() + '.');
+    }
+    async function decidirRetirada(id, aprovar) {
+      const r = retiradas.find(x => x.id === id); if (!r) return;
+      let obs = null;
+      if (aprovar) { if (!confirm(`Aprovar a retirada?\n\n${r.funcionario} · ${r.tipo_antes.toLowerCase()} em ${dbr(r.data)} → ${TXT_NOVO(r)}\nJustificativa: ${r.justificativa}`)) return; }
+      else { obs = prompt('Motivo da recusa (mínimo 10 letras):'); if (obs === null) return; if (letras(obs) < 10) return alert('Escreva o motivo da recusa (mínimo 10 letras).'); }
+      const { error } = await _supabase.rpc('fn_escala_retirada_decidir', { p_id: id, p_aprovar: aprovar, p_obs: obs });
+      if (error) return alert('Não foi possível: ' + error.message);
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
+    }
+    async function cancelarRetirada(id) {
+      if (!confirm('Cancelar o seu pedido de retirada?')) return;
+      const { error } = await _supabase.rpc('fn_escala_retirada_cancelar', { p_id: id });
+      if (error) return alert('Não foi possível: ' + error.message);
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
+    }
+    function renderRetiradas() {
+      const box = $('painelRetiradas'); if (!box) return;
+      const pend = retiradas.filter(r => r.status === 'PENDENTE');
+      const meusDecididos = retiradas.filter(r => r.meu && r.status !== 'PENDENTE' && r.status !== 'CANCELADO' && (Date.now() - new Date(r.decidido_em).getTime()) < 7 * 86400000);
+      if (!pend.length && !meusDecididos.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      const est = { APROVADO: ['✓ aprovado', 'text-emerald-700'], RECUSADO: ['✕ recusado', 'text-rose-700'] };
+      box.innerHTML = `<div class="bg-white border border-amber-300 rounded-xl p-3 space-y-2 text-xs">
+        <h4 class="font-black text-amber-900">🔒 Pedidos de retirada de falta/atestado${pend.length ? ' · ' + pend.length + ' aguardando' : ''}</h4>
+        ${pend.map(r => `<div class="bg-amber-50 rounded-lg p-2 flex flex-wrap items-center justify-between gap-2">
+          <div><b>${esc(r.funcionario)}</b> <span class="text-slate-500">· ${esc(r.loja || '')}</span> · ${esc(r.tipo_antes.toLowerCase())} em <b>${dbr(r.data)}</b> → ${esc(TXT_NOVO(r))}
+            <div class="text-[11px] text-slate-600">${esc(r.justificativa)} · por ${esc(r.solicitado_por)} · aguarda ${r.etapa === 'SUPERVISOR' ? 'o supervisor' : 'o Gestor (Aprovações)'}</div></div>
+          ${botoesRetirada(r)}</div>`).join('')}
+        ${meusDecididos.map(r => `<div class="text-[11px] border-t border-slate-100 pt-1"><b class="${est[r.status][1]}">${est[r.status][0]}</b> · ${esc(r.funcionario)} · ${dbr(r.data)} → ${esc(TXT_NOVO(r))} · por ${esc(r.decidido_por)}${r.decisao_obs ? ' · ' + esc(r.decisao_obs) : ''}</div>`).join('')}</div>`;
+      box.classList.remove('hidden');
     }
 
     // feriado: folga compensatória (direto na escala) ou pagamento (vira hora extra com motivo FERIADO)

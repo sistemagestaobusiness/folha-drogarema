@@ -539,7 +539,7 @@
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['RH', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || !telas.has('pendencias.html')) return;
     try {
-      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=5');
+      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=6');
       const r = await window.Pendencias.carregar(window.ACESSO_CLI, pf);
       const meus = r.itens.filter(i => i.com === pf && !i.semMenu && i.nivel !== 'info');
       const por = {};

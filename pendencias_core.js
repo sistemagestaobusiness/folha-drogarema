@@ -141,6 +141,19 @@
       add({ assunto: 'holerites', com: perfil, tela: 'holerite_entrega.html', link: `holerite_entrega.html?comp=${encodeURIComponent(r.competencia)}&pend=1`,
         titulo: `Entrega de holerites ${r.competencia}`, sub: '', detalhe: `${r.qtd} funcionário(s) sem a sua confirmação`, nivel: 'atencao', foraHa: 0 }); });
 
+    // ---- retirada de falta/atestado da escala pedida pelo líder: decide o supervisor (regra de 29/10/2026)
+    if (perfil === 'SUPERVISOR') {
+      try {
+        const r = await cli.rpc('fn_escala_retiradas_lista');
+        ok(r).filter(x => x.status === 'PENDENTE' && x.pode_decidir).forEach(x => {
+          const prazo = new Date(x.solicitado_em).getTime() + PRAZO_SUP_H * H, fora = agora > prazo;
+          add({ assunto: 'falta', com: 'SUPERVISOR', tela: 'escala.html', titulo: `Retirada de ${String(x.tipo_antes).toLowerCase()} · ${titulo(curto(x.funcionario))}`, sub: x.loja || '',
+            detalhe: `dia ${dbr(x.data)} · pedido em ${dataHora(x.solicitado_em)}${fora ? ' · fora do prazo há ' + tempo(agora - prazo) : ' · aprovar ou recusar na Escala'}`,
+            nivel: fora ? 'critico' : 'atencao', data: String(x.solicitado_em).slice(0, 10), desde: x.solicitado_em, foraHa: fora ? agora - prazo : 0 });
+        });
+      } catch (e) { }
+    }
+
     // ---- abatimentos com os líderes (só informativo)
     if (rab && rab.count) add({ assunto: 'outros', com: 'LIDER', tela: 'abatimentos.html', titulo: 'Abatimentos', sub: '', detalhe: `${rab.count} aguardando o líder da loja`, nivel: 'info', foraHa: 0 });
 
