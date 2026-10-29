@@ -130,7 +130,13 @@
               <label class="block text-xs font-bold text-indigo-800 uppercase">🌙 Horas noturnas no mês *</label>
               <input type="number" step="0.01" min="0" id="inputHorasNoturno" oninput="calcularNoturno(true)" placeholder="ex.: 22,5"
                 class="w-full bg-white border border-indigo-300 rounded-lg p-2 text-slate-800 text-sm font-mono focus:outline-none focus:border-indigo-600">
+              <div id="txtEscalaNoturno" class="text-[10px] leading-snug"></div>
               <div id="txtCalcNoturno" class="text-[10px] text-indigo-900 leading-snug"></div>
+              <div id="boxDivNoturno" class="hidden">
+                <label class="block text-[11px] font-bold text-amber-700 uppercase mb-1">⚠ Horas diferentes da escala · justificativa *</label>
+                <input type="text" id="inputDivNoturno" maxlength="200" placeholder="Por que as horas são diferentes da escala? (fica no histórico do lançamento)"
+                  class="w-full bg-white border border-amber-400 rounded-lg p-2 text-slate-800 text-xs uppercase focus:outline-none focus:border-amber-600">
+              </div>
               <div id="boxJustNoturno" class="hidden">
                 <label class="block text-[11px] font-bold text-rose-700 uppercase mb-1">Valor diferente do cálculo · justificativa *</label>
                 <input type="text" id="inputJustNoturno" maxlength="200" placeholder="Por que o valor é diferente do calculado?"
@@ -850,17 +856,42 @@
       if (!ehNot) { document.getElementById('inputHorasNoturno').value = ''; document.getElementById('inputJustNoturno').value = ''; document.getElementById('boxJustNoturno').classList.add('hidden'); return; }
       const idEd = document.getElementById('editLancamentoId').value;
       if (idEd) document.getElementById('inputHorasNoturno').value = horasDoMotivo((mapaItensRenderizados[idEd] || {}).motivo_ajuste);
-      await calcularNoturno(!idEd);
+      document.getElementById('inputDivNoturno').value = '';
+      await calcularNoturno(!idEd, !idEd);
     }
-    async function calcularNoturno(preencherValor) {
+    // escala do mês (padrão + dias alterados): horas entre 22h e 5h, calculadas no banco (fn_escala_noturno, regra de 29/10/2026)
+    let cacheEscNot = {};
+    async function escalaNoturno(fid) {
+      const k = fid + '|' + competenciaRegraLancamento;
+      if (!(k in cacheEscNot)) {
+        try { const { data, error } = await _supabase.rpc('fn_escala_noturno', { p_func: fid, p_comp: competenciaRegraLancamento });
+          cacheEscNot[k] = error ? null : ((data || [])[0] || null); } catch (e) { cacheEscNot[k] = null; }
+      }
+      return cacheEscNot[k];
+    }
+    let escNotAtual = null;   // { horas, dias, datas, tem_escala } do colaborador escolhido
+    const DIVERGE_H = 0.25;   // tolerância de 15 min entre o lançado e a escala
+    async function calcularNoturno(preencherValor, preencherHoras) {
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
       if (!ev || !PAR_NOTURNO[ev.codigo_evento]) return;
       const func = listaGlobalFuncionarios.find(f => String(f.id) === String(document.getElementById('selectFuncionarioNovo').value));
       const sal = func ? parseFloat(func.salario_base || 0) : 0;
-      const h = parseFloat(document.getElementById('inputHorasNoturno').value) || 0;
+      let h = parseFloat(document.getElementById('inputHorasNoturno').value) || 0;
       const txt = document.getElementById('txtCalcNoturno');
       const valorEl = document.getElementById('valorLancamento');
       if (!func) { txt.innerHTML = 'Selecione o colaborador.'; return; }
+      escNotAtual = await escalaNoturno(func.id);
+      const txtE = document.getElementById('txtEscalaNoturno'), inH = document.getElementById('inputHorasNoturno');
+      if (preencherHoras && escNotAtual && escNotAtual.horas > 0 && !inH.value) inH.value = escNotAtual.horas;
+      const hDig = parseFloat(inH.value) || 0; h = hDig;
+      const fmtH = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      txtE.innerHTML = !escNotAtual ? '<span class="text-slate-500">Não foi possível ler a escala agora.</span>'
+        : !escNotAtual.tem_escala ? '<span class="text-amber-700 font-bold">📅 Colaborador sem escala cadastrada: confira as horas pelo ponto.</span>'
+        : `<span class="text-indigo-900">📅 <b>Escala de ${competenciaRegraLancamento}: ${fmtH(escNotAtual.horas)} h noturnas</b> em ${escNotAtual.dias} dia(s) (horas de relógio entre 22h e 5h)`
+          + (escNotAtual.datas ? `<span class="block text-indigo-500 truncate" title="${escaparHtml(escNotAtual.datas)}">${escaparHtml(escNotAtual.datas)}</span>` : '') + '</span>';
+      const diverge = !!(escNotAtual && escNotAtual.tem_escala && hDig > 0 && Math.abs(hDig - Number(escNotAtual.horas)) > DIVERGE_H);
+      document.getElementById('boxDivNoturno').classList.toggle('hidden', !diverge);
+      if (diverge) txtE.innerHTML += `<span class="block text-amber-700 font-bold mt-0.5">⚠ Lançando ${fmtH(hDig)} h e a escala tem ${fmtH(escNotAtual.horas)} h: pode lançar, com justificativa.</span>`;
       if (!(sal > 1)) { txt.innerHTML = '<b class="text-rose-700">Colaborador sem salário base no cadastro: não dá para calcular.</b>'; calcNoturno = null; return; }
       const d = await diasDsrDoMes(competenciaRegraLancamento, func.loja_id);
       const adicional = Math.round(h * sal / 220 * 0.30 * 100) / 100;
@@ -1513,6 +1544,10 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
    async function carregarLancamentosNovo() {
       if (abaAtiva !== 'novo') return;
       const funcionarioId = document.getElementById('selectFuncionarioNovo').value;
+      // adicional noturno aberto e trocou o colaborador: busca a escala dele de novo
+      if (!document.getElementById('boxNoturno').classList.contains('hidden') && !document.getElementById('editLancamentoId').value) {
+        document.getElementById('inputHorasNoturno').value = ''; document.getElementById('inputDivNoturno').value = ''; document.getElementById('valorLancamento').value = ''; calcularNoturno(true, true);
+      }
       if (!funcionarioId) {
         limparTabelasDireita();
         return;
@@ -1956,6 +1991,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       document.getElementById('boxNoturno').classList.add('hidden');
       document.getElementById('inputHorasNoturno').value = ''; document.getElementById('inputJustNoturno').value = '';
       document.getElementById('boxJustNoturno').classList.add('hidden'); calcNoturno = null;
+      document.getElementById('inputDivNoturno').value = ''; document.getElementById('boxDivNoturno').classList.add('hidden'); document.getElementById('txtEscalaNoturno').innerHTML = '';
 
       const btnSalvar = document.getElementById('btnSalvar');
       btnSalvar.innerText = '✓ CONFIRMAR LANÇAMENTO';
@@ -2061,8 +2097,18 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           alert(`O valor (R$ ${valorBruto.toFixed(2)}) é diferente do calculado (R$ ${calcNoturno.adicional.toFixed(2)}).\n\nInforme a justificativa (mínimo 10 letras) ou volte ao valor calculado.`);
           document.getElementById('boxJustNoturno').classList.remove('hidden'); document.getElementById('inputJustNoturno').focus(); return;
         }
+        // horas diferentes da escala: pode lançar, com justificativa (vai para o histórico do lançamento e para a auditoria)
+        const esc = escNotAtual && escNotAtual.tem_escala ? Number(escNotAtual.horas) : null;
+        const diverge = esc != null && Math.abs(calcNoturno.horas - esc) > DIVERGE_H;
+        const justEsc = removerAcentosEColocarMaiuscula(document.getElementById('inputDivNoturno').value).trim();
+        if (diverge && justEsc.replace(/[^A-Z]/g, '').length < 10) {
+          alert(`As horas lançadas (${String(calcNoturno.horas).replace('.', ',')} h) são diferentes da escala (${String(esc).replace('.', ',')} h).\n\nInforme a justificativa (mínimo 10 letras) ou use as horas da escala.`);
+          document.getElementById('boxDivNoturno').classList.remove('hidden'); document.getElementById('inputDivNoturno').focus(); return;
+        }
         noturno = { ...calcNoturno, valor: valorBruto,
-          motivo: `NOTURNO ${String(calcNoturno.horas).replace('.', ',')}H (CALCULO R$ ${calcNoturno.adicional.toFixed(2)})` + (editado ? ` · VALOR EDITADO: ${just}` : '') };
+          motivo: `NOTURNO ${String(calcNoturno.horas).replace('.', ',')}H (CALCULO R$ ${calcNoturno.adicional.toFixed(2)})`
+            + (esc != null ? ` · ESCALA ${String(esc).replace('.', ',')}H` : ' · SEM ESCALA')
+            + (diverge ? ` · DIVERGENCIA ESCALA: ${justEsc}` : '') + (editado ? ` · VALOR EDITADO: ${just}` : '') };
       }
 
       let vencimentoPag = document.getElementById('inputVencimentoPag').value || null;
