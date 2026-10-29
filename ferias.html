@@ -151,7 +151,8 @@
       CALCULADA:     { txt: 'Calculada',             cls: 'bg-violet-100 text-violet-800' },
       LANCADA:       { txt: 'Aprovada e lançada',    cls: 'bg-emerald-100 text-emerald-800' },
       RECUSADA:      { txt: 'Recusada',              cls: 'bg-rose-100 text-rose-800' },
-      CANCELADA:     { txt: 'Cancelada',             cls: 'bg-slate-200 text-slate-600' }
+      CANCELADA:     { txt: 'Cancelada',             cls: 'bg-slate-200 text-slate-600' },
+      ESCALA:        { txt: 'Só escala (2026)',      cls: 'bg-teal-100 text-teal-800' }
     };
     const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
     let perfil = null, minhaLoja = null, meuEmail = '', aba = null, ano = new Date().getFullYear();
@@ -335,7 +336,9 @@
           ${lista.map(cardRh).join('') || '<div class="text-[10px] text-slate-300 px-1">vazio</div>'}</div>`;
       };
       $('kanban').innerHTML = col('SOLICITADA', '1 · Novas', 'text-amber-700') + col('PRE_APROVADA', '2 · Pré-aprovadas', 'text-sky-700')
-        + col('CONTABILIDADE', '3 · Na contabilidade', 'text-indigo-700') + col('CALCULADA', '4 · Calculadas', 'text-violet-700') + col('LANCADA', '5 · Lançadas', 'text-emerald-700');
+        + col('CONTABILIDADE', '3 · Na contabilidade', 'text-indigo-700') + col('CALCULADA', '4 · Calculadas', 'text-violet-700') + col('LANCADA', '5 · Lançadas', 'text-emerald-700')
+        // férias de 2026 (regra de 29/10/2026): só para a escala, fora das etapas do RH e do Financeiro
+        + `<div class="col-span-full text-[11px] text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">Férias que começam em 2026 ficam só na escala (${solic.filter(s => s.status === 'ESCALA').length} hoje): não passam pelas etapas do RH, pela folha nem pelo Financeiro. A regra completa vale a partir de 2027.</div>`;
     }
 
     function cardRh(s) {
@@ -385,7 +388,7 @@
       const dSem = d => new Date(ano, i, d).getDay();
       const cab = Array.from({ length: dias }, (_, k) => `<th class="w-6 text-[9px] font-normal ${[0, 6].includes(dSem(k + 1)) ? 'text-rose-400' : 'text-slate-400'}">${k + 1}</th>`).join('');
       const linhas = lista.map(s => {
-        const f = func(s.funcionario_id), fechado = ['LANCADA', 'CALCULADA', 'CONTABILIDADE', 'PRE_APROVADA'].includes(s.status);
+        const f = func(s.funcionario_id), fechado = ['LANCADA', 'CALCULADA', 'CONTABILIDADE', 'PRE_APROVADA', 'ESCALA'].includes(s.status);
         const cel = Array.from({ length: dias }, (_, k) => {
           const d = `${ano}-${String(i + 1).padStart(2, '0')}-${String(k + 1).padStart(2, '0')}`;
           const em = d >= s.data_inicio && d <= s.data_fim;
