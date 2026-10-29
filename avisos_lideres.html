@@ -87,8 +87,10 @@
     }
 
     function render() {
-      const lista = avisos.filter(a => $('fEnc').checked || a.ativo);
-      $('lblTot').innerText = `${avisos.filter(a => a.ativo).length} ativo(s)`;
+      const hj = (window.DataMes ? DataMes.hoje() : new Date().toISOString().slice(0, 10));
+      const vale = a => a.ativo && (!a.valido_ate || a.valido_ate >= hj);   // aviso automático vence no fim do mês
+      const lista = avisos.filter(a => $('fEnc').checked || vale(a));
+      $('lblTot').innerText = `${avisos.filter(vale).length} ativo(s) · nos 3 últimos dias de cada mês o sistema avisa sozinho os líderes sobre a escala do mês seguinte`;
       $('lista').innerHTML = lista.length ? lista.map(a => {
         const alvo = alvoDe(a), nd = a.dias || 1;
         const diasDe = e => dias.filter(x => x.aviso_id === a.id && x.email === String(e).toLowerCase()).sort((p, q) => String(p.dia).localeCompare(String(q.dia)));
@@ -97,7 +99,8 @@
         return `<div class="bg-white border ${a.ativo ? 'border-indigo-200' : 'border-slate-200 opacity-70'} rounded-xl p-4 text-xs space-y-2">
           <div class="flex flex-wrap justify-between gap-2"><span class="flex flex-wrap gap-1"><span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(a.loja_id))}</span>
             <span class="bg-indigo-50 text-indigo-800 px-2 py-0.5 rounded text-[10px] font-bold">${(a.perfis || ['LIDER']).map(p => PERFIL_TXT[p] || p).join(' + ')}</span>
-            ${nd > 1 ? `<span class="bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${nd} dias seguidos</span>` : ''}</span>
+            ${nd > 1 ? `<span class="bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${nd} dias seguidos</span>` : ''}
+            ${a.chave ? `<span class="bg-teal-50 text-teal-800 px-2 py-0.5 rounded text-[10px] font-bold" title="Criado sozinho pelo sistema todo mês">🤖 automático${a.valido_ate ? ' · até ' + String(a.valido_ate).split('-').reverse().join('/') : ''}</span>` : ''}</span>
             <span class="text-slate-500">${dataHora(a.criado_em)} · ${esc(a.criado_por || '')}${a.ativo ? '' : ` · <b>encerrado</b> ${dataHora(a.encerrado_em)}`}</span></div>
           <div class="text-[13px] text-slate-900 whitespace-pre-wrap">${esc(a.mensagem)}</div>
           <div class="text-[11px]"><b>${completos} de ${alvo.length}</b> ${nd > 1 ? `completaram os ${nd} dias de ciência` : 'leram'}:

@@ -887,7 +887,7 @@
       const fmtH = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
       txtE.innerHTML = !escNotAtual ? '<span class="text-slate-500">Não foi possível ler a escala agora.</span>'
         : !escNotAtual.tem_escala ? '<span class="text-amber-700 font-bold">📅 Colaborador sem escala cadastrada: confira as horas pelo ponto.</span>'
-        : `<span class="text-indigo-900">📅 <b>Escala de ${competenciaRegraLancamento}: ${fmtH(escNotAtual.horas)} h noturnas</b> em ${escNotAtual.dias} dia(s) (horas de relógio entre 22h e 5h)`
+        : `<span class="text-indigo-900">📅 <b>Escala de ${competenciaRegraLancamento}: ${fmtH(escNotAtual.horas)} h noturnas</b> em ${escNotAtual.dias} dia(s) (período 26 a 25; horas de relógio entre 22h e 5h)`
           + (escNotAtual.datas ? `<span class="block text-indigo-500 truncate" title="${escaparHtml(escNotAtual.datas)}">${escaparHtml(escNotAtual.datas)}</span>` : '') + '</span>';
       const diverge = !!(escNotAtual && escNotAtual.tem_escala && hDig > 0 && Math.abs(hDig - Number(escNotAtual.horas)) > DIVERGE_H);
       document.getElementById('boxDivNoturno').classList.toggle('hidden', !diverge);

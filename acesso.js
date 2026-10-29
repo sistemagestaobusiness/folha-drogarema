@@ -141,7 +141,7 @@ window.DiaUtil = window.DiaUtil || {
   }
 };
 // Datas só no mês (regra de 29/10/2026). Campos <input type="date" data-mes-corrente="..."> recebem min/max e são conferidos ao mudar:
-//  "periodo"    = mês do período ABERTO da folha (telas do RH)
+//  "periodo"    = período ABERTO da folha (telas do RH): do dia 26 do mês anterior ao 5º dia útil do mês seguinte
 //  "calendario" = mês corrente do calendário (solicitações); com data-dias-tras="5" vale de hoje-5 até o fim do mês
 // Na hora de gravar, use DataMes.conferir(valor, 'rótulo', modo, diasTras): avisa e devolve false se estiver fora.
 window.DataMes = window.DataMes || {
@@ -163,15 +163,27 @@ window.DataMes = window.DataMes || {
   faixa(modo, diasTras) {
     const h = this.hoje(); let a = +h.slice(0, 4), m = +h.slice(5, 7);
     if (modo === 'periodo' && this._per) { a = this._per.a; m = this._per.m; }
-    let ini = this._iso(new Date(a, m - 1, 1)); const fim = this._iso(new Date(a, m, 0));
+    let ini = this._iso(new Date(a, m - 1, 1)), fim = this._iso(new Date(a, m, 0));
+    // período da folha: lançamentos do dia 26 do mês anterior até o 5º dia útil do mês seguinte (fechamento contábil 26 a 25; a folha fecha no 5º dia útil)
+    if (modo === 'periodo') { ini = this._iso(new Date(a, m - 2, 26)); fim = this.quintoDiaUtil(a, m + 1); }
     if (diasTras != null && modo !== 'periodo') { const d = new Date(+h.slice(0, 4), +h.slice(5, 7) - 1, +h.slice(8, 10)); d.setDate(d.getDate() - diasTras); ini = this._iso(d); }   // ex.: freelance = até 5 dias para trás (pode cair no mês anterior)
     return [ini, fim];
+  },
+  // 5º dia útil do mês (sábado conta; domingo e feriado nacional/estadual não)
+  quintoDiaUtil(a, m) {
+    const FIX = ['01-01', '04-21', '05-01', '07-09', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'];
+    const fer = (window.DiaUtil && window.DiaUtil._fer) || null;
+    const d = new Date(a, m - 1, 1); let n = 0;
+    for (let i = 0; i < 40; i++) { const iso = this._iso(d);
+      if (d.getDay() !== 0 && !(fer ? fer.has(iso) : FIX.includes(iso.slice(5)))) { n++; if (n === 5) return iso; }
+      d.setDate(d.getDate() + 1); }
+    return this._iso(d);
   },
   conferir(valor, rotulo, modo, diasTras) {
     if (!valor) return true;
     const [i, f] = this.faixa(modo || 'periodo', diasTras);
     if (valor >= i && valor <= f) return true;
-    alert(`${rotulo || 'Data'} fora do período: ${this._br(valor)}.\n\nSó dá para usar datas de ${this._br(i)} a ${this._br(f)} (${modo === 'calendario' ? 'mês corrente' : 'mês do período aberto da folha'}).`);
+    alert(`${rotulo || 'Data'} fora do período: ${this._br(valor)}.\n\nSó dá para usar datas de ${this._br(i)} a ${this._br(f)} (${modo === 'calendario' ? 'mês corrente' : 'período aberto da folha: do dia 26 do mês anterior ao 5º dia útil do mês seguinte'}).`);
     return false;
   },
   aplicar(raiz) {
