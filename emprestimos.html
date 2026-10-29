@@ -327,6 +327,19 @@
       }
     }
 
+    // TRAVA (regra de 29/10/2026): depois de salvo, valor, parcelas, início, evento e funcionário só o Gestor altera (o banco também barra)
+    const ehGestor = () => String((window.ACESSO || {}).perfil || '').toUpperCase() === 'GESTOR';
+    const CAMPOS_TRAVADOS = ['selectFuncionario', 'selectEventoEmprestimo', 'inputCompetencia', 'inputValorTotal', 'inputQtdParcelas'];
+    function travarCampos(travar) {
+      CAMPOS_TRAVADOS.forEach(id => { const el = document.getElementById(id); if (el) { el.disabled = travar; el.classList.toggle('opacity-60', travar); } });
+      let av = document.getElementById('avisoTravaEmp');
+      if (!av) { av = document.createElement('div'); av.id = 'avisoTravaEmp'; av.className = 'hidden text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded p-2 mt-2';
+        document.getElementById('btnCancelarEdicao').parentElement.after(av); }
+      av.innerText = '🔒 Contrato já salvo: valor, parcelas, início, evento e funcionário só o Gestor altera. Aqui dá para corrigir só a data do contrato.';
+      av.classList.toggle('hidden', !travar);
+    }
+    function soGestor(acao) { if (ehGestor()) return true; alert(acao + ': só o Gestor. Peça a ele (o RH registra "não cobrou" ou "descontou a menor" no mês, no cronograma).'); return false; }
+
     function editarEmprestimo(id) {
       const emp = listaEmprestimos.find(item => String(item.id) === String(id));
       if (!emp) return;
@@ -339,6 +352,7 @@
       document.getElementById('inputValorTotal').value = emp.valor_total;
       document.getElementById('inputQtdParcelas').value = emp.qtd_parcelas;
       calcularParcela();
+      travarCampos(!ehGestor());
 
       const btnSalvar = document.getElementById('btnSalvar');
       btnSalvar.innerText = '✓ ATUALIZAR';
@@ -349,6 +363,7 @@
     }
 
     function cancelarEdicao() {
+      travarCampos(false);
       document.getElementById('editEmprestimoId').value = '';
       document.getElementById('formEmprestimo').reset();
       document.getElementById('selectEventoEmprestimo').value = '3004';
@@ -489,6 +504,7 @@
     }
 
     async function editarParcela(id, parcela, valorAtual) {
+      if (!soGestor('Editar o valor de uma parcela')) return;
       const novoValor = await pedirTexto(`Digite o novo valor para a parcela ${parcela}:`, Number(valorAtual).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
       if (novoValor !== null && novoValor.trim() !== '') {
         const valorNumerico = lerValor(novoValor);
@@ -501,12 +517,14 @@
     }
 
     function cancelarParcela(id, parcela) {
+      if (!soGestor('Cancelar parcela')) return;
       if (confirm(`Cancelar a parcela ${parcela}? Ela NÃO será cobrada depois.\n\n(Se o governo só não cobrou neste mês, use "Não cobrou": a parcela passa para o mês seguinte.)`)) {
         salvarExcecao(id, parcela, { status: 'cancelada' });
       }
     }
 
     function restaurarParcela(id, parcela) {
+      if (!soGestor('Restaurar parcela')) return;
       if (confirm(`Deseja restaurar esta parcela para o valor original do contrato?`)) {
         salvarExcecao(id, parcela, null);
       }
@@ -550,9 +568,11 @@
     }
 
     async function finalizarEmprestimo(id) {
+      if (!soGestor('Quitar empréstimo')) return;
       if (confirm('Marcar como totalmente quitado? O sistema deixará de enviar as parcelas restantes para a folha.')) {
         const { error } = await _supabase.from('emprestimos').update({ status: 'FINALIZADO' }).eq('id', id);
-        if (!error) carregarEmprestimos();
+        if (error) return alert('Não foi possível: ' + error.message);
+        carregarEmprestimos();
       }
     }
 
