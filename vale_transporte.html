@@ -205,7 +205,8 @@
     // 3% do salário-base de registro, independente do valor do VT (proporcional aos dias trabalhados: o RH ajusta com justificativa)
     const calcDesc = (f, e) => { const v = valorVT(f, e); return v == null ? null : r2(Number(f.salario_base) * 0.03); };
     const descEfetivo = (f, e) => e.dt === 'ISENTO' ? 0 : (e.dv != null ? e.dv : calcDesc(f, e));
-    const precisaJustDesc = (f, e) => { const c = calcDesc(f, e), d = descEfetivo(f, e); return c != null && c > 0 && (e.dt === 'ISENTO' || r2(d) !== r2(c) || e.dt === 'NAO_CONTABIL'); };
+    // "sem desconto" pede justificativa sempre, mesmo com salário 0 (sócio, sem registro): o banco exige (correção de 29/10/2026)
+    const precisaJustDesc = (f, e) => { if (e.recebe && e.dt === 'ISENTO') return true; const c = calcDesc(f, e), d = descEfetivo(f, e); return c != null && c > 0 && (r2(d) !== r2(c) || e.dt === 'NAO_CONTABIL'); };
     const vdMudou = (f, e) => !f.trava && f.valor_dia_cfg != null && e.vd != null && r2(e.vd) !== r2(f.valor_dia_cfg);
     // variação de até 1 dia com o mesmo valor por dia passa direto ao Financeiro, sem o Gestor (regra de 28/10/2026, igual ao banco)
     const umDia = (f, e, v) => Number(f.ant_valor) > 0 && e.vd != null && Math.abs(v - Number(f.ant_valor)) <= Number(e.vd) + 0.005 && (f.valor_dia_cfg == null || r2(e.vd) === r2(f.valor_dia_cfg));
