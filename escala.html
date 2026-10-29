@@ -612,6 +612,9 @@
     async function salvarDia() {
       const { f, iso } = editando, ate = $('dAte').value;
       if (precisaPedir(tipoDia)) return pedirRetirada();
+      // prazo (regra de 29/10/2026): líder e supervisor alteram a escala até 5 dias para trás; com 6 dias de atraso bloqueia (fale com o RH)
+      if (['LIDER', 'SUPERVISOR'].includes(perfil)) { const lim = addDias(hoje(), -5);
+        if (iso < lim) return alert(`Fora do prazo: a escala só pode ser alterada até 5 dias para trás (a partir de ${dbr(lim)}). Fale com o RH.`); }
       if (ate && ate < iso) return alert('"Repetir até" precisa ser depois do dia escolhido.');
       const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) if (!$('dMesmoDia').checked || dow(d) === dow(iso)) datas.push(d);
       if (datas.length > 62) return alert('No máximo 62 dias de uma vez.');

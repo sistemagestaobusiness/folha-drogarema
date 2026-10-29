@@ -427,7 +427,7 @@
     // ------------------------------------------------------------------
     // CARRINHO
     // ------------------------------------------------------------------
-    const DIAS_PARA_TRAS = 6;
+    const DIAS_PARA_TRAS = 5;
     function dataMinimaPedido() { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - DIAS_PARA_TRAS);
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
     document.addEventListener('DOMContentLoaded', () => { const i = document.getElementById('inputData'); if (i) i.min = dataMinimaPedido(); });
@@ -436,8 +436,8 @@
       const data = document.getElementById('inputData').value;
       const calc = calcularHoras();
       if (!data || !calc) { alert('Preencha a data e os horários (de 30 em 30 minutos).'); return; }
-      // prazo para pedir (regra de 22/10/2026): no máximo 6 dias para trás (hoje 22/10 → a partir de 16/10)
-      if (data < dataMinimaPedido()) { alert(`Não dá para pedir freelance ou hora extra de ${formatarDataBR(data)}: o prazo é de até 6 dias para trás (a partir de ${formatarDataBR(dataMinimaPedido())}). Fale com o RH.`); return; }
+      // prazo para pedir (regra de 29/10/2026): no máximo 5 dias para trás; com 6 dias de atraso bloqueia (hoje 29/10 → a partir de 24/10)
+      if (data < dataMinimaPedido()) { alert(`Não dá para pedir freelance ou hora extra de ${formatarDataBR(data)}: o prazo é de até 5 dias para trás (a partir de ${formatarDataBR(dataMinimaPedido())}). Fale com o RH.`); return; }
       const choque = carrinho.find(c => c.data_servico === data && horariosSobrepoem(c.hora_inicio, c.hora_fim, calc.ini, calc.fim));
       if (choque) { alert(`Esta data já está na lista com horário que coincide (${choque.hora_inicio} às ${choque.hora_fim}). No mesmo dia só vale outro horário, ex.: 07:00–15:00 e 15:00–23:00.`); return; }
       if (alertaEscalaAtual && !confirm('Atenção (escala):\n\n' + alertaEscalaAtual + '\n\nIncluir esta data mesmo assim?')) return;
