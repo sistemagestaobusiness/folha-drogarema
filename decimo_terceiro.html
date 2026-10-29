@@ -120,7 +120,7 @@
       <div id="aInfo" class="bg-slate-50 rounded-lg p-2 space-y-0.5"></div>
       <div class="grid grid-cols-2 gap-2">
         <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Valor (R$) *</label><input type="number" step="0.01" min="0" id="aValor" oninput="checarAnt()" class="inp font-mono"></div>
-        <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Data do pagamento *</label><input type="date" id="aVenc" class="inp font-mono"></div>
+        <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Data do pagamento *</label><input data-mes-corrente="periodo" data-rotulo="Data do pagamento" type="date" id="aVenc" class="inp font-mono"></div>
         <div class="col-span-2"><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Pagamento</label>
           <select id="aMeio" class="inp"><option value="BANCO">🏦 Banco</option><option value="DINHEIRO">💵 Dinheiro</option></select></div>
       </div>
@@ -321,6 +321,7 @@
       const v = num($('aValor').value), mot = $('aMotivo').value.trim();
       if (!(v > 0)) return alert('Informe o valor.');
       if (!$('aVenc').value) return alert('Informe a data do pagamento.');
+      await DataMes.carregarPeriodo(_supabase); if (!DataMes.conferir($('aVenc').value, 'Data do pagamento', 'periodo')) return;   // só no mês do período aberto (29/10/2026)
       const venc = await DiaUtil.conferir($('aVenc').value, _supabase); if (venc === null) return;
       $('aVenc').value = venc;
       if (v > num(atual.saldo_a_pagar) + 0.005 && mot.length < 10) return alert('Valor acima do saldo: informe a justificativa (mínimo 10 letras).');

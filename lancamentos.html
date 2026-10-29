@@ -103,7 +103,7 @@
             <!-- Evento pago fora do 5º dia útil: vai para a tela do Financeiro -->
             <div id="boxVencimentoPag" class="hidden bg-sky-50 border border-sky-300 p-3 rounded-lg space-y-1">
               <label class="block text-xs font-bold text-sky-800 uppercase">💸 Pago fora do 5º dia útil · Data de vencimento *</label>
-              <input type="date" id="inputVencimentoPag" class="w-full bg-white border border-sky-300 rounded-lg p-2 text-slate-800 text-sm font-mono focus:outline-none focus:border-sky-600">
+              <input data-mes-corrente="periodo" data-rotulo="Data de vencimento" type="date" id="inputVencimentoPag" class="w-full bg-white border border-sky-300 rounded-lg p-2 text-slate-800 text-sm font-mono focus:outline-none focus:border-sky-600">
               <p id="txtVencimentoPag" class="text-[10px] text-sky-700 leading-tight">Ao confirmar, o pagamento é enviado automaticamente para a tela do Financeiro.</p>
               <div id="info13" class="hidden text-[10px] bg-white border border-sky-200 rounded p-2 text-slate-700 space-y-0.5"></div>
             </div>
@@ -935,7 +935,7 @@
       const lista = document.getElementById('listaDiasReembolso');
       const row = document.createElement('div');
       row.className = 'linhaDiaReemb grid grid-cols-12 gap-1 items-center';
-      row.innerHTML = `<input type="date" class="rdData col-span-4 bg-white border border-violet-200 rounded p-1.5 text-xs font-mono" value="${escaparHtml(d.data || '')}">
+      row.innerHTML = `<input type="date" data-mes-corrente="periodo" data-rotulo="Dia do reembolso" class="rdData col-span-4 bg-white border border-violet-200 rounded p-1.5 text-xs font-mono" value="${escaparHtml(d.data || '')}">
         <input type="number" step="0.01" min="0" class="rdValor col-span-3 bg-white border border-violet-200 rounded p-1.5 text-xs font-mono" value="${d.valor != null ? d.valor : ''}" oninput="somarReembolso()">
         <input type="text" list="dlTrajetos" maxlength="80" class="rdTrajeto col-span-4 bg-white border border-violet-200 rounded p-1.5 text-xs uppercase" value="${escaparHtml(d.trajeto || '')}" placeholder="opcional">
         <button type="button" class="text-violet-400 hover:text-rose-600 font-bold cursor-pointer" title="Remover dia" onclick="this.parentElement.remove(); somarReembolso()">✕</button>`;
@@ -2127,6 +2127,9 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         document.getElementById('inputVencimentoPag').focus();
         return;
       }
+      // datas só no mês do período aberto (regra de 29/10/2026)
+      await DataMes.carregarPeriodo(_supabase);
+      if (vencimentoPag && !DataMes.conferir(vencimentoPag, 'Data de vencimento', 'periodo')) { document.getElementById('inputVencimentoPag').focus(); return; }
       // sábado, domingo ou feriado nacional/estadual: oferece o dia útil anterior (regra de 28/10/2026)
       if (ehPagExtra && vencimentoPag) {
         const d = await DiaUtil.conferir(vencimentoPag, _supabase); if (d === null) return;
@@ -2140,6 +2143,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         if (!diasReembolso.length) { alert('Informe os dias do reembolso (data e valor de cada dia).'); addDiaReembolso(); return; }
         const ruim = diasReembolso.find(d => !d.data || !(d.valor > 0));
         if (ruim) { alert('Cada dia do reembolso precisa de data e valor.'); return; }
+        const foraMes = diasReembolso.find(d => !DataMes.conferir(d.data, 'Dia do reembolso', 'periodo')); if (foraMes) return;
         const datas = diasReembolso.map(d => d.data);
         const repetida = datas.find((d, i) => datas.indexOf(d) !== i);
         if (repetida && !confirm(`O dia ${repetida.split('-').reverse().join('/')} aparece mais de uma vez. Confirma (ex.: ida e volta)?`)) return;

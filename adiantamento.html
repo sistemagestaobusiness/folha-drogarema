@@ -32,7 +32,7 @@
       <!-- filtros -->
       <div class="flex flex-wrap items-end gap-3 text-xs">
         <div><label class="lbl">Competência</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="mudouMes()"></div>
-        <div id="boxVenc"><label class="lbl">Data do pagamento</label><input id="fVenc" type="date" class="inp !py-1.5 font-mono"></div>
+        <div id="boxVenc"><label class="lbl">Data do pagamento</label><input data-mes-corrente="periodo" data-rotulo="Data do pagamento" id="fVenc" type="date" class="inp !py-1.5 font-mono"></div>
         <div><label class="lbl">Loja / setor</label><select id="fLoja" onchange="render()" class="inp !py-1.5"><option value="">Todas</option></select></div>
         <div class="flex-1 min-w-[160px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
         <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fOcultarNao" onchange="render()"> ocultar quem não recebe</label>
@@ -276,6 +276,7 @@
 
     async function confirmar() {
       if (!$('fVenc').value) return alert('Informe a data do pagamento.');
+      await DataMes.carregarPeriodo(_supabase); if (!DataMes.conferir($('fVenc').value, 'Data do pagamento', 'periodo')) return;   // só no mês do período aberto (29/10/2026)
       const venc = await DiaUtil.conferir($('fVenc').value, _supabase); if (venc === null) return;
       $('fVenc').value = venc;
       const pend = prontosA();

@@ -72,7 +72,7 @@
         <label class="cursor-pointer"><input type="radio" name="mTipo" value="1"> Crédito (compensou)</label>
       </div>
       <div class="grid grid-cols-2 gap-2">
-        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Data</label><input type="date" id="mData" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+        <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Data</label><input data-mes-corrente="periodo" data-rotulo="Data" type="date" id="mData" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
         <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas *</label><input type="number" id="mHoras" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
       </div>
       <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Motivo *</label><textarea id="mObs" rows="2" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea></div>
@@ -177,6 +177,7 @@
     }
 
     async function salvarAjuste() {
+      await DataMes.carregarPeriodo(_supabase); if (!DataMes.conferir(document.getElementById('mData').value, 'Data', 'periodo')) return;   // só no mês do período aberto (29/10/2026)
       const sinal = parseInt(document.querySelector('input[name="mTipo"]:checked').value);
       const horas = Math.abs(parseFloat(document.getElementById('mHoras').value) || 0) * sinal;
       const { error } = await _supabase.rpc('fn_banco_horas_ajuste', {

@@ -88,7 +88,7 @@
           <div id="apLiderPediu" class="text-[10px]"></div>
           <div id="boxDataPrevista" class="hidden">
             <label class="block text-[11px] font-black uppercase text-amber-900">📅 Data prevista de pagamento *</label>
-            <input type="date" id="apDataPrevista" class="w-full border-2 border-amber-400 bg-white rounded-lg p-2.5 text-base font-mono font-bold text-slate-900">
+            <input data-mes-corrente="periodo" data-rotulo="Data prevista de pagamento" type="date" id="apDataPrevista" class="w-full border-2 border-amber-400 bg-white rounded-lg p-2.5 text-base font-mono font-bold text-slate-900">
             <div class="text-[10px] text-amber-900 mt-1">É a data que aparece para o Financeiro pagar. <span id="apSugestao"></span></div>
           </div>
           <div id="txtFolha" class="hidden text-[11px] font-bold text-slate-700">Pago junto com a folha no 5º dia útil (competência <span id="apCompFolha"></span>).</div>
@@ -478,6 +478,7 @@
       if (atual.funcionario_ausente_id && !trat) return alert('Defina o tratamento de quem faltou.');
       const formaSel = document.getElementById('apForma').value;
       const dataPrev = document.getElementById('apDataPrevista').value || null;
+      if (dataPrev) { await DataMes.carregarPeriodo(_supabase); if (!DataMes.conferir(dataPrev, 'Data prevista de pagamento', 'periodo')) return; }   // só no mês do período aberto (29/10/2026)
       if (modo === 'PAGAR' && formaSel !== 'FOLHA' && !dataPrev) {
         document.getElementById('apDataPrevista').focus();
         return alert('Informe a DATA PREVISTA DE PAGAMENTO (' + formaSel.toLowerCase() + ').');

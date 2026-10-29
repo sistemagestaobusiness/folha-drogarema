@@ -39,7 +39,7 @@
         <div><label class="lbl">Telefone de contato (com DDD) *</label><input id="cTel" class="inp font-mono" maxlength="16" placeholder="(11) 99999-9999" oninput="mascaraTel(this); copiarPix()"></div>
         <div><label class="lbl">Função prevista *</label>
           <div class="grid grid-cols-2 gap-2" id="cFuncoes"></div></div>
-        <div><label class="lbl">Início previsto *</label><input id="cInicio" type="date" class="inp font-mono"></div>
+        <div><label class="lbl">Início previsto *</label><input data-mes-corrente="calendario" data-rotulo="Início previsto" id="cInicio" type="date" class="inp font-mono"></div>
         <div class="grid grid-cols-5 gap-2">
           <div class="col-span-2"><label class="lbl">Tipo PIX *</label>
             <select id="cPixTipo" class="inp" onchange="copiarPix(true)"><option value="">-</option><option>CPF</option><option>CELULAR</option><option>E-MAIL</option><option>ALEATÓRIA</option><option>CNPJ</option></select></div>
@@ -233,6 +233,7 @@
       if (dig(tel).length < 10) return alert('Informe o telefone com DDD.');
       if (!funcaoSel) return alert('Escolha a função prevista.');
       if (!$('cInicio').value) return alert('Informe o início previsto.');
+      if (!DataMes.conferir($('cInicio').value, 'Início previsto', 'calendario')) return;   // só no mês corrente (29/10/2026)
       if (!$('cPixTipo').value || !$('cPix').value.trim()) return alert('Informe o tipo e a chave PIX.');
       const b1 = $('btnEnviar'), b2 = $('btnEnviarCriar'); b1.disabled = b2.disabled = true;
       const { data: numero, error } = await _supabase.rpc('fn_cadastro_solicitar_v2', {

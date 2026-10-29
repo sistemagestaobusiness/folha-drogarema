@@ -140,6 +140,58 @@ window.DiaUtil = window.DiaUtil || {
     });
   }
 };
+// Datas só no mês (regra de 29/10/2026). Campos <input type="date" data-mes-corrente="..."> recebem min/max e são conferidos ao mudar:
+//  "periodo"    = mês do período ABERTO da folha (telas do RH)
+//  "calendario" = mês corrente do calendário (solicitações); com data-dias-tras="5" vale de hoje-5 até o fim do mês
+// Na hora de gravar, use DataMes.conferir(valor, 'rótulo', modo, diasTras): avisa e devolve false se estiver fora.
+window.DataMes = window.DataMes || {
+  _per: null, _carregando: null,
+  _iso(dt) { return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; },
+  _br(iso) { return String(iso).slice(0, 10).split('-').reverse().join('/'); },
+  hoje() { try { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date()); } catch (e) { return this._iso(new Date()); } },
+  carregarPeriodo(cli) {
+    if (this._per || this._carregando) return this._carregando || Promise.resolve();
+    const c = cli || window.ACESSO_CLI || window._supabase;
+    if (!c || !c.from) return Promise.resolve();
+    this._carregando = (async () => {
+      try { const { data } = await c.from('competencias').select('mes, ano, status').eq('status', 'ABERTO').order('ano', { ascending: false }).order('mes', { ascending: false }).limit(1);
+        const x = (data || [])[0]; if (x) this._per = { a: +x.ano, m: +x.mes }; } catch (e) { }
+      this.aplicar();
+    })();
+    return this._carregando;
+  },
+  faixa(modo, diasTras) {
+    const h = this.hoje(); let a = +h.slice(0, 4), m = +h.slice(5, 7);
+    if (modo === 'periodo' && this._per) { a = this._per.a; m = this._per.m; }
+    let ini = this._iso(new Date(a, m - 1, 1)); const fim = this._iso(new Date(a, m, 0));
+    if (diasTras != null && modo !== 'periodo') { const d = new Date(+h.slice(0, 4), +h.slice(5, 7) - 1, +h.slice(8, 10)); d.setDate(d.getDate() - diasTras); ini = this._iso(d); }   // ex.: freelance = até 5 dias para trás (pode cair no mês anterior)
+    return [ini, fim];
+  },
+  conferir(valor, rotulo, modo, diasTras) {
+    if (!valor) return true;
+    const [i, f] = this.faixa(modo || 'periodo', diasTras);
+    if (valor >= i && valor <= f) return true;
+    alert(`${rotulo || 'Data'} fora do período: ${this._br(valor)}.\n\nSó dá para usar datas de ${this._br(i)} a ${this._br(f)} (${modo === 'calendario' ? 'mês corrente' : 'mês do período aberto da folha'}).`);
+    return false;
+  },
+  aplicar(raiz) {
+    (raiz && raiz.querySelectorAll ? raiz : document).querySelectorAll('input[type="date"][data-mes-corrente]').forEach(el => {
+      const modo = el.dataset.mesCorrente || 'periodo', t = el.dataset.diasTras !== undefined && el.dataset.diasTras !== '' ? Number(el.dataset.diasTras) : null;
+      const [i, f] = this.faixa(modo, t); el.min = i; el.max = f;
+      if (!el.__dataMes) { el.__dataMes = true;
+        el.addEventListener('change', () => { if (el.value && !this.conferir(el.value, el.dataset.rotulo || 'Data', el.dataset.mesCorrente || 'periodo', el.dataset.diasTras !== undefined && el.dataset.diasTras !== '' ? Number(el.dataset.diasTras) : null)) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); } }); }
+    });
+  }
+};
+(function () {
+  const ligar = () => {
+    window.DataMes.aplicar();
+    if (document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo();
+    try { new MutationObserver(ms => { if (ms.some(x => x.addedNodes && x.addedNodes.length)) { window.DataMes.aplicar(); if (!window.DataMes._per && document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo(); } })
+      .observe(document.documentElement, { childList: true, subtree: true }); } catch (e) { }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ligar); else ligar();
+})();
 if (!window.__alertTraduzido) {
   window.__alertTraduzido = true;
   const alertaOriginal = window.alert.bind(window);
@@ -217,6 +269,7 @@ if (!window.__alertTraduzido) {
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }
       window.ACESSO = data; window.ACESSO.email = user.email; window.ACESSO_CLI = cli;
+      try { if (document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo(cli); } catch (e) { }
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {
         const sm = document.createElement('script'); sm.src = 'menu.js?v=40'; (document.head || document.documentElement).appendChild(sm);
