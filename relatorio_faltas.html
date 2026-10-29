@@ -70,6 +70,7 @@
       BANCO_HORAS:  { txt: '⏱ Banco de horas', cls: 'bg-indigo-100 text-indigo-800' },
       ABONADO:      { txt: '✓ Abonado / atestado', cls: 'bg-emerald-100 text-emerald-800' },
       SEM_DESCONTO: { txt: 'Sem desconto', cls: 'bg-slate-200 text-slate-700' },
+      DISPENSADO:   { txt: '✋ Sem desconto (Gestor)', cls: 'bg-amber-100 text-amber-800' },
       CANCELADO:    { txt: '⊘ Pedido cancelado/recusado', cls: 'bg-slate-100 text-slate-500' }
     };
     const MOTIVO = { FALTA_DIA: 'falta', FALTA_PARCIAL: 'falta parcial', ATESTADO: 'atestado', AUSENCIA: 'ausência' };
@@ -124,7 +125,7 @@
         if (!d.tratamento) o.etapa = 'A_LANCAR';
         else {
           o.etapa = d.tratamento === 'ABONADO' ? 'ABONADO' : d.tratamento;
-          o.passos.push(`RH: <b>${{ DESCONTO: 'desconto', BANCO_HORAS: 'banco de horas' + (d.tratado_horas ? ' (' + String(d.tratado_horas).replace('.', ',') + 'h)' : ''), ABONADO: 'abonado' }[d.tratamento] || d.tratamento}</b> por ${esc(d.tratado_por || '')} em ${dh(d.tratado_em)}`);
+          o.passos.push(`RH: <b>${{ DESCONTO: 'desconto', BANCO_HORAS: 'banco de horas' + (d.tratado_horas ? ' (' + String(d.tratado_horas).replace('.', ',') + 'h)' : ''), ABONADO: 'abonado', DISPENSADO: 'sem desconto, aprovado pelo Gestor' }[d.tratamento] || d.tratamento}</b> por ${esc(d.tratado_por || '')} em ${dh(d.tratado_em)}`);
           if (d.tratamento === 'ABONADO') {
             if (!doc) o.alertas.push('abonado sem documento (antes da regra)');
             else { o.passos.push(`📎 atestado anexado por ${esc(doc.enviado_por || '')} em ${dh(doc.enviado_em)}`);

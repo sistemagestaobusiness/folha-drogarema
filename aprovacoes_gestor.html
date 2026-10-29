@@ -66,7 +66,9 @@
       ALTERACAO:    { nome: 'Alteração na ficha do RH', rpc: 'fn_alteracao_decidir',    tela: 'conferencia_fechamento.html',          cor: 'bg-slate-200 text-slate-700' },
       // pedido de freelance criado pelo RH: o RH não aprova o próprio pedido; o Gestor decide valor e pagamento na tela Aprovação do RH (regra de 28/10/2026)
       FREELANCE_RH: { nome: 'Freelance criado pelo RH', rpc: null, tela: 'rh_aprovacao_freelance.html',                                      cor: 'bg-orange-100 text-orange-800' },
-      PATROCINIO:   { nome: 'Patrocínio (Marketing)', rpc: null, tela: 'marketing_pedidos.html?aba=patrocinio',                         cor: 'bg-fuchsia-100 text-fuchsia-800' }
+      PATROCINIO:   { nome: 'Patrocínio (Marketing)', rpc: null, tela: 'marketing_pedidos.html?aba=patrocinio',                         cor: 'bg-fuchsia-100 text-fuchsia-800' },
+      // falta da escala que o RH pede para não descontar (regra de 29/10/2026): aprovar = sem desconto; recusar = volta ao RH com o motivo
+      FALTA_SEM_DESCONTO: { nome: 'Falta sem desconto', rpc: 'fn_falta_dispensa_decidir', tela: 'lancamentos.html',                  cor: 'bg-rose-100 text-rose-800', individual: true }
     };
     let itens = [];
 
@@ -104,7 +106,7 @@
 
     function render() {
       $('vazio').classList.toggle('hidden', itens.length > 0);
-      const urg = itens.filter(i => faixa(i) <= 1 && TIPO[i.tipo] && TIPO[i.tipo].rpc), emLote = itens.filter(i => TIPO[i.tipo] && TIPO[i.tipo].rpc);
+      const urg = itens.filter(i => faixa(i) <= 1 && TIPO[i.tipo] && TIPO[i.tipo].rpc && !TIPO[i.tipo].individual), emLote = itens.filter(i => TIPO[i.tipo] && TIPO[i.tipo].rpc && !TIPO[i.tipo].individual);
       $('topo').innerHTML = itens.length ? `
         <span class="text-sm font-bold text-slate-800">${itens.length} item(ns) aguardando</span>
         ${urg.length ? `<span class="chip bg-rose-600 text-white">${urg.length} para pagar hoje/amanhã</span>` : ''}
@@ -130,7 +132,7 @@
             ${i.vencimento ? `<span class="chip ${urgente ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'}">pagar em ${dbr(i.vencimento)}</span>` : ''}
             ${i.competencia ? `<span class="text-[11px] text-slate-400">ref. ${esc(i.competencia)}</span>` : ''}</div>
           <div class="text-base font-bold text-slate-900">${esc(i.funcionario)} <span class="text-xs font-normal text-slate-500">· ${esc(i.loja || '-')}</span></div>
-          ${['FREELANCE_RH', 'PATROCINIO'].includes(i.tipo) ? '' : `<div class="text-sm"><span class="text-slate-500">Antes</span> <b>${brl(i.anterior)}</b> <span class="text-slate-400">→</span> <span class="text-slate-500">Agora</span> <b class="text-lg">${brl(i.atual)}</b> ${difTxt}</div>`}
+          ${i.tipo === 'FALTA_SEM_DESCONTO' ? `<div class="text-sm"><span class="text-slate-500">Desconto que deixa de ser feito</span> <b class="text-lg text-rose-700">${brl(i.anterior)}</b></div>` : ['FREELANCE_RH', 'PATROCINIO'].includes(i.tipo) ? '' : `<div class="text-sm"><span class="text-slate-500">Antes</span> <b>${brl(i.anterior)}</b> <span class="text-slate-400">→</span> <span class="text-slate-500">Agora</span> <b class="text-lg">${brl(i.atual)}</b> ${difTxt}</div>`}
           <div class="text-xs text-slate-600">${esc(i.detalhe || '')}</div>
           <div class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><b>${i.tipo === 'FREELANCE_RH' ? 'Observação do pedido' : i.tipo === 'PATROCINIO' ? 'Parecer do Marketing' : 'Motivo do RH'}:</b> ${esc(i.motivo || '(sem motivo escrito)')}</div>
           <div class="text-[11px] text-slate-400">Enviado por ${esc(i.enviado_por || '-')} · ${dh(i.enviado_em)} · <a href="${t.tela}" class="underline hover:text-slate-600">ver na tela de origem</a></div>
@@ -157,7 +159,7 @@
     }
 
     async function aprovarVarios(soUrgentes) {
-      const alvo = itens.filter(i => TIPO[i.tipo] && TIPO[i.tipo].rpc && (!soUrgentes || faixa(i) <= 1));
+      const alvo = itens.filter(i => TIPO[i.tipo] && TIPO[i.tipo].rpc && !TIPO[i.tipo].individual && (!soUrgentes || faixa(i) <= 1));
       if (!alvo.length) return;
       const total = alvo.reduce((s, i) => s + Number(i.atual || 0), 0);
       if (!confirm(`Aprovar ${alvo.length} item(ns)${soUrgentes ? ' com pagamento hoje/amanhã' : ''}? Total dos valores novos: ${brl(total)}.\nOs pagamentos vão para o Financeiro.`)) return;

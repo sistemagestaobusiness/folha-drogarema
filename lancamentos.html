@@ -1033,7 +1033,7 @@
     // ESCALA: faltas e atestados do mês que ainda não viraram desconto / banco de horas
     // ---------------------------------------------------------------------
     const ECL = window.EscalaCore ? EscalaCore.criar(_supabase) : null;
-    const TRAT_ESCALA = { DESCONTO: 'desconto lançado', BANCO_HORAS: 'banco de horas', ABONADO: 'abonado' };
+    const TRAT_ESCALA = { DESCONTO: 'desconto lançado', BANCO_HORAS: 'banco de horas', ABONADO: 'abonado', DISPENSADO: 'sem desconto, aprovado pelo Gestor' };
     const TRAT_FREELA = { DESCONTO: 'desconto', BANCO_HORAS: 'banco de horas', ATESTADO: 'atestado', NENHUM: 'sem desconto' };
     let ocorrEscala = [], escalaSemTratamento = false;
     const dmEscala = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
@@ -1041,6 +1041,7 @@
     function situacaoOcorr(o) {
       if (o.trat) return 'OK';
       if (o.fd && o.fd.status === 'PENDENTE') return 'PENDENTE';
+      if (o.fd && o.fd.status === 'AGUARDANDO_GESTOR') return 'AGUARDA_GESTOR';   // pedido de não descontar (regra de 29/10/2026)
       if (o.freela && o.freela.tratamento_ausencia) return 'OK_FREELA';
       if (o.freela && o.freela.status !== 'APROVADA') return 'AGUARDA_FREELA';
       return 'PENDENTE';
@@ -1085,7 +1086,7 @@
       const descFalta = {};
       (rd && !rd.error ? rd.data || [] : []).forEach(x => {
         const k = x.funcionario_id + '|' + x.data;
-        if (!descFalta[k] || ['PENDENTE', 'APROVADO'].includes(x.status)) descFalta[k] = x;
+        if (!descFalta[k] || ['PENDENTE', 'APROVADO', 'AGUARDANDO_GESTOR', 'DISPENSADO'].includes(x.status)) descFalta[k] = x;
       });
       if (re.error) { renderBannerEscala(); return; }
       const mapa = {};
@@ -1136,7 +1137,11 @@
         const s = situacaoOcorr(o), cab = `<b>${dmEscala(o.data)}</b> · ${escaparHtml(o.tipo.toLowerCase())}${o.obs ? ' · <i>' + escaparHtml(o.obs) + '</i>' : ''}`;
         const aprov = o.fd && o.fd.status === 'APROVADO' && o.trat === 'DESCONTO';
         if (s === 'OK') return `<div class="text-emerald-800">✓ ${cab} → <b>${TRAT_ESCALA[o.trat] || o.trat}${o.horas ? ' (' + String(o.horas).replace('.', ',') + 'h)' : ''}</b>${aprov ? ` · ${o.fd.natureza === 'CONTABIL' ? '2060 contábil' : '3003 não contábil'} ${fmtMoeda(o.fd.valor_final)}` : ''}${o.trat === 'ABONADO' ? (o.doc ? ' 📎' : ' <span class="text-amber-700 font-bold">(sem documento — abono anterior à regra)</span>') : ''} <span class="text-[10px] text-slate-500">${escaparHtml(o.por || '')}</span> ${aprov ? bt('↩ estornar', `estornarFalta('${o.fd.id}')`, 'bg-white border border-slate-300 text-slate-600') : bt('↩ desfazer', `tratarEscala('${o.fid}','${o.data}',null)`, 'bg-white border border-slate-300 text-slate-600')}${o.fd ? histFalta(o.fd) : ''}</div>`;
+        if (s === 'OK' && o.trat === 'DISPENSADO') return `<div class="text-amber-800">✋ ${cab} → <b>sem desconto, aprovado pelo Gestor</b> · ${fmtMoeda(o.fd ? o.fd.valor_calculado : 0)} não descontados${o.fd && o.fd.dispensa_justif ? ' · <i>' + escaparHtml(o.fd.dispensa_justif) + '</i>' : ''} <span class="text-[10px] text-slate-500">${escaparHtml(o.por || '')}</span>${o.fd ? histFalta(o.fd) : ''}</div>`;
         if (s === 'PENDENTE' && o.fd && o.fd.status === 'PENDENTE') return caixaFaltaPendente(o, cab, bt);
+        if (s === 'AGUARDA_GESTOR') return `<div class="bg-amber-50 border-2 border-amber-300 rounded p-1.5">⏳ ${cab} · <b class="text-amber-800">pedido para NÃO descontar aguardando o Gestor</b>`
+          + `<div class="text-[10px] text-slate-700 mt-0.5">${fmtMoeda(o.fd.valor_calculado)} que deixariam de ser descontados · justificativa: <i>${escaparHtml(o.fd.dispensa_justif || '')}</i> · pedido por ${escaparHtml(o.fd.dispensa_por || '')} em ${o.fd.dispensa_em ? new Date(o.fd.dispensa_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}</div>`
+          + `<div class="text-[10px] text-slate-500">O Gestor decide em "Aprovações do Gestor". Se ele recusar, a falta volta para cá com o motivo. Enquanto isso, a Conferência do fechamento mostra a falta em vermelho.</div>${histFalta(o.fd)}</div>`;
         if (s === 'OK_FREELA') return `<div class="text-emerald-800">✓ ${cab} → tratado na aprovação do freelance: <b>${TRAT_FREELA[o.freela.tratamento_ausencia] || o.freela.tratamento_ausencia}</b></div>`;
         if (s === 'AGUARDA_FREELA') return `<div>⏳ ${cab} → freelance pedido para cobrir; o tratamento é definido na <a href="rh_aprovacao_freelance.html" class="underline font-bold">aprovação do freelance</a>.</div>`;
         return `<div class="bg-white border border-amber-300 rounded p-1.5">⚠ ${cab} <b>sem tratamento</b><div class="mt-1 flex flex-wrap gap-1">`
@@ -1190,7 +1195,8 @@
 
     // FALTA NA ESCALA → DESCONTO PARA O RH CONFIRMAR (regra de 26/10/2026)
     // valor = salário-base / 30 + DSR da semana (1 por semana); o RH só muda o valor com justificativa e escolhe contábil ou não contábil
-    const ACAO_FALTA = { CRIADO: 'criado', RECRIADO: 'voltou a aguardar', DSR: 'DSR', APROVADO: 'aprovado', RECUSADO: 'recusado', CANCELADO: 'cancelado', ESTORNADO: 'estornado' };
+    const ACAO_FALTA = { CRIADO: 'criado', RECRIADO: 'voltou a aguardar', DSR: 'DSR', APROVADO: 'aprovado', RECUSADO: 'recusado', CANCELADO: 'cancelado', ESTORNADO: 'estornado',
+      PEDIU_DISPENSA: 'pediu ao Gestor para não descontar', DISPENSADO: 'sem desconto (Gestor aprovou)', GESTOR_RECUSOU: 'Gestor recusou tirar o desconto' };
     function histFalta(fd) {
       const h = Array.isArray(fd.historico) ? fd.historico : [];
       if (!h.length) return '';
@@ -1201,6 +1207,7 @@
       const fd = o.fd, id = fd.id, v = Number(fd.valor_calculado || 0);
       const vtxt = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       return `<div class="bg-white border-2 border-rose-300 rounded p-1.5">⚠ ${cab} · <b class="text-rose-700">desconto aguardando o RH</b>`
+        + (fd.gestor_obs ? `<div class="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 mt-0.5">✋ O Gestor não aprovou tirar o desconto: ${escaparHtml(fd.gestor_obs)} (${escaparHtml(fd.gestor_por || '')})</div>` : '')
         + `<div class="text-[10px] text-slate-600 mt-0.5">Cálculo: salário-base ${fmtMoeda(fd.salario_base)} ÷ 30 = ${fmtMoeda(fd.valor_dia)} (1 dia)${Number(fd.valor_dsr) > 0 ? ' + DSR ' + fmtMoeda(fd.valor_dsr) : ' · DSR da semana já está em outra falta'} = <b>${fmtMoeda(v)}</b> · competência ${escaparHtml(fd.competencia)}${fd.marcado_por ? ' · marcado por ' + escaparHtml(fd.marcado_por) : ''}</div>`
         + `<div class="mt-1 flex flex-wrap items-end gap-1.5">`
         + `<label class="text-[10px] font-bold">Valor R$<br><input id="fdv_${id}" type="text" inputmode="decimal" value="${vtxt}" data-calc="${vtxt}" oninput="faltaValorMudou('${id}')" class="w-24 border border-slate-300 rounded px-1 py-0.5 text-[11px]"></label>`
@@ -1210,7 +1217,22 @@
         + bt('✓ Aprovar desconto', `aprovarFalta('${id}')`, 'bg-rose-600 text-white')
         + bt('✗ Recusar → banco de horas', `recusarFalta('${id}','${o.fid}','${o.data}','BANCO_HORAS')`, 'bg-sky-600 text-white')
         + bt('✗ Recusar → abonar com atestado', `recusarFalta('${id}','${o.fid}','${o.data}','ABONADO')`, 'bg-emerald-600 text-white')
+        + bt('✋ Não descontar → pedir ao Gestor', `pedirDispensaFalta('${id}','${o.fid}')`, 'bg-amber-500 text-amber-950')
         + `</div>${histFalta(fd)}</div>`;
+    }
+    // NÃO DESCONTAR COM APROVAÇÃO DO GESTOR (regra de 29/10/2026): o RH justifica (15 letras) e o Gestor decide em Aprovações do Gestor
+    async function pedirDispensaFalta(id, fid) {
+      const o = ocorrEscala.find(x => x.fd && x.fd.id === id); if (!o) return;
+      const outras = ocorrEscala.filter(x => String(x.fid) === String(fid) && x.fd && x.fd.status === 'PENDENTE' && x.fd.id !== id);
+      let ids = [id];
+      if (outras.length && confirm(`${nomeFuncEscala(fid)} tem mais ${outras.length} falta(s) aguardando o RH neste mês (${outras.map(x => dmEscala(x.data)).join(', ')}).\n\nIncluir todas no mesmo pedido ao Gestor? (OK = todas · Cancelar = só ${dmEscala(o.data)})`)) ids = ids.concat(outras.map(x => x.fd.id));
+      const tot = ocorrEscala.filter(x => x.fd && ids.includes(x.fd.id)).reduce((t, x) => t + Number(x.fd.valor_calculado || 0), 0);
+      const just = (await pedirTexto(`Pedir ao Gestor para NÃO descontar ${ids.length} falta(s) de ${nomeFuncEscala(fid)} · ${fmtMoeda(tot)}.\n\nPor que não descontar? (pelo menos 15 letras; o Gestor vai ver)`) || '').trim();
+      if (!just) return;
+      if (just.replace(/[^A-Za-zÀ-ú]/g, '').length < 15) return alert('Pedido não enviado: explique melhor (pelo menos 15 letras).');
+      const { error } = await _supabase.rpc('fn_falta_pedir_dispensa', { p_ids: ids, p_justif: just });
+      if (error) return alert('Não foi possível enviar o pedido: ' + error.message);
+      await aposDecisaoFalta(fid);
     }
     function numFalta(txt) { const n = parseFloat(String(txt || '').replace(/\./g, '').replace(',', '.')); return isNaN(n) ? null : Math.round(n * 100) / 100; }
     function faltaValorMudou(id) {
