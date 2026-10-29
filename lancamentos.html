@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="escala_core.js"></script>
-  <script src="emprestimo_core.js"></script>
+  <script src="emprestimo_core.js?v=2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
@@ -2287,6 +2287,22 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           if (igual) { alert('Nada mudou neste lançamento. Nenhum pedido foi enviado ao Gestor.'); return; }
           if (await solicitarAoGestor(idEdicao, 'UPDATE', payload)) { cancelarEdicao(); carregarLancamentosNovo(); }
           return;
+        }
+        // parcela automática de empréstimo (regra de 29/10/2026): valor diferente vira "descontou a menor" no contrato;
+        // a diferença vai para o mês seguinte (o Gestor pode mandar para o fim do contrato na tela de Empréstimos)
+        if (String(itemOriginal.motivo_ajuste || '').startsWith('Automação Empréstimo #') && Math.abs(Number(payload.valor) - Number(itemOriginal.valor)) > 0.004) {
+          const empId = String(itemOriginal.motivo_ajuste).match(/#(\d+)/)[1];
+          const { data: emp } = await _supabase.from('emprestimos').select('*').eq('id', empId).single();
+          if (!emp) return alert('Contrato do empréstimo não encontrado.');
+          const linha = EmprestimoCore.doMes(emp, competenciaRegraLancamento);
+          const devido = linha ? Number(linha.devido || linha.valor) : Number(itemOriginal.valor);
+          if (Number(payload.valor) > devido + 0.004) return alert(`O valor (${fmtMoeda(payload.valor)}) é maior que a parcela do mês (${fmtMoeda(devido)}). Aumentar desconto de empréstimo: só o Gestor, ajustando o contrato na tela de Empréstimos.`);
+          if (!(Number(payload.valor) > 0)) return alert('Se não houve desconto no mês, use "Não cobrou" no cronograma do contrato (tela de Empréstimos).');
+          if (!confirm(`Desconto a menor no empréstimo: ${fmtMoeda(payload.valor)} em vez de ${fmtMoeda(devido)}.\n\nA diferença de ${fmtMoeda(devido - Number(payload.valor))} fica registrada no contrato e vai para o desconto do mês seguinte (o Gestor pode levar para o fim do contrato).\n\nConfirmar?`)) return;
+          const exc = emp.excecoes ? JSON.parse(JSON.stringify(emp.excecoes)) : {}; exc.meses = exc.meses || {};
+          exc.meses[competenciaRegraLancamento] = { tipo: 'PARCIAL', valor: Math.round(Number(payload.valor) * 100) / 100 };
+          const r = await _supabase.from('emprestimos').update({ excecoes: exc }).eq('id', empId);
+          if (r.error) return alert('Não foi possível registrar no contrato: ' + r.error.message);
         }
         ({ error } = await _supabase.from('folha_itens').update(payload).eq('id', idEdicao));
       } else {

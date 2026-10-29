@@ -7,6 +7,8 @@
 //                                    e a parcela fica para o mês seguinte (o contrato estica)
 //   { tipo: 'PARCIAL', valor: 86.91} descontou a menor: lança esse valor e o saldo
 //                                    residual é somado ao desconto do mês seguinte
+//   { tipo: 'PARCIAL', valor, fim: true }  decisão do Gestor (29/10/2026): a diferença vai para o FIM do contrato
+//                                    (vira parcela de saldo depois da última), o mês seguinte não aumenta
 // plano(emp) devolve uma linha por mês, do início até quitar.
 // =====================================================================
 (function (global) {
@@ -16,7 +18,7 @@
   function plano(emp) {
     const exc = emp.excecoes || {}, meses = exc.meses || {}, qtd = parseInt(emp.qtd_parcelas, 10) || 0, out = [];
     if (!/^\d{2}\/\d{4}$/.test(String(emp.competencia_inicio || ''))) return out;
-    let comp = emp.competencia_inicio, parc = 1, residual = 0, guarda = 0;
+    let comp = emp.competencia_inicio, parc = 1, residual = 0, guarda = 0, paraFim = 0;
     while (parc <= qtd && guarda++ < 600) {
       const em = meses[comp] || {};
       if (em.tipo === 'PULADO') { out.push({ competencia: comp, parcela: null, status: 'PULADO', valor: 0, devido: 0, residualAnterior: residual, residual }); comp = prox(comp); continue; }
@@ -26,10 +28,13 @@
       let valor = devido, status = 'NORMAL';
       if (em.tipo === 'PARCIAL') { valor = Math.min(devido, r2(em.valor)); status = 'PARCIAL'; }
       residual = r2(devido - valor);
-      out.push({ competencia: comp, parcela: parc, status, valor, base, devido, residualAnterior: ant, residual, editado: ep.valor !== undefined });
+      let fim = 0;
+      if (em.tipo === 'PARCIAL' && em.fim && residual > 0.004) { fim = residual; paraFim = r2(paraFim + residual); residual = 0; }
+      out.push({ competencia: comp, parcela: parc, status, valor, base, devido, residualAnterior: ant, residual, paraFim: fim, editado: ep.valor !== undefined });
       parc++; comp = prox(comp);
     }
-    // sobrou saldo depois da última parcela: meses extras só com o residual
+    // sobrou saldo depois da última parcela (inclusive o que o Gestor mandou para o fim): meses extras só com o residual
+    residual = r2(residual + paraFim);
     while (residual > 0.004 && guarda++ < 600) {
       const em = meses[comp] || {};
       if (em.tipo === 'PULADO') { out.push({ competencia: comp, parcela: null, status: 'PULADO', valor: 0, devido: 0, residualAnterior: residual, residual }); comp = prox(comp); continue; }

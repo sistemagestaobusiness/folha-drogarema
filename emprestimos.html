@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="emprestimo_core.js"></script>
+  <script src="emprestimo_core.js?v=2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
@@ -404,12 +404,13 @@
 
         const obs = [];
         if (l.residualAnterior > 0.004 && l.status !== 'PULADO' && l.status !== 'CANCELADA') obs.push(l.status === 'RESIDUAL' ? 'saldo residual' : `parcela ${fmtV(l.base)} + ${fmtV(l.residualAnterior)} de saldo do mês anterior`);
-        if (l.status === 'PARCIAL') obs.push(`era ${fmtV(l.devido)}; ficam ${fmtV(l.residual)} para o mês seguinte`);
+        if (l.status === 'PARCIAL') obs.push(l.paraFim > 0.004 ? `era ${fmtV(l.devido)}; ${fmtV(l.paraFim)} vão para o FIM do contrato (decisão do Gestor)` : `era ${fmtV(l.devido)}; ficam ${fmtV(l.residual)} para o mês seguinte`);
         if (l.status === 'PULADO') obs.push('parcela passa para o mês seguinte');
         if (l.editado && l.status !== 'CANCELADA') obs.push('valor da parcela editado');
 
         let btnAcoes;
-        if (l.status === 'PULADO' || l.status === 'PARCIAL') btnAcoes = `<button onclick="excecaoMes('${emp.id}', '${c}', null)" class="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold underline cursor-pointer">Desfazer</button>`;
+        if (l.status === 'PULADO' || l.status === 'PARCIAL') btnAcoes = `<button onclick="excecaoMes('${emp.id}', '${c}', null)" class="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold underline cursor-pointer">Desfazer</button>`
+          + (l.status === 'PARCIAL' && ehGestor() ? ` <button onclick="diferencaParaFim('${emp.id}', '${c}', ${l.paraFim > 0.004 ? 'false' : 'true'})" class="ml-2 text-indigo-600 hover:text-indigo-800 text-[10px] font-bold underline cursor-pointer" title="Decisão do Gestor">${l.paraFim > 0.004 ? '↩ diferença no mês seguinte' : '➜ diferença para o fim do contrato'}</button>` : '');
         else if (l.status === 'CANCELADA') btnAcoes = `<button onclick="restaurarParcela('${emp.id}', ${l.parcela})" class="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold underline cursor-pointer" title="Restaurar parcela normal">Restaurar</button>`;
         else btnAcoes = `
             <button onclick="descontoMenor('${emp.id}', '${c}', ${l.devido})" class="text-orange-600 hover:text-orange-800 text-[10px] font-bold cursor-pointer" title="O governo descontou menos que a parcela: o saldo vai para o mês seguinte">Descontou a menor</button>
@@ -498,6 +499,22 @@
       if (v >= devido - 0.004) return alert('O valor informado não é menor que o previsto. Nada foi alterado.');
       if (v === 0) return mesPulado(id, comp);
       excecaoMes(id, comp, { tipo: 'PARCIAL', valor: v });
+    }
+    // Gestor decide onde fica a diferença do desconto a menor: mês seguinte (padrão) ou fim do contrato (vira parcela a mais)
+    async function diferencaParaFim(id, comp, paraFim) {
+      if (!soGestor('Levar a diferença para o fim do contrato')) return;
+      const emp = listaEmprestimos.find(e => String(e.id) === String(id)); if (!emp) return;
+      const em = ((emp.excecoes || {}).meses || {})[comp]; if (!em || em.tipo !== 'PARCIAL') return;
+      if (!confirm(paraFim ? `Levar a diferença de ${comp} para o FIM do contrato?\n\nO mês seguinte volta a descontar só a parcela normal e o saldo vira uma parcela a mais no final.` : `Voltar a diferença de ${comp} para o mês seguinte?`)) return;
+      const nov = { ...em }; if (paraFim) nov.fim = true; else delete nov.fim;
+      await excecaoMes(id, comp, nov);
+      // o mês seguinte já lançado na folha acompanha o novo valor
+      const prox = EmprestimoCore.prox(comp), linha = EmprestimoCore.doMes({ ...emp, excecoes: { ...(emp.excecoes || {}), meses: { ...((emp.excecoes || {}).meses || {}), [comp]: nov } } }, prox);
+      const { data: itens } = await _supabase.from('folha_itens').select('id, valor').eq('funcionario_id', emp.funcionario_id).eq('competencia', prox).eq('motivo_ajuste', `Automação Empréstimo #${emp.id}`);
+      for (const it of (itens || [])) if (linha && Math.abs(Number(it.valor) - linha.valor) > 0.004) {
+        const r = await _supabase.from('folha_itens').update({ valor: linha.valor, valor_bruto: linha.valor }).eq('id', it.id);
+        if (r.error) alert(`Não consegui acertar o lançamento de ${prox} na folha (${r.error.message}). Valor certo: ${linha.valor.toFixed(2)}.`);
+      }
     }
     function mesPulado(id, comp) {
       if (confirm(`O governo NÃO cobrou a parcela em ${comp}?\n\nNada será descontado nesse mês e a parcela passa para o mês seguinte (o contrato termina um mês depois).`)) excecaoMes(id, comp, { tipo: 'PULADO' });
