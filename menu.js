@@ -229,15 +229,15 @@
     ver(); window.addEventListener('resize', ver); document.addEventListener('fullscreenchange', ver); setInterval(ver, 1500);
   }
 
-  // avisos do Gestor para o líder: aparecem ao abrir o sistema até ele confirmar "Li e estou ciente" (regra de 15/10/2026)
+  // avisos do Gestor: aparecem ao abrir o sistema até a pessoa confirmar "Li e estou ciente" (regra de 15/10/2026)
+  // desde 29/10/2026: vão também para supervisor e RH (quando marcado) e repetem por N dias (uma ciência por dia)
   async function avisosLider() {
-    if (String(window.ACESSO.perfil || '').toUpperCase() !== 'LIDER' || !window.ACESSO_CLI || document.getElementById('avisoLiderModal')) return;
-    const cli = window.ACESSO_CLI, email = String(window.ACESSO.email || '').toLowerCase();
+    if (!['LIDER', 'SUPERVISOR', 'RH'].includes(String(window.ACESSO.perfil || '').toUpperCase()) || !window.ACESSO_CLI || document.getElementById('avisoLiderModal')) return;
+    const cli = window.ACESSO_CLI;
     try {
-      const [ra, rl] = await Promise.all([cli.from('avisos_lideres').select('id, mensagem, criado_em, criado_por, loja_id').order('criado_em'), cli.from('avisos_leitura').select('aviso_id').eq('email', email)]);
+      const ra = await cli.rpc('fn_avisos_pendentes');
       if (ra.error) return;
-      const lidos = new Set((rl.data || []).map(x => x.aviso_id));
-      const pend = (ra.data || []).filter(a => !lidos.has(a.id));
+      const pend = ra.data || [];
       if (!pend.length) return;
       const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       const m = document.createElement('div'); m.id = 'avisoLiderModal';
@@ -247,7 +247,7 @@
         const a = pend[i];
         m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
           <div style="font-size:12px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:.04em">📣 Aviso da gestão${pend.length > 1 ? ` · ${i + 1} de ${pend.length}` : ''}</div>
-          <div style="font-size:11px;color:#94a3b8;margin-top:2px">${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px">${new Date(a.criado_em).toLocaleString('pt-BR')}${a.dias > 1 ? ` · aparece por ${a.dias} dias (hoje é o ${Math.min(a.dia_atual, a.dias)}º)` : ''}</div>
           <div style="font-size:15px;color:#0f172a;margin:14px 0 18px;white-space:pre-wrap;line-height:1.5">${esc(a.mensagem)}</div>
           <button type="button" style="width:100%;background:#4f46e5;color:#fff;border:0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">✓ Li e estou ciente</button></div>`;
         m.querySelector('button').onclick = async () => {

@@ -14,7 +14,7 @@
 
     <div class="cab-sis py-3 border-b border-slate-200">
       <h1 class="tit-sis text-xl font-bold text-slate-900">📣 Avisos para os líderes</h1>
-      <p class="text-xs text-slate-500">A mensagem aparece para o líder quando ele abre o sistema. Ele confirma "Li e estou ciente", e você vê quem já leu.</p>
+      <p class="text-xs text-slate-500">A mensagem aparece para líderes, supervisor e/ou RH ao abrir o sistema. Cada um confirma "Li e estou ciente" (todo dia, se o aviso for de vários dias), e você vê quem já leu.</p>
     </div>
 
     <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
@@ -23,7 +23,15 @@
       <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-4 space-y-3 h-fit">
         <div class="font-bold text-sm text-slate-900">Novo aviso</div>
         <div><label class="lbl">Para</label><select id="cLoja" class="inp font-bold"></select></div>
-        <div><label class="lbl">Mensagem</label><textarea id="cMsg" rows="6" maxlength="3000" class="inp" placeholder="Escreva o aviso para os líderes..."></textarea></div>
+        <div><label class="lbl">Quem vê</label>
+          <div class="flex flex-wrap gap-3 text-xs font-bold text-slate-700">
+            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" class="cPerfil accent-indigo-600" value="LIDER" checked> Líderes</label>
+            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" class="cPerfil accent-indigo-600" value="SUPERVISOR" checked> Supervisor</label>
+            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" class="cPerfil accent-indigo-600" value="RH" checked> RH</label></div></div>
+        <div><label class="lbl">Aparece por</label><select id="cDias" class="inp font-bold">
+          <option value="1">1 dia (some depois da ciência)</option><option value="2">2 dias seguidos</option><option value="3" selected>3 dias seguidos (ciência todo dia)</option><option value="5">5 dias seguidos</option></select>
+          <p class="text-[10px] text-slate-400 mt-0.5">Cada pessoa confirma "Li e estou ciente" uma vez por dia; o aviso volta no dia seguinte até completar os dias.</p></div>
+        <div><label class="lbl">Mensagem</label><textarea id="cMsg" rows="6" maxlength="3000" class="inp" placeholder="Escreva o aviso..."></textarea></div>
         <button id="btnEnviar" onclick="enviar()" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider cursor-pointer">Publicar aviso</button>
       </div>
       <div class="lg:col-span-3 space-y-2">
@@ -43,7 +51,8 @@
     const $ = id => document.getElementById(id);
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const dataHora = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
-    let lojas = [], avisos = [], leituras = [], lideres = [], meuEmail = '';
+    let lojas = [], avisos = [], leituras = [], dias = [], usuarios = [], meuEmail = '';
+    const PERFIL_TXT = { LIDER: 'Líderes', SUPERVISOR: 'Supervisor', RH: 'RH' };
     const nomeLoja = id => id ? ((lojas.find(l => l.id === id) || {}).nome_loja || '-') : 'TODAS AS LOJAS';
 
     async function inicializar() {
@@ -54,35 +63,47 @@
       if (!u || u.perfil !== 'GESTOR') { $('aviso').innerText = 'Somente o Gestor publica avisos.'; $('aviso').classList.remove('hidden'); return; }
       const [rl, ru] = await Promise.all([_supabase.from('lojas').select('*').order('nome_loja'), _supabase.from('usuarios_sistema').select('email, perfil, loja_id, ativo')]);
       lojas = (rl.data || []).filter(l => l.ativo !== false);
-      lideres = (ru.data || []).filter(x => x.perfil === 'LIDER' && x.ativo !== false);
+      usuarios = (ru.data || []).filter(x => ['LIDER', 'SUPERVISOR', 'RH'].includes(x.perfil) && x.ativo !== false);
       $('cLoja').innerHTML = '<option value="">📣 Todas as lojas</option>' + lojas.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
       $('conteudo').classList.remove('hidden');
       await carregar();
     }
 
     async function carregar() {
-      const [ra, rl] = await Promise.all([
+      const [ra, rl, rd] = await Promise.all([
         _supabase.from('avisos_lideres').select('*').order('criado_em', { ascending: false }).limit(200),
-        _supabase.from('avisos_leitura').select('*')
+        _supabase.from('avisos_leitura').select('*'),
+        _supabase.from('avisos_ciencia_dia').select('aviso_id, email, dia, em')
       ]);
       if (ra.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(ra.error.message); $('aviso').classList.remove('hidden'); return; }
-      avisos = ra.data || []; leituras = rl.data || [];
+      avisos = ra.data || []; leituras = rl.data || []; dias = rd.data || [];
       render();
+    }
+
+    // quem deve ver o aviso: perfis marcados; loja escolhida = líder da loja + supervisor + RH (se marcados)
+    function alvoDe(a) {
+      const perfis = a.perfis && a.perfis.length ? a.perfis : ['LIDER'];
+      return usuarios.filter(u => perfis.includes(u.perfil) && (!a.loja_id || u.perfil !== 'LIDER' || u.loja_id === a.loja_id));
     }
 
     function render() {
       const lista = avisos.filter(a => $('fEnc').checked || a.ativo);
       $('lblTot').innerText = `${avisos.filter(a => a.ativo).length} ativo(s)`;
       $('lista').innerHTML = lista.length ? lista.map(a => {
-        const alvo = lideres.filter(l => !a.loja_id || l.loja_id === a.loja_id);
-        const lidos = leituras.filter(x => x.aviso_id === a.id);
-        const leu = e => lidos.find(x => x.email === String(e).toLowerCase());
+        const alvo = alvoDe(a), nd = a.dias || 1;
+        const diasDe = e => dias.filter(x => x.aviso_id === a.id && x.email === String(e).toLowerCase()).sort((p, q) => String(p.dia).localeCompare(String(q.dia)));
+        const leu = e => leituras.find(x => x.aviso_id === a.id && x.email === String(e).toLowerCase());
+        const completos = alvo.filter(u => diasDe(u.email).length >= nd).length;
         return `<div class="bg-white border ${a.ativo ? 'border-indigo-200' : 'border-slate-200 opacity-70'} rounded-xl p-4 text-xs space-y-2">
-          <div class="flex flex-wrap justify-between gap-2"><span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(a.loja_id))}</span>
+          <div class="flex flex-wrap justify-between gap-2"><span class="flex flex-wrap gap-1"><span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(nomeLoja(a.loja_id))}</span>
+            <span class="bg-indigo-50 text-indigo-800 px-2 py-0.5 rounded text-[10px] font-bold">${(a.perfis || ['LIDER']).map(p => PERFIL_TXT[p] || p).join(' + ')}</span>
+            ${nd > 1 ? `<span class="bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${nd} dias seguidos</span>` : ''}</span>
             <span class="text-slate-500">${dataHora(a.criado_em)} · ${esc(a.criado_por || '')}${a.ativo ? '' : ` · <b>encerrado</b> ${dataHora(a.encerrado_em)}`}</span></div>
           <div class="text-[13px] text-slate-900 whitespace-pre-wrap">${esc(a.mensagem)}</div>
-          <div class="text-[11px]"><b>${alvo.filter(l => leu(l.email)).length} de ${alvo.length}</b> líder(es) leram:
-            ${alvo.map(l => { const x = leu(l.email); return `<span class="inline-block mr-1.5 ${x ? 'text-emerald-700' : 'text-amber-700'}">${x ? '✓' : '⏳'} ${esc(l.email)}${x ? ' ' + dataHora(x.lido_em) : ''}${!a.loja_id && l.loja_id ? ' (' + esc(nomeLoja(l.loja_id)) + ')' : ''}</span>`; }).join('')}</div>
+          <div class="text-[11px]"><b>${completos} de ${alvo.length}</b> ${nd > 1 ? `completaram os ${nd} dias de ciência` : 'leram'}:
+            ${alvo.map(u => { const d = diasDe(u.email), x = leu(u.email), ok = d.length >= nd;
+              const txt = nd > 1 ? `${d.length}/${nd}${d.length ? ' · último ' + dataHora(d[d.length - 1].em) : ''}` : (x ? dataHora(x.lido_em) : '');
+              return `<span class="inline-block mr-1.5 ${ok ? 'text-emerald-700' : d.length ? 'text-indigo-700' : 'text-amber-700'}">${ok ? '✓' : '⏳'} ${esc(u.email)}${u.perfil !== 'LIDER' ? ' [' + esc(PERFIL_TXT[u.perfil]) + ']' : ''}${txt ? ' ' + txt : ''}${!a.loja_id && u.perfil === 'LIDER' && u.loja_id ? ' (' + esc(nomeLoja(u.loja_id)) + ')' : ''}</span>`; }).join('')}</div>
           ${a.ativo ? `<button onclick="encerrar('${a.id}')" class="text-[11px] text-slate-500 hover:text-rose-600 underline cursor-pointer">encerrar aviso (deixa de aparecer)</button>` : ''}</div>`;
       }).join('') : '<div class="bg-white border border-slate-200 rounded-xl p-6 text-center text-slate-400 text-sm">Nenhum aviso.</div>';
     }
@@ -91,16 +112,18 @@
       const msg = $('cMsg').value.trim();
       if (msg.length < 3) return alert('Escreva a mensagem.');
       const para = $('cLoja').value || null;
-      if (!confirm(`Publicar este aviso para ${para ? nomeLoja(para) : 'TODAS AS LOJAS'}?`)) return;
+      const perfis = [...document.querySelectorAll('.cPerfil:checked')].map(c => c.value), nd = Number($('cDias').value) || 1;
+      if (!perfis.length) return alert('Marque quem vê o aviso (líderes, supervisor e/ou RH).');
+      if (!confirm(`Publicar este aviso para ${para ? nomeLoja(para) : 'TODAS AS LOJAS'}?\n\nQuem vê: ${perfis.map(p => PERFIL_TXT[p]).join(', ')}\nAparece por: ${nd} dia(s)${nd > 1 ? ' seguidos, com ciência todo dia' : ''}`)) return;
       $('btnEnviar').disabled = true;
-      const { error } = await _supabase.from('avisos_lideres').insert([{ mensagem: msg, loja_id: para }]);
+      const { error } = await _supabase.from('avisos_lideres').insert([{ mensagem: msg, loja_id: para, perfis, dias: nd }]);
       $('btnEnviar').disabled = false;
       if (error) return alert('Não foi publicado: ' + error.message);
       $('cMsg').value = '';
       await carregar();
     }
     async function encerrar(id) {
-      if (!confirm('Encerrar este aviso? Ele deixa de aparecer para os líderes (o histórico fica).')) return;
+      if (!confirm('Encerrar este aviso? Ele deixa de aparecer para todos (o histórico fica).')) return;
       const { error } = await _supabase.from('avisos_lideres').update({ ativo: false, encerrado_em: new Date().toISOString(), encerrado_por: meuEmail }).eq('id', id);
       if (error) return alert(error.message);
       await carregar();
