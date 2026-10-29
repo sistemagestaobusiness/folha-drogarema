@@ -126,6 +126,7 @@
             </div>
 
             <!-- Adicional noturno (2027 contábil / 2004 não contábil): RH informa as horas; o valor e o DSR (2037 / 2032) saem calculados (regra de 16/10/2026) -->
+            <div id="boxPendenteEvento" class="hidden bg-rose-50 border-2 border-rose-400 p-3 rounded-lg text-xs text-rose-900 space-y-1.5"></div>
             <div id="boxNoturno" class="hidden bg-indigo-50 border border-indigo-300 p-3 rounded-lg space-y-2">
               <label class="block text-xs font-bold text-indigo-800 uppercase">🌙 Horas noturnas no mês *</label>
               <input type="number" step="0.01" min="0" id="inputHorasNoturno" oninput="calcularNoturno(true)" placeholder="ex.: 22,5"
@@ -859,6 +860,42 @@
       document.getElementById('inputDivNoturno').value = '';
       await calcularNoturno(!idEd, !idEd);
     }
+    // LANÇAMENTO À MÃO × PEDIDO ABERTO (regra de 29/10/2026): o banco recusa (trg_folha_itens_pendente_trava); aqui mostramos antes
+    // e oferecemos resolver pelo caminho certo, que segue os critérios (cálculo, DSR, aprovações).
+    async function avisoPendenteDoEvento() {
+      const box = document.getElementById('boxPendenteEvento'); box.classList.add('hidden'); box.innerHTML = '';
+      if (document.getElementById('editLancamentoId').value) return;
+      const ev = eventoDaRubrica(document.getElementById('inputRubrica').value), fid = document.getElementById('selectFuncionarioNovo').value;
+      if (!ev || !fid) return;
+      const cod = Number(ev.codigo_evento), desc = String(ev.descricao_do_evento || '').toUpperCase();
+      let html = '';
+      if (cod === 2060 || cod === 3003) {
+        const pend = ocorrEscala.filter(o => String(o.fid) === String(fid) && o.fd && ['PENDENTE', 'AGUARDANDO_GESTOR'].includes(o.fd.status));
+        if (pend.length) html = `<div class="font-black">⛔ Não lance falta à mão: ${pend.length} falta(s) da escala já estão abertas para este colaborador</div>`
+          + pend.map(o => `<div class="flex flex-wrap items-center gap-2 bg-white border border-rose-200 rounded p-1.5"><span><b>${dmEscala(o.data)}</b> · ${fmtMoeda(o.fd.valor_calculado)} (${Number(o.fd.valor_dsr) > 0 ? '1 dia + DSR' : '1 dia'})${o.fd.status === 'AGUARDANDO_GESTOR' ? ' · <b>aguardando o Gestor</b>' : ''}</span>`
+            + (o.fd.status === 'PENDENTE' ? `<button type="button" onclick="usarFaltaAberta('${o.fd.id}', '${cod === 2060 ? 'CONTABIL' : 'NAO_CONTABIL'}')" class="px-2 py-0.5 rounded bg-rose-600 text-white font-bold cursor-pointer">✓ Usar esta falta como ${cod} (${cod === 2060 ? 'contábil' : 'não contábil'})</button>` : '') + '</div>').join('')
+          + '<div class="text-[10px]">O desconto sai pelo cartão da falta, com o cálculo do sistema (valor diferente só com justificativa).</div>';
+      } else if (ev.tipo_evento === 'PROVENTO' && (cod === 2014 || /HORA EXTRA|FREELANCE/.test(desc))) {
+        const { data } = await _supabase.from('freelance_solicitacoes').select('id, data_servico, status, tipo_solicitacao').eq('funcionario_id', fid).in('status', ['PENDENTE', 'PENDENTE_SUPERVISOR', 'PENDENTE_RH']);
+        const l = (data || []).sort((a, b) => String(a.data_servico).localeCompare(String(b.data_servico)));
+        if (l.length) html = `<div class="font-black">⛔ Não lance freelance/hora extra à mão: ${l.length} pedido(s) aguardando aprovação</div><div>${l.map(x => `${dmEscala(x.data_servico)} (${String(x.tipo_solicitacao || 'FREELANCE').toLowerCase().replace('_', ' ')} · ${x.status === 'PENDENTE_SUPERVISOR' ? 'com o supervisor' : 'com o RH'})`).join(' · ')}</div>`
+          + '<a href="rh_aprovacao_freelance.html" class="inline-block px-2 py-0.5 rounded bg-rose-600 text-white font-bold">Abrir a Aprovação do RH →</a><div class="text-[10px]">O lançamento sai da aprovação, com horas, valor e competência do pedido.</div>';
+      } else if (ev.decimo_papel === 'ANTECIPACAO') {
+        html = '<div class="font-black">⛔ 13º antecipado é lançado só pela tela "13º salário"</div><div>Lá o sistema confere o saldo do 13º e, se passar do saldo, manda para o Gestor.</div><a href="decimo_terceiro.html" class="inline-block px-2 py-0.5 rounded bg-rose-600 text-white font-bold">Abrir 13º salário →</a>';
+      }
+      if (html) { box.innerHTML = html; box.classList.remove('hidden'); }
+    }
+    // usar a falta aberta: preenche o cartão com a natureza escolhida e aprova pelo caminho do cartão (mesmos critérios)
+    async function usarFaltaAberta(id, natureza) {
+      const sel = document.getElementById('fdn_' + id);
+      if (!sel) { renderAlertaEscala(document.getElementById('selectFuncionarioNovo').value); }
+      const s2 = document.getElementById('fdn_' + id); if (!s2) return alert('Abra o cartão da falta (acima, na escala do colaborador).');
+      s2.value = natureza;
+      document.getElementById('inputRubrica').value = ''; document.getElementById('boxPendenteEvento').classList.add('hidden');
+      s2.closest('div.border-2').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await aprovarFalta(id);
+    }
+
     // escala do mês (padrão + dias alterados): horas entre 22h e 5h, calculadas no banco (fn_escala_noturno, regra de 29/10/2026)
     let cacheEscNot = {};
     async function escalaNoturno(fid) {
@@ -984,7 +1021,7 @@
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
       aplicarTipoDoEvento();
       const extra = catPagExtra(ev, competenciaRegraLancamento);
-      atualizarBoxNoturno();
+      atualizarBoxNoturno(); avisoPendenteDoEvento();
       document.getElementById('boxVencimentoPag').classList.toggle('hidden', !extra);
       document.getElementById('info13').classList.add('hidden');
       const idEd = document.getElementById('editLancamentoId').value;
@@ -1584,6 +1621,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       const funcNome = document.getElementById('selectFuncionarioNovo').selectedOptions[0]?.text || '';
       carregarAlerta13(funcionarioId);
       renderAlertaEscala(funcionarioId);
+      avisoPendenteDoEvento();
       document.getElementById('subtituloContexto').innerText = `Competência Ativa: ${competenciaRegraLancamento} | Colaborador: ${funcNome}`;
 
       // Puxa o salário base mapeado
@@ -2115,10 +2153,11 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       }
 
       // adicional noturno: horas obrigatórias; valor diferente do cálculo exige justificativa
-      // falta da escala aguardando o RH: o certo é decidir pelo cartão (regra de 29/10/2026)
-      if (!idEdicao && [2060, 3003].includes(Number(eventoSel.codigo_evento))) {
-        const pendF = ocorrEscala.filter(o => String(o.fid) === String(funcionario_id) && o.fd && o.fd.status === 'PENDENTE');
-        if (pendF.length && !confirm(`Este colaborador tem ${pendF.length} falta(s) da escala aguardando o RH (${pendF.map(o => dmEscala(o.data)).join(', ')}).\n\nO certo é usar "✓ Aprovar desconto" no cartão da falta (acima): ele já calcula 1 dia + DSR e baixa o aviso.\n\nSe lançar aqui, depois use "🔗 Vincular" no cartão, senão a falta continua pendente.\n\nLançar aqui mesmo assim?`)) return;
+      // pedido aberto para este evento (falta da escala, freelance/HE, 13º antecipado): não grava à mão (regra de 29/10/2026)
+      await avisoPendenteDoEvento();
+      if (!document.getElementById('boxPendenteEvento').classList.contains('hidden')) {
+        document.getElementById('boxPendenteEvento').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return alert('Este lançamento tem um pedido aberto no sistema (veja o quadro vermelho). Resolva pelo caminho indicado: assim valem o cálculo e as aprovações.');
       }
       let noturno = null;
       if (PAR_NOTURNO[eventoSel.codigo_evento]) {
