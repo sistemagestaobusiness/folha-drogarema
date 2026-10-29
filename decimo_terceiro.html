@@ -31,7 +31,7 @@
       <details class="noprint bg-white rounded-xl border border-slate-200 p-3 text-xs text-slate-600">
         <summary class="font-bold text-slate-800 cursor-pointer">ℹ Como funciona (clique para ver)</summary>
         <ol class="list-decimal ml-5 mt-2 space-y-1">
-          <li><b>Antecipação</b> (pedido do funcionário ao longo do ano): o RH lança <b>nesta tela</b> (botão "+ antecipar"). Até o saldo vai direto para o Financeiro; <b>acima do saldo</b> (ou na própria ficha do RH) passa antes pelo Gestor. Depois que o Financeiro paga, o evento <b id="evAnt">-</b> entra sozinho em Lançamentos (3º quadro).</li>
+          <li><b>Antecipação</b> (pedido do funcionário ao longo do ano): o RH lança <b>nesta tela</b> (botão "+ antecipar"). Até o <b>teto seguro</b> (saldo líquido: já descontados o INSS e o IRRF estimados do 13º, sem dependentes) vai direto para o Financeiro; <b>acima do teto</b> (ou na própria ficha do RH) passa antes pelo Gestor. Depois que o Financeiro paga, o evento <b id="evAnt">-</b> entra sozinho em Lançamentos (3º quadro).</li>
           <li><b>13º esperado</b> = (salário base + acordo de férias/13º do cadastro) × avos ÷ 12. Avos: mês com 15 dias ou mais trabalhados (regra contábil). <b>Saldo a pagar</b> = esperado − o que já foi pago − antecipações ainda no Gestor/Financeiro.</li>
           <li>Antecipações de abr–set/2026 vêm da planilha do RH (só registro, já pagas).</li>
           <li><b>Novembro/dezembro</b>: a contabilidade manda o holerite do 13º; o RH lança <b id="evParc">-</b> (e INSS/IRRF). Quem recebeu antecipação: lançar junto o desconto <b id="evComp">-</b> — o sistema oferece isso sozinho ao salvar a parcela.</li>
@@ -125,7 +125,7 @@
           <select id="aMeio" class="inp"><option value="BANCO">🏦 Banco</option><option value="DINHEIRO">💵 Dinheiro</option></select></div>
       </div>
       <div id="aAviso" class="hidden bg-red-50 border border-red-300 text-red-800 rounded-lg p-2 font-bold"></div>
-      <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Justificativa <span id="aObrig" class="text-red-600 hidden">* (acima do saldo)</span></label>
+      <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Justificativa <span id="aObrig" class="text-red-600 hidden">* (acima do teto seguro)</span></label>
         <input id="aMotivo" maxlength="300" class="inp" placeholder="motivo / pedido do funcionário"></div>
       <button onclick="salvarAnt()" id="aBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">✓ Lançar antecipação</button>
       <p class="text-[10px] text-slate-400">Vai para o Financeiro pagar na data informada. O evento 2066 só entra em Lançamentos depois do pagamento confirmado.</p>
@@ -193,10 +193,15 @@
 
     async function carregar() {
       $('lblAno').innerText = ano;
-      const [{ data, error }, rm] = await Promise.all([_supabase.rpc('fn_decimo_resumo', { p_ano: ano }), _supabase.rpc('fn_decimo_movimentos', { p_ano: ano })]);
+      const [{ data, error }, rm, rt] = await Promise.all([_supabase.rpc('fn_decimo_resumo', { p_ano: ano }), _supabase.rpc('fn_decimo_movimentos', { p_ano: ano }),
+        _supabase.rpc('fn_decimo_teto_lista', { p_ano: ano })]);
       if (error || rm.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro((error || rm.error).message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
       linhas = data || []; movs = rm.data || [];
+      // teto seguro (29/10/2026): líquido estimado do 13º (bruto − INSS − IRRF, sem dependentes) − já pago − pendente
+      const tetos = {}; ((rt && !rt.error && rt.data) || []).forEach(t => tetos[t.funcionario_id] = t);
+      linhas.forEach(l => { const t = tetos[l.funcionario_id]; l.inss_est = t ? num(t.inss) : 0; l.irrf_est = t ? num(t.irrf) : 0;
+        l.teto = t ? Math.min(num(t.teto), num(l.saldo_a_pagar)) : num(l.saldo_a_pagar); });
       trocarAba(aba);
     }
     function trocarAba(a) {
@@ -306,16 +311,20 @@
       $('aInfo').innerHTML = `<div class="flex justify-between"><span>13º esperado (${atual.avos}/12)</span><b class="font-mono">${fmtR(atual.esperado)}</b></div>
         ${ants.map(m => `<div class="flex justify-between text-slate-600"><span>Antecipação ${MESES[m.mes - 1]}/${String(ano).slice(2)} ${chipStatus(m)}</span><span class="font-mono">− ${fmtR(m.valor)}</span></div>`).join('')}
         ${num(atual.parcela1) + num(atual.parcela2) ? `<div class="flex justify-between text-slate-600"><span>Parcelas</span><span class="font-mono">− ${fmtR(num(atual.parcela1) + num(atual.parcela2))}</span></div>` : ''}
-        <div class="flex justify-between border-t border-slate-200 pt-1 font-black"><span>Saldo disponível</span><span class="font-mono">${fmtR(atual.saldo_a_pagar)}</span></div>`;
+        <div class="flex justify-between border-t border-slate-200 pt-1 font-bold"><span>Saldo bruto</span><span class="font-mono">${fmtR(atual.saldo_a_pagar)}</span></div>
+        <div class="flex justify-between text-slate-600"><span>INSS estimado do 13º</span><span class="font-mono">− ${fmtR(atual.inss_est)}</span></div>
+        <div class="flex justify-between text-slate-600"><span>IRRF estimado do 13º (sem dependentes)</span><span class="font-mono">− ${fmtR(atual.irrf_est)}</span></div>
+        <div class="flex justify-between border-t border-slate-200 pt-1 font-black text-emerald-800"><span>Teto seguro para antecipar</span><span class="font-mono">${fmtR(Math.max(atual.teto, 0))}</span></div>
+        <div class="text-[10px] text-slate-500">INSS e IRRF saem na 2ª parcela: antecipar acima do líquido deixa o funcionário devendo. Acima do teto, só com o Gestor.</div>`;
       $('aValor').value = ''; $('aMotivo').value = ''; $('aMeio').value = 'BANCO';
       const d = new Date(); $('aVenc').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       checarAnt();
       $('mAnt').classList.remove('hidden'); $('aValor').focus();
     }
     function checarAnt() {
-      const v = num($('aValor').value), saldo = num(atual.saldo_a_pagar), acima = v > saldo + 0.005;
+      const v = num($('aValor').value), saldo = num(atual.teto), acima = v > saldo + 0.005;
       $('aAviso').classList.toggle('hidden', !acima); $('aObrig').classList.toggle('hidden', !acima);
-      $('aAviso').innerHTML = acima ? `Valor acima do saldo do 13º em ${fmtR(v - Math.max(saldo, 0))}. ${perfil === 'GESTOR' ? 'Você é Gestor: lança direto (justifique).' : 'Vai para o Gestor aprovar antes do Financeiro — informe a justificativa.'}` : '';
+      $('aAviso').innerHTML = acima ? `Valor acima do teto seguro (líquido, já descontados INSS e IRRF) em ${fmtR(v - Math.max(saldo, 0))}. ${perfil === 'GESTOR' ? 'Você é Gestor: lança direto (justifique).' : 'Vai para o Gestor aprovar antes do Financeiro — informe a justificativa.'}` : '';
     }
     async function salvarAnt() {
       const v = num($('aValor').value), mot = $('aMotivo').value.trim();
@@ -324,7 +333,7 @@
       await DataMes.carregarPeriodo(_supabase); if (!DataMes.conferir($('aVenc').value, 'Data do pagamento', 'periodo')) return;   // só no mês do período aberto (29/10/2026)
       const venc = await DiaUtil.conferir($('aVenc').value, _supabase); if (venc === null) return;
       $('aVenc').value = venc;
-      if (v > num(atual.saldo_a_pagar) + 0.005 && mot.length < 10) return alert('Valor acima do saldo: informe a justificativa (mínimo 10 letras).');
+      if (v > num(atual.teto) + 0.005 && mot.length < 10) return alert('Valor acima do teto seguro (líquido do 13º): informe a justificativa (mínimo 10 letras).');
       if (!confirm(`Lançar antecipação de 13º de ${fmtR(v)} para ${atual.nome}, pagamento em ${dbr(venc)}?`)) return;
       $('aBtn').disabled = true;
       const { data, error } = await _supabase.rpc('fn_decimo_antecipar', { p_func: atual.funcionario_id, p_valor: v, p_vencimento: venc, p_meio: $('aMeio').value, p_motivo: mot || null });
