@@ -1182,6 +1182,34 @@
           + '</div></div>';
       }).join('');
       box.classList.remove('hidden');
+      procurarLancadoAMao(fid);
+    }
+    // falta já lançada à mão em Lançamentos (2060/3003) sem passar pelo cartão: oferece vincular (regra de 29/10/2026)
+    async function procurarLancadoAMao(fid) {
+      const pend = ocorrEscala.filter(o => String(o.fid) === String(fid) && o.fd && o.fd.status === 'PENDENTE');
+      if (!pend.length) return;
+      const usados = new Set(ocorrEscala.filter(o => o.fd && o.fd.folha_item_id && o.fd.status === 'APROVADO').map(o => o.fd.folha_item_id));
+      const { data } = await _supabase.from('folha_itens').select('id, rubrica, valor, competencia, complemento').eq('funcionario_id', fid).eq('tipo', 'DESCONTO');
+      const cand = (data || []).filter(i => /^\s*(2060|3003)\b/.test(i.rubrica || '') && !usados.has(i.id) && [competenciaRegraLancamento].concat(pend.map(o => o.fd.competencia)).includes(i.competencia));
+      pend.forEach(o => {
+        const el = document.getElementById('fdvinc_' + o.fd.id); if (!el) return;
+        el.innerHTML = cand.length ? `<div class="mt-1 bg-sky-50 border border-sky-300 rounded p-1 text-[10px] text-sky-900"><b>🔗 Já existe desconto de falta lançado à mão</b> (sem passar por este cartão), por isso o aviso continua:`
+          + cand.map(i => ` <button type="button" onclick="vincularFalta('${o.fd.id}','${i.id}')" class="ml-1 px-2 py-0.5 rounded bg-sky-700 text-white font-bold cursor-pointer">Vincular ${escaparHtml(String(i.rubrica).split(' - ')[0])} ${fmtMoeda(i.valor)} (${escaparHtml(i.competencia)}) a esta falta</button>`).join('')
+          + `<div class="text-slate-600 mt-0.5">Vincular baixa a falta como descontada usando esse lançamento (não cria outro).</div></div>` : '';
+      });
+    }
+    async function vincularFalta(id, item) {
+      const o = ocorrEscala.find(x => x.fd && x.fd.id === id); if (!o) return;
+      const { data: it } = await _supabase.from('folha_itens').select('rubrica, valor').eq('id', item).single();
+      if (!it) return alert('Lançamento não encontrado.');
+      let just = null;
+      if (Math.abs(Number(it.valor) - Number(o.fd.valor_calculado)) > 0.004) {
+        just = (await pedirTexto(`O lançamento ${it.rubrica} ${fmtMoeda(it.valor)} é diferente do calculado para a falta de ${dmEscala(o.data)} (${fmtMoeda(o.fd.valor_calculado)}${Number(o.fd.valor_dsr) > 0 ? ' = 1 dia + DSR' : ''}).\n\nPor que ficou diferente? (fica no histórico)`) || '').trim();
+        if (just.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('Não vinculado: escreva a justificativa.');
+      } else if (!confirm(`Vincular ${it.rubrica} ${fmtMoeda(it.valor)} à falta de ${dmEscala(o.data)}?`)) return;
+      const { error } = await _supabase.rpc('fn_falta_vincular', { p_id: id, p_item: item, p_justificativa: just });
+      if (error) return alert('Não foi possível vincular: ' + error.message);
+      await aposDecisaoFalta(o.fid);
     }
     // ABONO SÓ COM ANEXO (regra de 15/10/2026): escolhe o arquivo, envia, registra na ficha e devolve o id do documento.
     // Se for PDF com texto, procura sinais de atestado (só um indicativo; quem confere é o supervisor).
@@ -1227,7 +1255,7 @@
     // FALTA NA ESCALA → DESCONTO PARA O RH CONFIRMAR (regra de 26/10/2026)
     // valor = salário-base / 30 + DSR da semana (1 por semana); o RH só muda o valor com justificativa e escolhe contábil ou não contábil
     const ACAO_FALTA = { CRIADO: 'criado', RECRIADO: 'voltou a aguardar', DSR: 'DSR', APROVADO: 'aprovado', RECUSADO: 'recusado', CANCELADO: 'cancelado', ESTORNADO: 'estornado',
-      PEDIU_DISPENSA: 'pediu ao Gestor para não descontar', DISPENSADO: 'sem desconto (Gestor aprovou)', GESTOR_RECUSOU: 'Gestor recusou tirar o desconto' };
+      VINCULADO: 'vinculado a lançamento feito à mão', PEDIU_DISPENSA: 'pediu ao Gestor para não descontar', DISPENSADO: 'sem desconto (Gestor aprovou)', GESTOR_RECUSOU: 'Gestor recusou tirar o desconto' };
     function histFalta(fd) {
       const h = Array.isArray(fd.historico) ? fd.historico : [];
       if (!h.length) return '';
@@ -1249,7 +1277,7 @@
         + bt('✗ Recusar → banco de horas', `recusarFalta('${id}','${o.fid}','${o.data}','BANCO_HORAS')`, 'bg-sky-600 text-white')
         + bt('✗ Recusar → abonar com atestado', `recusarFalta('${id}','${o.fid}','${o.data}','ABONADO')`, 'bg-emerald-600 text-white')
         + bt('✋ Não descontar → pedir ao Gestor', `pedirDispensaFalta('${id}','${o.fid}')`, 'bg-amber-500 text-amber-950')
-        + `</div>${histFalta(fd)}</div>`;
+        + `</div><div id="fdvinc_${id}"></div>${histFalta(fd)}</div>`;
     }
     // NÃO DESCONTAR COM APROVAÇÃO DO GESTOR (regra de 29/10/2026): o RH justifica (15 letras) e o Gestor decide em Aprovações do Gestor
     async function pedirDispensaFalta(id, fid) {
@@ -2087,6 +2115,11 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       }
 
       // adicional noturno: horas obrigatórias; valor diferente do cálculo exige justificativa
+      // falta da escala aguardando o RH: o certo é decidir pelo cartão (regra de 29/10/2026)
+      if (!idEdicao && [2060, 3003].includes(Number(eventoSel.codigo_evento))) {
+        const pendF = ocorrEscala.filter(o => String(o.fid) === String(funcionario_id) && o.fd && o.fd.status === 'PENDENTE');
+        if (pendF.length && !confirm(`Este colaborador tem ${pendF.length} falta(s) da escala aguardando o RH (${pendF.map(o => dmEscala(o.data)).join(', ')}).\n\nO certo é usar "✓ Aprovar desconto" no cartão da falta (acima): ele já calcula 1 dia + DSR e baixa o aviso.\n\nSe lançar aqui, depois use "🔗 Vincular" no cartão, senão a falta continua pendente.\n\nLançar aqui mesmo assim?`)) return;
+      }
       let noturno = null;
       if (PAR_NOTURNO[eventoSel.codigo_evento]) {
         await calcularNoturno(false);
