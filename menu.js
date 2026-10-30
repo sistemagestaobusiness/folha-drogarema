@@ -316,8 +316,7 @@
           const sec = item.closest('.sec'); if (sec) sec.classList.add('aberto'); }
       }
       let totAp = pend.reduce((t, p) => t + (p.qtd || 0), 0);
-      // pedidos de freelance criados pelo RH esperando o Gestor na etapa do RH (regra de 28/10/2026)
-      try { const { data: rs } = await window.ACESSO_CLI.rpc('fn_aprovacoes_gestor_resumo'); const fr = (rs || []).find(r => r.tipo === 'FREELANCE_RH'); if (fr) { totAp += fr.qtd || 0; pend.push({ tela: 'aprovacoes_gestor.html', nome: 'Freelance criado pelo RH (o RH não aprova o próprio pedido)', qtd: fr.qtd, total: 0, m: 'aguardando a etapa do RH' }); } } catch (e) { }
+      // (30/10/2026) freelance criado pelo RH não passa mais pelo Gestor: volta ao RH depois do supervisor
       const itAp = document.querySelector('#menuSistema a.it[data-menu="aprovacoes_gestor.html"]');
       if (totAp && itAp && !itAp.querySelector('.bolha')) { const b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; b.textContent = totAp; itAp.appendChild(b); }
       if (PAGINA === 'aprovacoes_gestor.html') return;
