@@ -234,6 +234,41 @@
       const s = $('toast'); s.textContent = 'copiado: ' + txt; s.style.opacity = 1; clearTimeout(s._t); s._t = setTimeout(() => s.style.opacity = 0, 1200);
     }
 
+    // MODELO DA CONTABILIDADE (variáveis da folha, enviado em 30/10/2026): Plan1 com "COMPETENCIA" em B2 e, para cada empregado,
+    // uma linha por código na ordem fixa abaixo. Valor em R$; VT 3% (0328) como percentual (3% quando tem o desconto);
+    // adicional noturno (0210) e hora extra 100% (0200) em horas (formato [h]:mm), lidas do lançamento ("NOTURNO 22,5H" / "HE100 8H").
+    const ORDEM_CONTAB = ['238', '222', '252', '593', '328', '210', '200'];
+    function planilhaContabilidade(aaaamm) {
+      const ano = +aaaamm.slice(0, 4), mes = +aaaamm.slice(4, 6);
+      const serial = (Date.UTC(ano, mes - 1, 1) - Date.UTC(1899, 11, 30)) / 86400000;
+      const emp = $('fEmp').value;
+      // por empregado e código contábil: valor (R$), horas e se teve lançamento
+      const porF = {};
+      linhas.forEach(l => { const ev = eventos[l.cod]; const cc = String(Number(ev.codigo_contabil || 0)); if (!ORDEM_CONTAB.includes(cc)) return;
+        const o = (porF[l.fid] = porF[l.fid] || {}); const x = (o[cc] = o[cc] || { valor: 0, horas: 0, tem: false });
+        x.valor += Math.abs(l.valor); x.horas += l.horas || 0; x.tem = x.tem || Math.abs(l.valor) > 0.004; });
+      const pessoas = Object.values(funcs).filter(f => f.codigo_contabil && (String(f.status || 'ATIVO').toUpperCase() === 'ATIVO' || porF[f.id]))
+        .map(f => ({ f, e: empDe(f) || {} })).filter(x => !emp || (x.e.id || '-') === emp)
+        .sort((a, b) => (Number(a.e.cod_contabil) || 9999) - (Number(b.e.cod_contabil) || 9999) || String(a.f.nome_registro).localeCompare(String(b.f.nome_registro)));
+      const ws = {}, set = (ref, v, t, z) => { ws[ref] = { v, t }; if (z) ws[ref].z = z; };
+      const MOEDA = '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
+      set('A2', 'COMPETENCIA', 's'); set('B2', serial, 'n', 'mmm-yy');
+      ['Cód Epr', 'Nome', 'Competência', 'Código  do Evento', 'valor/hora', 'Cód Emp'].forEach((h, i) => set(String.fromCharCode(65 + i) + '4', h, 's'));
+      let r = 5;
+      pessoas.forEach(({ f, e }) => ORDEM_CONTAB.forEach(cc => {
+        const x = (porF[f.id] || {})[cc] || { valor: 0, horas: 0, tem: false };
+        set('A' + r, Number(f.codigo_contabil), 'n'); set('B' + r, f.nome_registro || '', 's'); set('C' + r, serial, 'n', 'mmm-yy'); set('D' + r, Number(cc), 'n');
+        if (cc === '328') set('E' + r, x.tem ? 0.03 : 0, 'n', '0%');
+        else if (cc === '210' || cc === '200') set('E' + r, Math.round(x.horas * 100) / 100 / 24, 'n', '[h]:mm');
+        else set('E' + r, Math.round(x.valor * 100) / 100, 'n', MOEDA);
+        if (e.cod_contabil) set('F' + r, Number(e.cod_contabil), 'n');
+        r++;
+      }));
+      ws['!ref'] = 'A2:F' + Math.max(r - 1, 4);
+      ws['!cols'] = [{ wch: 9 }, { wch: 43 }, { wch: 12 }, { wch: 17 }, { wch: 14 }, { wch: 9 }];
+      return ws;
+    }
+
     function baixar() {
       if (!window.XLSX) return alert('O gerador de Excel não carregou. Recarregue a página.');
       const comp = compDe($('fComp').value), aaaamm = $('fComp').value.replace('-', '');
@@ -252,6 +287,7 @@
       const conferir = base.filter(x => !completos.includes(x)).map(({ l, f, e, ev }) => ({ 'Nome': f.nome_registro || '', 'Evento no sistema': `${l.cod} - ${ev.descricao_do_evento}`, 'Valor': Math.abs(l.valor),
         'Motivo': [!f.codigo_contabil && 'sem código do empregado', !e.cod_contabil && 'sem código da empresa', !ev.codigo_contabil && 'evento sem código contábil', ev.unidade_contabil === 'HORAS' && 'contabilidade recebe em horas'].filter(Boolean).join(' · ') }));
       const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, planilhaContabilidade(aaaamm), 'Plan1');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista), 'INFORMAÇÕES FOLHA');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modelo.length ? modelo : [{ 'fixo': '', 'cód empregado': '', 'competencia': '', 'código rubrica': '', 'Tipo do processo': '', 'valor': '', 'empresa': '' }]), 'MODELO');
       if (conferir.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conferir), 'CONFERIR');

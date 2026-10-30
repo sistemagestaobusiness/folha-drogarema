@@ -862,6 +862,7 @@
     // ---------------- HORA EXTRA 100% CONTÁBIL (2067): horas → valor (regra de 30/10/2026) ----------------
     // valor = horas × salário base / 220 × 2 (hora normal + 100%). O RH pode editar o valor, com justificativa.
     const HE_FATOR = { 2067: 2 };
+    const HE_DSR = { 2067: 2056 };   // DSR da hora extra, lançado junto e automático (como o do adicional noturno)
     let calcHE = null;
     function horasHEDoMotivo(m) { const x = String(m || '').match(/HE100 ([\d.,]+)\s*H/i); return x ? x[1].replace(',', '.') : ''; }
     async function atualizarBoxHE() {
@@ -874,7 +875,7 @@
       if (idEd) document.getElementById('inputHorasHE').value = horasHEDoMotivo((mapaItensRenderizados[idEd] || {}).motivo_ajuste);
       calcularHE(!idEd);
     }
-    function calcularHE(preencherValor) {
+    async function calcularHE(preencherValor) {
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
       if (!ev || !HE_FATOR[ev.codigo_evento]) return;
       const func = listaGlobalFuncionarios.find(f => String(f.id) === String(document.getElementById('selectFuncionarioNovo').value));
@@ -886,7 +887,13 @@
       calcHE = { horas: h, valor };
       if (preencherValor && h > 0) valorEl.value = valor.toFixed(2);
       const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      txt.innerHTML = h > 0 ? `${h.toLocaleString('pt-BR')} h × ${brl(sal)} / 220 × 2 (hora + 100%) = <b>${brl(valor)}</b> · vai em horas para a contabilidade (0200)` : 'Informe as horas: o valor é calculado.';
+      const dd = await diasDsrDoMes(competenciaRegraLancamento, func.loja_id), codDsr = HE_DSR[ev.codigo_evento];
+      calcHE.dsr = { codDsr, dsrDias: dd.dsrDias, uteis: dd.uteis };
+      const valorDig = parseFloat(valorEl.value) || 0, dsrV = Math.round(valorDig * dd.dsrDias / dd.uteis * 100) / 100;
+      const evDsr = listaGlobalEventos.find(e => Number(e.codigo_evento) === codDsr);
+      txt.innerHTML = h > 0 ? `${h.toLocaleString('pt-BR')} h × ${brl(sal)} / 220 × 2 (hora + 100%) = <b>${brl(valor)}</b> · vai em horas para a contabilidade (0200)<br>`
+          + `DSR (${codDsr}${evDsr ? ' ' + escaparHtml(evDsr.descricao_do_evento) : ''}) = valor × ${dd.dsrDias} / ${dd.uteis} <span class="text-orange-500">(${dd.domingos} domingo(s) + ${dd.feriados} feriado(s) / dias úteis de ${competenciaRegraLancamento})</span> = <b>${brl(dsrV)}</b> · lançado junto, automático`
+        : 'Informe as horas: o valor e o DSR são calculados.';
       const difere = h > 0 && Math.abs((parseFloat(valorEl.value) || 0) - valor) > 0.009;
       document.getElementById('boxJustHE').classList.toggle('hidden', !difere);
     }
@@ -2197,9 +2204,9 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       }
 
       // hora extra 100% contábil: horas obrigatórias; valor diferente do cálculo exige justificativa (regra de 30/10/2026)
-      let he100 = null;
+      let he100 = null, he100dsr = null;
       if (HE_FATOR[eventoSel.codigo_evento]) {
-        calcularHE(false);
+        await calcularHE(false);
         if (!calcHE || !(calcHE.horas > 0)) { alert('Hora extra 100%: informe as HORAS do mês (o valor é calculado).'); document.getElementById('inputHorasHE').focus(); return; }
         const justHE = removerAcentosEColocarMaiuscula(document.getElementById('inputJustHE').value).trim();
         const editadoHE = Math.abs(valorBruto - calcHE.valor) > 0.009;
@@ -2207,6 +2214,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           alert(`O valor (R$ ${valorBruto.toFixed(2)}) é diferente do calculado (R$ ${calcHE.valor.toFixed(2)}).\n\nInforme a justificativa (mínimo 10 letras) ou volte ao valor calculado.`);
           document.getElementById('boxJustHE').classList.remove('hidden'); document.getElementById('inputJustHE').focus(); return;
         }
+        he100dsr = calcHE.dsr;
         he100 = `HE100 ${String(calcHE.horas).replace('.', ',')}H (CALCULO R$ ${calcHE.valor.toFixed(2)})` + (editadoHE ? ` · VALOR EDITADO: ${justHE}` : '');
       }
       // adicional noturno: horas obrigatórias; valor diferente do cálculo exige justificativa
@@ -2384,6 +2392,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       }
       if (!idEdicao) await oferecerDesconto13(eventoSel, valorFinal, funcionario_id, vencimentoPag);
       if (noturno) await lancarDsrNoturno(funcionario_id, valorFinal, noturno);
+      if (he100dsr && he100dsr.codDsr) await lancarDsrNoturno(funcionario_id, valorFinal, he100dsr);
       window.__lancGravou = true;
       cancelarEdicao();
       carregarLancamentosNovo();
@@ -2407,7 +2416,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           rubrica: nomeDoCadastro(evDsr), tipo: evDsr.tipo_evento || 'PROVENTO', valor: dsr, valor_bruto: dsr, abatimento_sigiloso: 0,
           motivo_ajuste: motivo, parcela_atual: 1, total_parcelas: 1, fixo: false }]));
       }
-      if (error) alert(`O adicional foi salvo, mas o DSR (${n.codDsr}) não: ${error.message}\nLance o DSR de R$ ${dsr.toFixed(2)} manualmente.`);
+      if (error) alert(`O lançamento foi salvo, mas o DSR (${n.codDsr}) não: ${error.message}\nLance o DSR de R$ ${dsr.toFixed(2)} manualmente.`);
     }
 
     function somarUmMes(dataIso) {
