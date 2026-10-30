@@ -339,6 +339,8 @@
       if (errPerfil) console.error('Erro ao ler perfil:', errPerfil);
       usuario.perfil = perfil ? perfil.perfil : null;
       usuario.loja_id = perfil ? perfil.loja_id : null;
+      // Gestor pode lançar data passada (o banco já libera): só o limite do fim do mês seguinte (regra de 30/10/2026)
+      if (usuario.perfil === 'GESTOR') { const old = document.getElementById('inputData'); if (old) { const inp = old.cloneNode(true); delete inp.dataset.mesCorrente; delete inp.dataset.diasTras; inp.removeAttribute('min'); inp.max = DataMes.faixa('mes_seguinte')[1]; inp.onchange = old.onchange; old.replaceWith(inp); } }
       document.getElementById('lblUsuario').innerText = usuario.email;
       document.getElementById('lblPerfil').innerText = usuario.perfil || 'SEM PERFIL';
       // Gestor/RH voltam ao painel (o SAIR fica no index); demais perfis só têm SAIR
@@ -439,8 +441,8 @@
       const calc = calcularHoras();
       if (!data || !calc) { alert('Preencha a data e os horários (de 30 em 30 minutos).'); return; }
       // prazo para pedir (regra de 29/10/2026): no máximo 5 dias para trás; com 6 dias de atraso bloqueia (hoje 29/10 → a partir de 24/10)
-      if (data < dataMinimaPedido()) { alert(`Não dá para pedir freelance ou hora extra de ${formatarDataBR(data)}: o prazo é de até 5 dias para trás (a partir de ${formatarDataBR(dataMinimaPedido())}). Fale com o RH.`); return; }
-      if (!DataMes.conferir(data, 'Data do serviço', 'mes_seguinte', 5)) return;   // até o fim do mês seguinte (regra de 30/10/2026)
+      if (usuario.perfil !== 'GESTOR' && data < dataMinimaPedido()) { alert(`Não dá para pedir freelance ou hora extra de ${formatarDataBR(data)}: o prazo é de até 5 dias para trás (a partir de ${formatarDataBR(dataMinimaPedido())}). Fale com o RH.`); return; }
+      if (usuario.perfil === 'GESTOR' ? data > DataMes.faixa('mes_seguinte')[1] && !DataMes.conferir(data, 'Data do serviço', 'mes_seguinte') : !DataMes.conferir(data, 'Data do serviço', 'mes_seguinte', 5)) return;   // até o fim do mês seguinte (regra de 30/10/2026)
       const choque = carrinho.find(c => c.data_servico === data && horariosSobrepoem(c.hora_inicio, c.hora_fim, calc.ini, calc.fim));
       if (choque) { alert(`Esta data já está na lista com horário que coincide (${choque.hora_inicio} às ${choque.hora_fim}). No mesmo dia só vale outro horário, ex.: 07:00–15:00 e 15:00–23:00.`); return; }
       if (alertaEscalaAtual && !confirm('Atenção (escala):\n\n' + alertaEscalaAtual + '\n\nIncluir esta data mesmo assim?')) return;
