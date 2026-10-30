@@ -117,7 +117,7 @@
       $('tab').innerHTML = '<tbody><tr><td>Carregando…</td></tr></tbody>';
       try {
         const [li, lf, re, rt] = await Promise.all([
-          tudo(() => _supabase.from('folha_itens').select('funcionario_id, rubrica, tipo, valor, referencia').eq('competencia', comp)),
+          tudo(() => _supabase.from('folha_itens').select('funcionario_id, rubrica, tipo, valor, referencia, motivo_ajuste').eq('competencia', comp)),
           tudo(() => _supabase.from('funcionarios').select('id, nome_registro, cnpj, empresa_registro, codigo_contabil, status')),
           _supabase.from('empresas').select('id, razao_social, nome_fantasia, cnpj, cod_contabil'),
           _supabase.from('tipos_eventos').select('id, codigo_evento, descricao_do_evento, tipo_evento, natureza_do_evento, codigo_contabil, unidade_contabil')]);
@@ -131,7 +131,10 @@
           const cod = (String(i.rubrica || '').match(/^\s*(\d+)/) || [])[1]; const ev = eventos[cod];
           if (!ev || ev.natureza_do_evento !== 'CONTABIL' || SALARIO.includes(cod)) return;
           const k = i.funcionario_id + '|' + cod;
-          const o = soma[k] || (soma[k] = { fid: i.funcionario_id, cod, valor: 0, n: 0, refs: new Set() });
+          const o = soma[k] || (soma[k] = { fid: i.funcionario_id, cod, valor: 0, n: 0, refs: new Set(), horas: 0, semHoras: 0 });
+          // horas gravadas no lançamento (adicional noturno "NOTURNO 22,5H", hora extra 100% "HE100 8H"): a contabilidade recebe em horas
+          if (ev.unidade_contabil === 'HORAS') { const mh = String(i.motivo_ajuste || '').match(/(?:NOTURNO|HE100) ([\d.,]+)\s*H/i);
+            if (mh) o.horas += parseFloat(mh[1].replace(',', '.')) || 0; else o.semHoras++; }
           o.valor += Number(i.valor || 0) * (ev.tipo_evento === 'DESCONTO' || i.tipo === 'DESCONTO' ? -1 : 1); o.n++;
           if (i.referencia) o.refs.add(i.referencia);
         });
@@ -199,7 +202,7 @@
               <td>${ev.codigo_contabil ? codEd(ev.codigo_contabil, 'EVENTO', ev.id) : semCod('sem código', 'EVENTO', ev.id)}${ev.unidade_contabil === 'HORAS' ? '<span class="horas">HORAS</span>' : ''}</td>
               <td>${esc(l.cod + ' - ' + ev.descricao_do_evento)}</td>
               <td class="${l.valor < 0 ? 'deb' : 'cred'}">${l.valor < 0 ? 'Débito' : 'Crédito'}</td>
-              <td class="desc">${esc([...l.refs].join(' · '))}</td>
+              <td class="desc">${esc([...l.refs].join(' · '))}${ev.unidade_contabil === 'HORAS' ? ` <b class="horas">${l.horas ? String(Math.round(l.horas * 100) / 100).replace('.', ',') + ' h' : ''}${l.semHoras ? (l.horas ? ' + ' : '') + l.semHoras + ' sem horas' : ''}</b>` : ''}</td>
               <td class="n cp ${l.valor < 0 ? 'deb' : ''}" onclick="copiar(this, ${Math.abs(l.valor)})">${brl(Math.abs(l.valor))}</td></tr>`;
           });
         });
@@ -241,6 +244,7 @@
         'Cód Epr': f.codigo_contabil ? Number(f.codigo_contabil) : '', 'Nome': f.nome_registro || '', 'Competência': comp,
         'Código do Evento': ev.codigo_contabil ? Number(ev.codigo_contabil) : '', 'valor/hora': Math.abs(l.valor), 'Cód Emp': e.cod_contabil ? Number(e.cod_contabil) : '',
         'Tipo': l.valor < 0 ? 'Débito' : 'Crédito', 'Unidade na contabilidade': ev.unidade_contabil === 'HORAS' ? 'HORAS (conferir)' : 'valor',
+        'Horas': ev.unidade_contabil === 'HORAS' && l.horas ? Math.round(l.horas * 100) / 100 : '',
         'Evento no sistema': `${l.cod} - ${ev.descricao_do_evento}`, 'Referência': [...l.refs].join(' · '), 'Empresa': e.nome_fantasia || e.razao_social || '' }));
       const completos = base.filter(({ f, e, ev }) => f.codigo_contabil && e.cod_contabil && ev.codigo_contabil && ev.unidade_contabil !== 'HORAS');
       const modelo = completos.map(({ l, f, e, ev }) => ({ 'fixo': 10, 'cód empregado': Number(f.codigo_contabil), 'competencia': Number(aaaamm),

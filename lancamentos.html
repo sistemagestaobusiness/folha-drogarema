@@ -127,6 +127,18 @@
 
             <!-- Adicional noturno (2027 contábil / 2004 não contábil): RH informa as horas; o valor e o DSR (2037 / 2032) saem calculados (regra de 16/10/2026) -->
             <div id="boxPendenteEvento" class="hidden bg-rose-50 border-2 border-rose-400 p-3 rounded-lg text-xs text-rose-900 space-y-1.5"></div>
+            <!-- Hora extra 100% contábil (2067): RH informa as horas; o valor sai calculado (regra de 30/10/2026). A contabilidade recebe em horas (código 0200). -->
+            <div id="boxHE" class="hidden bg-orange-50 border border-orange-300 p-3 rounded-lg space-y-2">
+              <label class="block text-xs font-bold text-orange-800 uppercase">⏰ Horas de hora extra 100% no mês *</label>
+              <input type="number" step="0.01" min="0" id="inputHorasHE" oninput="calcularHE(true)" placeholder="ex.: 8"
+                class="w-full bg-white border border-orange-300 rounded-lg p-2 text-slate-800 text-sm font-mono focus:outline-none focus:border-orange-600">
+              <div id="txtCalcHE" class="text-[10px] text-orange-900 leading-snug"></div>
+              <div id="boxJustHE" class="hidden">
+                <label class="block text-[11px] font-bold text-rose-700 uppercase mb-1">Valor diferente do cálculo · justificativa *</label>
+                <input type="text" id="inputJustHE" maxlength="200" placeholder="Por que o valor é diferente do calculado?"
+                  class="w-full bg-white border border-rose-300 rounded-lg p-2 text-slate-800 text-xs uppercase focus:outline-none focus:border-rose-600">
+              </div>
+            </div>
             <div id="boxNoturno" class="hidden bg-indigo-50 border border-indigo-300 p-3 rounded-lg space-y-2">
               <label class="block text-xs font-bold text-indigo-800 uppercase">🌙 Horas noturnas no mês *</label>
               <input type="number" step="0.01" min="0" id="inputHorasNoturno" oninput="calcularNoturno(true)" placeholder="ex.: 22,5"
@@ -155,7 +167,7 @@
                 <label class="block text-xs font-bold text-slate-600 uppercase">4. Valor do Lançamento (R$) *</label>
                 <button type="button" onclick="alternarCampoAbatimento()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-1.5 py-0.5 rounded cursor-pointer" title="">+</button>
               </div>
-              <input type="number" step="0.01" id="valorLancamento" required placeholder="0,00" oninput="calcularNoturno(false)" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+              <input type="number" step="0.01" id="valorLancamento" required placeholder="0,00" oninput="calcularNoturno(false); calcularHE(false)" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
             </div>
 
             <!-- Painel Oculto 1 -->
@@ -847,6 +859,37 @@
       fer.forEach(f => dias.add(Number(String(f.data).slice(8, 10))));
       return { dsrDias: dias.size, uteis: ultimo - dias.size, domingos, feriados: dias.size - domingos };
     }
+    // ---------------- HORA EXTRA 100% CONTÁBIL (2067): horas → valor (regra de 30/10/2026) ----------------
+    // valor = horas × salário base / 220 × 2 (hora normal + 100%). O RH pode editar o valor, com justificativa.
+    const HE_FATOR = { 2067: 2 };
+    let calcHE = null;
+    function horasHEDoMotivo(m) { const x = String(m || '').match(/HE100 ([\d.,]+)\s*H/i); return x ? x[1].replace(',', '.') : ''; }
+    async function atualizarBoxHE() {
+      const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
+      const eh = ev && HE_FATOR[ev.codigo_evento];
+      document.getElementById('boxHE').classList.toggle('hidden', !eh);
+      calcHE = null;
+      if (!eh) { document.getElementById('inputHorasHE').value = ''; document.getElementById('inputJustHE').value = ''; document.getElementById('boxJustHE').classList.add('hidden'); return; }
+      const idEd = document.getElementById('editLancamentoId').value;
+      if (idEd) document.getElementById('inputHorasHE').value = horasHEDoMotivo((mapaItensRenderizados[idEd] || {}).motivo_ajuste);
+      calcularHE(!idEd);
+    }
+    function calcularHE(preencherValor) {
+      const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
+      if (!ev || !HE_FATOR[ev.codigo_evento]) return;
+      const func = listaGlobalFuncionarios.find(f => String(f.id) === String(document.getElementById('selectFuncionarioNovo').value));
+      const txt = document.getElementById('txtCalcHE'), valorEl = document.getElementById('valorLancamento');
+      if (!func) { txt.innerHTML = 'Selecione o colaborador.'; return; }
+      const sal = parseFloat(func.salario_base || 0), h = parseFloat(document.getElementById('inputHorasHE').value) || 0;
+      if (!(sal > 1)) { txt.innerHTML = '<b class="text-rose-700">Colaborador sem salário base no cadastro: não dá para calcular.</b>'; calcHE = null; return; }
+      const fator = HE_FATOR[ev.codigo_evento], valor = Math.round(h * sal / 220 * fator * 100) / 100;
+      calcHE = { horas: h, valor };
+      if (preencherValor && h > 0) valorEl.value = valor.toFixed(2);
+      const brl = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      txt.innerHTML = h > 0 ? `${h.toLocaleString('pt-BR')} h × ${brl(sal)} / 220 × 2 (hora + 100%) = <b>${brl(valor)}</b> · vai em horas para a contabilidade (0200)` : 'Informe as horas: o valor é calculado.';
+      const difere = h > 0 && Math.abs((parseFloat(valorEl.value) || 0) - valor) > 0.009;
+      document.getElementById('boxJustHE').classList.toggle('hidden', !difere);
+    }
     function horasDoMotivo(m) { const x = String(m || '').match(/NOTURNO ([\d.,]+)\s*H/i); return x ? x[1].replace(',', '.') : ''; }
     async function atualizarBoxNoturno() {
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
@@ -1021,7 +1064,7 @@
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value);
       aplicarTipoDoEvento();
       const extra = catPagExtra(ev, competenciaRegraLancamento);
-      atualizarBoxNoturno(); avisoPendenteDoEvento();
+      atualizarBoxNoturno(); atualizarBoxHE(); avisoPendenteDoEvento();
       document.getElementById('boxVencimentoPag').classList.toggle('hidden', !extra);
       document.getElementById('info13').classList.add('hidden');
       const idEd = document.getElementById('editLancamentoId').value;
@@ -2057,6 +2100,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       document.getElementById('boxNoturno').classList.add('hidden');
       document.getElementById('inputHorasNoturno').value = ''; document.getElementById('inputJustNoturno').value = '';
       document.getElementById('boxJustNoturno').classList.add('hidden'); calcNoturno = null;
+      document.getElementById('inputHorasHE').value = ''; document.getElementById('inputJustHE').value = ''; document.getElementById('boxJustHE').classList.add('hidden'); document.getElementById('boxHE').classList.add('hidden'); calcHE = null;
       document.getElementById('inputDivNoturno').value = ''; document.getElementById('boxDivNoturno').classList.add('hidden'); document.getElementById('txtEscalaNoturno').innerHTML = '';
 
       const btnSalvar = document.getElementById('btnSalvar');
@@ -2152,6 +2196,19 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         return;
       }
 
+      // hora extra 100% contábil: horas obrigatórias; valor diferente do cálculo exige justificativa (regra de 30/10/2026)
+      let he100 = null;
+      if (HE_FATOR[eventoSel.codigo_evento]) {
+        calcularHE(false);
+        if (!calcHE || !(calcHE.horas > 0)) { alert('Hora extra 100%: informe as HORAS do mês (o valor é calculado).'); document.getElementById('inputHorasHE').focus(); return; }
+        const justHE = removerAcentosEColocarMaiuscula(document.getElementById('inputJustHE').value).trim();
+        const editadoHE = Math.abs(valorBruto - calcHE.valor) > 0.009;
+        if (editadoHE && justHE.replace(/[^A-Z]/g, '').length < 10) {
+          alert(`O valor (R$ ${valorBruto.toFixed(2)}) é diferente do calculado (R$ ${calcHE.valor.toFixed(2)}).\n\nInforme a justificativa (mínimo 10 letras) ou volte ao valor calculado.`);
+          document.getElementById('boxJustHE').classList.remove('hidden'); document.getElementById('inputJustHE').focus(); return;
+        }
+        he100 = `HE100 ${String(calcHE.horas).replace('.', ',')}H (CALCULO R$ ${calcHE.valor.toFixed(2)})` + (editadoHE ? ` · VALOR EDITADO: ${justHE}` : '');
+      }
       // adicional noturno: horas obrigatórias; valor diferente do cálculo exige justificativa
       // pedido aberto para este evento (falta da escala, freelance/HE, 13º antecipado): não grava à mão (regra de 29/10/2026)
       await avisoPendenteDoEvento();
@@ -2244,6 +2301,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       }
 
       if (noturno) motivo_ajuste = noturno.motivo + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
+      if (he100) motivo_ajuste = he100 + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
 
       const parcela_atual = aj1 ? aj1.parcela_atual : (itemOriginal.parcela_atual || 1);
       const total_parcelas = aj1 ? aj1.total_parcelas : (itemOriginal.total_parcelas || 1);
