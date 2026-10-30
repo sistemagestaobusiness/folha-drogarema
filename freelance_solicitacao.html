@@ -118,7 +118,7 @@
           <div class="grid grid-cols-3 gap-2">
             <div>
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data *</label>
-              <input data-mes-corrente="calendario" data-rotulo="Data do serviço" data-dias-tras="5" type="date" id="inputData" onchange="atualizarEscala()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono">
+              <input data-mes-corrente="mes_seguinte" data-rotulo="Data do serviço" data-dias-tras="5" type="date" id="inputData" onchange="atualizarEscala()" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono">
             </div>
             <div>
               <label id="lblInicio" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Início</label>
@@ -438,7 +438,7 @@
       if (!data || !calc) { alert('Preencha a data e os horários (de 30 em 30 minutos).'); return; }
       // prazo para pedir (regra de 29/10/2026): no máximo 5 dias para trás; com 6 dias de atraso bloqueia (hoje 29/10 → a partir de 24/10)
       if (data < dataMinimaPedido()) { alert(`Não dá para pedir freelance ou hora extra de ${formatarDataBR(data)}: o prazo é de até 5 dias para trás (a partir de ${formatarDataBR(dataMinimaPedido())}). Fale com o RH.`); return; }
-      if (!DataMes.conferir(data, 'Data do serviço', 'calendario', 5)) return;   // só até o fim do mês corrente (regra de 29/10/2026)
+      if (!DataMes.conferir(data, 'Data do serviço', 'mes_seguinte', 5)) return;   // até o fim do mês seguinte (regra de 30/10/2026)
       const choque = carrinho.find(c => c.data_servico === data && horariosSobrepoem(c.hora_inicio, c.hora_fim, calc.ini, calc.fim));
       if (choque) { alert(`Esta data já está na lista com horário que coincide (${choque.hora_inicio} às ${choque.hora_fim}). No mesmo dia só vale outro horário, ex.: 07:00–15:00 e 15:00–23:00.`); return; }
       if (alertaEscalaAtual && !confirm('Atenção (escala):\n\n' + alertaEscalaAtual + '\n\nIncluir esta data mesmo assim?')) return;

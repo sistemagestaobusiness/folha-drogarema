@@ -142,6 +142,7 @@ window.DiaUtil = window.DiaUtil || {
 };
 // Datas só no mês (regra de 29/10/2026). Campos <input type="date" data-mes-corrente="..."> recebem min/max e são conferidos ao mudar:
 //  "periodo"    = período ABERTO da folha (telas do RH): do dia 26 do mês anterior ao 5º dia útil do mês seguinte
+//  "mes_seguinte" = como "calendario", mas vai até o fim do mês seguinte (freelance)
 //  "calendario" = mês corrente do calendário (solicitações); com data-dias-tras="5" vale de hoje-5 até o fim do mês
 // Na hora de gravar, use DataMes.conferir(valor, 'rótulo', modo, diasTras): avisa e devolve false se estiver fora.
 window.DataMes = window.DataMes || {
@@ -166,6 +167,7 @@ window.DataMes = window.DataMes || {
     let ini = this._iso(new Date(a, m - 1, 1)), fim = this._iso(new Date(a, m, 0));
     // período da folha: lançamentos do dia 26 do mês anterior até o 5º dia útil do mês seguinte (fechamento contábil 26 a 25; a folha fecha no 5º dia útil)
     if (modo === 'periodo') { ini = this._iso(new Date(a, m - 2, 26)); fim = this.quintoDiaUtil(a, m + 1); }
+    if (modo === 'mes_seguinte') fim = this._iso(new Date(a, m + 1, 0));   // freelance: mês corrente + o seguinte (pedido do supervisor, 30/10/2026)
     if (diasTras != null && modo !== 'periodo') { const d = new Date(+h.slice(0, 4), +h.slice(5, 7) - 1, +h.slice(8, 10)); d.setDate(d.getDate() - diasTras); ini = this._iso(d); }   // ex.: freelance = até 5 dias para trás (pode cair no mês anterior)
     return [ini, fim];
   },
@@ -183,7 +185,7 @@ window.DataMes = window.DataMes || {
     if (!valor) return true;
     const [i, f] = this.faixa(modo || 'periodo', diasTras);
     if (valor >= i && valor <= f) return true;
-    alert(`${rotulo || 'Data'} fora do período: ${this._br(valor)}.\n\nSó dá para usar datas de ${this._br(i)} a ${this._br(f)} (${modo === 'calendario' ? 'mês corrente' : 'período aberto da folha: do dia 26 do mês anterior ao 5º dia útil do mês seguinte'}).`);
+    alert(`${rotulo || 'Data'} fora do período: ${this._br(valor)}.\n\nSó dá para usar datas de ${this._br(i)} a ${this._br(f)} (${modo === 'calendario' ? 'mês corrente' : modo === 'mes_seguinte' ? 'mês corrente e o seguinte' : 'período aberto da folha: do dia 26 do mês anterior ao 5º dia útil do mês seguinte'}).`);
     return false;
   },
   aplicar(raiz) {
