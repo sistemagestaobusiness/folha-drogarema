@@ -303,6 +303,27 @@
     } catch (e) { console.warn('holerites', e); }
   }
 
+  // (03/11/2026) bolhas das aprovações do Gestor se atualizam sozinhas: a cada 60 s, ao voltar para a aba e quando uma tela avisa
+  // que aprovou/recusou algo (postMessage 'aprovacoes-mudaram'). Antes ficavam presas até recarregar o sistema.
+  async function bolhasGestor() {
+    if (String(window.ACESSO.perfil || '').toUpperCase() !== 'GESTOR' || !window.ACESSO_CLI) return;
+    let tot = 0;
+    const pinta = (item, n) => { if (!item) return; let b = item.querySelector('.bolha');
+      if (n > 0) { if (!b) { b = document.createElement('span'); b.className = 'bolha'; b.style.background = '#dc2626'; b.style.color = '#fff'; item.appendChild(b); } b.textContent = n; }
+      else if (b && !b.hasAttribute('data-pend')) b.remove(); };
+    for (const ap of APROVACOES_GESTOR) {
+      try { const { data, error } = await window.ACESSO_CLI.rpc(ap.rpc); if (error) continue;
+        const n = (data && data[0] && data[0].qtd) || 0; tot += n;
+        pinta(document.querySelector(`#menuSistema a.it[data-menu="${ap.tela}"]`), n); } catch (e) { }
+    }
+    pinta(document.querySelector('#menuSistema a.it[data-menu="aprovacoes_gestor.html"]'), tot);
+  }
+  if (window.top === window) {
+    setInterval(bolhasGestor, 60000);
+    window.addEventListener('focus', () => bolhasGestor());
+    window.addEventListener('message', ev => { if (ev && ev.data === 'aprovacoes-mudaram') bolhasGestor(); });
+  }
+
   async function adiantamentoGestor() {
     if (String(window.ACESSO.perfil || '').toUpperCase() !== 'GESTOR' || !window.ACESSO_CLI) return;
     try {

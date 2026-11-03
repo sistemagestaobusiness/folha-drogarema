@@ -158,18 +158,24 @@
       const { error } = await _supabase.rpc(t.rpc, { p_id: id, p_aprovar: aprovar, p_obs: obs });
       if (error) { if (c) c.querySelectorAll('button').forEach(b => b.disabled = false); return alert('Não foi possível ' + (aprovar ? 'aprovar' : 'recusar') + ': ' + error.message); }
       await carregar();
+      try { window.top.postMessage('aprovacoes-mudaram', '*'); } catch (e) { }   // atualiza as bolhas do menu
     }
 
     async function aprovarVarios(soUrgentes) {
       const alvo = itens.filter(i => TIPO[i.tipo] && TIPO[i.tipo].rpc && !TIPO[i.tipo].individual && (!soUrgentes || faixa(i) <= 1));
       if (!alvo.length) return;
       const total = alvo.reduce((s, i) => s + Number(i.atual || 0), 0);
-      if (!confirm(`Aprovar ${alvo.length} item(ns)${soUrgentes ? ' com pagamento hoje/amanhã' : ''}? Total dos valores novos: ${brl(total)}.\nOs pagamentos vão para o Financeiro.`)) return;
+      // só VT, adiantamento e 13º antecipado viram pagamento no Financeiro; planos (desconto) e o resto ficam só na folha (03/11/2026)
+      const PAGA = ['VT', 'ADIANTAMENTO', 'DECIMO'];
+      const nPag = alvo.filter(i => PAGA.includes(i.tipo)).length, nFolha = alvo.length - nPag;
+      const destino = [nPag && `${nPag} pagamento(s) (VT, adiantamento, 13º) vão para o Financeiro`, nFolha && `${nFolha} item(ns) (planos e outros descontos) só entram na folha do mês`].filter(Boolean).join('.\n');
+      if (!confirm(`Aprovar ${alvo.length} item(ns)${soUrgentes ? ' com pagamento hoje/amanhã' : ''}? Total dos valores novos: ${brl(total)}.\n${destino}.`)) return;
       $('topo').querySelectorAll('button').forEach(b => b.disabled = true);
       const falhas = [];
       for (const i of alvo) { const { error } = await _supabase.rpc(TIPO[i.tipo].rpc, { p_id: i.id, p_aprovar: true, p_obs: null }); if (error) falhas.push(`${i.funcionario} (${TIPO[i.tipo].nome}): ${error.message}`); }
       if (falhas.length) alert('Não aprovados:\n' + falhas.join('\n'));
       await carregar();
+      try { window.top.postMessage('aprovacoes-mudaram', '*'); } catch (e) { }   // atualiza as bolhas do menu
     }
 
     inicializar();
