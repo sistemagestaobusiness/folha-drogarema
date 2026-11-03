@@ -90,11 +90,15 @@
   }
 
   // "Análise de Entrega": uma linha por unidade (valor do delivery e quantidade de entregas)
+  // (03/11/2026) também aceita o "Análise de Entrega por Item" (Un. Neg., Valor, Qtd. Itens): traz o valor, mas não a
+  // quantidade de entregas (fica em branco) nem o mês; o "Análise de Entrega" (com a coluna Entregas) é o completo.
   function lerEntregas(rows) {
     const out = {}; let ix = null;
     (rows || []).forEach(r => {
       if (!r) return;
       if (r.some(c => /^ENTREGAS$/.test(norm(c))) && r.some(c => /^UN\. NEG\.?$/.test(norm(c)))) { ix = colunas(r, { un: /^UN\. NEG\.?$/, v: /^VALOR$/, e: /^ENTREGAS$/ }); return; }
+      if (!ix && r.some(c => /^UN\. NEG\.?$/.test(norm(c))) && r.some(c => /^VALOR$/.test(norm(c))) && r.some(c => /^QTD\. ITENS$/.test(norm(c)))) { ix = colunas(r, { un: /^UN\. NEG\.?$/, v: /^VALOR$/ }); ix.porItem = true; return; }
+      if (ix && ix.porItem) { if (!/^\d+$/.test(String(r[ix.un] == null ? '' : r[ix.un]).trim())) return; out[parseInt(r[ix.un], 10)] = { valor: num(r[ix.v]), entregas: null, porItem: true }; return; }
       if (!ix || !/^\d+$/.test(String(r[ix.un] == null ? '' : r[ix.un]).trim())) return;
       out[parseInt(r[ix.un], 10)] = { valor: num(r[ix.v]), entregas: num(r[ix.e]) };
     });
@@ -175,7 +179,7 @@
       R[c.id] = { nome: c.nome, bruto: liq + desc, desc, liq, lucro, gen, sim, gensim, vit: c.vit, gensim_sem_vit: gensim - c.vit,
         perf, ...perfItens, sidney: c.sid, perf_sem_sidney: perf - c.sid,
         // comissão/bônus não considera farmácia popular (sem margem): base = gen + sim − vitaminas, sem a transferência
-        ...(c.loja ? porClasse(c.loja) : {}), delivery: c.loja && ent ? ((ent[c.loja] || {}).valor || 0) : null, entregas: c.loja && ent ? ((ent[c.loja] || {}).entregas || 0) : null,
+        ...(c.loja ? porClasse(c.loja) : {}), delivery: c.loja && ent ? ((ent[c.loja] || {}).valor || 0) : null, entregas: c.loja && ent ? ((ent[c.loja] || {}).porItem ? null : ((ent[c.loja] || {}).entregas || 0)) : null,
         fp_venda: fpV[c.id] || 0, fp_gensim: fpGS[c.id] || 0, base_bonus: gensim - c.vit - (fpGS[c.id] || 0),
         dermo_total: dermo + rennova, dermo, rennova, efs: etico + formulas + servicos + covid, etico, formulas, servicos, covid };
     });

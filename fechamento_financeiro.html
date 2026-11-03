@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="fechamento_core.js?v=4"></script>
+  <script src="fechamento_core.js?v=5"></script>
   <script src="metas_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -240,7 +240,7 @@
     function limparSlots() { slots = {}; naoReconhecidos = []; entregasExtra = null; montarDosSlots(); }
     function renderSlots() {
       const tem = Object.keys(slots).length || naoReconhecidos.length || entregasExtra;
-      if (!tem) { $('listaRel').innerHTML = `<div class="text-[11px] text-slate-400">São 8 arquivos: 7 de venda (nível 3, prefeitura, vendas Wagner, e-commerce, farmácia popular, resumo vitaminas, resumo Sidney) e o <b>arquivo único de comissão</b> (o mesmo da tela Importar Alpha7; a tela reparte nos 6 planos). Os 6 arquivos de comissão por plano continuam aceitos. Entregas (delivery) é opcional.</div>`; return; }
+      if (!tem) { $('listaRel').innerHTML = `<div class="text-[11px] text-slate-400">São 9 arquivos: 7 de venda (nível 3, prefeitura, vendas Wagner, e-commerce, farmácia popular, resumo vitaminas, resumo Sidney) e o <b>arquivo único de comissão</b> (o mesmo da tela Importar Alpha7; a tela reparte nos 6 planos). Os 6 arquivos de comissão por plano continuam aceitos. E o relatório de entregas (delivery), com a coluna Entregas.</div>`; return; }
       const linha = ([t, rot, grupo, obrig]) => { const s = t === 'ENTREGAS' ? entregasExtra : slots[t];
         const foraMes = s && s.info.competencia && competencia && s.info.competencia !== competencia;
         let dir = '';
@@ -248,7 +248,7 @@
           dir = `<span class="font-mono">${fmt(s.info.total)}</span>` + (sis == null ? '' : ` <span class="text-slate-400">· no sistema</span> <span class="font-mono">${fmt(sis)}</span> ${Math.abs(dif) < 0.005 ? '<span class="text-emerald-700">✓</span>' : `<span class="text-amber-700 font-semibold" title="lançado no sistema − relatório do Alpha7">${dif > 0 ? '+' : '−'}${fmt(Math.abs(dif))}</span>`}`); }
         else if (s) dir = `<span class="font-mono">${fmt(s.info.total || 0)}</span>`;
         // (03/11/2026) os 7 de venda são esperados todo mês: falta aparece em laranja; comissão: falta o arquivo único
-        const esperado = !s && !obrig && t !== 'ENTREGAS';
+        const esperado = !s && !obrig;
         return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-100"><span class="w-4 ${s ? 'text-emerald-600' : obrig ? 'text-rose-600' : esperado ? 'text-amber-600' : 'text-slate-300'}">${s ? '✓' : obrig ? '✗' : esperado ? '!' : '○'}</span>
           <span class="w-52 ${s ? 'text-slate-800' : 'text-slate-400'}">${rot}</span><span class="flex-1 truncate ${esperado ? 'text-amber-700 font-semibold' : 'text-slate-500'}" title="${s ? esc(s.nome) : ''}">${s ? esc(s.nome) + (s.unico ? ' (arquivo único)' : '') : obrig ? 'falta (obrigatório)' : esperado ? (grupo === 'C' ? 'falta: suba o arquivo único de comissão' : 'falta este relatório') : 'não enviado (opcional)'}${foraMes ? ` <b class="text-rose-700">período ${esc(s.info.periodo)}: não é ${esc(competencia)}</b>` : ''}</span><span class="text-right">${dir}</span></div>`; };
       $('listaRel').innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 text-[11px] mt-1">
@@ -279,8 +279,10 @@
       window._entMsg = '';
       if (abasLidas && entregasExtra) { const e = FechamentoCore.entregasDoMes(entregasExtra.linhas, competencia);
         abasLidas['ENTREGAS'] = e.linhas;
-        const n = Object.keys(FechamentoCore.lerEntregas(e.linhas)).length;
+        const le = FechamentoCore.lerEntregas(e.linhas), n = Object.keys(le).length, porItem = Object.values(le).some(x => x.porItem);
         window._entMsg = e.achou && n ? `Delivery: lido de "${entregasExtra.nome}"${e.meses.length ? ' (mês ' + competencia + ')' : ' (o arquivo não informa o mês: confira se é de ' + competencia + ')'}, ${n} loja(s).`
+            + (porItem ? ' É o relatório "por Item": traz o valor do delivery, mas não a quantidade de entregas (fica em branco). Para ter as entregas, use o "Análise de Entrega".' : '')
+          : e.achou && !n ? `ATENÇÃO: o arquivo de entregas "${entregasExtra.nome}" não tem as colunas esperadas (Un. Neg., Valor e Entregas): o delivery ficou vazio.`
           : `ATENÇÃO: o arquivo de entregas "${entregasExtra.nome}" não tem o mês ${competencia}${e.meses.length ? ' (tem: ' + e.meses.join(', ') + ')' : ''}. O delivery ficou vazio neste fechamento.`; }
       try { calc = FechamentoCore.calcular(abasLidas, lojaDoUsuario); calc.novo = true; }
       catch (err) { calc = null; $('avisos').innerHTML = `<div class="text-rose-700 font-bold">${esc(err.message)}</div>`; }
@@ -492,9 +494,13 @@
         const equipe = {}, campoDe = { C2018: 'simgen', C2019: 'perf', C2020: 'sidney', C2022: 'vit' };
         // venda de cada atendente no plano: a do quadro de detalhe do relatório (toda a venda, com ou sem premiação);
         // se o arquivo não tiver o detalhe, usa o resumo do topo (só a venda premiada)
+        // (03/11/2026) o quadro de detalhe traz o nome sem o código do Alpha7 (e cortado em 30 letras): acha o usuário completo
+        // no resumo do mesmo plano ("DAIANE PERERIA DE MELO" → "DAIANE PERERIA DE MELO - 120") antes de procurar o funcionário
         Object.keys(campoDe).forEach(t => { const info = (slots[t] || {}).info || {}, lista = (info.detalhe && info.detalhe.length) ? info.detalhe : (info.usuarios || []);
+          const comCod = {}; (info.usuarios || []).forEach(x => { const k = norm(String(x.usuario).replace(/\s*-\s*\d+\s*$/, '')); if (!comCod[k]) comCod[k] = x.usuario; });
           lista.forEach(u => {
-          const f = acharFuncionario(u.usuario), l = f ? lojaNum(f.loja_id) : null; if (!l || !(u.venda > 0)) return;
+          const cheio = comCod[norm(u.usuario)] || u.usuario;
+          const f = acharFuncionario(cheio) || acharFuncionario(u.usuario), l = f ? lojaNum(f.loja_id) : null; if (!l || !(u.venda > 0)) return;
           const e = (equipe[l] = equipe[l] || {}), nomeU = String(u.usuario).replace(/\s*-\s*\d+\s*$/, '').trim();
           const p = e[f.id] || (e[f.id] = { fid: String(f.id), nome: nomeU, simgen: 0, perf: 0, sidney: 0, vit: 0 });
           p[campoDe[t]] = Math.round((p[campoDe[t]] + u.venda) * 100) / 100; }); });
