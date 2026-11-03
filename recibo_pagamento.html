@@ -131,6 +131,7 @@
     .th-cod, .td-cod { width: 45px; text-align: center; }
     .th-desc, .td-desc { width: 215px; text-align: left; }
     .th-ref, .td-ref { width: 75px; text-align: center; }
+    .td-ref { font-size: 8.5px; line-height: 1.1; word-break: break-word; }   /* dias agrupados: "19,20,21,22,23/10" */
     .th-venc, .td-venc { width: 105px; text-align: right; }
     .th-descval, .td-descval { width: 105px; text-align: right; }
   </style>
@@ -479,13 +480,37 @@
           const compl = item.complemento ? ' - ' + String(item.complemento).toUpperCase().slice(0, 30) : '';
           const descExibir = evAtual ? `${String(evAtual.descricao_do_evento).toUpperCase()}${compl}${sufixoParcela ? ' ' + sufixoParcela : ''}` : desc + compl;
 
+          // dia do fato (freelance, hora extra…): da referência "DD/MM" ou do motivo "… 17/10/2026 …"
+          const dia = (String(item.referencia || '').match(/^(\d{2})\/(\d{2})$/) || String(item.motivo_ajuste || '').match(/\b(\d{2})\/(\d{2})\/\d{4}\b/) || [])[0] || '';
           recibosMap[fId].itens.push({
             codigo: codigo,
             descricao: descExibir,
             referencia: '',
+            dia: dia.slice(0, 5),
             vencimento: tipo === 'PROVENTO' ? val : 0,
             desconto: tipo === 'DESCONTO' ? val : 0
           });
+        });
+
+        // (03/11/2026) o mesmo evento várias vezes no mês (ex.: hora extra e freelance por dia) vira UMA linha no holerite,
+        // com os valores somados e os dias na coluna Referência ("19,20,21/10"); assim o recibo cabe numa folha
+        Object.values(recibosMap).forEach(r => {
+          const grupos = [], idx = {};
+          r.itens.forEach(it => {
+            const k = it.codigo + '|' + it.descricao + '|' + (it.vencimento ? 'V' : 'D');
+            if (!it.codigo || idx[k] == null) { idx[k] = grupos.length; grupos.push({ ...it, dias: it.dia ? [it.dia] : [], n: 1 }); return; }
+            const g = grupos[idx[k]]; g.vencimento += it.vencimento; g.desconto += it.desconto; g.n++; if (it.dia) g.dias.push(it.dia);
+          });
+          grupos.forEach(g => {
+            g.vencimento = Math.round(g.vencimento * 100) / 100; g.desconto = Math.round(g.desconto * 100) / 100;
+            if (g.n > 1 || g.dias.length) {
+              const ord = [...new Set(g.dias)].sort((a, b) => (a.slice(3) + a.slice(0, 2)).localeCompare(b.slice(3) + b.slice(0, 2)));
+              const meses = [...new Set(ord.map(d => d.slice(3)))];
+              g.referencia = !ord.length ? (g.n > 1 ? g.n + 'x' : '')
+                : meses.length === 1 ? ord.map(d => d.slice(0, 2)).join(',') + '/' + meses[0] : ord.join(' ');
+            }
+          });
+          r.itens = grupos;
         });
 
         // ordem: empresa (CNPJ) e, dentro dela, nome; assim a impressão já sai separada por empresa
