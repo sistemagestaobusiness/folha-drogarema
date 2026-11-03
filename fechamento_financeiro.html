@@ -14,6 +14,9 @@
   <style>
     th { font-weight: 600; }
     .num { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+    #rolaResultado { max-height: calc(100vh - 140px); overflow: auto; }
+    #cab th { position: sticky; top: 0; z-index: 2; background: #fff; box-shadow: inset 0 -1px 0 #e2e8f0; }
+    @media print { #rolaResultado { max-height: none; overflow: visible; } #cab th { position: static; box-shadow: none; } }
     @media print { .noprint { display: none !important; } body { background: #fff !important; } .cartao { border: 0 !important; } }
   </style>
 </head>
@@ -62,7 +65,8 @@
           <div class="flex items-center gap-4 text-[11px] text-slate-600"><span id="boxComparar"><input type="checkbox" id="chkComparar" class="hidden"></span>
             <span class="text-[10px] text-slate-400">% na coluna TOTAL = média das 7 lojas</span></div></div>
         <div id="resumoVar"></div>
-        <table class="w-full text-xs mt-2"><thead id="cab"></thead><tbody id="corpo"></tbody></table>
+        <!-- (03/11/2026) cabeçalho com as lojas e o total fica fixo ao rolar a tabela -->
+        <div id="rolaResultado"><table class="w-full text-xs mt-2"><thead id="cab"></thead><tbody id="corpo"></tbody></table></div>
       </div>
 
       <!-- 3. bônus faturamento -->
@@ -402,7 +406,11 @@
     }
     async function lancarBonus(fid, valor, det) {
       const nome = (funcs.find(f => f.id === fid) || {}).nome_registro || '';
-      if (!confirm(`Lançar o bônus de faturamento de ${nome} na folha ${competencia}?\n\nValor: R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nSe já existir um lançamento do evento 2015 para a pessoa neste mês, ele é atualizado (não duplica).`)) return;
+      // (03/11/2026) diz se já existe ou não, em vez do texto genérico que parecia "já lançado"
+      const ja = lancados2015[fid] || [], vJa = ja.reduce((a, i) => a + parseFloat(i.valor || 0), 0), brl = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      const situacao = ja.length ? `Já existe bônus (2015) de R$ ${brl(vJa)} para ${nome} em ${competencia}: ele será TROCADO por R$ ${brl(valor)} (não duplica).`
+        : `Ainda NÃO há bônus (2015) para ${nome} em ${competencia}: será criado agora.`;
+      if (!confirm(`Lançar o bônus de faturamento de ${nome} na folha ${competencia}?\n\nValor: R$ ${brl(valor)}\n\n${situacao}`)) return;
       const { data, error } = await _supabase.rpc('fn_fechamento_lancar_bonus', { p_competencia: competencia, p_funcionario: fid, p_valor: valor, p_detalhe: det });
       if (error) return alert('Não foi possível lançar: ' + error.message);
       alert('Resultado: ' + data);
