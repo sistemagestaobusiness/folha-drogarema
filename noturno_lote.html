@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adicional noturno pela escala - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
+      <div>
+        <h1 class="tit-sis text-xl font-bold text-slate-900">☾ Adicional noturno pela escala</h1>
+        <p class="text-xs text-slate-500">O sistema lê a escala do período (26 a 25, horas entre 23h e 5h) e monta a prévia. Nada é gravado até o RH revisar e clicar em <b>Confirmar lançamento</b>. Grava o adicional e o DSR, com o mesmo cálculo de Lançamentos.</p>
+      </div>
+      <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-3">
+      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-wrap items-end gap-3">
+        <div><label class="lbl">Competência (período aberto)</label><div id="lblComp" class="font-mono font-black text-lg text-slate-900">-</div></div>
+        <div class="text-[11px] text-slate-600 flex-1 min-w-[260px]">
+          Cálculo: horas × salário / 220 × 30% · DSR = adicional × (domingos + feriados) / dias úteis do mês.<br>
+          Registrado (com código contábil) vai no <b>2027</b> + DSR 2037; sem registro vai no <b>2004</b> + DSR 2032. Dá para trocar na linha.
+          Horas diferentes da escala pedem justificativa (10 letras).
+        </div>
+        <button onclick="carregar()" class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold cursor-pointer">↻ Ler a escala de novo</button>
+      </div>
+
+      <div id="resumo" class="text-xs text-slate-700"></div>
+
+      <div class="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-slate-50 text-[10px] uppercase text-slate-500">
+            <tr><th class="px-2 py-2"><input type="checkbox" id="chkTodos" onchange="marcarTodos(this.checked)" class="w-4 h-4"></th>
+              <th class="px-2 py-2 text-left">Funcionário</th><th class="px-2 py-2 text-left">Escala (dias)</th>
+              <th class="px-2 py-2 text-left">Horas</th><th class="px-2 py-2 text-left">Evento</th>
+              <th class="px-2 py-2 text-right">Adicional</th><th class="px-2 py-2 text-right">DSR</th><th class="px-2 py-2 text-left">Situação</th></tr>
+          </thead>
+          <tbody id="tab"><tr><td class="p-3">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+        <div id="totSel" class="text-sm font-bold text-indigo-900 flex-1">Nenhum selecionado.</div>
+        <button id="btnConfirmar" onclick="confirmar()" class="px-4 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-black text-sm cursor-pointer disabled:opacity-40" disabled>✓ Confirmar lançamento</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 3px; }
+    .inp { width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px; font-size: 12px; }
+  </style>
+
+  <script>
+    const _supabase = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const num = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtH = v => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
+    const DIVERGE_H = 0.25;
+    let perfil = null, comp = null, linhas = [], ed = {};
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
+      perfil = u ? u.perfil : null;
+      $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
+      if (!['RH', 'GESTOR'].includes(perfil)) { $('aviso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora. Recarregue a página.'; $('aviso').classList.remove('hidden'); return; }
+      // mesmo período de Lançamentos: mês FECHADO em liberação do Gestor ou o ABERTO mais antigo
+      const { data: cs } = await _supabase.from('competencias').select('*');
+      const ord = (a, b) => (a.ano - b.ano) || (a.mes - b.mes), agora = new Date();
+      const alvo = (cs || []).filter(c => c.status === 'FECHADO' && c.liberado_ate && new Date(c.liberado_ate) > agora).sort(ord)[0]
+        || (cs || []).filter(c => c.status === 'ABERTO').sort(ord)[0];
+      if (!alvo) { $('aviso').innerText = 'Nenhum período aberto: o Gestor abre o mês no Painel.'; $('aviso').classList.remove('hidden'); return; }
+      comp = `${String(alvo.mes).padStart(2, '0')}/${alvo.ano}`;
+      $('lblComp').innerText = comp;
+      $('conteudo').classList.remove('hidden');
+      await carregar();
+    }
+
+    async function carregar() {
+      $('tab').innerHTML = '<tr><td colspan="8" class="p-3">Lendo a escala…</td></tr>';
+      const { data, error } = await _supabase.rpc('fn_noturno_lote_previa', { p_comp: comp });
+      if (error) { $('tab').innerHTML = `<tr><td colspan="8" class="p-3 text-rose-700 font-bold">Erro: ${esc(error.message)}</td></tr>`; return; }
+      linhas = data || []; ed = {};
+      linhas.forEach(l => { ed[l.funcionario_id] = { sel: false, horas: Number(l.horas_escala), evento: l.evento_sugerido, just: '' }; });
+      render();
+    }
+
+    function calc(l) {
+      const e = ed[l.funcionario_id], h = Number(e.horas) || 0;
+      const adic = r2(h * Number(l.salario) / 220 * 0.30), dsr = l.uteis ? r2(adic * l.dsr_dias / l.uteis) : 0;
+      const diverge = Math.abs(h - Number(l.horas_escala)) > DIVERGE_H;
+      const justOk = !diverge || String(e.just).toUpperCase().replace(/[^A-Z]/g, '').length >= 10;
+      return { h, adic, dsr, diverge, justOk };
+    }
+
+    function render() {
+      const pend = linhas.filter(l => !l.ja_lancado), ja = linhas.filter(l => l.ja_lancado);
+      $('resumo').innerHTML = !linhas.length
+        ? '<div class="bg-white border border-slate-200 rounded-xl p-4">Pela escala, ninguém tem horas entre 23h e 5h neste período e não há adicional lançado. Nada a fazer.</div>'
+        : `<b>${pend.length}</b> com horas noturnas na escala e sem adicional lançado · <b>${ja.length}</b> já lançado(s) (só para conferir).`;
+      $('tab').innerHTML = linhas.length ? linhas.map(l => {
+        const e = ed[l.funcionario_id], id = l.funcionario_id, c = calc(l), lanc = !!l.ja_lancado;
+        const semSal = !(Number(l.salario) > 1);
+        return `<tr class="border-t border-slate-100 ${lanc ? 'bg-slate-50 text-slate-500' : ''}">
+          <td class="px-2 py-1.5 text-center">${lanc || semSal ? '' : `<input type="checkbox" class="w-4 h-4" ${e.sel ? 'checked' : ''} onchange="ed['${id}'].sel=this.checked; render()">`}</td>
+          <td class="px-2 py-1.5"><div class="font-bold text-slate-900">${esc(l.nome)}</div><div class="text-[10px] text-slate-500">${esc(l.loja || '-')} · ${esc(l.cargo || '')} · salário ${num(l.salario)}${l.registrado ? '' : ' · <b>sem registro</b>'}</div></td>
+          <td class="px-2 py-1.5"><b>${fmtH(l.horas_escala)} h</b> <span class="text-slate-500">(${l.dias || 0} dia(s))</span>${l.datas ? `<div class="text-[10px] text-slate-400 max-w-[260px] truncate" title="${esc(l.datas)}">${esc(l.datas)}</div>` : ''}</td>
+          <td class="px-2 py-1.5">${lanc ? '-' : `<input class="inp !w-20 font-mono" value="${fmtH(e.horas)}" onchange="ed['${id}'].horas=parseFloat(this.value.replace(',', '.'))||0; render()">
+            ${c.diverge ? `<input class="inp !w-56 mt-1 text-[10px] ${c.justOk ? '' : '!border-red-400 !bg-red-50'}" placeholder="Por que diferente da escala? (mín. 10 letras) *" value="${esc(e.just)}" oninput="ed['${id}'].just=this.value; atualizarTotal()">` : ''}`}</td>
+          <td class="px-2 py-1.5">${lanc ? '-' : `<select class="inp !w-auto" onchange="ed['${id}'].evento=Number(this.value); render()">
+            <option value="2027" ${e.evento === 2027 ? 'selected' : ''}>2027 contábil</option><option value="2004" ${e.evento === 2004 ? 'selected' : ''}>2004 não contábil</option></select>`}</td>
+          <td class="px-2 py-1.5 text-right font-mono">${lanc ? '-' : num(c.adic)}</td>
+          <td class="px-2 py-1.5 text-right font-mono">${lanc ? '-' : `${num(c.dsr)}<div class="text-[9px] text-slate-400">× ${l.dsr_dias}/${l.uteis}</div>`}</td>
+          <td class="px-2 py-1.5 text-[11px]">${lanc ? `<span class="text-emerald-700 font-bold">Já lançado</span><div class="text-[10px]">${esc(l.ja_lancado)}</div>${Number(l.horas_escala) === 0 ? '<div class="text-amber-700 font-bold">⚠ escala sem horas noturnas</div>' : ''}`
+            : semSal ? '<span class="text-rose-700 font-bold">Sem salário no cadastro</span>'
+            : c.diverge ? '<span class="text-amber-700 font-bold">Horas diferentes da escala</span>' : '<span class="text-slate-600">Pela escala</span>'}</td></tr>`;
+      }).join('') : '<tr><td colspan="8" class="p-3 text-slate-500">Nada na escala.</td></tr>';
+      atualizarTotal();
+    }
+
+    function selecionados() { return linhas.filter(l => !l.ja_lancado && ed[l.funcionario_id].sel); }
+    function atualizarTotal() {
+      const s = selecionados();
+      let ta = 0, td = 0, falta = 0;
+      s.forEach(l => { const c = calc(l); ta += c.adic; td += c.dsr; if (!c.justOk || !(c.h > 0)) falta++; });
+      $('totSel').innerHTML = s.length ? `${s.length} selecionado(s) · adicional R$ ${num(ta)} + DSR R$ ${num(td)} = <span class="text-indigo-700">R$ ${num(ta + td)}</span>`
+        + (falta ? ` · <span class="text-rose-700">${falta} sem horas ou sem justificativa</span>` : '') : 'Nenhum selecionado.';
+      $('btnConfirmar').disabled = !s.length || falta > 0;
+    }
+    function marcarTodos(v) { linhas.forEach(l => { if (!l.ja_lancado && Number(l.salario) > 1) ed[l.funcionario_id].sel = v; }); render(); }
+
+    async function confirmar() {
+      const s = selecionados(); if (!s.length) return;
+      let ta = 0, td = 0; s.forEach(l => { const c = calc(l); ta += c.adic; td += c.dsr; });
+      if (!confirm(`Confirmar o lançamento do adicional noturno de ${s.length} funcionário(s) em ${comp}?\n\nAdicional R$ ${num(ta)} + DSR R$ ${num(td)} = R$ ${num(ta + td)}\n\nO valor é calculado pelo banco com as horas informadas.`)) return;
+      const itens = s.map(l => { const e = ed[l.funcionario_id]; return { funcionario_id: l.funcionario_id, evento: e.evento, horas: Number(e.horas), justificativa: e.just || null }; });
+      $('btnConfirmar').disabled = true;
+      const { data, error } = await _supabase.rpc('fn_noturno_lote_lancar', { p_comp: comp, p_itens: itens });
+      if (error) { alert('Nada foi gravado: ' + error.message); atualizarTotal(); return; }
+      alert(`${data} lançamento(s) de adicional noturno gravados em ${comp}, com o DSR.`);
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
