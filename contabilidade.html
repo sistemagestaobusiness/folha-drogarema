@@ -133,7 +133,8 @@
           const k = i.funcionario_id + '|' + cod;
           const o = soma[k] || (soma[k] = { fid: i.funcionario_id, cod, valor: 0, n: 0, refs: new Set(), horas: 0, semHoras: 0 });
           // horas gravadas no lançamento (adicional noturno "NOTURNO 22,5H", hora extra 100% "HE100 8H"): a contabilidade recebe em horas
-          if (ev.unidade_contabil === 'HORAS') { const mh = String(i.motivo_ajuste || '').match(/(?:NOTURNO|HE100) ([\d.,]+)\s*H/i);
+          // também "Hora extra 12/10/2026 - LOJA 07 (7.5h)", gravado pela aprovação do RH (feriado / hora extra) — 03/11/2026
+          if (ev.unidade_contabil === 'HORAS') { const mh = String(i.motivo_ajuste || '').match(/(?:NOTURNO|HE100) ([\d.,]+)\s*H/i) || String(i.motivo_ajuste || '').match(/\(([\d.,]+)\s*h\)/i);
             if (mh) o.horas += parseFloat(mh[1].replace(',', '.')) || 0; else o.semHoras++; }
           o.valor += Number(i.valor || 0) * (ev.tipo_evento === 'DESCONTO' || i.tipo === 'DESCONTO' ? -1 : 1); o.n++;
           if (i.referencia) o.refs.add(i.referencia);
@@ -269,6 +270,49 @@
       return ws;
     }
 
+    // Aba CONFERIR (03/11/2026): para cada lançamento que não vai completo à contabilidade, diz se entrou na Plan1,
+    // o que está errado e o que fazer. Gravidade: CORRIGIR (cadastro faltando, o valor some da Plan1) · CONFERIR (vai, mas
+    // precisa olhar: horas, código a pedir à contabilidade) · INFORMATIVO (a contabilidade calcula; só para bater o valor).
+    const ORDEM_GRAV = ['CORRIGIR', 'CONFERIR', 'INFORMATIVO'];
+    function diagnostico({ l, f, e, ev }) {
+      const desc = String(ev.descricao_do_evento || '').toUpperCase(), cod = String(l.cod);
+      const naPlan1 = !!(f.codigo_contabil && ORDEM_CONTAB.includes(String(Number(ev.codigo_contabil || 0))));
+      let grav, prob, fazer;
+      if (!f.codigo_contabil) {
+        grav = 'CORRIGIR'; prob = 'Funcionário sem código do empregado no cadastro: nenhum lançamento dele entra na Plan1.';
+        fazer = 'Na tela Envio à contabilidade, clicar em "sem código" ao lado do nome e gravar o código do empregado (o da contabilidade). Se não tem registro (autônomo/sócio), gravar a dispensa.';
+      } else if (!e.cod_contabil) {
+        grav = 'CORRIGIR'; prob = 'Empresa do funcionário sem código da contabilidade: a linha sai sem "Cód Emp".';
+        fazer = 'Na tela Envio à contabilidade, clicar em "sem código" na empresa e gravar o código.';
+      } else if (ev.unidade_contabil === 'HORAS' && !l.horas) {
+        grav = 'CORRIGIR'; prob = `A contabilidade recebe ${desc.toLowerCase()} em horas, mas o lançamento não tem as horas: na Plan1 vai 0:00.`;
+        fazer = 'Em Lançamentos, editar o lançamento e informar as horas (ex.: "NOTURNO 22,5H" / "HE100 8H").';
+      } else if (ev.unidade_contabil === 'HORAS') {
+        grav = 'CONFERIR'; prob = `Vai na Plan1 em horas (${String(Math.round(l.horas * 100) / 100).replace('.', ',')}h), não em reais.`;
+        fazer = 'Conferir se as horas batem com a escala; a contabilidade calcula o valor.';
+      } else if (/INSS|IRRF|IRPF/.test(desc)) {
+        grav = 'INFORMATIVO'; prob = 'Imposto calculado pela contabilidade: não se envia.'; fazer = 'Só conferir se o valor do holerite da contabilidade bate com o do sistema.';
+      } else if (/FERIAS|RESCIS|AVISO|INDENIZ/.test(desc)) {
+        grav = 'INFORMATIVO'; prob = 'Verba de férias ou rescisão: a contabilidade calcula no recibo de férias / termo de rescisão.'; fazer = 'Conferir se o valor deles bate com o do sistema; se divergir, avisar a contabilidade.';
+      } else if (/13/.test(desc)) {
+        grav = 'CONFERIR'; prob = '13º antecipado pago no mês: não tem código na tabela da contabilidade.'; fazer = 'Informar à contabilidade (por e-mail) para abater na 2ª parcela do 13º em dezembro.';
+      } else if (/DSR|REFLEXO/.test(desc)) {
+        grav = 'INFORMATIVO'; prob = 'Reflexo no DSR: a contabilidade calcula a partir das horas enviadas (noturno / hora extra).'; fazer = 'Só conferir o valor no holerite deles.';
+      } else if (/EMPREST|EMP\.|CRED\. TRAB|CONSIG/.test(desc)) {
+        grav = 'CONFERIR'; prob = 'Parcela de empréstimo descontada em folha: a tabela da contabilidade (30/10) não tem código para empréstimo.';
+        fazer = 'Pedir à contabilidade o código do desconto de empréstimo (ou confirmar que eles já lançam pelo consignado/eSocial). Com o código, gravar no evento.';
+      } else if (/FALTA/.test(desc)) {
+        grav = 'CONFERIR'; prob = 'Falta: a tabela da contabilidade não tem código de falta.'; fazer = 'Informar a falta à contabilidade (dias e horas) ou pedir o código e gravar no evento.';
+      } else {
+        grav = 'CONFERIR'; prob = `Evento ${cod} sem código contábil: não entra na Plan1.`;
+        fazer = 'Se a contabilidade precisa receber, pedir o código e gravar no evento (tela Envio à contabilidade, "sem código"); se não precisa, ignorar.';
+      }
+      return { 'Gravidade': grav, 'Nome': f.nome_registro || '', 'Cód Epr': f.codigo_contabil ? Number(f.codigo_contabil) : '', 'Empresa': e.nome_fantasia || e.razao_social || '',
+        'Evento no sistema': `${cod} - ${ev.descricao_do_evento}`, 'Tipo': l.valor < 0 ? 'Débito' : 'Crédito', 'Valor': Math.abs(l.valor),
+        'Horas': ev.unidade_contabil === 'HORAS' && l.horas ? Math.round(l.horas * 100) / 100 : '',
+        'Código contábil': ev.codigo_contabil || '(sem)', 'Na Plan1?': naPlan1 ? 'sim' : 'NÃO', 'O que está errado': prob, 'O que fazer': fazer };
+    }
+
     function baixar() {
       if (!window.XLSX) return alert('O gerador de Excel não carregou. Recarregue a página.');
       const comp = compDe($('fComp').value), aaaamm = $('fComp').value.replace('-', '');
@@ -284,13 +328,16 @@
       const completos = base.filter(({ f, e, ev }) => f.codigo_contabil && e.cod_contabil && ev.codigo_contabil && ev.unidade_contabil !== 'HORAS');
       const modelo = completos.map(({ l, f, e, ev }) => ({ 'fixo': 10, 'cód empregado': Number(f.codigo_contabil), 'competencia': Number(aaaamm),
         'código rubrica': Number(ev.codigo_contabil), 'Tipo do processo': 11, 'valor': Math.round(Math.abs(l.valor) * 100), 'empresa': Number(e.cod_contabil) }));
-      const conferir = base.filter(x => !completos.includes(x)).map(({ l, f, e, ev }) => ({ 'Nome': f.nome_registro || '', 'Evento no sistema': `${l.cod} - ${ev.descricao_do_evento}`, 'Valor': Math.abs(l.valor),
-        'Motivo': [!f.codigo_contabil && 'sem código do empregado', !e.cod_contabil && 'sem código da empresa', !ev.codigo_contabil && 'evento sem código contábil', ev.unidade_contabil === 'HORAS' && 'contabilidade recebe em horas'].filter(Boolean).join(' · ') }));
+      const conferir = base.filter(x => !completos.includes(x)).map(diagnostico)
+        .sort((a, b) => ORDEM_GRAV.indexOf(a['Gravidade']) - ORDEM_GRAV.indexOf(b['Gravidade']) || a['Nome'].localeCompare(b['Nome']));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, planilhaContabilidade(aaaamm), 'Plan1');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista), 'INFORMAÇÕES FOLHA');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modelo.length ? modelo : [{ 'fixo': '', 'cód empregado': '', 'competencia': '', 'código rubrica': '', 'Tipo do processo': '', 'valor': '', 'empresa': '' }]), 'MODELO');
-      if (conferir.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conferir), 'CONFERIR');
+      if (conferir.length) { const wc = XLSX.utils.json_to_sheet(conferir);
+        wc['!cols'] = [{ wch: 12 }, { wch: 36 }, { wch: 8 }, { wch: 14 }, { wch: 34 }, { wch: 8 }, { wch: 11 }, { wch: 7 }, { wch: 10 }, { wch: 9 }, { wch: 70 }, { wch: 90 }];
+        wc['!autofilter'] = { ref: wc['!ref'] };
+        XLSX.utils.book_append_sheet(wb, wc, 'CONFERIR'); }
       XLSX.writeFile(wb, `VARIAVEL_FOLHA_${aaaamm.slice(4)}${aaaamm.slice(0, 4)}.xlsx`);
     }
 
