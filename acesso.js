@@ -166,7 +166,8 @@ window.DataMes = window.DataMes || {
     if (modo === 'periodo' && this._per) { a = this._per.a; m = this._per.m; }
     let ini = this._iso(new Date(a, m - 1, 1)), fim = this._iso(new Date(a, m, 0));
     // período da folha: lançamentos do dia 26 do mês anterior até o 5º dia útil do mês seguinte (fechamento contábil 26 a 25; a folha fecha no 5º dia útil)
-    if (modo === 'periodo') { ini = this._iso(new Date(a, m - 2, 26)); fim = this.quintoDiaUtil(a, m + 1); }
+    // período da folha: do dia 26 do mês anterior até o fim do mês seguinte (o VT e o adiantamento do mês seguinte são pagos com o período ainda aberto; correção de 03/11/2026)
+    if (modo === 'periodo') { ini = this._iso(new Date(a, m - 2, 26)); fim = this._iso(new Date(a, m + 1, 0)); }
     if (modo === 'mes_seguinte') fim = this._iso(new Date(a, m + 1, 0));   // freelance: mês corrente + o seguinte (pedido do supervisor, 30/10/2026)
     if (diasTras != null && modo !== 'periodo') { const d = new Date(+h.slice(0, 4), +h.slice(5, 7) - 1, +h.slice(8, 10)); d.setDate(d.getDate() - diasTras); ini = this._iso(d); }   // ex.: freelance = até 5 dias para trás (pode cair no mês anterior)
     return [ini, fim];
@@ -185,7 +186,7 @@ window.DataMes = window.DataMes || {
     if (!valor) return true;
     const [i, f] = this.faixa(modo || 'periodo', diasTras);
     if (valor >= i && valor <= f) return true;
-    alert(`${rotulo || 'Data'} fora do período: ${this._br(valor)}.\n\nSó dá para usar datas de ${this._br(i)} a ${this._br(f)} (${modo === 'calendario' ? 'mês corrente' : modo === 'mes_seguinte' ? 'mês corrente e o seguinte' : 'período aberto da folha: do dia 26 do mês anterior ao 5º dia útil do mês seguinte'}).`);
+    alert(`${rotulo || 'Data'} fora do período: ${this._br(valor)}.\n\nSó dá para usar datas de ${this._br(i)} a ${this._br(f)} (${modo === 'calendario' ? 'mês corrente' : modo === 'mes_seguinte' ? 'mês corrente e o seguinte' : 'período aberto da folha: do dia 26 do mês anterior ao fim do mês seguinte'}).`);
     return false;
   },
   aplicar(raiz) {
