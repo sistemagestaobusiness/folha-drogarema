@@ -87,7 +87,7 @@
         </div>
         <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
           <div><h3 class="font-black text-sm">🎉 Feriados</h3>
-            <p class="text-[11px] text-slate-500">Aparecem destacados na escala. Quem trabalha no feriado recebe folga compensatória em outro dia ou hora extra 100% (clique no dia da pessoa). Farmacêuticos não entram (adicional fixo mensal). Cadastro: RH/Gestor.</p></div>
+            <p class="text-[11px] text-slate-500">Aparecem destacados na escala. Quem trabalha no feriado recebe folga compensatória em outro dia ou hora extra 100% (clique no dia da pessoa). Farmacêuticos com adicional fixo de feriado não entram; os que não recebem (ex.: Loja 07) entram como os demais. Cadastro: RH/Gestor.</p></div>
           <div id="tabFeriados"></div>
         </div>
       </div>
@@ -160,6 +160,9 @@
     // feriado do dia para a loja aberta (vazio = todas as lojas)
     const feriadoDe = iso => (feriados.find(x => x.data === iso && (!x.loja_id || x.loja_id === lojaSel)) || {}).nome || '';
     const ehFarmaceutico = f => /FARMAC[EÊ]UTIC/i.test(String(f.cargo || '') + ' ' + String(f.organograma_funcao || ''));
+    // feriado: só fica sem hora extra/folga o farmacêutico que recebe o adicional fixo de feriado (2012) — Loja 07 não recebe (03/11/2026)
+    let comFixoFeriado = new Set();
+    const temFixoFeriado = f => ehFarmaceutico(f) && comFixoFeriado.has(f.id);
     let funcs = [], padroes = {}, horario = {}, excecoes = [], ferias = [], freelas = [];
     // equipe fixa da loja: quem é só FREELANCE (cargo do cadastro) e não tem horário padrão não entra na lista de cima;
     // aparece só na parte de baixo (★), nos dias em que tiver freelance aprovado/solicitado
@@ -213,6 +216,7 @@
       ]);
       lojas = (rl.data || []).filter(l => l.ativo !== false);
       funcs = rf.data || [];
+      try { const { data: fx } = await _supabase.rpc('fn_farmaceuticos_adicional_feriado'); comFixoFeriado = new Set((fx || []).map(x => typeof x === 'string' ? x : Object.values(x)[0])); } catch (e) { }
       const escopo = perfil === 'LIDER' ? lojas.filter(l => l.id === minhaLoja)
         : perfil === 'SUPERVISOR' ? lojas.filter(estruturaSupervisor) : lojas;
       $('selLoja').innerHTML = escopo.map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
@@ -579,10 +583,10 @@
       const fer = feriadoDe(iso), bx = $('dBoxFeriado');
       bx.classList.toggle('hidden', !fer);
       if (fer) {
-        const farma = ehFarmaceutico(f);
+        const farma = temFixoFeriado(f);
         bx.innerHTML = `<div class="bg-fuchsia-50 border border-fuchsia-300 rounded-lg p-2.5 space-y-2">
           <div class="font-black text-fuchsia-900">🎉 FERIADO: ${esc(fer)}</div>
-          ${farma ? '<div class="text-[11px] text-slate-600">Farmacêutico: recebe adicional fixo mensal, não gera folga compensatória nem hora extra.</div>'
+          ${farma ? '<div class="text-[11px] text-slate-600">Farmacêutico com adicional fixo de feriado: não gera folga compensatória nem hora extra.</div>'
           : r.tipo !== 'TRABALHO' ? (/^DISPENSADO NO FERIADO/i.test(r.obs || '')
               ? `<div class="text-[11px] text-fuchsia-900"><b>🏠 Dispensado pela loja</b> (sem hora extra e sem folga compensatória).<div class="text-slate-600">${esc(String(r.obs).replace(/^DISPENSADO NO FERIADO:\s*/i, ''))}</div><div class="text-[10px] text-slate-500 mt-1">Para desfazer: escolha "Padrão" e salve.</div></div>`
               : '<div class="text-[11px] text-slate-600">Pela escala, a pessoa não trabalha neste feriado.</div>')
