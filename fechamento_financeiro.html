@@ -470,9 +470,9 @@
         const quando = new Date(salvo.salvo_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
         const frase = 'SUBSTITUIR ' + competencia;
         const dig = prompt(`ATENÇÃO: ${competencia} JÁ ESTÁ FECHADO (salvo em ${quando}).\n\nSubstituir troca o resultado das lojas publicado e pode mudar a meta do mês seguinte. Só faça se o fechamento estiver errado.\n\nPara continuar, digite exatamente:  ${frase}`);
-        if (dig == null) return; if (dig.trim().toUpperCase() !== frase) return alert('Texto diferente do pedido. O fechamento salvo foi mantido.');
+        if (dig == null) return; if (dig.trim().toUpperCase() !== frase) return alert(`❌ NÃO FOI SALVO.\n\nO texto digitado é diferente de "${frase}". Nada mudou: clique em Salvar fechamento e digite de novo.`);
         const motivo = (prompt('Motivo da substituição (fica registrado no fechamento):') || '').trim();
-        if (motivo.length < 5) return alert('Informe o motivo (pelo menos 5 letras). O fechamento salvo foi mantido.');
+        if (motivo.length < 5) return alert('❌ NÃO FOI SALVO.\n\nFaltou o motivo (pelo menos 5 letras). Nada mudou: clique em Salvar fechamento de novo.');
         troca = [...((salvo.dados && salvo.dados.substituicoes) || []), { em: new Date().toISOString(), por: (window.ACESSO || {}).email || null, motivo, anterior: salvo.salvo_em, arquivoAnterior: salvo.arquivo || null }];
       }
       const comissaoAlpha7 = {}; RELS.filter(r => r[2] === 'C' && slots[r[0]]).forEach(r => { comissaoAlpha7[r[0]] = { total: slots[r[0]].info.total, usuarios: slots[r[0]].info.usuarios }; });
@@ -483,7 +483,7 @@
       const pub = await publicarResultado(dados.resultado);
       abasLidas = null; $('arq').value = ''; slots = {}; naoReconhecidos = []; renderSlots();
       await carregarCompetencia();
-      alert('Fechamento de ' + competencia + ' salvo.\n\n' + pub);
+      alert('✅ SALVO: fechamento de ' + competencia + ' gravado.\n\n' + pub);
     }
 
     // Fechar o período: publica o resultado de cada loja (só indicadores de venda) e calcula a meta do mês seguinte

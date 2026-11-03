@@ -15,7 +15,7 @@
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
       <div>
         <h1 class="tit-sis text-xl font-bold text-slate-900">☾ Adicional noturno pela escala</h1>
-        <p class="text-xs text-slate-500">O sistema lê a escala do período (26 a 25, horas entre 23h e 5h) e monta a prévia. Nada é gravado até o RH revisar e clicar em <b>Confirmar lançamento</b>. Grava o adicional e o DSR, com o mesmo cálculo de Lançamentos.</p>
+        <p class="text-xs text-slate-500">O sistema lê a escala do período (26 a 25, horas entre 22h e 5h) e monta a prévia. Nada é gravado até o RH revisar e clicar em <b>Confirmar lançamento</b>. Grava o adicional e o DSR, com o mesmo cálculo de Lançamentos.</p>
       </div>
       <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
     </div>
@@ -108,7 +108,7 @@
     function render() {
       const pend = linhas.filter(l => !l.ja_lancado), ja = linhas.filter(l => l.ja_lancado);
       $('resumo').innerHTML = !linhas.length
-        ? '<div class="bg-white border border-slate-200 rounded-xl p-4">Pela escala, ninguém tem horas entre 23h e 5h neste período e não há adicional lançado. Nada a fazer.</div>'
+        ? '<div class="bg-white border border-slate-200 rounded-xl p-4">Pela escala, ninguém tem horas entre 22h e 5h neste período e não há adicional lançado. Nada a fazer.</div>'
         : `<b>${pend.length}</b> com horas noturnas na escala e sem adicional lançado · <b>${ja.length}</b> já lançado(s) (só para conferir).`;
       $('tab').innerHTML = linhas.length ? linhas.map(l => {
         const e = ed[l.funcionario_id], id = l.funcionario_id, c = calc(l), lanc = !!l.ja_lancado;

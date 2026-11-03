@@ -313,3 +313,46 @@ document.addEventListener('wheel', function () {
   var el = document.activeElement;
   if (el && el.tagName === 'INPUT' && el.type === 'number') el.blur();
 }, { passive: true, capture: true });
+
+// ---------------------------------------------------------------------
+// VERSÃO DO SISTEMA (03/11/2026): o GitHub Pages deixa as telas no cache do navegador por até 10 min, então fechar e
+// abrir a aba nem sempre traz a versão nova. A janela principal confere versao.txt (sem cache) ao abrir, a cada 2 min
+// e ao voltar para a janela; quando muda, mostra uma barra azul "Atualizar agora", que renova no cache a tela atual,
+// as abas abertas e os scripts comuns e recarrega.
+// ---------------------------------------------------------------------
+(function () {
+  if (window.top !== window || /login\.html$/i.test(location.pathname)) return;
+  var atual = null;
+  function ler() { return fetch('versao.txt?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : null; }).then(function (t) { return t ? t.trim() : null; }).catch(function () { return null; }); }
+  function barra(nova) {
+    if (document.getElementById('barraVersao')) return;
+    var b = document.createElement('div'); b.id = 'barraVersao';
+    b.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:99999;background:#1d4ed8;color:#fff;border-radius:0 0 10px 10px;padding:6px 14px;font:600 12.5px Inter,system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center';
+    b.innerHTML = '🔄 O sistema foi atualizado. Salve o que estiver digitando e clique em <button type="button" style="background:#fff;color:#1d4ed8;border:0;border-radius:6px;padding:3px 10px;font-weight:800;cursor:pointer">Atualizar agora</button>';
+    b.querySelector('button').onclick = function () {
+      b.querySelector('button').textContent = 'Atualizando…';
+      try { localStorage.setItem(CH, nova); } catch (e) { }
+      renovar().then(function () { document.querySelectorAll('iframe').forEach(function (f) { try { f.contentWindow.location.reload(); } catch (e) { } }); location.reload(); });
+    };
+    (document.body || document.documentElement).appendChild(b);
+  }
+  function renovar() {
+    var urls = [location.href, 'acesso.js'];
+    document.querySelectorAll('iframe').forEach(function (f) { if (f.src) urls.push(f.src); });
+    document.querySelectorAll('script[src]').forEach(function (s) { if (s.src.indexOf(location.origin) === 0) urls.push(s.src); });
+    return Promise.all(urls.map(function (u) { return fetch(u, { cache: 'reload' }).catch(function () { }); }));
+  }
+  var CH = 'versao_sistema';
+  function conferir() { ler().then(function (v) {
+    if (!v) return;
+    if (atual === null) {
+      atual = v; var ant = null; try { ant = localStorage.getItem(CH); } catch (e) { }
+      try { localStorage.setItem(CH, v); } catch (e) { }
+      // abriu o sistema depois de uma atualização: renova o cache uma vez e recarrega sozinho (a tela pode ter vindo antiga)
+      if (ant && ant !== v) { var j = 'versao_recarregou_' + v, ja = null; try { ja = sessionStorage.getItem(j); } catch (e) { }
+        if (!ja) { try { sessionStorage.setItem(j, '1'); } catch (e) { } renovar().then(function () { location.reload(); }); } }
+      return;
+    }
+    if (v !== atual) barra(v); }); }
+  conferir(); setInterval(conferir, 120000); window.addEventListener('focus', conferir);
+})();
