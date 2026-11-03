@@ -172,9 +172,20 @@
       rd.onload = e => {
         try {
           const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null });
-          const hi = rows.findIndex(r => r && r.some(c => String(c || '').trim() === 'Entregador') && r.some(c => String(c || '').trim() === 'Bairro'));
-          if (hi < 0) throw new Error('Não achei o cabeçalho (Data, Entregador, Un. Neg., Bairro...). Confira se é o relatório "Análise de Entrega".');
+          // (03/11/2026) procura em todas as abas: o relatório do Alpha7 tem uma aba só, mas uma planilha de trabalho pode ter
+          // várias (resumo na 1ª aba, cópias antigas...). Usa a aba com o cabeçalho cuja data mais recente é a maior.
+          const temCab = r => r && r.some(c => String(c || '').trim() === 'Entregador') && r.some(c => String(c || '').trim() === 'Bairro');
+          let rows = null, hi = -1, abaUsada = '', melhor = '';
+          wb.SheetNames.forEach(nome => {
+            const rs = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: null });
+            const h = rs.findIndex(temCab); if (h < 0) return;
+            const cD0 = rs[h].map(c => String(c || '').trim()).indexOf('Data');
+            let max = '';
+            rs.slice(h + 1).forEach(r => { const d = r && r[cD0]; const iso = d instanceof Date ? d.toISOString().slice(0, 10)
+              : /^\d{2}\/\d{2}\/\d{4}/.test(String(d || '')) ? String(d).slice(0, 10).split('/').reverse().join('-') : ''; if (iso > max) max = iso; });
+            if (rows === null || max > melhor) { rows = rs; hi = h; abaUsada = nome; melhor = max; }
+          });
+          if (hi < 0) throw new Error('Não achei o cabeçalho (Data, Entregador, Un. Neg., Bairro...) em nenhuma aba. Confira se é o relatório "Análise de Entrega" do Alpha7.');
           const H = rows[hi].map(c => String(c || '').trim());
           const ix = n => H.indexOf(n);
           const cD = ix('Data'), cE = ix('Entregador'), cL = ix('Un. Neg.'), cB = ix('Bairro'), cV = ix('Valor'), cN = ix('Entregas'), cI = ix('Itens');
@@ -198,7 +209,8 @@
           const ents = new Set(linhas.map(l => l.entregador).filter(Boolean));
           $('previaImport').innerHTML = `<div class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
               <div><b>${linhas.length}</b> linha(s) · <b>${linhas.reduce((t, l) => t + l.entregas, 0)}</b> entrega(s) · ${ents.size} entregador(es)</div>
-              <div>Datas de <b>${dbr(ds[0])}</b> a <b>${dbr(ds[ds.length - 1])}</b></div></div>
+              <div>Datas de <b>${dbr(ds[0])}</b> a <b>${dbr(ds[ds.length - 1])}</b></div>
+              ${wb.SheetNames.length > 1 ? `<div class="text-[11px] text-slate-500">Arquivo com ${wb.SheetNames.length} abas: usei a aba <b>${esc(abaUsada)}</b> (a de data mais recente).</div>` : ''}</div>
             <button onclick="importar()" id="btnImportar" class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-extrabold cursor-pointer">Importar esta quinzena</button>`;
           $('previaImport').classList.remove('hidden');
         } catch (err) { importando = null; $('previaImport').innerHTML = `<div class="bg-rose-50 border border-rose-300 text-rose-800 rounded-lg p-3 font-bold">${esc(err.message)}</div>`; $('previaImport').classList.remove('hidden'); }
