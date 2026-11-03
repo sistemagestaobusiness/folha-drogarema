@@ -127,7 +127,22 @@
     }
 
     let competenciaRegraLancamento = converterCompetenciaParaMMYYYY(competenciaAtivaTexto);
-    document.getElementById('labelCompetencia').innerText = `${competenciaRegraLancamento} (ABERTA)`;
+    document.getElementById('labelCompetencia').innerText = 'carregando período aberto...';
+    // Importação só no período ABERTO (tabela competencias), igual a Lançamentos: não depende do mês escolhido no Painel (03/11/2026).
+    // Ordem: mês FECHADO com liberação excepcional ativa do Gestor → mês ABERTO mais antigo.
+    let periodoPronto = false;
+    const periodoAberto = (async () => {
+      const el = document.getElementById('labelCompetencia');
+      const { data, error } = await _supabase.from('competencias').select('*');
+      if (error || !data) { el.innerText = 'erro ao ler o período aberto'; return; }
+      const ord = (a, b) => (a.ano - b.ano) || (a.mes - b.mes), agora = new Date();
+      const lib = data.filter(c => c.status === 'FECHADO' && c.liberado_ate && new Date(c.liberado_ate) > agora).sort(ord);
+      const alvo = lib[0] || data.filter(c => c.status === 'ABERTO').sort(ord)[0];
+      if (!alvo) { el.innerText = 'nenhum período aberto: o Gestor abre no Painel'; return; }
+      competenciaRegraLancamento = `${String(alvo.mes).padStart(2, '0')}/${alvo.ano}`;
+      el.innerText = `${competenciaRegraLancamento} (${lib.length ? 'LIBERAÇÃO DO GESTOR' : 'ABERTA'})`;
+      periodoPronto = true;
+    })();
 
     async function carregarFuncionarios() {
       const { data } = await _supabase.from('funcionarios').select('id, nome_registro, usuario_alpha7, nomes_alternativos').eq('status', 'ATIVO');
@@ -313,6 +328,8 @@
     }
 
     async function salvarLancamentosLote() {
+      await periodoAberto;
+      if (!periodoPronto) { alert('Não há período aberto para importar. O Gestor abre o mês no Painel.'); return; }
       const naoVinculados = dadosProcessados.filter(d => !d.funcionario_id);
       if (naoVinculados.length > 0) {
         alert('Existem registros sem colaborador vinculado. Por favor, vincule todos antes de salvar.');
