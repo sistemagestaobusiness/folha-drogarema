@@ -120,7 +120,7 @@
       if (perfil === 'GESTOR') await desenharGestor(); else desenharPessoal();
       // cronograma da folha (regra de 28/10/2026): prazos do mês, o que falta e as confirmações
       if (cron) $('conteudo').insertAdjacentHTML('afterbegin', `<section class="card bloco"><div style="padding:16px 20px 6px"><h2 style="margin:0;font-size:15px;font-weight:700">📅 Cronograma da folha</h2>
-        <div class="desc">Adiantamento dia 15 · início do fechamento dia 25 · VT e envio à contabilidade no último dia útil · comissões do Gestor no 1º dia útil. Dia que não é útil antecipa. Aviso obrigatório a partir de 3 dias úteis antes, até a etapa estar feita.</div></div>${Cronograma.tabela(cron, perfil)}</section>`);
+        <div class="desc">Adiantamento dia 15 · início do fechamento dia 25 · envio à contabilidade dia 28 (para os ajustes voltarem prontos em 30/01) · VT no último dia útil · comissões do Gestor no 1º dia útil. A folha do período aberto fica aqui até as etapas dela serem feitas. Dia que não é útil antecipa. Aviso obrigatório a partir de 3 dias úteis antes, até a etapa estar feita.</div></div>${Cronograma.tabela(cron, perfil)}</section>`);
       if (perfil === 'RH') competenciaTrabalho();
     }
 
