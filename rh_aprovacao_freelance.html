@@ -419,7 +419,8 @@
       const he = r.tipo_solicitacao === 'HORA_EXTRA';
       document.getElementById('apTipoTxt').innerText = he ? '1. ⏰ HORA EXTRA de' : '1. 🧑‍🤝‍🧑 FREELANCE feito por';
       const chave = he ? 'HORA EXTRA' : 'FREELANCE';
-      const evs = eventosProv.filter(e => String(e.descricao_do_evento).toUpperCase().includes(chave) && !e.pagamento_extra_tipo);
+      // (03/11/2026) 2072 HORAS TRABALHADAS (acordo: valor da hora, sem os 50%) também aparece para hora extra
+      const evs = eventosProv.filter(e => (String(e.descricao_do_evento).toUpperCase().includes(chave) || (he && /HORAS TRABALHADAS/i.test(e.descricao_do_evento))) && !e.pagamento_extra_tipo && (!e.status || String(e.status).toUpperCase() === 'ATIVO'));
       document.getElementById('apEventoPag').innerHTML = (he ? '<option value="">-- escolha o evento de hora extra --</option>' : '') +
         evs.map(e => `<option value="${e.codigo_evento}" ${(!he && e.codigo_evento === 2014) || (r.motivo === 'FERIADO' && e.codigo_evento === eventoFeriado(r)) ? 'selected' : ''}>${e.codigo_evento} - ${esc(e.descricao_do_evento)} (${e.natureza_do_evento === 'CONTABIL' ? 'contábil' : 'não contábil'})</option>`).join('');
       document.getElementById('apSaldoFreela').innerHTML = txtSaldo(r.funcionario_id);
