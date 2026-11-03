@@ -946,7 +946,7 @@
       await aprovarFalta(id);
     }
 
-    // escala do mês (padrão + dias alterados): horas entre 22h e 5h, calculadas no banco (fn_escala_noturno, regra de 29/10/2026)
+    // escala do mês (padrão + dias alterados): horas entre 23h e 5h (desde 03/11/2026; antes 22h), calculadas no banco (fn_escala_noturno, regra de 29/10/2026)
     let cacheEscNot = {};
     async function escalaNoturno(fid) {
       const k = fid + '|' + competenciaRegraLancamento;
