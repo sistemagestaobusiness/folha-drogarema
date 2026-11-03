@@ -1867,13 +1867,25 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
             <button type="button" onclick="prepararEdicaoPorId('${item.id}')" class="text-slate-400 hover:text-sky-600 font-bold px-1 cursor-pointer" title="Editar">✎</button>
             ${itemTravado(item.id) || exclusaoBloqueada ? `<span class="text-slate-300 px-1">🔒</span>` : `<button type="button" onclick="excluirLancamento('${item.id}')" class="text-slate-400 hover:text-rose-600 font-bold px-1 cursor-pointer" title="Excluir">✕</button>`}`;
         return `<tr class="hover:bg-slate-50">
-          <td class="py-1 px-2 text-slate-700 font-medium">${chipPagamento(item)}${escaparHtml(item.rubrica)} ${badgePagExtra(item)}
+          <td class="py-1 px-2 text-slate-700 font-medium">${chipPagamento(item)}${escaparHtml(item.rubrica)} ${chipDataServico(item)}${badgePagExtra(item)}
             ${Array.isArray(item.reembolso_dias) && item.reembolso_dias.length ? `<div class="text-[10px] text-violet-700 font-normal">🚌 ${item.reembolso_dias.map(d => `${escaparHtml(String(d.data || '').slice(8, 10) + '/' + String(d.data || '').slice(5, 7))}${d.trajeto ? ' ' + escaparHtml(d.trajeto) : ''} (${parseFloat(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join(' · ')}</div>` : ''}
             <span onclick="abrirDetalhesItem('${item.id}')" class="text-slate-300 hover:text-slate-600 cursor-pointer ml-1 text-[10px] select-none" title="Histórico do lançamento">🕘</span></td>
           <td class="py-1 px-2 text-right font-mono font-bold w-24 ${item.tipo === 'DESCONTO' ? 'text-rose-700' : 'text-emerald-700'}">${item.tipo === 'DESCONTO' ? '- ' : ''}${fmt(item.valor)}</td>
           <td class="py-1 px-2 text-center w-16">${acoes}</td>
         </tr>`;
       }).join('');
+    }
+
+    // (03/11/2026) dia do serviço ao lado do evento (freelance, hora extra, horas trabalhadas...): vem da referência dd/mm
+    // ou, se faltar, da 1ª data do motivo. Só visual.
+    function chipDataServico(item) {
+      const ref = String(item.referencia || '').trim();
+      let d = /^\d{2}\/\d{2}$/.test(ref) ? ref : '';
+      if (!d && /FREELANCE|HORA EXTRA|HORAS TRABALHADAS/i.test(String(item.rubrica || ''))) {
+        const m = String(item.motivo_ajuste || '').match(/\b(\d{2}\/\d{2})\/\d{4}\b/);
+        if (m) d = m[1];
+      }
+      return d ? `<span class="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-1 rounded font-mono font-normal" title="Dia do serviço">${escaparHtml(d)}</span> ` : '';
     }
 
     function renderizarListas(lancamentos) {
@@ -1953,7 +1965,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           return `
             <tr class="hover:bg-slate-50">
               <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
-                ${chipPagamento(item)}${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
+                ${chipPagamento(item)}${item.rubrica || '-'} ${chipDataServico(item)}${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
               </td>
               <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
@@ -2001,7 +2013,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           return `
             <tr class="hover:bg-slate-50">
               <td class="py-1 px-2 text-slate-700 font-medium border-r border-slate-100">
-                ${chipPagamento(item)}${item.rubrica || '-'} ${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
+                ${chipPagamento(item)}${item.rubrica || '-'} ${chipDataServico(item)}${iconeAbatimento} ${badgeFixo} ${badgeAuto} ${badgePagExtra(item)}
               </td>
               <td class="py-1 px-2 text-right text-emerald-700 font-mono font-bold border-r border-slate-100">${valorCredito > 0 ? 'R$ ' + valorCredito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
               <td class="py-1 px-2 text-right text-rose-700 font-mono font-bold border-r border-slate-100">${valorDebito > 0 ? 'R$ ' + valorDebito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}</td>
