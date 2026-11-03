@@ -226,6 +226,39 @@
   // Descobre qual relatório do Alpha7 é o arquivo (pelo conteúdo; o nome só desempata relatórios de formato igual).
   // tipos: NIVEL3, PREFEITURA, WAGNER, ECOMMERCE, FP, VIT, SID e comissão C2018/C2019/C2020/C2021/C2022/CQUARENTENA
   const PLANOS = [['C2018', /\bSM\b|\bGN\b|GENERIC|SIMILAR/], ['CQUARENTENA', /QUARENTENA/], ['C2021', /FIXO/], ['C2020', /SIDNEY/], ['C2022', /VITAMINA/], ['C2019', /PERFUMARIA/]];
+  // (03/11/2026) arquivo ÚNICO de comissão (o mesmo da tela Importar Alpha7): resumo com a coluna "Plano de Remuneração"
+  // e quadros de detalhe por loja. Reparte nos 6 planos (C2018…CQUARENTENA) com o mesmo formato de lerComissao.
+  const planoDe = t => { const n = norm(t); const p = PLANOS.find(x => x[1].test(n)); return p ? p[0] : null; };
+  const planoDaDimensao = t => { const n = norm(t); return /GENERIC|SIMILAR/.test(n) ? 'C2018' : /PERFUMARIA/.test(n) ? 'C2019' : /SIDNEY/.test(n) ? 'C2020' : /VITAMINA/.test(n) ? 'C2022' : null; };
+  function dividirComissaoUnica(rows) {
+    const out = {}; PLANOS.forEach(([t]) => { out[t] = { usuarios: [], total: 0, detalhe: [] }; });
+    let ix = null, ult = '';
+    for (const r of (rows || [])) {
+      if (!r) continue;
+      if (!ix) { if (r.some(c => /^USUARIO$/.test(norm(c))) && r.some(c => /^PLANO DE REMUNERACAO$/.test(norm(c))) && r.some(c => /^REMUNERACAO$/.test(norm(c))))
+        ix = colunas(r, { u: /^USUARIO$/, p: /^PLANO DE REMUNERACAO$/, rem: /^REMUNERACAO$/, v: /^VENDA$/ }); continue; }
+      let u = String(r[ix.u] == null ? '' : r[ix.u]).trim();
+      if (/^TOTAL/i.test(u)) break;
+      if (!u) u = ult; else ult = u;
+      const t = planoDe(r[ix.p]);
+      if (!u || !t || typeof r[ix.rem] !== 'number') continue;
+      out[t].usuarios.push({ usuario: u, venda: num(r[ix.v]), valor: num(r[ix.rem]) }); out[t].total += num(r[ix.rem]);
+    }
+    const det = {}; let id = null;
+    for (const r of (rows || [])) {
+      if (!r) continue;
+      if (r.some(c => /^USUARIO$/.test(norm(c))) && r.some(c => /^DIMENSAO$/.test(norm(c)))) { id = colunas(r, { u: /^USUARIO$/, d: /^DIMENSAO$/, v: /^VENDA$/, rem: /^REMUN/ }); continue; }
+      if (r.some(c => /^USUARIO$/.test(norm(c)))) { id = null; continue; }
+      if (!id) continue;
+      const u = String(r[id.u] == null ? '' : r[id.u]).trim(), t = planoDaDimensao(r[id.d]);
+      if (!u || !t || /^TOTAL/i.test(u) || typeof r[id.v] !== 'number') continue;
+      const k = t + '|' + u, d = (det[k] = det[k] || { t, usuario: u, venda: 0, valor: 0 }); d.venda += num(r[id.v]); d.valor += num(r[id.rem]);
+    }
+    Object.values(det).forEach(d => out[d.t].detalhe.push({ usuario: d.usuario, venda: d.venda, valor: d.valor }));
+    Object.values(out).forEach(o => { o.total = Math.round(o.total * 100) / 100; });
+    return out;
+  }
+
   function identificar(nomeArquivo, rows) {
     const nome = norm(String(nomeArquivo || '').replace(/\.[a-z0-9]+$/i, '').replace(/[_\-.]+/g, ' '));
     const topo = (rows || []).slice(0, 12);
@@ -234,6 +267,11 @@
     const per = /(\d{2})\/(\d{2})\/(\d{4})(?:\s+[\d:]+)?\s+a\s+(\d{2})\/(\d{2})\/(\d{4})/.exec(String(((rows || [])[0] || [])[0] || ''));
     const info = { tipo: null, periodo: per ? per[0].replace(/\s+\d{2}:\d{2}:\d{2}/g, '') : '', competencia: per ? per[2] + '/' + per[3] : '', mesmoMes: per ? per[2] === per[5] && per[3] === per[6] : null };
     if (/PLANO DE REMUNERACAO/.test(titulo)) {
+      if (topo.some(r => (r || []).some(c => /^PLANO DE REMUNERACAO$/.test(norm(c))))) {   // arquivo único de comissão
+        info.tipo = 'CUNICO'; info.planos = dividirComissaoUnica(rows);
+        info.total = Math.round(Object.values(info.planos).reduce((a, p) => a + p.total, 0) * 100) / 100;
+        return info;
+      }
       let p = PLANOS.find(x => x[1].test(nome));
       if (!p) { const dims = new Set(); let col = -1; (rows || []).forEach(r => { if (!r) return; const j = r.findIndex(c => /^DIMENSAO$/.test(norm(c))); if (j >= 0) { col = j; return; } if (col >= 0 && r[col]) dims.add(norm(r[col])); });
         const d = [...dims].join(' '); p = PLANOS.find(x => x[0] !== 'CQUARENTENA' && x[0] !== 'C2021' && x[1].test(d)); }
@@ -252,5 +290,5 @@
     return info;
   }
 
-  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular, lerComissao, lerEntregas, entregasDoMes, identificar };
+  global.FechamentoCore = { calcular, bonus, norm, LOJAS, lerPorUnidade, lerEcommerce, lerDetalhe, lerFarmaciaPopular, lerComissao, lerEntregas, entregasDoMes, identificar, dividirComissaoUnica };
 })(typeof window !== 'undefined' ? window : globalThis);

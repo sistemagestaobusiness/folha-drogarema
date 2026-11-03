@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="fechamento_core.js?v=3"></script>
+  <script src="fechamento_core.js?v=4"></script>
   <script src="metas_core.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -228,6 +228,9 @@
           const linhas = await lerUm(arq), info = FechamentoCore.identificar(arq.name, linhas);
           if (!info.tipo || /\?$/.test(info.tipo)) { naoReconhecidos = naoReconhecidos.filter(x => x.nome !== arq.name); naoReconhecidos.push({ nome: arq.name, motivo: info.tipo === 'RESUMO?' ? 'resumo por unidade: o nome do arquivo precisa ter VITAMINAS ou SIDNEY' : info.tipo === 'C?' ? 'comissão: o nome do arquivo precisa dizer o plano (SM E GN, PERFUMARIA, SIDNEY, VALOR FIXO, VITAMINAS, QUARENTENA)' : 'não é um relatório conhecido do Alpha7' }); continue; }
           if (info.tipo === 'ENTREGAS') { entregasExtra = { nome: arq.name, linhas, info }; continue; }
+          // arquivo único de comissão (o mesmo do Importar Alpha7): vira os 6 planos de comissão
+          if (info.tipo === 'CUNICO') { Object.entries(info.planos).forEach(([t, p]) => { slots[t] = { nome: arq.name, linhas: [], unico: true,
+            info: { tipo: t, periodo: info.periodo, competencia: info.competencia, mesmoMes: info.mesmoMes, total: p.total, usuarios: p.usuarios, detalhe: p.detalhe } }; }); continue; }
           slots[info.tipo] = { nome: arq.name, linhas, info };
         } catch (err) { naoReconhecidos.push({ nome: arq.name, motivo: 'não foi possível ler: ' + err.message }); }
       }
@@ -237,15 +240,17 @@
     function limparSlots() { slots = {}; naoReconhecidos = []; entregasExtra = null; montarDosSlots(); }
     function renderSlots() {
       const tem = Object.keys(slots).length || naoReconhecidos.length || entregasExtra;
-      if (!tem) { $('listaRel').innerHTML = `<div class="text-[11px] text-slate-400">São 13 arquivos: 7 de venda (nível 3, prefeitura, Wagner, e-commerce, farmácia popular, resumo vitaminas, resumo Sidney) e 6 de comissão (SM e GN, perfumaria, Sidney, valor fixo, vitaminas, quarentena).</div>`; return; }
+      if (!tem) { $('listaRel').innerHTML = `<div class="text-[11px] text-slate-400">São 8 arquivos: 7 de venda (nível 3, prefeitura, vendas Wagner, e-commerce, farmácia popular, resumo vitaminas, resumo Sidney) e o <b>arquivo único de comissão</b> (o mesmo da tela Importar Alpha7; a tela reparte nos 6 planos). Os 6 arquivos de comissão por plano continuam aceitos. Entregas (delivery) é opcional.</div>`; return; }
       const linha = ([t, rot, grupo, obrig]) => { const s = t === 'ENTREGAS' ? entregasExtra : slots[t];
         const foraMes = s && s.info.competencia && competencia && s.info.competencia !== competencia;
         let dir = '';
         if (s && grupo === 'C') { const sis = t === 'CQUARENTENA' ? null : (comissaoSistema[t.slice(1)] || 0), dif = sis == null ? null : sis - s.info.total;
           dir = `<span class="font-mono">${fmt(s.info.total)}</span>` + (sis == null ? '' : ` <span class="text-slate-400">· no sistema</span> <span class="font-mono">${fmt(sis)}</span> ${Math.abs(dif) < 0.005 ? '<span class="text-emerald-700">✓</span>' : `<span class="text-amber-700 font-semibold" title="lançado no sistema − relatório do Alpha7">${dif > 0 ? '+' : '−'}${fmt(Math.abs(dif))}</span>`}`); }
         else if (s) dir = `<span class="font-mono">${fmt(s.info.total || 0)}</span>`;
-        return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-100"><span class="w-4 ${s ? 'text-emerald-600' : obrig ? 'text-rose-600' : 'text-slate-300'}">${s ? '✓' : obrig ? '✗' : '○'}</span>
-          <span class="w-52 ${s ? 'text-slate-800' : 'text-slate-400'}">${rot}</span><span class="flex-1 truncate text-slate-500" title="${s ? esc(s.nome) : ''}">${s ? esc(s.nome) : obrig ? 'falta (obrigatório)' : 'não enviado'}${foraMes ? ` <b class="text-rose-700">período ${esc(s.info.periodo)}: não é ${esc(competencia)}</b>` : ''}</span><span class="text-right">${dir}</span></div>`; };
+        // (03/11/2026) os 7 de venda são esperados todo mês: falta aparece em laranja; comissão: falta o arquivo único
+        const esperado = !s && !obrig && t !== 'ENTREGAS';
+        return `<div class="flex items-center gap-2 py-0.5 border-b border-slate-100"><span class="w-4 ${s ? 'text-emerald-600' : obrig ? 'text-rose-600' : esperado ? 'text-amber-600' : 'text-slate-300'}">${s ? '✓' : obrig ? '✗' : esperado ? '!' : '○'}</span>
+          <span class="w-52 ${s ? 'text-slate-800' : 'text-slate-400'}">${rot}</span><span class="flex-1 truncate ${esperado ? 'text-amber-700 font-semibold' : 'text-slate-500'}" title="${s ? esc(s.nome) : ''}">${s ? esc(s.nome) + (s.unico ? ' (arquivo único)' : '') : obrig ? 'falta (obrigatório)' : esperado ? (grupo === 'C' ? 'falta: suba o arquivo único de comissão' : 'falta este relatório') : 'não enviado (opcional)'}${foraMes ? ` <b class="text-rose-700">período ${esc(s.info.periodo)}: não é ${esc(competencia)}</b>` : ''}</span><span class="text-right">${dir}</span></div>`; };
       $('listaRel').innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 text-[11px] mt-1">
         <div><div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Venda · entram no resultado por loja <span class="normal-case font-normal">(valor = venda do relatório)</span></div>${RELS.filter(r => r[2] === 'V').map(linha).join('')}</div>
         <div><div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Comissão · conferência <span class="normal-case font-normal">(relatório × lançado na folha de ${esc(competencia)})</span></div>${RELS.filter(r => r[2] === 'C').map(linha).join('')}</div></div>
@@ -263,7 +268,8 @@
       if (slots.FP) abasLidas['FARMACIA POPULAR LOJA 3'] = L('FP');
       // vitaminas e Sidney são dois relatórios iguais: juntos formam o "detalhe total vendido"
       if (slots.VIT || slots.SID) abasLidas['DETALHE TOTAL VENDIDO'] = [['VITAMINAS'], ...L('VIT'), ['SIDNEY OLIVEIRA'], ...L('SID')];
-      nomeArquivo = (Object.keys(slots).length + ' arquivos do Alpha7: ' + Object.keys(slots).map(n => slots[n].nome).join(' + ')).slice(0, 300);
+      const nomesArq = [...new Set(Object.keys(slots).map(n => slots[n].nome))];
+      nomeArquivo = (nomesArq.length + ' arquivos do Alpha7: ' + nomesArq.join(' + ')).slice(0, 300);
       vinculoManual = {};
       if (!slots.NIVEL3) { calc = null; $('avisos').innerHTML = '<div class="text-[11px] text-rose-700 font-semibold">Falta o relatório "Classificação nível 3" para calcular.</div>'; render(); return; }
       recalcular();
