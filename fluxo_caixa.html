@@ -155,6 +155,31 @@
       if (_vfa >= hoje) _vfa = FluxoCore.somaDia(hoje, -1);
       return _vfa;
     }
+    // última carga aplicada: id (para saber se chegou carga nova) e até que dia vai o extrato
+    let _carga = null;
+    async function ultimaCarga() {
+      const { data } = await _supabase.from('fin_cargas').select('id, resumo').eq('status', 'APLICADA').order('id', { ascending: false }).limit(1);
+      const c = (data || [])[0];
+      return c ? { id: c.id, extratoAte: (c.resumo || {}).extrato_ate || null } : null;
+    }
+    async function extratoAte() { if (!_carga) _carga = await ultimaCarga(); return _carga && _carga.extratoAte; }
+    // aba aberta antes da importação: ao voltar para ela, se entrou carga nova, recarrega tudo sozinha (03/11/2026)
+    let _checando = false;
+    async function conferirCargaNova() {
+      if (_checando || !_carga || document.hidden) return; _checando = true;
+      try {
+        const n = await ultimaCarga();
+        if (n && n.id !== _carga.id) {
+          _carga = n; _vfa = null;
+          aviso('Chegou uma carga nova do Alpha7: atualizando o fluxo…');
+          await carregarCadastros(); alertas(); await carregar();
+        }
+      } catch (e) { /* tenta de novo no próximo foco */ } finally { _checando = false; }
+    }
+    window.addEventListener('focus', conferirCargaNova);
+    document.addEventListener('visibilitychange', conferirCargaNova);
+    setInterval(conferirCargaNova, 60000);
+
     async function carregarCadastros() {
       const [rg, rc, rk, rf, rp] = await Promise.all([
         _supabase.from('fin_grupos').select('*').order('ordem'),
@@ -196,7 +221,11 @@
       $('tab').innerHTML = '<tbody><tr><td class="l">Carregando…</td></tr></tbody>';
       // período no futuro: busca desde o mês atual, para o saldo previsto partir do último saldo real
       const mesAtual = hoje.slice(0, 8) + '01';
-      const buscaIni = ini > hoje ? mesAtual : ini;
+      let buscaIni = ini > hoje ? mesAtual : ini;
+      // (03/11/2026) o saldo real parte do último dia com extrato: se o mês ainda não tem extrato (ex.: dia 03 com extrato
+      // até 30 do mês anterior), busca desde esse dia, senão o saldo do mês inteiro fica em branco
+      const extAte = await extratoAte();
+      if (extAte && extAte < buscaIni) buscaIni = extAte;
       try {
         const linhas = await rpcTudo('fn_fin_fluxo', { p_ini: buscaIni, p_fim: fim });
         base = { ini, buscaIni, fim, linhas };
