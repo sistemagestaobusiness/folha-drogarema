@@ -581,9 +581,41 @@
         carregarOcorrenciasEscala();
         carregarBannerEnvioFin();
         carregarBannerProximo();
+        await aplicarAtalhoConferencia();
       } catch (err) {
         console.error('Erro na inicialização:', err);
       }
+    }
+
+    // atalho da Conferência do fechamento (03/11/2026): ?func=<id>&evento=<código>&valor=<mês anterior>&ref=<MM/AAAA>&fixo=1
+    // preenche empresa, funcionário, evento e valor; o RH confere e salva (nada é gravado sozinho)
+    async function aplicarAtalhoConferencia() {
+      const q = new URLSearchParams(location.search), fid = q.get('func'), cod = q.get('evento');
+      if (!fid || !cod) return;
+      const f = listaGlobalFuncionarios.find(x => String(x.id) === String(fid));
+      if (!f) return alert('Atalho da Conferência: o funcionário não está na lista de ativos desta tela.');
+      const selE = document.getElementById('selectEmpresaNovo'), cnpj = String(f.cnpj || '').replace(/\D/g, '');
+      const opt = cnpj && [...selE.options].find(o => (o.getAttribute('data-cnpj') || '').replace(/\D/g, '') === cnpj);
+      if (opt) { selE.value = opt.value; carregarFuncionariosPorEmpresa('Novo'); }
+      const selF = document.getElementById('selectFuncionarioNovo');
+      selF.value = String(fid);
+      if (selF.value !== String(fid)) return alert('Atalho da Conferência: escolha a empresa e o funcionário manualmente (' + (f.nome_registro || '') + ').');
+      await carregarLancamentosNovo();
+      const ev = listaGlobalEventos.find(e => String(e.codigo_evento) === String(cod));
+      if (ev) selecionarEvento(ev.codigo_evento, ev.descricao_do_evento, ev.tipo_evento);
+      const v = parseFloat(q.get('valor'));
+      if (v > 0) document.getElementById('valorLancamento').value = v.toFixed(2);
+      const fx = document.getElementById('checkFixo'); if (fx && q.get('fixo') === '1') fx.checked = true;
+      const ref = q.get('ref') || '';
+      const box = document.createElement('div');
+      box.className = 'bg-sky-50 border border-sky-300 text-sky-900 rounded-lg p-3 text-xs';
+      box.innerHTML = `<b>↪ Vindo da Conferência do fechamento:</b> ${escaparHtml(ev ? nomeDoCadastro(ev) : cod)} de <b>${escaparHtml(f.nome_registro || '')}</b>.`
+        + (v > 0 ? ` Valor de ${escaparHtml(ref)}: <b>R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</b> (já preenchido).` : '')
+        + (String(cod) === '3020' ? ' <b class="text-amber-800">INSS: troque pelo valor do holerite contábil deste mês.</b>' : '')
+        + ' Confira e clique em <b>Salvar</b>. Depois volte à Conferência e clique em ↻ Atualizar.';
+      const form = document.getElementById('formLancamento'); form.parentNode.insertBefore(box, form);
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try { history.replaceState(null, '', location.pathname); } catch (e) { }   // não repete o atalho ao recarregar
     }
 
     async function verificarStatusCompetenciaNoBanco(competenciaStr) {

@@ -32,6 +32,13 @@
         <div><label class="lbl">Competência</label><input id="fMes" type="month" class="inp !py-1.5 font-mono" onchange="carregar()"></div>
         <div class="flex-1 min-w-[160px]"><label class="lbl">Buscar nome</label><input id="fNome" oninput="render()" class="inp !py-1.5" placeholder="nome do funcionário"></div>
         <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 pb-2 cursor-pointer"><input type="checkbox" id="fSoPend" checked onchange="render()"> só o que falta resolver</label>
+        <button onclick="carregar()" class="mb-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-[11px] font-bold cursor-pointer">↻ Atualizar</button>
+      </div>
+      <div class="bg-sky-50 border border-sky-200 rounded-xl px-4 py-2.5 text-[12px] text-sky-900 leading-relaxed">
+        <b>Como deixar esta tela limpa:</b> cada linha <b class="text-red-700">vermelha</b> precisa de UMA destas ações:
+        <b>① Lançar</b> (o botão ao lado do evento abre Lançamentos já preenchido; confira e salve) ou
+        <b>② Justificar</b> (o evento não vale mais neste mês: escreva o porquê e clique em Salvar).
+        Amarelo é só para conferir e não bloqueia. Quando não sobrar vermelho, a folha pode ser fechada. Depois de lançar, clique em <b>↻ Atualizar</b>.
       </div>
 
       <div id="pConf" class="space-y-3">
@@ -58,19 +65,19 @@
     const comp = () => { const [a, m] = $('fMes').value.split('-'); return `${m}/${a}`; };
 
     const CATS = {
-      FIXOS:        ['Fixos do mês anterior não lançados', 'Quem tinha lançamento fixo no mês anterior e ainda não tem neste mês.', 'lancamentos.html'],
-      SALARIO:      ['Salário diferente do cadastro', 'Salário (evento 2024 – Dias normais) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html'],
-      DUPLICADO:    ['Evento lançado mais de uma vez', 'Evento que só pode existir uma vez no mês (salário, INSS, IRPF, plano, alimentação, combustível, adicionais).', 'lancamentos.html'],
-      FALTA:        ['Falta na escala sem desconto nem abono', 'Falta registrada na escala do mês sem desconto de falta/DSR e sem abono.', 'relatorio_faltas.html'],
-      VT:           ['Vale transporte × desconto', 'VT pago sem desconto, desconto sem VT, ou "sem desconto" por acordo.', 'vale_transporte.html'],
-      NOTURNO:      ['Adicional noturno × escala', 'Escala do mês (padrão + dias alterados) com horas entre 23h e 5h sem adicional lançado, adicional sem horário noturno na escala, ou horas lançadas diferentes da escala sem justificativa.', 'escala.html'],
-      RESCISAO:     ['Lançamento de desligado', 'Funcionário inativo ou desligado antes do mês com lançamento na folha.', 'lancamentos.html'],
-      VARIACAO:     ['Valor fixo com variação acima de 20%', 'Evento fixo com valor bem diferente do mês anterior.', 'lancamentos.html'],
-      PLANOS:       ['Plano do mês anterior que sumiu', 'Tinha desconto de odontológico, saúde ou Mogi Care no mês anterior e não tem neste mês (esquecido ou tirado fora da tela de Planos).', 'planos.html'],
-      COD_CONTABIL: ['Sem código contábil', 'Ativo sem o código da contabilidade (funcionário ou empresa). Só para verificar: não bloqueia o fechamento. Autônomo, sem registro e sócio ficam fora.', 'funcionarios.html'],
-      PROPRIA_FICHA:['Lançamentos do RH na própria ficha', 'Para o Gestor conferir.', 'lancamentos.html'],
-      PENDENCIA:    ['Pendências de aprovação', 'Adiantamento, VT, planos, alterações e freelance que ainda não foram decididos.', 'index.html'],
-      EXCLUSAO:     ['Exclusões feitas no mês', 'Tudo o que foi excluído, com o motivo e quem excluiu.', 'auditoria.html']
+      FIXOS:        ['Fixos do mês anterior não lançados', 'Quem tinha lançamento fixo no mês anterior e ainda não tem neste mês.', 'lancamentos.html', 'Para cada evento: <b>Lançar</b> (abre Lançamentos com o valor do mês anterior; INSS: digite o valor do holerite contábil) ou, se acabou, justifique a linha.'],
+      SALARIO:      ['Salário diferente do cadastro', 'Salário (evento 2024 – Dias normais) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html', 'Abra Lançamentos e corrija o 2024 Dias normais; se o valor diferente estiver certo (admissão, rescisão, falta), justifique.'],
+      DUPLICADO:    ['Evento lançado mais de uma vez', 'Evento que só pode existir uma vez no mês (salário, INSS, IRPF, plano, alimentação, combustível, adicionais).', 'lancamentos.html', 'Abra Lançamentos e exclua o lançamento repetido (com motivo).'],
+      FALTA:        ['Falta na escala sem desconto nem abono', 'Falta registrada na escala do mês sem desconto de falta/DSR e sem abono.', 'relatorio_faltas.html', 'No Relatório de faltas, desconte, abone (com atestado) ou mande para o banco de horas.'],
+      VT:           ['Vale transporte × desconto', 'VT pago sem desconto, desconto sem VT, ou "sem desconto" por acordo.', 'vale_transporte.html', 'Confira na tela de Vale transporte; acordo sem desconto precisa de justificativa.'],
+      NOTURNO:      ['Adicional noturno × escala', 'Escala do mês (padrão + dias alterados) com horas entre 23h e 5h sem adicional lançado, adicional sem horário noturno na escala, ou horas lançadas diferentes da escala sem justificativa.', 'escala.html', 'Use a tela Adicional noturno (lança pela escala, com revisão) ou corrija a escala.'],
+      RESCISAO:     ['Lançamento de desligado', 'Funcionário inativo ou desligado antes do mês com lançamento na folha.', 'lancamentos.html', 'Confira se o lançamento do desligado está certo; se estiver, justifique.'],
+      VARIACAO:     ['Valor fixo com variação acima de 20%', 'Evento fixo com valor bem diferente do mês anterior.', 'lancamentos.html', 'Confira o valor em Lançamentos; se a variação estiver certa, justifique.'],
+      PLANOS:       ['Plano do mês anterior que sumiu', 'Tinha desconto de odontológico, saúde ou Mogi Care no mês anterior e não tem neste mês (esquecido ou tirado fora da tela de Planos).', 'planos.html', 'Lance o plano do mês na tela de Planos ou justifique (saiu do plano).'],
+      COD_CONTABIL: ['Sem código contábil', 'Ativo sem o código da contabilidade (funcionário ou empresa). Só para verificar: não bloqueia o fechamento. Autônomo, sem registro e sócio ficam fora.', 'funcionarios.html', 'Peça o código à contabilidade e grave em Envio à contabilidade (não bloqueia).'],
+      PROPRIA_FICHA:['Lançamentos do RH na própria ficha', 'Para o Gestor conferir.', 'lancamentos.html', 'O Gestor confere; nada a fazer pelo RH.'],
+      PENDENCIA:    ['Pendências de aprovação', 'Adiantamento, VT, planos, alterações e freelance que ainda não foram decididos.', 'index.html', 'Resolva na tela indicada (aprovação pendente).'],
+      EXCLUSAO:     ['Exclusões feitas no mês', 'Tudo o que foi excluído, com o motivo e quem excluiu.', 'auditoria.html', 'Só registro; nada a fazer.']
     };
     let perfil = null, linhas = [], alts = [], aba = 'conf';
 
@@ -97,6 +104,7 @@
       if (r1.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(r1.error.message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
       linhas = r1.data || []; alts = r2.data || [];
+      await carregarAnteriores();
       const ids = [...new Set(alts.map(a => a.funcionario_id))];
       if (ids.length) { const { data: f } = await _supabase.from('funcionarios').select('id, nome_registro').in('id', ids); alts.forEach(a => a.nome = ((f || []).find(x => x.id === a.funcionario_id) || {}).nome_registro || ''); }
       trocarAba(aba);
@@ -124,16 +132,17 @@
         const ls = vis.filter(l => l.categoria === cat), todas = linhas.filter(l => l.categoria === cat);
         if (!todas.length) return '';
         const v = todas.filter(l => l.gravidade === 'VERMELHO').length;
-        const [tit, desc, tela] = CATS[cat];
+        const [tit, desc, tela, como] = CATS[cat];
         const extra = cat === 'FIXOS' && v ? `<button onclick="importarFixos()" class="ml-auto bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer">📥 Importar fixos de todos (${v})</button>` : `<a href="${tela}" class="ml-auto text-[11px] font-bold text-sky-700 underline">abrir tela</a>`;
         return `<div class="bg-white rounded-xl overflow-hidden">
           <div class="px-4 py-2.5 flex flex-wrap items-center gap-2 border-b border-slate-100">
             <b class="text-slate-900 text-[13px]">${tit}</b><span class="text-[11px] font-bold ${v ? 'text-red-600' : 'text-slate-400'}">${todas.length} · ${v} vermelho(s)</span>${extra}
-            <div class="w-full text-[11px] text-slate-500">${desc}</div></div>
+            <div class="w-full text-[11px] text-slate-500">${desc}</div>
+            ${como && v ? `<div class="w-full text-[11px] text-sky-800 bg-sky-50 rounded px-2 py-1"><b>O que fazer:</b> ${como}</div>` : ''}</div>
           ${ls.length ? `<table class="w-full text-xs">${ls.map(l => {
             const k = btoa(unescape(encodeURIComponent([l.categoria, l.funcionario_id, l.chave].join('|')))).replace(/=/g, '');
             return `<tr class="border-b border-slate-50 align-top"><td class="px-4 py-1.5 w-56"><div class="font-bold text-slate-800">${esc(l.nome || '-')}</div><div class="text-[10px] text-slate-400">${esc(l.nome_loja || '')}</div></td>
-              <td class="px-2 py-1.5 text-[11px] text-slate-700">${esc(l.detalhe)}${l.justificativa ? `<div class="text-[10px] text-emerald-700 mt-0.5">✓ ${esc(l.justificativa)} · ${esc(l.justificado_por || '')}</div>` : ''}</td>
+              <td class="px-2 py-1.5 text-[11px] text-slate-700">${l.categoria === 'FIXOS' && l.gravidade === 'VERMELHO' ? chipsFixos(l) : esc(l.detalhe)}${l.justificativa ? `<div class="text-[10px] text-emerald-700 mt-0.5">✓ ${esc(l.justificativa)} · ${esc(l.justificado_por || '')}</div>` : ''}</td>
               <td class="px-2 py-1.5 w-24"><span class="px-2 py-0.5 rounded font-bold text-[10px] ${cor(l.gravidade)}">${rot(l.gravidade)}</span></td>
               <td class="px-4 py-1.5 w-72">${['VERMELHO', 'JUSTIFICADO'].includes(l.gravidade) && l.categoria !== 'PENDENCIA' ? `<div class="flex gap-1"><input id="j_${k}" class="inp !py-1 text-[11px]" placeholder="justificativa (mín. 10 letras)" value="${esc(digitado[k] ?? l.justificativa ?? '')}" oninput="digitado['${k}']=this.value">
                 <button onclick="justificar('${l.categoria}','${l.funcionario_id}','${esc(l.chave || '')}','j_${k}')" class="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-3 py-1 text-[11px] font-bold cursor-pointer whitespace-nowrap">Salvar</button></div>` : ''}</td></tr>`; }).join('')}</table>`
@@ -152,6 +161,39 @@
       delete digitado[inp.slice(2)];
       await carregar();
     }
+
+    // atalho por evento (03/11/2026): valor do mês anterior e botão que abre Lançamentos já preenchido
+    let anteriores = {};
+    const compAnterior = c => { const [m, a] = c.split('/').map(Number); return m === 1 ? `12/${a - 1}` : `${String(m - 1).padStart(2, '0')}/${a}`; };
+    async function carregarAnteriores() {
+      anteriores = {};
+      const ids = [...new Set(linhas.filter(l => l.categoria === 'FIXOS').map(l => l.funcionario_id))];
+      if (!ids.length) return;
+      const ant = compAnterior(comp());
+      for (let i = 0; i < ids.length; i += 40) {
+        const lote = ids.slice(i, i + 40);
+        for (let de = 0; ; de += 1000) {
+          const { data, error } = await _supabase.from('folha_itens').select('funcionario_id, rubrica, valor').eq('competencia', ant).in('funcionario_id', lote).range(de, de + 999);
+          if (error || !data) break;
+          data.forEach(x => { const c = (String(x.rubrica || '').match(/^\s*(\d+)/) || [])[1]; if (!c) return;
+            const k = x.funcionario_id + '|' + c; anteriores[k] = (anteriores[k] || 0) + Number(x.valor || 0); });
+          if (data.length < 1000) break;
+        }
+      }
+    }
+    function chipsFixos(l) {
+      const ant = compAnterior(comp());
+      return String(l.detalhe || '').split(' · ').map(r => {
+        const c = (r.match(/^\s*(\d+)/) || [])[1]; if (!c) return `<div>${esc(r)}</div>`;
+        const v = anteriores[l.funcionario_id + '|' + c];
+        const url = `lancamentos.html?func=${encodeURIComponent(l.funcionario_id)}&evento=${c}&valor=${v != null ? v.toFixed(2) : ''}&ref=${encodeURIComponent(ant)}&fixo=1`;
+        return `<div class="flex items-center gap-2 py-0.5"><span class="flex-1">${esc(r)}${v != null ? ` <span class="text-slate-400">· ${ant}: R$ ${num(v)}</span>` : ''}${c === '3020' ? ' <span class="text-amber-700">(valor do holerite contábil)</span>' : ''}</span>
+          <a href="${url}" class="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2 py-0.5 text-[10px] font-bold no-underline">Lançar →</a></div>`;
+      }).join('');
+    }
+    // ao voltar para esta aba depois de lançar, atualiza sozinho (no máximo a cada 20 s)
+    let ultimaCarga = Date.now();
+    window.addEventListener('focus', () => { if (Date.now() - ultimaCarga > 20000 && aba === 'conf') { ultimaCarga = Date.now(); carregar(); } });
 
     async function importarFixos() {
       if (!confirm(`Importar os lançamentos fixos de ${comp()} do mês anterior para todos que ainda não têm?\n\nEntram só os eventos marcados como fixos no cadastro de eventos (feriado, bônus desempenho, alimentação, combustível, bônus liderança, contribuição, bolsa, abono, INSS, IRPF...). Parcelas avançam uma.`)) return;

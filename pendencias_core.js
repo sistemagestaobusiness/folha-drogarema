@@ -167,6 +167,26 @@
       } catch (e) { }
     }
 
+    // ---- fechamento financeiro e bônus de faturamento (03/11/2026): lembrete do Gestor para subir os 13 relatórios do Alpha7
+    //      da competência aberta; depois de salvo, lembra de lançar o bônus de faturamento (2015) de quem tem regra.
+    if (perfil === 'GESTOR' && compStr) {
+      try {
+        const { data: ff } = await cli.from('fechamento_financeiro').select('competencia').eq('competencia', compStr);
+        if (!(ff && ff.length)) add({ assunto: 'gestor', com: 'GESTOR', tela: 'fechamento_financeiro.html', titulo: `Fechamento financeiro ${compStr}`, sub: '',
+          detalhe: 'Subir os 13 relatórios do Alpha7 (7 de venda + 6 de comissão) e salvar; depois lançar o bônus de faturamento (2015)', nivel: 'atencao', foraHa: 0, contaMenu: 1 });
+        else {
+          const { data: rg } = await cli.from('fechamento_bonus_regras').select('funcionario_id').eq('ativo', true);
+          const ids = (rg || []).map(r => r.funcionario_id).filter(Boolean);
+          if (ids.length) {
+            const { data: lb } = await cli.from('folha_itens').select('funcionario_id').eq('competencia', compStr).in('funcionario_id', ids).like('rubrica', '2015%');
+            const faltam = ids.filter(id => !(lb || []).some(x => x.funcionario_id === id)).length;
+            if (faltam) add({ assunto: 'gestor', com: 'GESTOR', tela: 'fechamento_financeiro.html', titulo: `Bônus de faturamento ${compStr}`, sub: '',
+              detalhe: `${faltam} bônus (2015) ainda não lançado(s): no Fechamento financeiro, clique em lançar o bônus`, nivel: 'atencao', foraHa: 0, contaMenu: faltam });
+          }
+        }
+      } catch (e) { }
+    }
+
     // ---- aprovações do Gestor
     if (perfil === 'GESTOR') {
       const AP = [['fn_adiant_pendentes', 'adiantamento.html', 'Adiantamento salarial'], ['fn_vt_pendentes', 'vale_transporte.html', 'Vale transporte'],

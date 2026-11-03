@@ -555,11 +555,31 @@
   // vermelha piscando = fora do prazo (fica até resolver), laranja = para resolver no prazo.
   // Para o Gestor é informativo: a "Central de pendências" pisca quando alguém da equipe está fora do prazo.
   function carregarScript(src) { return new Promise((ok, erro) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = erro; document.head.appendChild(sc); }); }
+  function barraConferencia(conf) {
+    if (window.top !== window) return;
+    let bar = document.getElementById('barraConferencia');
+    if (!conf) { if (bar) bar.remove(); document.documentElement.classList.remove('conf-barra'); return; }
+    if (!bar) {
+      const st = document.createElement('style');
+      st.textContent = `#barraConferencia { position: fixed; left: ${L}px; right: 0; bottom: 0; height: 28px; z-index: 46; background: #B42318; color: #fff; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 12px; font-weight: 700; font-family: inherit; }
+        #barraConferencia a { color: #fff; text-decoration: underline; font-weight: 800; margin-left: auto; white-space: nowrap; }
+        #barraConferencia .pisca { width: 8px; height: 8px; border-radius: 999px; background: #fff; animation: bolhaPisca 1.1s ease-in-out infinite; flex-shrink: 0; }
+        html.menu-oculto #barraConferencia { left: 54px; }
+        html.conf-barra body { padding-bottom: 28px; } html.conf-barra #abasArea { bottom: 28px; }
+        @media (max-width: 900px) { #barraConferencia { left: 0; } }`;
+      document.head.appendChild(st);
+      bar = document.createElement('div'); bar.id = 'barraConferencia'; document.body.appendChild(bar);
+    }
+    document.documentElement.classList.add('conf-barra');
+    const comp = (String(conf.titulo).match(/(\d{2}\/\d{4})/) || [])[1] || '';
+    bar.innerHTML = `<span class="pisca"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Fechamento ${comp}: ${conf.contaMenu || ''} pendência(s) vermelha(s) para lançar ou justificar antes de fechar a folha</span><a href="conferencia_fechamento.html">Resolver na Conferência →</a>`;
+  }
+
   async function pendenciasMenu() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['RH', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || !telas.has('pendencias.html')) return;
     try {
-      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=6');
+      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=7');
       const r = await window.Pendencias.carregar(window.ACESSO_CLI, pf);
       const meus = r.itens.filter(i => i.com === pf && !i.semMenu && i.nivel !== 'info');
       const por = {};
@@ -567,6 +587,10 @@
       const central = { n: meus.reduce((a, i) => a + (i.contaMenu || 1), 0), crit: meus.some(i => i.nivel === 'critico') };
       if (pf === 'GESTOR') { const eq = r.itens.filter(i => i.com !== 'GESTOR' && i.nivel === 'critico').length; central.n += eq; central.crit = central.crit || eq > 0; }
       por['pendencias.html'] = central;
+      // Conferência do fechamento (03/11/2026): enquanto houver vermelho, bolha vermelha piscando no menu e barra fina fixa embaixo (RH)
+      const conf = r.itens.find(i => i.tela === 'conferencia_fechamento.html' && /^Conferência do fechamento/.test(i.titulo || ''));
+      if (conf && por['conferencia_fechamento.html']) por['conferencia_fechamento.html'].crit = true;
+      barraConferencia(pf === 'RH' ? conf : null);
       document.querySelectorAll('#menuSistema .bolha[data-pend]').forEach(b => b.remove());
       Object.entries(por).forEach(([tela, x]) => {
         if (!x.n) return;
