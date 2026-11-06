@@ -244,7 +244,7 @@
       const s = $('toast'); s.textContent = 'copiado: ' + txt; s.style.opacity = 1; clearTimeout(s._t); s._t = setTimeout(() => s.style.opacity = 0, 1200);
     }
 
-    // MODELO DA CONTABILIDADE (variáveis da folha, enviado em 30/10/2026): Plan1 com "COMPETENCIA" em B2 e, para cada empregado,
+    // MODELO DA CONTABILIDADE (variáveis da folha, enviado em 30/10/2026): planilha com "COMPETENCIA" em B2 e, para cada empregado,
     // uma linha por código na ordem fixa abaixo. Valor em R$; VT 3% (0328) como percentual (3% quando tem o desconto);
     // adicional noturno (0210) e hora extra 100% (0200) em horas (formato [h]:mm), lidas do lançamento ("NOTURNO 22,5H" / "HE100 8H").
     const ORDEM_CONTAB = ['238', '222', '252', '593', '328', '210', '200'];
@@ -279,28 +279,85 @@
       return ws;
     }
 
-    // Aba CONFERIR (03/11/2026): para cada lançamento que não vai completo à contabilidade, diz se entrou na Plan1,
-    // o que está errado e o que fazer. Gravidade: CORRIGIR (cadastro faltando, o valor some da Plan1) · CONFERIR (vai, mas
+    // (06/11/2026) MODELO DO RH (arquivo "importação MM/AAAA folha contábil"): uma aba por empresa, com cabeçalho da empresa e
+    // uma linha por empregado; colunas fixas 252, 238, 222, 210, 200, 328, 593. Noturno/HE em horas ([h]:mm), VT 3% = 3, demais em R$.
+    const COLS_EMP = [['Adiantamento Salarial', '252'], ['Farmacia', '238'], ['Uniodonto', '222'], ['Adicional Noturno', '210'], ['Hora extra 100%', '200'], ['Vale Transporte 3%', '328'], ['Mogi Care', '593']];
+    function nomeAba(e, usados) {
+      const fil = (String(e.cnpj || '').match(/\/(\d{4})-/) || [])[1];
+      let n = /DROGAREMA/i.test(e.razao_social || '') ? `Drogarema (${fil || '?'})` : String(e.nome_fantasia || e.razao_social || 'Empresa').trim();
+      n = n.replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31); let k = n, i = 2; while (usados.has(k)) k = n.slice(0, 28) + ' ' + i++; usados.add(k); return k;
+    }
+    function abasPorEmpresa(aaaamm) {
+      const ano = +aaaamm.slice(0, 4), mes = +aaaamm.slice(4, 6);
+      const serial = (Date.UTC(ano, mes - 1, 1) - Date.UTC(1899, 11, 30)) / 86400000;
+      const empSel = $('fEmp').value;
+      const porF = {};
+      linhas.forEach(l => { const ev = eventos[l.cod]; const cc = String(Number(ev.codigo_contabil || 0)); if (!COLS_EMP.some(c => c[1] === cc) || rescisao[l.fid]) return;
+        const o = (porF[l.fid] = porF[l.fid] || {}); const x = (o[cc] = o[cc] || { valor: 0, horas: 0, tem: false });
+        x.valor += Math.abs(l.valor); x.horas += l.horas || 0; x.tem = x.tem || Math.abs(l.valor) > 0.004; });
+      const grupos = {};
+      Object.values(funcs).forEach(f => {
+        if (rescisao[f.id]) return;
+        const ativo = String(f.status || 'ATIVO').toUpperCase() === 'ATIVO';
+        if (!(f.codigo_contabil && ativo) && !porF[f.id]) return;          // sem código e sem valor: não tem o que mandar
+        const e = empDe(f); if (!e || (empSel && e.id !== empSel)) return;
+        (grupos[e.id] = grupos[e.id] || { e, fs: [] }).fs.push(f);
+      });
+      const usados = new Set();
+      const MOEDA = '#,##0.00';
+      return Object.values(grupos).sort((a, b) => (Number(a.e.cod_contabil) || 9999) - (Number(b.e.cod_contabil) || 9999)).map(({ e, fs }) => {
+        const ws = {}, set = (ref, v, t, z) => { ws[ref] = { v, t }; if (z) ws[ref].z = z; };
+        set('A1', 'RELAÇÃO DE VALORES PARA FOLHA DE PAGAMENTO', 's');
+        set('A3', 'Codigo Empresa:', 's'); if (e.cod_contabil) set('C3', Number(e.cod_contabil), 'n'); else set('C3', '(sem código)', 's');
+        set('A4', 'Razão Social:', 's'); set('C4', String(e.razao_social || '').replace(/^\d+\s*-\s*/, ''), 's');
+        set('A5', 'Inscrição Cnpj:', 's'); set('C5', e.cnpj || '', 's');
+        set('A6', 'Competencia:', 's'); set('C6', serial, 'n', 'mm/yyyy');
+        ['Tipo de', 'Código', 'Nome dos', ...COLS_EMP.map(c => c[0])].forEach((h, i) => set(XLSX.utils.encode_cell({ r: 7, c: i }), h, 's'));
+        ['Calculo', 'Folha', 'Colaboradores'].forEach((h, i) => set(XLSX.utils.encode_cell({ r: 8, c: i }), h, 's'));
+        COLS_EMP.forEach((c, i) => set(XLSX.utils.encode_cell({ r: 8, c: 3 + i }), Number(c[1]), 'n'));
+        let r = 9;
+        fs.sort((a, b) => (Number(a.codigo_contabil) || 99999) - (Number(b.codigo_contabil) || 99999) || String(a.nome_registro).localeCompare(String(b.nome_registro)))
+          .forEach(f => {
+            set(XLSX.utils.encode_cell({ r, c: 0 }), 11, 'n');
+            if (f.codigo_contabil) set(XLSX.utils.encode_cell({ r, c: 1 }), Number(f.codigo_contabil), 'n');
+            set(XLSX.utils.encode_cell({ r, c: 2 }), f.nome_registro || '', 's');
+            COLS_EMP.forEach((c, i) => {
+              const x = (porF[f.id] || {})[c[1]]; if (!x || !x.tem) return; const ref = XLSX.utils.encode_cell({ r, c: 3 + i });
+              if (c[1] === '328') set(ref, 3, 'n');
+              else if (c[1] === '210' || c[1] === '200') set(ref, Math.round(x.horas * 100) / 100 / 24, 'n', '[h]:mm');
+              else set(ref, Math.round(x.valor * 100) / 100, 'n', MOEDA);
+            });
+            r++;
+          });
+        ws['!ref'] = 'A1:J' + Math.max(r, 9);
+        ws['!merges'] = [3, 4, 5, 6].map(n => XLSX.utils.decode_range(`A${n}:B${n}`));
+        ws['!cols'] = [{ wch: 9 }, { wch: 8 }, { wch: 40 }, { wch: 13 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 10 }];
+        return { nome: nomeAba(e, usados), ws };
+      });
+    }
+
+    // Aba CONFERIR (03/11/2026): para cada lançamento que não vai completo à contabilidade, diz se entrou na planilha,
+    // o que está errado e o que fazer. Gravidade: CORRIGIR (cadastro faltando, o valor some da planilha) · CONFERIR (vai, mas
     // precisa olhar: horas, código a pedir à contabilidade) · INFORMATIVO (a contabilidade calcula; só para bater o valor).
     const ORDEM_GRAV = ['CORRIGIR', 'CONFERIR', 'INFORMATIVO'];
     function diagnostico({ l, f, e, ev }) {
       if (rescisao[l.fid]) return { 'Gravidade': 'INFORMATIVO', 'Nome': f.nome_registro || '', 'Cód Epr': f.codigo_contabil ? Number(f.codigo_contabil) : '', 'Empresa': e.nome_fantasia || e.razao_social || '',
-        'Evento no sistema': rescisao[l.fid].join(' · '), 'Tipo': '', 'Valor': '', 'Horas': '', 'Código contábil': '', 'Na Plan1?': 'NÃO',
+        'Evento no sistema': rescisao[l.fid].join(' · '), 'Tipo': '', 'Valor': '', 'Horas': '', 'Código contábil': '', 'Na planilha?': 'NÃO',
         'O que está errado': 'Rescisão no mês: nenhum lançamento dele vai na planilha (regra de 03/11/2026).', 'O que fazer': 'A contabilidade calcula a rescisão; conferir o termo de rescisão com os lançamentos do sistema.' };
       const desc = String(ev.descricao_do_evento || '').toUpperCase(), cod = String(l.cod);
       const naPlan1 = !!(f.codigo_contabil && ORDEM_CONTAB.includes(String(Number(ev.codigo_contabil || 0))));
       let grav, prob, fazer;
       if (!f.codigo_contabil) {
-        grav = 'CORRIGIR'; prob = 'Funcionário sem código do empregado no cadastro: nenhum lançamento dele entra na Plan1.';
+        grav = 'CORRIGIR'; prob = 'Funcionário sem código do empregado no cadastro: nenhum lançamento dele entra na planilha.';
         fazer = 'Na tela Envio à contabilidade, clicar em "sem código" ao lado do nome e gravar o código do empregado (o da contabilidade). Se não tem registro (autônomo/sócio), gravar a dispensa.';
       } else if (!e.cod_contabil) {
         grav = 'CORRIGIR'; prob = 'Empresa do funcionário sem código da contabilidade: a linha sai sem "Cód Emp".';
         fazer = 'Na tela Envio à contabilidade, clicar em "sem código" na empresa e gravar o código.';
       } else if (ev.unidade_contabil === 'HORAS' && !l.horas) {
-        grav = 'CORRIGIR'; prob = `A contabilidade recebe ${desc.toLowerCase()} em horas, mas o lançamento não tem as horas: na Plan1 vai 0:00.`;
+        grav = 'CORRIGIR'; prob = `A contabilidade recebe ${desc.toLowerCase()} em horas, mas o lançamento não tem as horas: na planilha vai 0:00.`;
         fazer = 'Em Lançamentos, editar o lançamento e informar as horas (ex.: "NOTURNO 22,5H" / "HE100 8H").';
       } else if (ev.unidade_contabil === 'HORAS') {
-        grav = 'CONFERIR'; prob = `Vai na Plan1 em horas (${String(Math.round(l.horas * 100) / 100).replace('.', ',')}h), não em reais.`;
+        grav = 'CONFERIR'; prob = `Vai na planilha em horas (${String(Math.round(l.horas * 100) / 100).replace('.', ',')}h), não em reais.`;
         fazer = 'Conferir se as horas batem com a escala; a contabilidade calcula o valor.';
       } else if (/INSS|IRRF|IRPF/.test(desc)) {
         grav = 'INFORMATIVO'; prob = 'Imposto calculado pela contabilidade: não se envia.'; fazer = 'Só conferir se o valor do holerite da contabilidade bate com o do sistema.';
@@ -316,13 +373,13 @@
       } else if (/FALTA/.test(desc)) {
         grav = 'CONFERIR'; prob = 'Falta: a tabela da contabilidade não tem código de falta.'; fazer = 'Informar a falta à contabilidade (dias e horas) ou pedir o código e gravar no evento.';
       } else {
-        grav = 'CONFERIR'; prob = `Evento ${cod} sem código contábil: não entra na Plan1.`;
+        grav = 'CONFERIR'; prob = `Evento ${cod} sem código contábil: não entra na planilha.`;
         fazer = 'Se a contabilidade precisa receber, pedir o código e gravar no evento (tela Envio à contabilidade, "sem código"); se não precisa, ignorar.';
       }
       return { 'Gravidade': grav, 'Nome': f.nome_registro || '', 'Cód Epr': f.codigo_contabil ? Number(f.codigo_contabil) : '', 'Empresa': e.nome_fantasia || e.razao_social || '',
         'Evento no sistema': `${cod} - ${ev.descricao_do_evento}`, 'Tipo': l.valor < 0 ? 'Débito' : 'Crédito', 'Valor': Math.abs(l.valor),
         'Horas': ev.unidade_contabil === 'HORAS' && l.horas ? Math.round(l.horas * 100) / 100 : '',
-        'Código contábil': ev.codigo_contabil || '(sem)', 'Na Plan1?': naPlan1 ? 'sim' : 'NÃO', 'O que está errado': prob, 'O que fazer': fazer };
+        'Código contábil': ev.codigo_contabil || '(sem)', 'Na planilha?': naPlan1 ? 'sim' : 'NÃO', 'O que está errado': prob, 'O que fazer': fazer };
     }
 
     function baixar() {
@@ -344,14 +401,15 @@
       const conferir = base.filter(x => !completos.includes(x)).filter(x => { if (!rescisao[x.l.fid]) return true; if (vistosResc.has(x.l.fid)) return false; vistosResc.add(x.l.fid); return true; }).map(diagnostico)
         .sort((a, b) => ORDEM_GRAV.indexOf(a['Gravidade']) - ORDEM_GRAV.indexOf(b['Gravidade']) || a['Nome'].localeCompare(b['Nome']));
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, planilhaContabilidade(aaaamm), 'Plan1');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lista), 'INFORMAÇÕES FOLHA');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(modelo.length ? modelo : [{ 'fixo': '', 'cód empregado': '', 'competencia': '', 'código rubrica': '', 'Tipo do processo': '', 'valor': '', 'empresa': '' }]), 'MODELO');
+      // (06/11/2026) uma aba por empresa, no modelo do RH; CONFERIR no fim
+      const abas = abasPorEmpresa(aaaamm);
+      if (!abas.length) return alert('Nenhum empregado com lançamento para a contabilidade nesta competência/empresa.');
+      abas.forEach(a => XLSX.utils.book_append_sheet(wb, a.ws, a.nome));
       if (conferir.length) { const wc = XLSX.utils.json_to_sheet(conferir);
         wc['!cols'] = [{ wch: 12 }, { wch: 36 }, { wch: 8 }, { wch: 14 }, { wch: 34 }, { wch: 8 }, { wch: 11 }, { wch: 7 }, { wch: 10 }, { wch: 9 }, { wch: 70 }, { wch: 90 }];
         wc['!autofilter'] = { ref: wc['!ref'] };
         XLSX.utils.book_append_sheet(wb, wc, 'CONFERIR'); }
-      XLSX.writeFile(wb, `VARIAVEL_FOLHA_${aaaamm.slice(4)}${aaaamm.slice(0, 4)}.xlsx`);
+      XLSX.writeFile(wb, `importacao_${aaaamm.slice(4)}${aaaamm.slice(0, 4)}_folha_contabil.xlsx`);
     }
 
     iniciar();

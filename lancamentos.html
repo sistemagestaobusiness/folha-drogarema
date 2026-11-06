@@ -175,7 +175,13 @@
                 <label class="block text-xs font-bold text-slate-600 uppercase">4. Valor do Lançamento (R$) *</label>
                 <button type="button" onclick="alternarCampoAbatimento()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-1.5 py-0.5 rounded cursor-pointer" title="">+</button>
               </div>
-              <input type="number" step="0.01" id="valorLancamento" required placeholder="0,00" oninput="calcularNoturno(false); calcularHE(false)" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+              <input type="number" step="0.01" id="valorLancamento" required placeholder="0,00" oninput="calcularNoturno(false); calcularHE(false); checarSalario()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
+              <div id="boxJustSal" class="hidden mt-2 bg-amber-50 border border-amber-300 rounded-lg p-2.5">
+                <label id="lblJustSal" class="block text-[11px] font-bold text-amber-800 uppercase mb-1">Salário diferente do cadastro · justificativa *</label>
+                <input type="text" id="inputJustSal" maxlength="200" placeholder="Ex.: proporcional à admissão em 23/09; férias; afastamento..."
+                  class="w-full bg-white border border-amber-300 rounded-lg p-2 text-slate-800 text-xs uppercase focus:outline-none focus:border-amber-600">
+                <div class="text-[10px] text-amber-800 mt-1">Muda só este lançamento do mês: o salário do cadastro continua o mesmo.</div>
+              </div>
             </div>
 
             <!-- Painel Oculto 1 -->
@@ -921,6 +927,7 @@
       travarCampoEvento(true);
       document.getElementById('listaSugestoes').classList.add('hidden');
       atualizarBoxVencimento();
+      checarSalario();
     }
 
     // ---------------------------------------------------------------------
@@ -2148,6 +2155,16 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       };
     }
 
+    function checarSalario() {
+      const box = document.getElementById('boxJustSal'); if (!box) return;
+      const ev = eventoDaRubrica(document.getElementById('inputRubrica').value || '');
+      const fs = listaGlobalFuncionarios.find(x => String(x.id) === String(document.getElementById('selectFuncionarioNovo').value)) || {};
+      const salCad = parseFloat(fs.salario_base || 0), v = parseFloat(document.getElementById('valorLancamento').value || 0);
+      const mostra = !!ev && String(ev.codigo_evento) === '2024' && salCad > 1 && v > 0 && Math.abs(v - salCad) > 0.05;
+      box.classList.toggle('hidden', !mostra);
+      if (mostra) document.getElementById('lblJustSal').innerText = `Salário diferente do cadastro (R$ ${salCad.toFixed(2).replace('.', ',')}) · justificativa *`;
+    }
+
     function prepararEdicaoPorId(id) {
       const item = mapaItensRenderizados[id];
       if (item) prepararEdicao(item);
@@ -2170,6 +2187,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       preencherPainelAjuste(2, ajustes[1] || null);
 
       document.getElementById('checkFixo').checked = !!item.fixo;
+      { const mj = String(item.motivo_ajuste || '').match(/SALARIO EDITADO \(cadastro R\$ [\d.]+\): ([^|]+)/); document.getElementById('inputJustSal').value = mj ? mj[1].trim() : ''; setTimeout(checarSalario, 0); }
 
       const pag = mapaPagExtras[item.id];
       document.getElementById('inputVencimentoPag').value = (pag && pag.vencimento) || item.vencimento_pagamento || '';
@@ -2206,6 +2224,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       document.getElementById('inputRubrica').value = '';
       travarCampoEvento(false);
       document.getElementById('valorLancamento').value = '';
+      document.getElementById('inputJustSal').value = ''; document.getElementById('boxJustSal').classList.add('hidden');
       preencherPainelAjuste(1, null);
       preencherPainelAjuste(2, null);
       document.getElementById('checkFixo').checked = false;
@@ -2322,6 +2341,20 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         he100dsr = calcHE.dsr;
         he100 = `HE100 ${String(calcHE.horas).replace('.', ',')}H (CALCULO R$ ${calcHE.valor.toFixed(2)})` + (editadoHE ? ` · VALOR EDITADO: ${justHE}` : '');
       }
+      // salário (2024 DIAS NORMAIS) diferente do cadastro: pode, com justificativa; o cadastro não muda (regra de 06/11/2026)
+      let salEdit = null;
+      if (String(eventoSel.codigo_evento) === '2024') {
+        const fs = listaGlobalFuncionarios.find(x => String(x.id) === String(funcionario_id)) || {}, salCad = parseFloat(fs.salario_base || 0);
+        if (salCad > 1 && Math.abs(valorBruto - salCad) > 0.05) {
+          const jsal = removerAcentosEColocarMaiuscula(document.getElementById('inputJustSal').value).trim();
+          if (jsal.replace(/[^A-Z]/g, '').length < 10) {
+            checarSalario();
+            alert(`O salário lançado (R$ ${valorBruto.toFixed(2)}) é diferente do cadastro (R$ ${salCad.toFixed(2)}).\n\nInforme a justificativa (mínimo 10 letras). O cadastro do funcionário não muda.`);
+            document.getElementById('inputJustSal').focus(); return;
+          }
+          salEdit = `SALARIO EDITADO (cadastro R$ ${salCad.toFixed(2)}): ${jsal}`;
+        }
+      }
       // adicional noturno: horas obrigatórias; valor diferente do cálculo exige justificativa
       // pedido aberto para este evento (falta da escala, freelance/HE, 13º antecipado): não grava à mão (regra de 29/10/2026)
       await avisoPendenteDoEvento();
@@ -2415,6 +2448,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
 
       if (noturno) motivo_ajuste = noturno.motivo + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
       if (he100) motivo_ajuste = he100 + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
+      if (salEdit) motivo_ajuste = salEdit + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
 
       const parcela_atual = aj1 ? aj1.parcela_atual : (itemOriginal.parcela_atual || 1);
       const total_parcelas = aj1 ? aj1.total_parcelas : (itemOriginal.total_parcelas || 1);
