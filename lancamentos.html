@@ -1674,9 +1674,13 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         .select('id')
         .eq('funcionario_id', funcionarioId)
         .eq('competencia', competencia)
-        .or('rubrica.ilike.2000 %,rubrica.ilike.2024 %');
+        .or('rubrica.ilike.2000 %,rubrica.ilike.2024 %,rubrica.ilike.2042 %,rubrica.ilike.2050 %');
+      // (06/11/2026) não recria o salário se o mês já tem DIAS FÉRIAS (2042) ou SALDO DE SALÁRIO (2050),
+      // nem se o RH já excluiu o salário deste mês com motivo
+      let excluidoAntes = false;
+      try { const { data: ok } = await _supabase.rpc('fn_salario_auto_permitido', { p_func: funcionarioId, p_comp: competencia }); excluidoAntes = ok === false; } catch (e) { }
 
-      if (!lancamentosExistentes || lancamentosExistentes.length === 0) {
+      if (!excluidoAntes && (!lancamentosExistentes || lancamentosExistentes.length === 0)) {
         const eventoSalario = listaGlobalEventos.find(ev => String(ev.codigo_evento) === '2024');
         const descEvento = eventoSalario ? eventoSalario.descricao_do_evento : 'DIAS NORMAIS';
         const rubricaExata = `2024 - ${descEvento}`;
@@ -2160,7 +2164,8 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       const ev = eventoDaRubrica(document.getElementById('inputRubrica').value || '');
       const fs = listaGlobalFuncionarios.find(x => String(x.id) === String(document.getElementById('selectFuncionarioNovo').value)) || {};
       const salCad = parseFloat(fs.salario_base || 0), v = parseFloat(document.getElementById('valorLancamento').value || 0);
-      const mostra = !!ev && String(ev.codigo_evento) === '2024' && salCad > 1 && v > 0 && Math.abs(v - salCad) > 0.05;
+      const vazio = String(document.getElementById('valorLancamento').value || '').trim() === '';
+      const mostra = !!ev && String(ev.codigo_evento) === '2024' && salCad > 1 && !vazio && Math.abs(v - salCad) > 0.05;
       box.classList.toggle('hidden', !mostra);
       if (mostra) document.getElementById('lblJustSal').innerText = `Salário diferente do cadastro (R$ ${salCad.toFixed(2).replace('.', ',')}) · justificativa *`;
     }
