@@ -96,6 +96,7 @@
       await carregar();
     }
 
+    const empresaDe = {};
     async function carregar() {
       const [r1, r2] = await Promise.all([
         _supabase.rpc('fn_conferencia', { p_comp: comp() }),
@@ -104,6 +105,14 @@
       if (r1.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(r1.error.message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
       linhas = r1.data || []; alts = r2.data || [];
+      // (06/11/2026) empresa de registro de cada funcionário, para achar rápido em Lançamentos
+      try {
+        const fids = [...new Set(linhas.map(l => l.funcionario_id).filter(Boolean))].filter(id => !(id in empresaDe));
+        for (let i = 0; i < fids.length; i += 200) {
+          const { data: fe } = await _supabase.from('funcionarios').select('id, empresa_registro').in('id', fids.slice(i, i + 200));
+          (fe || []).forEach(x => empresaDe[x.id] = String(x.empresa_registro || '').replace(/^[\d./-]+\s*-\s*/, ''));
+        }
+      } catch (e) { /* só visual */ }
       await carregarAnteriores();
       const ids = [...new Set(alts.map(a => a.funcionario_id))];
       if (ids.length) { const { data: f } = await _supabase.from('funcionarios').select('id, nome_registro').in('id', ids); alts.forEach(a => a.nome = ((f || []).find(x => x.id === a.funcionario_id) || {}).nome_registro || ''); }
@@ -141,7 +150,7 @@
             ${como && v ? `<div class="w-full text-[11px] text-sky-800 bg-sky-50 rounded px-2 py-1"><b>O que fazer:</b> ${como}</div>` : ''}</div>
           ${ls.length ? `<table class="w-full text-xs">${ls.map(l => {
             const k = btoa(unescape(encodeURIComponent([l.categoria, l.funcionario_id, l.chave].join('|')))).replace(/=/g, '');
-            return `<tr class="border-b border-slate-50 align-top"><td class="px-4 py-1.5 w-56"><div class="font-bold text-slate-800">${esc(l.nome || '-')}</div><div class="text-[10px] text-slate-400">${esc(l.nome_loja || '')}</div></td>
+            return `<tr class="border-b border-slate-50 align-top"><td class="px-4 py-1.5 w-56"><div class="font-bold text-slate-800">${esc(l.nome || '-')}</div><div class="text-[10px] text-slate-400">${esc(l.nome_loja || '')}</div>${empresaDe[l.funcionario_id] ? `<div class="text-[10px] text-sky-700" title="Empresa de registro (em Lançamentos, escolha esta empresa)">🏢 ${esc(empresaDe[l.funcionario_id])}</div>` : ''}</td>
               <td class="px-2 py-1.5 text-[11px] text-slate-700">${l.categoria === 'FIXOS' && l.gravidade === 'VERMELHO' ? chipsFixos(l) : esc(l.detalhe)}${l.justificativa ? `<div class="text-[10px] text-emerald-700 mt-0.5">✓ ${esc(l.justificativa)} · ${esc(l.justificado_por || '')}</div>` : ''}</td>
               <td class="px-2 py-1.5 w-24"><span class="px-2 py-0.5 rounded font-bold text-[10px] ${cor(l.gravidade)}">${rot(l.gravidade)}</span></td>
               <td class="px-4 py-1.5 w-72">${['VERMELHO', 'JUSTIFICADO'].includes(l.gravidade) && l.categoria !== 'PENDENCIA' ? `<div class="flex gap-1"><input id="j_${k}" class="inp !py-1 text-[11px]" placeholder="justificativa (mín. 10 letras)" value="${esc(digitado[k] ?? l.justificativa ?? '')}" oninput="digitado['${k}']=this.value">

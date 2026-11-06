@@ -68,6 +68,14 @@
           <form id="formLancamento" onsubmit="salvarLancamento(event)" class="space-y-4">
             <input type="hidden" id="editLancamentoId" value="">
 
+            <div class="relative">
+              <label class="block text-xs font-bold text-sky-700 uppercase mb-1">🔎 Buscar funcionário (todas as empresas)</label>
+              <input type="text" id="buscaFuncNovo" autocomplete="off" placeholder="Digite parte do nome: a empresa e o funcionário são escolhidos sozinhos"
+                oninput="buscarFuncGlobal('Novo')" onfocus="buscarFuncGlobal('Novo')" onkeydown="teclaFuncGlobal(event, 'Novo')" onblur="setTimeout(() => document.getElementById('sugFuncNovo').classList.add('hidden'), 200)"
+                class="w-full bg-sky-50 border border-sky-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+              <div id="sugFuncNovo" class="hidden absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto"></div>
+            </div>
+
             <div>
               <label class="block text-xs font-bold text-slate-600 uppercase mb-1">1. Empresa / Filial (CNPJ) *</label>
               <select id="selectEmpresaNovo" onchange="carregarFuncionariosPorEmpresa('Novo')" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:border-emerald-600 font-mono">
@@ -273,6 +281,14 @@
                 <option value="02/2026">02/2026</option>
                 <option value="01/2026">01/2026</option>
               </select>
+            </div>
+
+            <div class="relative">
+              <label class="block text-xs font-bold text-sky-700 uppercase mb-1">🔎 Buscar funcionário (todas as empresas)</label>
+              <input type="text" id="buscaFuncConsulta" autocomplete="off" placeholder="Digite parte do nome: a empresa e o funcionário são escolhidos sozinhos"
+                oninput="buscarFuncGlobal('Consulta')" onfocus="buscarFuncGlobal('Consulta')" onkeydown="teclaFuncGlobal(event, 'Consulta')" onblur="setTimeout(() => document.getElementById('sugFuncConsulta').classList.add('hidden'), 200)"
+                class="w-full bg-sky-50 border border-sky-300 rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+              <div id="sugFuncConsulta" class="hidden absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto"></div>
             </div>
 
             <div>
@@ -715,7 +731,7 @@
 
    async function carregarFuncionariosGeral() {
       // Adicionado o campo salario_base na consulta
-      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base, salario_adicional, adicional_caixa, cargo, loja_id').order('nome_registro');
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base, salario_adicional, adicional_caixa, cargo, loja_id, status').order('nome_registro');
       if (!error) {
         listaGlobalFuncionarios = data || [];
       }
@@ -726,6 +742,51 @@
       if (!error) {
         listaGlobalEventos = data || [];
       }
+    }
+
+    // (06/11/2026) busca do funcionário em todas as empresas: escolhe a empresa e o funcionário sozinho
+    function empresaDoFunc(f) {
+      const c = String(f.cnpj || '').replace(/\D/g, '');
+      return listaGlobalEmpresas.find(e => String(e.cnpj || '').replace(/\D/g, '') === c && c);
+    }
+    let _sugFunc = { Novo: [], Consulta: [] }, _sugIdx = { Novo: 0, Consulta: 0 };
+    function buscarFuncGlobal(t) {
+      const inp = document.getElementById('buscaFunc' + t), box = document.getElementById('sugFunc' + t);
+      const termos = removerAcentosEColocarMaiuscula(inp.value || '').trim().split(/\s+/).filter(Boolean);
+      if (!termos.length) { box.classList.add('hidden'); return; }
+      const lista = listaGlobalFuncionarios.filter(f => { const n = removerAcentosEColocarMaiuscula(f.nome_registro || ''); return termos.every(x => n.includes(x)); }).slice(0, 15);
+      _sugFunc[t] = lista; _sugIdx[t] = 0;
+      box.innerHTML = lista.length ? lista.map((f, i) => {
+        const e = empresaDoFunc(f);
+        const emp = e ? `${e.nome_fantasia ? '[' + e.nome_fantasia + '] ' : ''}${e.razao_social || ''}` : 'sem empresa no cadastro';
+        const inativo = String(f.status || 'ATIVO').toUpperCase() !== 'ATIVO';
+        return `<div data-i="${i}" onmousedown="escolherFuncGlobal('${t}', ${i})" class="px-3 py-2 cursor-pointer hover:bg-sky-50 border-b border-slate-100 ${i === 0 ? 'bg-sky-50' : ''}">
+          <div class="text-sm font-bold text-slate-800">${escaparHtml(f.nome_registro || '')}${inativo ? ' <span class="text-[10px] text-rose-600">(' + escaparHtml(f.status || '') + ')</span>' : ''}</div>
+          <div class="text-[11px] text-slate-500">${escaparHtml(emp)}${f.cargo ? ' · ' + escaparHtml(f.cargo) : ''}</div></div>`;
+      }).join('') : '<div class="px-3 py-2 text-xs text-slate-500">Nenhum funcionário com esse nome.</div>';
+      box.classList.remove('hidden');
+    }
+    function teclaFuncGlobal(ev, t) {
+      const box = document.getElementById('sugFunc' + t), n = _sugFunc[t].length;
+      if (!n || box.classList.contains('hidden')) return;
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault(); _sugIdx[t] = (_sugIdx[t] + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+        box.querySelectorAll('[data-i]').forEach(d => d.classList.toggle('bg-sky-50', +d.dataset.i === _sugIdx[t]));
+      } else if (ev.key === 'Enter') { ev.preventDefault(); escolherFuncGlobal(t, _sugIdx[t]); }
+      else if (ev.key === 'Escape') box.classList.add('hidden');
+    }
+    function escolherFuncGlobal(t, i) {
+      const f = _sugFunc[t][i]; if (!f) return;
+      document.getElementById('sugFunc' + t).classList.add('hidden');
+      const e = empresaDoFunc(f);
+      if (!e) return alert(`${f.nome_registro}: o cadastro não tem empresa (CNPJ) que exista na lista de empresas. Corrija o cadastro do funcionário.`);
+      const selE = document.getElementById(t === 'Novo' ? 'selectEmpresaNovo' : 'selectEmpresaConsulta');
+      selE.value = String(e.id); carregarFuncionariosPorEmpresa(t);
+      const selF = document.getElementById(t === 'Novo' ? 'selectFuncionarioNovo' : 'selectFuncionarioConsulta');
+      selF.value = String(f.id);
+      if (selF.value !== String(f.id)) return alert('Não consegui selecionar ' + f.nome_registro + '. Escolha a empresa e o funcionário manualmente.');
+      document.getElementById('buscaFunc' + t).value = f.nome_registro;
+      if (typeof selF.onchange === 'function') selF.onchange();
     }
 
     function carregarFuncionariosPorEmpresa(tipoAba) {
