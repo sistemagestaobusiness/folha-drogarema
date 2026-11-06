@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="pendencias_core.js?v=7"></script>
-  <script src="cronograma.js?v=1"></script>
+  <script src="cronograma.js?v=2"></script>
   <style>
     :root { --fundo: #F4F5F7; --card: #FFFFFF; --borda: #E3E6EB; --linha: #EEF0F3; --txt: #14181F; --sub: #5B6472; --escuro: #12161C; --ouro: #C69560;
       --verm: #B42318; --verm-bg: #FEE4E2; --verm-tx: #912018; --amar-bg: #FEF0C7; --amar-tx: #93370D; --cinza-bg: #EEF2F6; --cinza-tx: #364152; --verde-bg: #E7F6EC; --verde-tx: #05603A; --azul: #1D4ED8; }
@@ -159,10 +159,16 @@
       const meus = todos.filter(i => i.com === 'GESTOR'), equipe = todos.filter(i => i.com !== 'GESTOR');
       const crit = equipe.filter(i => i.nivel === 'critico');
       $('chips').innerHTML = `<span class="pill ${meus.length ? 'p-crit' : 'p-ok'}">${meus.length ? meus.length + ' aguardando você' : 'nada aguardando você'}</span>`
-        + `<span class="pill ${crit.length ? 'p-crit' : 'p-ok'}">${crit.length} fora do prazo na equipe</span>`;
+        + (crit.length ? `<a href="#foraPrazo" class="pill p-crit" title="Ver quais são">${crit.length} fora do prazo na equipe ↓</a>` : `<span class="pill p-ok">0 fora do prazo na equipe</span>`);
       let tempos = null; try { tempos = await Pendencias.tempos(_supabase); } catch (e) { }
       let html = '<div class="card bloco" style="padding:16px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:14px"><h2 style="margin:0;font-size:15px;font-weight:700;flex:1">Aguardando a sua aprovação</h2>'
         + (meus.length ? meus.map(i => `<a class="pill p-crit" href="${esc(i.link || i.tela)}">${esc(i.titulo)} · ${i.contaMenu || ''}</a>`).join('') : '<span class="pill p-ok">adiantamento, VT, planos, 13º e ficha do RH em dia</span>') + '</div>';
+      // (06/11/2026) as pendências fora do prazo da equipe, uma a uma (o número do topo e do Painel são estas)
+      if (crit.length) html += `<section id="foraPrazo" class="card bloco"><div style="padding:16px 20px 6px"><h2 style="margin:0;font-size:15px;font-weight:700">Fora do prazo na equipe · ${crit.length}</h2>
+        <div class="desc">Só para acompanhar: quem resolve é quem está na coluna "Está com".</div></div>
+        <div class="rola"><table style="min-width:760px"><thead><tr><th>Assunto</th><th>Loja</th><th>Situação</th><th>Está com</th><th></th></tr></thead><tbody>
+        ${ordenar(crit).map(i => `<tr><td>${ponto(i.nivel)} <b style="margin-left:6px">${esc(i.titulo)}</b></td><td>${esc(i.sub || '-')}</td><td style="color:var(--sub);font-size:12.5px">${esc(i.detalhe)}</td><td>${QUEM[i.com] || i.com}</td><td style="text-align:right"><a href="${esc(i.link || i.tela)}">Abrir →</a></td></tr>`).join('')}
+        </tbody></table></div></section>`;
       // prazos da equipe
       const quem = ['RH', 'SUPERVISOR', 'LIDER'];
       const linhaQ = q => {

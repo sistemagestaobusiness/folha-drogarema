@@ -17,6 +17,7 @@
   const cor = e => e.status === 'FEITO' ? '#059669' : e.dias <= 0 ? '#dc2626' : e.dias === 1 ? '#ea580c' : e.dias <= 3 ? '#B54708' : '#64748b';
 
   async function carregar(cli) {
+    if (cli && !ultimoCli) ultimoCli = cli;   // (06/11/2026) dentro das abas do sistema os avisos não iniciam; os botões usam este cliente
     const { data, error } = await cli.rpc('fn_cronograma');
     if (error) throw error;
     return data || { etapas: [] };
@@ -30,6 +31,7 @@
   }
 
   // ---------- janela obrigatória ----------
+  let ultimoCli = null;
   let cli = null, perfil = null, pagina = '', dados = null, somCtx = null, ultimoSom = 0;
   function beep() {
     try { if (!somCtx) somCtx = new (window.AudioContext || window.webkitAudioContext)(); if (somCtx.state === 'suspended') return;
@@ -103,7 +105,8 @@
   }
 
   async function marcar(etapa, ref) {
-    const c = cli || global._supabase;
+    const c = cli || ultimoCli || global.ACESSO_CLI;
+    if (!c) { alert('Não foi possível falar com o servidor agora. Recarregue a página e tente de novo.'); return; }
     const txt = etapa === 'CONTABILIDADE' ? `Confirmar que a folha ${ref} foi enviada à contabilidade?\n\nSó é aceito com a Conferência do fechamento sem vermelho. Se a contabilidade devolver, use "Voltou da contabilidade".`
       : `Confirmar que as comissões de ${ref} foram geradas e lançadas?`;
     if (!confirm(txt)) return;
@@ -112,7 +115,8 @@
     if (global.Cronograma.aoMudar) global.Cronograma.aoMudar();
   }
   async function desmarcar(etapa, ref) {
-    const c = cli || global._supabase;
+    const c = cli || ultimoCli || global.ACESSO_CLI;
+    if (!c) { alert('Não foi possível falar com o servidor agora. Recarregue a página e tente de novo.'); return; }
     const m = await (global.pedirTexto ? global.pedirTexto(`${etapa === 'CONTABILIDADE' ? 'A folha voltou da contabilidade' : 'Desfazer a confirmação das comissões'} (${ref}).\n\nOs avisos voltam até confirmar de novo. Explique o motivo:`, '') : Promise.resolve(prompt('Motivo:')));
     if (!m) return;
     const { error } = await c.rpc('fn_cron_desmarcar', { p_etapa: etapa, p_ref: ref, p_motivo: m });

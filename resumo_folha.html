@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=1"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .no-scrollbar::-webkit-scrollbar { height: 14px; width: 12px; }
@@ -218,7 +219,8 @@
           _supabase.from('pagamentos_dinheiro').select('*')   // todos os meses: o histórico vira lembrete de quem costuma receber em dinheiro
         ]);
 
-        const funcionarios = (resFunc.data || []).filter(f => !ehSocio(f));
+        // (06/11/2026) regra única (folha_calc.js): sem sócio e sem quem saiu (INATIVO com rescisão) — o Painel e a diretoria usam a mesma
+        const funcionarios = (resFunc.data || []).filter(f => FolhaCalc.naFolha(f, competenciaRegra));
         const itensFolha = resFolha.data || [];
         const eventos = resEventos.data || [];
         const lojas = resLojas.data || [];
@@ -240,22 +242,15 @@
           valoresDinheiro[pd.funcionario_id] = parseFloat(pd.valor || 0);
         });
 
-        const mapaEventos = {};
-        eventos.forEach(e => {
-          mapaEventos[String(e.codigo_evento)] = e.natureza_do_evento || 'CONTABIL';
-          mapaEventos[String(e.descricao_do_evento || '').toUpperCase()] = e.natureza_do_evento || 'CONTABIL';
-        });
+        const REG = FolhaCalc.regrasEventos(eventos);
 
         const colunasSet = { cc: new Set(), cd: new Set(), ncc: new Set(), ncd: new Set() };
         const dadosFuncMap = {};
 
         // 13º, férias, rescisão e VT são pagos FORA do holerite: não entram neste cálculo
         // pagamento_extra_desde: a regra "fora do holerite" só vale a partir daquela competência (ex.: 2031 reembolso desde 10/2026)
-        const ordCompFH = c => { const m = String(c || '').match(/^(\d{2})\/(\d{4})$/); return m ? (+m[2]) * 100 + (+m[1]) : 0; };
-        const foraDesde = {}; eventos.filter(e => e.pagamento_extra_tipo && e.pagamento_extra_tipo !== 'ADIANTAMENTO').forEach(e => { foraDesde[String(e.codigo_evento)] = e.pagamento_extra_desde || ''; });
-        const foraDoHolerite = it => { const c = (String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1]; return (c in foraDesde) && (!foraDesde[c] || ordCompFH(it.competencia) >= ordCompFH(foraDesde[c])); };
         itensFolha.forEach(item => {
-          if (foraDoHolerite(item)) return;
+          if (REG.foraDoHolerite(item)) return;
           const fId = item.funcionario_id;
           
           if (!dadosFuncMap[fId]) {
@@ -304,14 +299,7 @@
           const rubrica = String(item.rubrica || '').toUpperCase();
           const tipo = (item.tipo || 'PROVENTO').toUpperCase();
           
-          let natureza = 'CONTABIL';
-          for (let key in mapaEventos) {
-            if (rubrica.includes(key)) {
-              natureza = mapaEventos[key];
-              break;
-            }
-          }
-          if (natureza === 'NAO_CONTABIL' || rubrica.includes('FORA')) natureza = 'NAO_CONTABIL';
+          const natureza = REG.naturezaDe(rubrica);
 
           let cat = '';
           if (tipo === 'PROVENTO' && natureza === 'CONTABIL') cat = 'cc';
@@ -800,16 +788,20 @@
         liquido: r2((f.tot_cc - f.tot_cd) + (f.tot_ncc - f.tot_ncd)), dinheiro: r2(valoresDinheiro[f.id] || 0) }))
         .filter(x => x.liquido !== 0 || x.dinheiro !== 0);
     }
+    // (06/11/2026) compara a FILA DO FINANCEIRO (pago + a pagar, banco) com a folha de agora. Depois do envio, cada alteração
+    // em lançamento ajusta a fila sozinha no banco (fn_quinto_dia_sincronizar); sobra diferença só quando já foi pago a mais.
     function compararComEnvio() {
       if (!ultimoEnvio) return [];
-      const antes = new Map((ultimoEnvio.itens || []).map(i => [i.funcionario_id, i]));
+      const nomes = new Map((ultimoEnvio.itens || []).map(i => [i.funcionario_id, i.nome]));
+      const fila = new Map();
+      pagosQuinto.filter(p => p.status !== 'CANCELADO' && (p.meio || 'BANCO') === 'BANCO').forEach(p => fila.set(p.funcionario_id, r2((fila.get(p.funcionario_id) || 0) + Number(p.valor || 0))));
       const agora = new Map(fotoAtual().map(i => [i.funcionario_id, i]));
-      const ids = new Set([...antes.keys(), ...agora.keys()]);
+      const ids = new Set([...fila.keys(), ...agora.keys()]);
       const difs = [];
       ids.forEach(id => {
-        const a = antes.get(id) || { liquido: 0, dinheiro: 0 }, n = agora.get(id) || { liquido: 0, dinheiro: 0 };
-        if (Math.abs(r2(a.liquido) - n.liquido) >= 0.01 || Math.abs(r2(a.dinheiro) - n.dinheiro) >= 0.01)
-          difs.push({ nome: n.nome || a.nome || (glob_dadosFunc.find(f => f.id === id) || {}).nome || '?', antes: r2(a.liquido), agora: n.liquido, dinA: r2(a.dinheiro), dinN: n.dinheiro });
+        const n = agora.get(id), banco = n && n.liquido > 0 ? r2(n.liquido - n.dinheiro) : 0, f = fila.get(id) || 0;
+        if (Math.abs(f - banco) >= 0.01)
+          difs.push({ nome: (n && n.nome) || nomes.get(id) || (glob_dadosFunc.find(x => x.id === id) || {}).nome || '?', antes: f, agora: banco, dinA: 0, dinN: 0 });
       });
       return difs.sort((x, y) => x.nome.localeCompare(y.nome));
     }
@@ -819,7 +811,7 @@
         if (meuPerfil === null) { const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario'); meuPerfil = (Array.isArray(u) ? u[0] : u)?.perfil || ''; }
         const [rE, rP] = await Promise.all([
           _supabase.from('folha_envios').select('*').eq('competencia', competenciaRegra).order('versao', { ascending: false }).limit(1),
-          _supabase.from('pagamentos_extras').select('id, status, valor, funcionario_id').eq('tipo', 'QUINTO_DIA').eq('competencia', competenciaRegra)
+          _supabase.from('pagamentos_extras').select('id, status, valor, funcionario_id, meio').eq('tipo', 'QUINTO_DIA').eq('competencia', competenciaRegra)
         ]);
         if (rE.error) { document.getElementById('barraEnvio').innerHTML = `<div class="bg-slate-100 border border-slate-300 rounded-xl p-3 text-xs text-slate-600">Envio ao Financeiro ainda não instalado no banco. ${escH(rE.error.message)}</div>`; return; }
         ultimoEnvio = (rE.data || [])[0] || null;
@@ -854,27 +846,29 @@
           : `${escH(a.nome)} com líquido negativo (R$ ${formatarMoedaSimples(a.valor)}) — não foi enviado`).join(' · ')}</div>` : '';
       if (!difsEnvio.length) {
         box.innerHTML = `<div class="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-4 text-xs text-emerald-900"><div class="text-sm">${cab}</div>${sit}
-          <div class="text-[11px] text-emerald-700 mt-1">Nenhuma alteração desde o envio. Se precisar ajustar: corrija em Lançamentos e volte aqui para reenviar.</div>${alertHtml}</div>`;
+          <div class="text-[11px] text-emerald-700 mt-1">A fila do Financeiro bate com a folha. Alteração em Lançamentos chega sozinha ao Financeiro (a pagar: valor trocado; já pago: complemento ou pago a maior).</div>${alertHtml}</div>`;
         return;
       }
       const dif = difsEnvio.reduce((a, d) => a + (d.agora - d.antes), 0);
       box.innerHTML = `<div class="bg-rose-50 border-2 border-rose-400 rounded-xl p-4 text-xs text-rose-900">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div><div class="text-sm text-slate-700">${cab}</div>${sit}
-            <div class="font-black text-sm mt-2">⚠ ${difsEnvio.length} funcionário(s) mudaram DEPOIS do envio (diferença ${dif >= 0 ? '+' : '−'} R$ ${formatarMoedaSimples(Math.abs(dif))}). O Financeiro ainda está com os valores antigos.</div></div>
+            <div class="font-black text-sm mt-2">⚠ ${difsEnvio.length} funcionário(s) com o Financeiro diferente da folha de agora (${dif >= 0 ? 'faltando' : 'pago a mais'} R$ ${formatarMoedaSimples(Math.abs(dif))}). O que já foi pago a mais precisa de acerto (rescisão ou próxima folha).</div></div>
           ${podeEnviar() ? `<button onclick="abrirEnvio()" class="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-black text-xs cursor-pointer whitespace-nowrap shadow">🔁 REENVIAR AJUSTES AO FINANCEIRO</button>` : ''}
         </div>
         <details class="mt-2"><summary class="cursor-pointer font-bold">ver o que mudou</summary>${tabelaDifs(difsEnvio)}</details>${alertHtml}</div>`;
     }
 
     function tabelaDifs(difs) {
-      return `<table class="mt-2 w-full text-[11px] bg-white rounded"><tr class="text-slate-500 text-left"><th class="p-1">Funcionário</th><th class="p-1 text-right">Enviado</th><th class="p-1 text-right">Agora</th><th class="p-1 text-right">Diferença</th></tr>
+      return `<table class="mt-2 w-full text-[11px] bg-white rounded"><tr class="text-slate-500 text-left"><th class="p-1">Funcionário</th><th class="p-1 text-right">No Financeiro (banco)</th><th class="p-1 text-right">Folha agora (banco)</th><th class="p-1 text-right">Diferença</th></tr>
         ${difs.map(d => `<tr class="border-t"><td class="p-1">${escH(d.nome)}${Math.abs(d.dinA - d.dinN) >= 0.01 ? ` <span class="text-amber-700">(dinheiro ${formatarMoedaSimples(d.dinA)} → ${formatarMoedaSimples(d.dinN)})</span>` : ''}</td>
           <td class="p-1 text-right font-mono">${formatarMoedaSimples(d.antes)}</td><td class="p-1 text-right font-mono">${formatarMoedaSimples(d.agora)}</td>
           <td class="p-1 text-right font-mono font-bold ${d.agora - d.antes < 0 ? 'text-rose-700' : 'text-emerald-700'}">${d.agora - d.antes >= 0 ? '+' : '−'}${formatarMoedaSimples(Math.abs(d.agora - d.antes))}</td></tr>`).join('')}</table>`;
     }
 
     async function abrirEnvio() {
+      // (06/11/2026) recarrega os lançamentos do banco antes de enviar: a aba aberta há horas não pode mandar valor antigo
+      await processarDadosBanco();
       const foto = fotoAtual();
       const neg = foto.filter(i => i.liquido < 0), dinMaior = foto.filter(i => i.dinheiro > i.liquido && i.liquido >= 0);
       if (dinMaior.length) return alert('Dinheiro maior que o líquido para: ' + dinMaior.map(i => i.nome).join(', ') + '. Corrija a coluna Dinheiro antes de enviar.');
@@ -890,7 +884,7 @@
           <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-2"><div class="text-[10px] text-indigo-700 font-bold">BANCO / PIX (vai ao Financeiro)</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(banco)}</div></div>
           <div class="bg-amber-50 border border-amber-200 rounded-lg p-2"><div class="text-[10px] text-amber-700 font-bold">DINHEIRO (não vai ao Financeiro)</div><div class="text-lg font-black font-mono">${formatarMoedaSimples(din)}</div></div></div>
         ${neg.length ? `<div class="mt-2 bg-rose-50 border border-rose-300 rounded p-2 text-rose-800">⚠ Líquido negativo (não será enviado): ${neg.map(i => escH(i.nome) + ' ' + formatarMoedaSimples(i.liquido)).join(' · ')}</div>` : ''}
-        ${reenvio ? (difsEnvio.length ? `<div class="mt-2 font-bold">Mudanças desde o envio anterior:</div>${tabelaDifs(difsEnvio)}
+        ${reenvio ? (difsEnvio.length ? `<div class="mt-2 font-bold">Diferenças entre o Financeiro e a folha de agora:</div>${tabelaDifs(difsEnvio)}
           <div class="mt-2 text-[11px] text-slate-600">O que o Financeiro ainda não pagou é substituído pelo valor novo. O que já foi pago vira <b>complemento</b> (se aumentou) ou <b>alerta de pago a maior</b> (se diminuiu).</div>`
           : '<div class="mt-2 text-slate-600">Nenhuma diferença de valor — o reenvio só atualiza a data, se você mudar.</div>') : ''}`;
       let data = ultimoEnvio?.data_pagamento || '';
@@ -937,6 +931,8 @@
       processarDadosBanco();
     }
     iniciarCompetencia();
+    // (06/11/2026) alteração em lançamento, dinheiro ou pagamento: a tela se atualiza sozinha (folha_calc.js)
+    FolhaCalc.vigiar(_supabase, () => processarDadosBanco());
   
     // A área da tabela vai exatamente até o fim da janela: a barra de rolagem horizontal fica sempre à vista
     function ajustarAlturaTabela() {

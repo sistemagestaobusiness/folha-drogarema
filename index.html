@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=1"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="pendencias_core.js?v=7"></script>
   <style>
@@ -716,7 +717,8 @@
 
         const emps = empresas || [];
         const funcs = (funcionarios || []).filter(f => !ehSocio(f));
-        const idsFolha = new Set(funcs.map(f => String(f.id)));
+        // (06/11/2026) mesma base do Resumo da competência (folha_calc.js): quem saiu (INATIVO com rescisão) não entra
+        const idsFolha = new Set(funcs.filter(f => FolhaCalc.naFolha(f, competenciaMMYYYY)).map(f => String(f.id)));
         const itens = (itensFolha || []).filter(i => idsFolha.has(String(i.funcionario_id)));
         const evs = eventos || [];
 
@@ -822,7 +824,11 @@
           }
         });
 
-        const liquidoEst = totalProventos - totalDescontos;
+        // líquido, bruto e descontos do topo: exatamente os do Resumo da competência
+        const baseRC = FolhaCalc.calcular({ funcionarios: funcionarios || [], itens: itensFolha || [], eventos: evs, comp: competenciaMMYYYY });
+        totalProventos = baseRC.total.proventos; totalDescontos = baseRC.total.descontos; totalGeralFolha = baseRC.total.proventos;
+        totalContabil = baseRC.total.contabil; totalNaoContabil = baseRC.total.naoContabil;
+        const liquidoEst = baseRC.total.liquido;
 
         document.getElementById('valLiquidoConsolidado').innerText = 'R$ ' + liquidoEst.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         document.getElementById('valLiquidoConsolidado').classList.toggle('!text-rose-600', liquidoEst < 0);
@@ -950,6 +956,8 @@
     }
 
     carregarPeriodos();
+    // (06/11/2026) alteração em lançamento, dinheiro ou pagamento: a tela se atualiza sozinha (folha_calc.js)
+    FolhaCalc.vigiar(_supabase, () => carregarPeriodos());
 
     function sair() {
       localStorage.removeItem('usuario_drogarema');

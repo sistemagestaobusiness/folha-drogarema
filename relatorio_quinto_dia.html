@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=1"></script>
   <style>
     .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
     .barra h1 { margin: 0 10px 0 0; font-size: 18px; font-weight: 700; }
@@ -60,7 +61,7 @@
   <div class="kpis" id="kpis"></div>
 
   <section class="card rola" style="max-height: 62vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
-  <p class="nota">Valores do último envio do Resumo da competência ao Financeiro. <b>Pagamento via banco = débito do 5º dia útil nas contas</b> (o total bate com o quadro de débito por conta abaixo). <b>Total pago = dinheiro + banco</b> (líquido da folha enviado ao Financeiro).
+  <p class="nota">Valores da folha de agora, com a mesma conta do Resumo da competência (a fila do Financeiro acompanha sozinha; a tela se atualiza sozinha). <b>Pagamento via banco = débito do 5º dia útil nas contas</b> (o total bate com o quadro de débito por conta abaixo). <b>Total pago = dinheiro + banco</b> (líquido da folha enviado ao Financeiro).
     Banco (−) comissão = pagamento via banco menos a comissão. Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
     Clique na loja para ver os funcionários. <b>Clique num valor para copiar</b> (sem ponto de milhar, pronto para colar no Alpha7).</p>
 
@@ -82,17 +83,20 @@
     async function tudo(q) { let out = [], de = 0; for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; } }
     const compDe = ym => ym ? ym.slice(5, 7) + '/' + ym.slice(0, 4) : '';
 
+    let avisoPessoas = '';
     async function carregar() {
       aviso(''); const comp = compDe($('fComp').value); if (!comp) return;
       $('tab').innerHTML = '<tbody><tr><td class="l">Carregando…</td></tr></tbody>';
       try {
-        const [rE, lp, li, lf, rl, re] = await Promise.all([
+        const [rE, lp, li, lf, rl, re, rEv, rDin] = await Promise.all([
           _supabase.from('folha_envios').select('*').eq('competencia', comp).order('versao', { ascending: false }).limit(1),
           tudo(() => _supabase.from('pagamentos_extras').select('id, funcionario_id, status, valor, meio, vencimento, pago_em, banco_pagador').eq('tipo', 'QUINTO_DIA').eq('competencia', comp).neq('status', 'CANCELADO')),
           tudo(() => _supabase.from('folha_itens').select('funcionario_id, rubrica, tipo, valor').eq('competencia', comp)),
           tudo(() => _supabase.from('funcionarios').select('*')),
           _supabase.from('lojas').select('id, nome_loja'),
-          _supabase.from('empresas').select('id, nome_fantasia, razao_social, cnpj')]);
+          _supabase.from('empresas').select('id, nome_fantasia, razao_social, cnpj'),
+          _supabase.from('tipos_eventos').select('codigo_evento, descricao_do_evento, natureza_do_evento, pagamento_extra_tipo, pagamento_extra_desde'),
+          _supabase.from('pagamentos_dinheiro').select('funcionario_id, valor').eq('competencia', comp)]);
         if (rE.error) throw rE.error;
         envio = (rE.data || [])[0] || null; pagos = lp;
         cad.lojas = {}; (rl.data || []).forEach(l => cad.lojas[l.id] = l.nome_loja);
@@ -106,14 +110,24 @@
           (com[i.funcionario_id] = com[i.funcionario_id] || {})[cod] = (com[i.funcionario_id][cod] || 0) + Number(i.valor || 0); });
         if (!envio) { linhas = []; $('info').innerHTML = ''; render(); return aviso(`A competência ${comp} ainda não foi enviada ao Financeiro pelo Resumo da competência.`); }
         const pg = {}; pagos.forEach(p => (pg[p.funcionario_id] = pg[p.funcionario_id] || []).push(p));
-        linhas = (envio.itens || []).filter(i => Number(i.liquido) > 0).map(i => {
+        // (06/11/2026) valores da folha de AGORA, com a mesma conta do Resumo da competência (folha_calc.js); a fila do Financeiro
+        // acompanha sozinha. Diferença só sobra quando já foi pago e o lançamento mudou antes da trava (aviso no topo).
+        const din = {}; (rDin.data || []).forEach(d => din[d.funcionario_id] = Number(d.valor || 0));
+        const base = FolhaCalc.calcular({ funcionarios: lf, itens: li.map(i => ({ ...i, competencia: comp })), eventos: rEv.data || [], comp, dinheiro: din });
+        const ids = new Set([...base.lista.filter(b => b.liquido > 0).map(b => b.id), ...pagos.filter(p => p.meio !== 'DINHEIRO').map(p => p.funcionario_id)]);
+        const nomeEnvio = {}; (envio.itens || []).forEach(i => nomeEnvio[i.funcionario_id] = i.nome);
+        const difs = [];
+        linhas = [...ids].map(id => { const b = base.porId.get(String(id)) || { liquido: 0, dinheiro: 0 }; return { funcionario_id: id, nome: nomeEnvio[id], liquido: Math.max(b.liquido, 0), dinheiro: b.liquido > 0 ? b.dinheiro : 0 }; }).map(i => {
           const f = func[i.funcionario_id], e = empDe(f), ps = pg[i.funcionario_id] || [];
           const pagoBanco = {}; let aPagar = 0;
           ps.filter(p => p.meio !== 'DINHEIRO').forEach(p => { if (p.status === 'PAGO') { const b = p.banco_pagador || '(sem banco)'; pagoBanco[b] = (pagoBanco[b] || 0) + Number(p.valor || 0); } else aPagar += Number(p.valor || 0); });
           return { id: i.funcionario_id, nome: (f && (f.nome_registro || f.nome)) || i.nome || '?', loja: f && f.loja_id ? (cad.lojas[f.loja_id] || '(loja?)') : '(sem loja no cadastro)',
             empresa: e ? (e.nome_fantasia || e.razao_social) : (f && f.empresa_registro) || '(sem empresa)', cnpj: e ? e.cnpj : '',
             liquido: r2(i.liquido), dinheiro: r2(i.dinheiro), banco: r2(i.liquido - (i.dinheiro || 0)), com: com[i.funcionario_id] || {}, pagoBanco, aPagar: r2(aPagar) };
-        });
+        }).map(l => { const fila = r2(Object.values(l.pagoBanco).reduce((a, v) => a + v, 0) + l.aPagar);
+          if (Math.abs(fila - l.banco) >= 0.01) difs.push(`${esc(l.nome)} (Financeiro ${brl(fila)} · folha ${brl(l.banco)})`); return l; });
+        avisoPessoas = '';
+        if (difs.length) aviso(avisoPessoas = `⚠ ${difs.length} funcionário(s) pagos com valor diferente da folha de agora (acertar na rescisão ou na próxima folha): ${difs.join(' · ')}`);
         $('info').innerHTML = `Envio v${envio.versao} de ${new Date(envio.enviado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} por ${esc(envio.enviado_por || '')} · pagamento em <b>${dbr(envio.data_pagamento)}</b>`;
         render();
       } catch (e) { aviso('Não foi possível carregar: ' + esc(e.message || e)); }
@@ -164,7 +178,8 @@
         return `<tr><td class="l">${esc(b)}</td><td class="l mono">${dbr(d)}</td><td>${pd[k].n}</td>${n(pd[k].v)}</tr>`; }).join('')}
         <tr class="tt"><td class="l">Total baixado</td><td></td><td>${ks.reduce((a, k) => a + pd[k].n, 0)}</td>${n(ks.reduce((a, k) => a + pd[k].v, 0))}</tr></tbody>`
         : '<tbody><tr><td class="l desc">Nenhum pagamento do 5º dia útil baixado ainda nesta competência.</td></tr></tbody>';
-      if (linhas.length && difEnvio > 0.5) aviso(`O banco do envio (${brl(T.banco)}) difere do que está no Financeiro (pago + a pagar = ${brl(noFin)}): confira complementos ou pagamentos cancelados.`);
+      if (linhas.length && difEnvio > 0.5) aviso(avisoPessoas || `O banco do envio (${brl(T.banco)}) difere do que está no Financeiro (pago + a pagar = ${brl(noFin)}): confira complementos ou pagamentos cancelados.`);
+      else if (avisoPessoas) aviso(avisoPessoas);
     }
 
     async function copiar(td) {
@@ -190,6 +205,8 @@
       const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);   // padrão: competência do mês passado (paga no 5º dia útil deste mês)
       $('fComp').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
       carregar();
+      // (06/11/2026) alteração em lançamento, dinheiro ou pagamento: a tela se atualiza sozinha (folha_calc.js)
+      FolhaCalc.vigiar(_supabase, () => carregar());
     })();
   </script>
 </body>

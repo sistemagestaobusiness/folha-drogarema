@@ -760,7 +760,8 @@
       const inp = document.getElementById('buscaFunc' + t), box = document.getElementById('sugFunc' + t);
       const termos = removerAcentosEColocarMaiuscula(inp.value || '').trim().split(/\s+/).filter(Boolean);
       if (!termos.length) { box.classList.add('hidden'); return; }
-      const lista = listaGlobalFuncionarios.filter(f => { const n = removerAcentosEColocarMaiuscula(f.nome_registro || ''); return termos.every(x => n.includes(x)); }).slice(0, 15);
+      const lista = listaGlobalFuncionarios.filter(f => { const n = removerAcentosEColocarMaiuscula(f.nome_registro || '');
+        return termos.every(x => n.includes(x)) && (t !== 'Novo' || String(f.status || 'ATIVO').toUpperCase() === 'ATIVO'); }).slice(0, 15);
       _sugFunc[t] = lista; _sugIdx[t] = 0;
       box.innerHTML = lista.length ? lista.map((f, i) => {
         const e = empresaDoFunc(f);
@@ -769,7 +770,7 @@
         return `<div data-i="${i}" onmousedown="escolherFuncGlobal('${t}', ${i})" class="px-3 py-2 cursor-pointer hover:bg-sky-50 border-b border-slate-100 ${i === 0 ? 'bg-sky-50' : ''}">
           <div class="text-sm font-bold text-slate-800">${escaparHtml(f.nome_registro || '')}${inativo ? ' <span class="text-[10px] text-rose-600">(' + escaparHtml(f.status || '') + ')</span>' : ''}</div>
           <div class="text-[11px] text-slate-500">${escaparHtml(emp)}${f.cargo ? ' · ' + escaparHtml(f.cargo) : ''}</div></div>`;
-      }).join('') : '<div class="px-3 py-2 text-xs text-slate-500">Nenhum funcionário com esse nome.</div>';
+      }).join('') : `<div class="px-3 py-2 text-xs text-slate-500">Nenhum funcionário${t === 'Novo' ? ' ATIVO' : ''} com esse nome.${t === 'Novo' ? ' Quem saiu da empresa é tratado na tela de rescisão.' : ''}</div>`;
       box.classList.remove('hidden');
     }
     function teclaFuncGlobal(ev, t) {
@@ -813,9 +814,10 @@
       selectFunc.innerHTML = '<option value="">Carregando colaboradores...</option>';
       selectFunc.disabled = true;
 
+      // (06/11/2026) lançar só para funcionário ATIVO (quem saiu vai para a tela de rescisão); a consulta mostra todos
       const filtrados = listaGlobalFuncionarios.filter(f => {
         const funcCnpj = String(f.cnpj || '').replace(/\D/g, '');
-        return cnpjSelecionado && funcCnpj === cnpjSelecionado;
+        return cnpjSelecionado && funcCnpj === cnpjSelecionado && (tipoAba !== 'Novo' || String(f.status || 'ATIVO').toUpperCase() === 'ATIVO');
       });
 
       if (filtrados.length === 0) {

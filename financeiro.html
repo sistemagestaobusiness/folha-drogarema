@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=1"></script>
   <script src="comprovante_split.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -850,6 +851,8 @@ Confirmar mesmo assim?`)) return;
     }
 
     inicializar();
+    // (06/11/2026) alteração em lançamento, dinheiro ou pagamento: a tela se atualiza sozinha (folha_calc.js)
+    FolhaCalc.vigiar(_supabase, () => carregar());
   </script>
 </body>
 </html>

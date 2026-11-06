@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=1"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .no-scrollbar::-webkit-scrollbar { height: 14px; width: 12px; }
@@ -106,6 +107,8 @@
       { key: 'bruto_nao_contabil', label: 'TOTAL NÃO CONTÁBIL', colorH: 'bg-amber-200/80', colorB: 'bg-amber-50/30', colorD: 'bg-amber-100/60' },
       { key: 'descontos', label: 'TOTAL DESCONTOS', colorH: 'bg-rose-100/70', colorB: 'bg-rose-50/20', colorD: 'bg-rose-100/50' },
       { key: 'liquido', label: 'LÍQUIDO RECEBIDO', colorH: 'bg-slate-200/80', colorB: 'bg-slate-50', colorD: 'bg-slate-200/60' },
+      { key: 'dinheiro', label: 'DINHEIRO', colorH: 'bg-lime-100/70', colorB: 'bg-lime-50/20', colorD: 'bg-lime-100/50' },
+      { key: 'banco', label: 'BANCO', colorH: 'bg-sky-100/70', colorB: 'bg-sky-50/20', colorD: 'bg-sky-100/50' },
       { key: 'custo_empresa', label: 'CUSTO EMPRESA', colorH: 'bg-teal-100/70', colorB: 'bg-teal-50/20', colorD: 'bg-teal-100/50' },
       { key: 'vt', label: 'VALE-TRANSPORTE', colorH: 'bg-cyan-100/60', colorB: 'bg-cyan-50/20', colorD: 'bg-cyan-100/40' },
       { key: 'inss_patronal', label: 'INSS PATRONAL 27%', colorH: 'bg-teal-50', colorB: 'bg-white', colorD: 'bg-teal-50' },
@@ -168,7 +171,7 @@
     }
 
     function initMetrics() {
-      return { bruto: 0, bruto_contabil: 0, bruto_nao_contabil: 0, descontos: 0, liquido: 0, custo_empresa: 0, vt: 0, inss_patronal: 0, fgts: 0, sm_gn: 0, perfumaria: 0, sidney: 0, vitaminas: 0, he_fora: 0, freelance: 0, qtd_itens: 0 };
+      return { bruto: 0, bruto_contabil: 0, bruto_nao_contabil: 0, descontos: 0, liquido: 0, dinheiro: 0, banco: 0, custo_empresa: 0, vt: 0, inss_patronal: 0, fgts: 0, sm_gn: 0, perfumaria: 0, sidney: 0, vitaminas: 0, he_fora: 0, freelance: 0, qtd_itens: 0 };
     }
 
     function initTotals() {
@@ -188,15 +191,18 @@
       document.getElementById('labelCompetencia').innerText = `${compAtual} (vs ${compAnterior})`;
 
       try {
-        const [resFunc, resFolha, resEventos, resEmpresas] = await Promise.all([
+        const [resFunc, resFolha, resEventos, resEmpresas, resDin] = await Promise.all([
           _supabase.from('funcionarios').select('*'),
           // Busca lançamentos dos DOIS meses
           buscarTudo(() => _supabase.from('folha_itens').select('*').in('competencia', [compAtual, compAnterior])),
           _supabase.from('tipos_eventos').select('*'),
-          _supabase.from('empresas').select('*')
+          _supabase.from('empresas').select('*'),
+          _supabase.from('pagamentos_dinheiro').select('funcionario_id, competencia, valor').in('competencia', [compAtual, compAnterior])
         ]);
 
-        const funcionarios = (resFunc.data || []).filter(f => !ehSocio(f));
+        // (06/11/2026) mesma base do Resumo da competência (folha_calc.js): sem sócio e, em cada mês, sem quem já tinha saído
+        const funcionarios = (resFunc.data || []).filter(f => !FolhaCalc.ehSocio(f));
+        const todosFunc = resFunc.data || [];
         const itensFolha = resFolha.data || [];
         const eventos = resEventos.data || [];
         const empresas = resEmpresas.data || [];
@@ -216,9 +222,11 @@
         const catDoItem = it => { const c = (String(it.rubrica || '').match(/^\s*(\d+)/) || [])[1];
           return catEvento[c] && (!catDesde[c] || ordCompFH(it.competencia) >= ordCompFH(catDesde[c])) ? catEvento[c] : undefined; };
 
+        const fPorId = new Map(funcionarios.map(f => [String(f.id), f]));
         itensFolha.forEach(item => {
           const fId = item.funcionario_id;
           const isAtual = item.competencia === compAtual;
+          if (!FolhaCalc.naFolha(fPorId.get(String(fId)), item.competencia)) return;
           
           if (!dadosFuncMap[fId]) {
             const f = funcionarios.find(x => String(x.id) === String(fId));
@@ -293,17 +301,19 @@
           if (rubrica.includes('2014') || rubrica.includes('FREELANCE')) target.freelance += val;
         });
 
-        // (06/11/2026) funcionário INATIVO (saiu por rescisão) não entra no comparativo nem nos totais; fica listado à parte.
-        // Quem ainda está ATIVO no cadastro continua, mesmo com evento de rescisão no mês (decisão do Gestor).
-        { const fora = [];
-          Object.values(dadosFuncMap).forEach(d => {
-            const f = funcionarios.find(x => String(x.id) === String(d.id)) || {};
-            if (String(f.status || 'ATIVO').toUpperCase() !== 'ATIVO') { fora.push(d.nome); delete dadosFuncMap[d.id]; }
-          });
+        // (06/11/2026) quem saiu (INATIVO com rescisão) não entra na folha do mês: a regra é a do Resumo da competência (folha_calc.js).
+        { const fora = [...new Set(itensFolha.filter(i => i.competencia === compAtual).map(i => String(i.funcionario_id)))]
+            .map(id => fPorId.get(id)).filter(f => f && FolhaCalc.foraDaFolha(f, compAtual)).map(f => f.nome_registro);
           const nota = document.getElementById('notaRescisao');
           if (nota) { nota.classList.toggle('hidden', !fora.length);
-            nota.textContent = fora.length ? `Inativos fora do comparativo e dos totais (${fora.length}): ${fora.sort().join(' · ')}` : ''; }
+            nota.textContent = fora.length ? `Saíram da empresa (rescisão: tratar na tela de rescisão), fora da folha de ${compAtual} (${fora.length}): ${fora.sort().join(' · ')}` : ''; }
         }
+        // Líquido, dinheiro e banco: exatamente os valores do Resumo da competência (mesma conta, folha_calc.js)
+        const dinDe = c => { const o = {}; (resDin.data || []).filter(d => d.competencia === c).forEach(d => o[d.funcionario_id] = parseFloat(d.valor || 0)); return o; };
+        const base = {
+          atual: FolhaCalc.calcular({ funcionarios: todosFunc, itens: itensFolha, eventos, comp: compAtual, dinheiro: dinDe(compAtual) }),
+          anterior: FolhaCalc.calcular({ funcionarios: todosFunc, itens: itensFolha, eventos, comp: compAnterior, dinheiro: dinDe(compAnterior) })
+        };
 
         if (Object.keys(dadosFuncMap).length === 0) {
           document.getElementById('tabelaCorpo').innerHTML = `<tr><td class="p-8 text-center text-slate-400">Nenhum lançamento processado.</td></tr>`;
@@ -314,7 +324,8 @@
         // Calcula Líquido e Custo Empresa para Atual e Anterior
         glob_dadosFunc = Object.values(dadosFuncMap).map(f => {
           ['atual', 'anterior'].forEach(per => {
-            f[per].liquido = f[per].bruto - f[per].descontos;
+            const b = base[per].porId.get(String(f.id)) || { liquido: 0, dinheiro: 0, banco: 0 };
+            f[per].liquido = b.liquido; f[per].dinheiro = b.dinheiro; f[per].banco = b.banco;
             
             // Encargos sobre o SALÁRIO BASE do cadastro (só no mês em que o funcionário tem lançamento):
             // INSS patronal 27% para registrados nas empresas DROGAREMA; FGTS 8% para todos, menos freelance
@@ -518,6 +529,8 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharComparativo(); });
 
     processarDadosBanco();
+    // (06/11/2026) alteração em lançamento, dinheiro ou pagamento: a tela se atualiza sozinha (folha_calc.js)
+    FolhaCalc.vigiar(_supabase, () => processarDadosBanco());
   </script>
 <!-- Script de Bloqueio por Inatividade (Ex: 15 minutos) -->
   <script>

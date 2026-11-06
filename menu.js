@@ -548,7 +548,7 @@
   async function cronogramaAvisos() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['RH', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window) return;
-    try { if (!window.Cronograma) await carregarScript('cronograma.js?v=1'); window.Cronograma.iniciarAvisos(window.ACESSO_CLI, pf, PAGINA); } catch (e) { console.warn('cronograma', e); }
+    try { if (!window.Cronograma) await carregarScript('cronograma.js?v=2'); window.Cronograma.iniciarAvisos(window.ACESSO_CLI, pf, PAGINA); } catch (e) { console.warn('cronograma', e); }
   }
 
   // pendências no menu (regra de 21/10/2026): bolha com o número em cada tela onde se resolve;
