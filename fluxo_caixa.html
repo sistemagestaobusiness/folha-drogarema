@@ -444,11 +444,14 @@
         buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Pendente').gte('venc_util', fIni).lte('venc_util', fim)).order('venc_util').order('id')));
         buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Paga').gte('pagamento', fIni).lte('pagamento', fim)).order('pagamento').order('id')));
       }
+      // (05/11/2026) títulos vencidos e ainda em aberto entram no dia de hoje da projeção (não somem do fluxo)
+      if (ini <= hoje && hoje <= fim)
+        buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Pendente').lt('venc_util', hoje).gt('venc_util', fixo)).order('venc_util').order('id')));
       let lista;
       try { lista = (await Promise.all(buscas)).flat(); } catch (e) { $('mCorpo').innerHTML = `<div class="alerta verm" style="margin: 12px 16px">${esc(e.message || e)}</div>`; return; }
       const grupoDe = p => { const c = cad.categorias[p]; return c && c.grupo ? c.grupo : 'SEM GRUPO'; };
       lista = lista.filter(t => !(cad.categorias[t.plano] || {}).fora_do_fluxo && (!eGrupo || grupoDe(t.plano || '') === chave));
-      const dataFluxo = t => t.status === 'Paga' ? t.pagamento : t.venc_util;
+      const dataFluxo = t => t.status === 'Paga' ? t.pagamento : (t.venc_util < hoje ? hoje : t.venc_util);
       lista.sort((a, b) => dataFluxo(a) < dataFluxo(b) ? -1 : dataFluxo(a) > dataFluxo(b) ? 1 : Number(b.valor) - Number(a.valor));
       const tot = lista.reduce((a, t) => a + Number(t.valor || 0), 0);
       // previsões digitadas no período
@@ -461,7 +464,7 @@
         <span class="desc">valor na célula: <b class="mono">${brl(naCelula)}</b>${Math.abs(naCelula - tot - prev) > 0.5 ? ' · diferença ' + brl(naCelula - tot - prev) : ''}</span></div>`;
       if (temFixo) h += `<div class="alerta neutro" style="margin: 8px 16px"><span class="ponto aten"></span><span>Até ${dbr(fixo)} o fluxo guarda só o total por dia (período fixo): os títulos desses dias não aparecem aqui.</span></div>`;
       h += lista.length ? `<table class="t"><thead><tr><th>Data no fluxo</th><th>Situação</th><th>Vencimento</th><th>Credor</th><th>Descrição</th><th>Documento</th><th>Parc.</th><th>Loja</th>${eGrupo ? '<th>Plano de contas</th>' : ''}<th>Conta pagadora</th><th class="n">Valor</th></tr></thead><tbody>${lista.map(t => `<tr>
-          <td class="mono">${dbr(dataFluxo(t))}</td><td>${t.status === 'Paga' ? '<span class="pill p-ok">Paga</span>' : '<span class="pill p-info">Em aberto</span>'}</td>
+          <td class="mono">${dbr(dataFluxo(t))}</td><td>${t.status === 'Paga' ? '<span class="pill p-ok">Paga</span>' : t.venc_util < hoje ? '<span class="pill p-crit">Vencido em aberto</span>' : '<span class="pill p-info">Em aberto</span>'}</td>
           <td class="mono">${dbr(t.vencimento)}${t.venc_util && t.venc_util !== t.vencimento ? ' <span class="desc">(útil ' + dbr(t.venc_util).slice(0, 5) + ')</span>' : ''}</td>
           <td class="cr">${esc(t.credor || '')}</td><td class="ds">${esc(t.descricao || '')}</td><td class="mono">${esc(t.documento || '')}</td><td>${esc(t.parcela || '')}</td><td>${esc(t.unidade || '')}</td>
           ${eGrupo ? `<td class="pl" title="${esc(t.plano || '')}">${esc(curto(t.plano))}</td>` : ''}<td>${esc(t.conta_pagadora || '')}</td><td class="n">${brl(t.valor)}</td></tr>`).join('')}</tbody></table>`
