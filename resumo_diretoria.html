@@ -31,6 +31,7 @@
     <div>
       <h1 class="text-xl font-black text-slate-900 tracking-wide uppercase">Resumo Executivo - Diretoria</h1>
       <p class="text-xs text-slate-500 font-medium">Comparativo Mensal | Competência: <span id="labelCompetencia" class="text-emerald-600 font-bold font-mono">...</span></p>
+      <p id="notaRescisao" class="hidden text-[11px] text-amber-700 mt-1"></p>
     </div>
     
     <div class="flex items-center gap-3 w-full md:w-auto">
@@ -291,6 +292,18 @@
           if (rubrica.includes('2005') || rubrica.includes('HORA EXTRA POR FORA')) target.he_fora += val;
           if (rubrica.includes('2014') || rubrica.includes('FREELANCE')) target.freelance += val;
         });
+
+        // (06/11/2026) funcionário INATIVO (saiu por rescisão) não entra no comparativo nem nos totais; fica listado à parte.
+        // Quem ainda está ATIVO no cadastro continua, mesmo com evento de rescisão no mês (decisão do Gestor).
+        { const fora = [];
+          Object.values(dadosFuncMap).forEach(d => {
+            const f = funcionarios.find(x => String(x.id) === String(d.id)) || {};
+            if (String(f.status || 'ATIVO').toUpperCase() !== 'ATIVO') { fora.push(d.nome); delete dadosFuncMap[d.id]; }
+          });
+          const nota = document.getElementById('notaRescisao');
+          if (nota) { nota.classList.toggle('hidden', !fora.length);
+            nota.textContent = fora.length ? `Inativos fora do comparativo e dos totais (${fora.length}): ${fora.sort().join(' · ')}` : ''; }
+        }
 
         if (Object.keys(dadosFuncMap).length === 0) {
           document.getElementById('tabelaCorpo').innerHTML = `<tr><td class="p-8 text-center text-slate-400">Nenhum lançamento processado.</td></tr>`;
