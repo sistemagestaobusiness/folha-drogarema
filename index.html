@@ -138,6 +138,7 @@
         <div class="text-[11px] mt-2" style="color:#5B6472">Clique no mês para analisar; na engrenagem, para abrir ou fechar.</div>
         <button id="btnBackup" onclick="fazerBackup('manual')" class="hidden w-full mt-2 btn-claro cursor-pointer" style="min-height:32px;font-size:12px">Fazer backup agora</button>
         <p class="text-[10px] mt-1 leading-tight" style="color:#5B6472">O backup completo também é feito automaticamente ao fechar o mês.</p>
+        <p id="linhaPastaBackup" class="hidden text-[10px] mt-1 leading-tight" style="color:#5B6472">📁 Salvar em: <b id="nomePastaBackup">Downloads</b> · <a href="#" onclick="escolherPastaBackup(); return false;" class="underline" style="color:#0f766e">escolher pasta</a></p>
       </div>
     </div>
 
@@ -296,6 +297,7 @@
         const perfil = data ? data.perfil : null;
         perfilIndex = perfil; emailIndex = (user.email || '').toLowerCase();
         document.getElementById('btnBackup').classList.toggle('hidden', !['RH', 'GESTOR'].includes(perfil));
+        mostrarPastaBackup();
         if (perfil === 'LIDER') window.location.replace('freelance_solicitacao.html');
         else if (perfil === 'SUPERVISOR' || perfil === 'RH') {   // regra de 21/10/2026: início do RH e do Supervisor = pendências (só se a tela já estiver liberada no banco)
           const { data: ac } = await _supabase.rpc('fn_minhas_telas');
@@ -403,6 +405,7 @@
         if (ej) return alert('Não foi possível registrar a justificativa: ' + ej.message);
       }
       if (!confirm('Fechar a competência? Depois de fechada, nenhum lançamento pode ser excluído e só o GESTOR libera correções.\n\nO backup completo será feito em seguida.')) return;
+      pastaFechamento = prepararPastaBackup();   // permissão da pasta do backup pedida agora, ainda no clique
       executarAcaoCompetencia('FECHAR');
     }
 
@@ -430,14 +433,49 @@
       if (error) return alert('Não foi possível: ' + error.message);
       fecharModalMes();
       await carregarPeriodos();
-      if (acao === 'FECHAR') await fazerBackup(`${ano}-${String(mesNum).padStart(2, '0')}`);
+      if (acao === 'FECHAR') { const pp = pastaFechamento; pastaFechamento = undefined; await fazerBackup(`${ano}-${String(mesNum).padStart(2, '0')}`, pp); }
     }
 
     // ---------------------------------------------------------------------
     // BACKUP COMPLETO: todas as tabelas em um arquivo JSON.
     // Guarda uma cópia no Supabase (bucket privado "backups") e baixa outra no computador.
     // ---------------------------------------------------------------------
-    async function fazerBackup(rotulo) {
+    // (08/11/2026) Pasta do backup: o Gestor escolhe uma vez (ex.: OneDrive › Drogarema › BACKUP FOLHA) e o navegador lembra.
+    // Guarda a "chave" da pasta no próprio navegador (IndexedDB). Se o navegador não deixar gravar, baixa em Downloads como antes.
+    const PastaBackup = {
+      _db() { return new Promise((ok, ko) => { const r = indexedDB.open('business_backup', 1); r.onupgradeneeded = () => r.result.createObjectStore('cfg'); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); }); },
+      async ler() { try { const db = await this._db(); return await new Promise(ok => { const t = db.transaction('cfg').objectStore('cfg').get('pasta'); t.onsuccess = () => ok(t.result || null); t.onerror = () => ok(null); }); } catch (e) { return null; } },
+      async gravar(h) { try { const db = await this._db(); await new Promise(ok => { const t = db.transaction('cfg', 'readwrite'); t.objectStore('cfg').put(h, 'pasta'); t.oncomplete = ok; t.onerror = ok; }); } catch (e) { } },
+      suportado: () => typeof window.showDirectoryPicker === 'function'
+    };
+    async function mostrarPastaBackup() {
+      const linha = document.getElementById('linhaPastaBackup'); if (!linha) return;
+      if (!PastaBackup.suportado()) { linha.classList.add('hidden'); return; }
+      linha.classList.toggle('hidden', document.getElementById('btnBackup')?.classList.contains('hidden'));
+      const h = await PastaBackup.ler();
+      document.getElementById('nomePastaBackup').innerText = h ? h.name : 'Downloads (escolha a pasta)';
+    }
+    async function escolherPastaBackup() {
+      if (!PastaBackup.suportado()) { alert('Este navegador não permite escolher a pasta. Use o Chrome ou o Edge.'); return; }
+      try {
+        const h = await window.showDirectoryPicker({ id: 'backup-folha', mode: 'readwrite' });
+        await PastaBackup.gravar(h); mostrarPastaBackup();
+        alert(`Pasta do backup: ${h.name}\nOs próximos backups (manual e ao fechar o mês) vão direto para ela.`);
+      } catch (e) { if (e && e.name !== 'AbortError') alert('Não foi possível usar essa pasta: ' + (e.message || e)); }
+    }
+    // pede a permissão de gravar logo no clique (o navegador só pergunta durante um clique)
+    async function prepararPastaBackup() {
+      if (!PastaBackup.suportado()) return null;
+      const h = await PastaBackup.ler(); if (!h) return null;
+      try {
+        let p = await h.queryPermission({ mode: 'readwrite' });
+        if (p !== 'granted') p = await h.requestPermission({ mode: 'readwrite' });
+        return p === 'granted' ? h : null;
+      } catch (e) { return null; }
+    }
+    let pastaFechamento;
+    async function fazerBackup(rotulo, pastaPronta) {
+      const pastaPromessa = pastaPronta !== undefined ? Promise.resolve(pastaPronta) : prepararPastaBackup();
       const aviso = document.createElement('div');
       aviso.className = 'fixed bottom-4 right-4 z-[70] bg-slate-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-2xl';
       aviso.innerText = '💾 Gerando backup...';
@@ -465,11 +503,23 @@
         aviso.innerText = '💾 Backup: enviando cópia para o Supabase...';
         const pasta = rotulo === 'manual' ? 'manual' : rotulo;
         const { error: errUp } = await _supabase.storage.from('backups').upload(`${pasta}/${nome}`, arquivo, { upsert: false, contentType: 'application/json' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(arquivo); link.download = nome; document.body.appendChild(link); link.click(); link.remove();
+        let ondeFicou = '';
+        const pastaLocal = await pastaPromessa.catch(() => null);
+        if (pastaLocal) {
+          try {
+            aviso.innerText = `💾 Backup: gravando na pasta ${pastaLocal.name}...`;
+            const fh = await pastaLocal.getFileHandle(nome, { create: true }); const w = await fh.createWritable(); await w.write(arquivo); await w.close();
+            ondeFicou = `• Arquivo gravado na pasta ${pastaLocal.name}: ${nome}`;
+          } catch (e) { ondeFicou = ''; }
+        }
+        if (!ondeFicou) {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(arquivo); link.download = nome; document.body.appendChild(link); link.click(); link.remove();
+          ondeFicou = `• Arquivo baixado em Downloads: ${nome}` + (PastaBackup.suportado() ? ` (para ir direto à pasta, use "escolher pasta" abaixo do botão de backup)` : '');
+        }
         const total = Object.values(dados).reduce((a, v) => a + (Array.isArray(v) ? v.length : 0), 0);
         alert(`Backup concluído: ${Object.keys(dados).length} tabelas, ${total} registros.\n` +
-              `• Arquivo baixado no seu computador: ${nome}\n` +
+              ondeFicou + `\n` +
               (errUp ? `• ATENÇÃO: a cópia no Supabase falhou (${errUp.message}). Guarde o arquivo baixado.` : '• Cópia guardada no Supabase (Storage > backups).'));
       } catch (e) {
         alert('Falha no backup: ' + (e.message || e));
