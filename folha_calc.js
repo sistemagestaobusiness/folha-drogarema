@@ -66,7 +66,7 @@
     return { lista, porId: new Map(lista.map(r => [String(r.id), r])), total: tot };
   }
 
-  // Telas abertas se atualizam sozinhas (06/11/2026): a cada 20 s pergunta ao banco se algum lançamento, dinheiro ou pagamento mudou
+  // Telas abertas se atualizam sozinhas (06/11/2026; 10 s desde 08/11): a cada 10 s pergunta ao banco se algum lançamento, dinheiro ou pagamento mudou
   // (fn_folha_versao: lê um número, menos de 1 ms no banco) e, só se mudou, chama recarregar(). Aba escondida (outra aba do sistema
   // na frente ou janela minimizada) não pergunta nada; ao voltar a aparecer, confere na hora. Não recarrega com alguém digitando
   // ou com janela (modal) aberta: espera terminar.
@@ -98,15 +98,25 @@
           else if (data !== ultima) { ultima = data; pendente = true; }
         }
         if (pendente && !ocupado()) { pendente = false; await recarregar(); selo(); }
-      } catch (e) { } finally { rodando = false; }
+      } catch (e) { } finally { rodando = false; if (pendente && !escondida() && !ocupado()) setTimeout(checar, 200); }
     }
     checar();
-    setInterval(checar, opc.ms || 20000);
+    // (08/11/2026) AO VIVO: o banco grava um sinal a cada alteração (folha_sinal, Realtime do Supabase) e a tela recarrega
+    // na hora. A verificação a cada 10 s continua como reserva (internet caiu, Realtime fora do ar).
+    try {
+      cli.channel('folha_sinal_' + Math.random().toString(36).slice(2))
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'folha_sinal' }, () => { pendente = true; setTimeout(checar, 150); })
+        .subscribe();
+    } catch (e) { }
+    setInterval(checar, opc.ms || 10000);
     // aba do sistema voltou a aparecer: confere logo (sem esperar os 20 s)
     setInterval(() => { if (estavaEscondida && !escondida()) checar(); }, 1500);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) checar(); });
     window.addEventListener('focus', () => checar());
+    // terminou de digitar (saiu do campo) ou fechou a janela (modal): se havia mudança esperando, atualiza na hora
+    document.addEventListener('focusout', () => { if (pendente) setTimeout(checar, 150); });
+    document.addEventListener('click', () => { if (pendente) setTimeout(checar, 300); }, true);
   }
 
-  window.FolhaCalc = { ordComp, compDoFato, ehSocio, foraDaFolha, naFolha, regrasEventos, calcular, vigiar, VERSAO: 1 };
+  window.FolhaCalc = { ordComp, compDoFato, ehSocio, foraDaFolha, naFolha, regrasEventos, calcular, vigiar, VERSAO: 3 };
 })();

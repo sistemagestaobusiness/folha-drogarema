@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="folha_calc.js?v=1"></script>
+  <script src="folha_calc.js?v=3"></script>
   <style>
     .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
     .barra h1 { margin: 0 10px 0 0; font-size: 18px; font-weight: 700; }
@@ -115,9 +115,10 @@
         const din = {}; (rDin.data || []).forEach(d => din[d.funcionario_id] = Number(d.valor || 0));
         const base = FolhaCalc.calcular({ funcionarios: lf, itens: li.map(i => ({ ...i, competencia: comp })), eventos: rEv.data || [], comp, dinheiro: din });
         const ids = new Set([...base.lista.filter(b => b.liquido > 0).map(b => b.id), ...pagos.filter(p => p.meio !== 'DINHEIRO').map(p => p.funcionario_id)]);
+        // dinheiro nunca passa do líquido: mesma regra do banco (fn_quinto_dia_sincronizar)
         const nomeEnvio = {}; (envio.itens || []).forEach(i => nomeEnvio[i.funcionario_id] = i.nome);
         const difs = [];
-        linhas = [...ids].map(id => { const b = base.porId.get(String(id)) || { liquido: 0, dinheiro: 0 }; return { funcionario_id: id, nome: nomeEnvio[id], liquido: Math.max(b.liquido, 0), dinheiro: b.liquido > 0 ? b.dinheiro : 0 }; }).map(i => {
+        linhas = [...ids].map(id => { const b = base.porId.get(String(id)) || { liquido: 0, dinheiro: 0 }; return { funcionario_id: id, nome: nomeEnvio[id], liquido: Math.max(b.liquido, 0), dinheiro: b.liquido > 0 ? Math.min(Math.max(b.dinheiro, 0), b.liquido) : 0 }; }).map(i => {
           const f = func[i.funcionario_id], e = empDe(f), ps = pg[i.funcionario_id] || [];
           const pagoBanco = {}; let aPagar = 0;
           ps.filter(p => p.meio !== 'DINHEIRO').forEach(p => { if (p.status === 'PAGO') { const b = p.banco_pagador || '(sem banco)'; pagoBanco[b] = (pagoBanco[b] || 0) + Number(p.valor || 0); } else aPagar += Number(p.valor || 0); });

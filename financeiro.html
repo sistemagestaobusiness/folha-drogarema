@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="folha_calc.js?v=1"></script>
+  <script src="folha_calc.js?v=3"></script>
   <script src="comprovante_split.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -649,9 +649,10 @@ Confirmar mesmo assim?`)) return;
       }
       btn.innerText = 'Confirmando...';
       const { data: n, error } = await _supabase.rpc('fn_pagamento_confirmar', {
+        p_valores: ids.map(id => Number((itens.find(x => x.id === id) || {}).valor || 0)),   // (08/11/2026) o banco confere: valor mudou = não confirma
         p_ids: ids, p_data: data, p_banco: document.getElementById('pgBanco').value.trim() || null, p_obs: document.getElementById('pgObs').value.trim() || null
       });
-      if (error) { btn.disabled = false; btn.innerText = 'Confirmar'; return alert(error.message); }
+      if (error) { btn.disabled = false; btn.innerText = 'Confirmar'; alert(error.message); if (/mudou|não está mais/i.test(error.message)) { fechar('modalPagar'); carregar(); } return; }
       const falhas = [];
       for (const [id, caminho] of Object.entries(anexos)) {
         const { error: e2 } = await _supabase.rpc('fn_pagamento_anexar', { p_id: id, p_path: caminho });

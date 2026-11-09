@@ -266,6 +266,63 @@ if (!window.__alertTraduzido) {
       document.body.prepend(d); };
     if (document.body) pôr(); else document.addEventListener('DOMContentLoaded', pôr);
   }
+  // ⛔ PARA TUDO (08/11/2026): o banco compara a folha (Resumo da competência = Painel = Lançamentos) com a fila do Financeiro
+  // e cada pagamento com a tela de origem (VT, adiantamento, férias...). Divergência sem ciência do Gestor = faixa vermelha de
+  // urgência no sistema inteiro (Gestor, Financeiro e RH) e o banco não deixa confirmar aquele pagamento (fn_pagamento_confirmar).
+  function iniciarParaTudo(cli, perfil) {
+    let ultimaAssinatura = '', minimizado = false, rodando = false, ag = null;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const rs = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const bip = () => { try { const a = new (window.AudioContext || window.webkitAudioContext)(); [0, 0.25, 0.5].forEach(t => { const o = a.createOscillator(), g = a.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(a.destination); g.gain.value = 0.15; o.start(a.currentTime + t); o.stop(a.currentTime + t + 0.15); }); } catch (e) { } };
+    function desenhar(lista) {
+      let el = document.getElementById('paraTudo');
+      if (!lista.length) { if (el) el.remove(); return; }
+      if (!el) { el = document.createElement('div'); el.id = 'paraTudo'; document.body.appendChild(el); }
+      const total = lista.reduce((t, d) => t + Math.abs(Number(d.diferenca)), 0);
+      if (minimizado) {
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483000;background:#B42318;color:#fff;font:700 13px system-ui,sans-serif;padding:8px 14px;text-align:center;cursor:pointer;box-shadow:0 2px 10px #0006';
+        el.innerHTML = `⛔ PARA TUDO · ${lista.length} divergência(s) entre a folha e o Financeiro (${rs(total)}) · pagamentos destas pessoas bloqueados · clique para ver`;
+        el.onclick = () => { minimizado = false; desenhar(lista); }; return;
+      }
+      el.onclick = null;
+      el.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(127,29,29,.88);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;font:14px system-ui,sans-serif';
+      el.innerHTML = `<div style="background:#fff;max-width:980px;width:100%;border-radius:14px;border:4px solid #B42318;box-shadow:0 10px 40px #0008">
+        <div style="background:#B42318;color:#fff;padding:14px 18px;border-radius:9px 9px 0 0"><div style="font-size:20px;font-weight:800">⛔ PARA TUDO · divergência entre a folha e o Financeiro</div>
+        <div style="font-size:12.5px;margin-top:4px">O banco encontrou ${lista.length} valor(es) no Financeiro diferente(s) da tela de origem. O Financeiro não consegue confirmar o pagamento destas pessoas até corrigir${perfil === 'GESTOR' ? ' ou você registrar a ciência' : ' ou o Gestor registrar a ciência'}.</div></div>
+        <div style="padding:12px 18px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead><tr style="text-align:left;color:#555;border-bottom:1px solid #ddd"><th style="padding:6px">Quem</th><th>Pagamento</th><th>Compet.</th><th style="text-align:right">Origem (folha / tela)</th><th style="text-align:right">Financeiro</th><th style="text-align:right">Diferença</th><th></th></tr></thead><tbody>
+        ${lista.map(d => `<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:6px;font-weight:700">${esc(d.nome)}</td><td>${esc(d.tipo)}</td><td>${esc(d.competencia)}</td>
+          <td style="text-align:right">${rs(d.origem)}</td><td style="text-align:right">${rs(d.financeiro)}</td><td style="text-align:right;color:#B42318;font-weight:800">${rs(d.diferenca)}</td>
+          <td style="text-align:right">${perfil === 'GESTOR' ? `<button data-chave="${esc(d.chave)}" class="ptCiencia" style="background:#1f2937;color:#fff;border:0;border-radius:6px;padding:5px 9px;font-weight:700;cursor:pointer">Registrar ciência</button>` : ''}</td></tr>`).join('')}
+        </tbody></table>
+        <p style="font-size:11.5px;color:#555;margin:10px 0 0">O que fazer: corrigir o lançamento na tela de origem (o Financeiro se ajusta sozinho) ou, se o valor já saiu do banco (pago a mais), o Gestor registra a ciência com a explicação e o acerto vai para a rescisão ou a próxima folha.</p></div>
+        <div style="padding:10px 18px 16px;text-align:right"><button id="ptMin" style="background:#fff;border:2px solid #B42318;color:#B42318;border-radius:8px;padding:7px 14px;font-weight:800;cursor:pointer">Ir corrigir (deixar a faixa vermelha no topo)</button></div></div>`;
+      el.querySelector('#ptMin').onclick = () => { minimizado = true; desenhar(lista); };
+      el.querySelectorAll('.ptCiencia').forEach(b => b.onclick = async () => {
+        const j = (prompt('Ciência da divergência: explique o que aconteceu e como será o acerto (mínimo 15 letras).') || '').trim(); if (!j) return;
+        const { error } = await cli.rpc('fn_divergencia_ciencia', { p_chave: b.dataset.chave, p_justificativa: j });
+        if (error) return alert(error.message); checar();
+      });
+    }
+    async function checar() {
+      if (rodando) { clearTimeout(ag); ag = setTimeout(checar, 800); return; } rodando = true;
+      try {
+        const { data, error } = await cli.rpc('fn_divergencias');
+        if (error) return;
+        const abertas = (data || []).filter(d => !d.ciente);
+        const assinatura = abertas.map(d => d.chave + ':' + d.diferenca).join('|');
+        if (assinatura && assinatura !== ultimaAssinatura) { minimizado = false; bip(); }
+        ultimaAssinatura = assinatura;
+        const pronto = () => desenhar(abertas);
+        if (document.body) pronto(); else document.addEventListener('DOMContentLoaded', pronto);
+      } catch (e) { } finally { rodando = false; }
+    }
+    checar();
+    try { cli.channel('para_tudo_' + Math.random().toString(36).slice(2))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'folha_sinal' }, () => { clearTimeout(ag); ag = setTimeout(checar, 1500); }).subscribe(); } catch (e) { }
+    setInterval(checar, 60000);
+  }
   const raiz = document.documentElement;
   raiz.style.visibility = 'hidden';
   const liberar = () => { raiz.style.visibility = ''; };
@@ -284,6 +341,8 @@ if (!window.__alertTraduzido) {
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }
       window.ACESSO = data; window.ACESSO.email = user.email; window.ACESSO_CLI = cli;
+      // uma vez por janela (no sistema com abas, a janela de fora cobre todas as abas)
+      if (window.top === window && ['GESTOR', 'FINANCEIRO', 'RH'].includes(data.perfil)) iniciarParaTudo(cli, data.perfil);
       try { if (document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo(cli); } catch (e) { }
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {

@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=3"></script>
   <script src="escala_core.js"></script>
   <script src="emprestimo_core.js?v=2"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -604,6 +605,9 @@
         carregarBannerEnvioFin();
         carregarBannerProximo();
         await aplicarAtalhoConferencia();
+        // (08/11/2026) lançamento feito por outra pessoa (ou por outra tela) aparece sozinho na lista do funcionário aberto
+        FolhaCalc.vigiar(_supabase, async () => { await carregarFuncionariosGeral(); await carregarLancamentosNovo(); carregarBannerEnvioFin(); },
+          { pausar: () => !!document.getElementById('editLancamentoId').value });
       } catch (err) {
         console.error('Erro na inicialização:', err);
       }

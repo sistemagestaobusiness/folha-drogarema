@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=3"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
@@ -424,6 +425,8 @@
     }
 
     inicializar();
+    // (08/11/2026) alteração feita por outra pessoa ou outra tela aparece aqui ao vivo, sem botão (folha_calc.js)
+    FolhaCalc.vigiar(_supabase, () => carregar());
   </script>
 </body>
 </html>
