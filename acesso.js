@@ -337,6 +337,18 @@ if (!window.__alertTraduzido) {
         try { localStorage.removeItem('usuario_drogarema'); await cli.auth.signOut({ scope: 'local' }); } catch (e) { }
         (window.top !== window ? window.top : window).location.replace('login.html'); return;
       }   // dentro de uma aba: volta o sistema inteiro para o login
+      // REINÍCIO OBRIGATÓRIO (08/11/2026, depois da GK): quem entrou antes de 09/11/2026 05:00 sai do sistema e entra de novo,
+      // sem nenhuma aba aberta (as abas do sistema são apagadas), para todos começarem com as telas novas.
+      // Próximo reinício: trocar a data abaixo e subir a versão.
+      const REINICIO = Date.parse('2026-11-09T05:00:00-03:00');
+      const reiniciar = async () => {
+        try { localStorage.removeItem('usuario_drogarema'); sessionStorage.removeItem('abas_sistema'); } catch (e) { }
+        try { await cli.auth.signOut({ scope: 'local' }); } catch (e) { }
+        (window.top !== window ? window.top : window).location.replace('login.html?reinicio=1');
+      };
+      const entrouAntes = () => Date.now() >= REINICIO && !(Date.parse(user.last_sign_in_at || '') >= REINICIO);
+      if (entrouAntes()) { await reiniciar(); return; }
+      if (window.top === window && Date.now() < REINICIO) { const t = setInterval(() => { if (entrouAntes()) { clearInterval(t); reiniciar(); } }, 60000); }
       const { data, error } = await cli.rpc('fn_minhas_telas');
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }

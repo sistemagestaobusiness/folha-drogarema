@@ -34,6 +34,8 @@
       <h1 class="text-2xl font-bold text-white" style="letter-spacing:.28em;padding-left:.28em">BUSINESS</h1>
       <p id="subtituloTopo" class="text-xs text-slate-400 mt-1">Acesso Restrito ao Módulo de Folha / Gestão</p>
     </div>
+    <div id="avisoReinicio" class="hidden mb-4 rounded-lg border border-blue-400 bg-blue-900/40 p-3 text-sm text-blue-100">🔄 O sistema foi atualizado. Entre de novo para começar com todas as telas novas.</div>
+    <script>if (/reinicio=1/.test(location.search)) document.getElementById('avisoReinicio').classList.remove('hidden');</script>
 
     <!-- MODO 1: FORMULÁRIO DE LOGIN NORMAL -->
     <form id="loginForm" class="space-y-4">
