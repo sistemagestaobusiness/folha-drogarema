@@ -261,6 +261,67 @@
     } catch (e) { console.warn('avisos', e); }
   }
 
+  // comunicados do Marketing (GN2, 11/11/2026): janela igual ao aviso da gestão, todo dia até a validade (sem validade: até a ciência).
+  // Link e arquivo ficam registrados (quem abriu/baixou e quando) e a ciência só libera depois de abrir o link / baixar o arquivo.
+  async function popupMarketing() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['LIDER', 'SUPERVISOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || document.getElementById('mktPopup') || document.getElementById('avisoLiderModal')) return;
+    const cli = window.ACESSO_CLI;
+    let pend; try { const { data, error } = await cli.rpc('fn_mkt_popup_pendentes'); if (error) return; pend = data || []; } catch (e) { return; }
+    if (!pend.length) return;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const RX = /https?:\/\/[^\s<>"']+/g;
+    const m = document.createElement('div'); m.id = 'mktPopup';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    let i = 0;
+    const btn = 'border:0;border-radius:10px;padding:9px 12px;font-weight:700;font-size:12.5px;cursor:pointer';
+    const mostrar = () => {
+      const a = pend[i], links = (a.texto || '').match(RX) || [];
+      const faltas = [];
+      if (a.tem_link && !a.clicou) faltas.push('abrir o link');
+      if (a.tem_arquivo && !a.baixou) faltas.push('baixar o arquivo');
+      if (a.enquete && !a.respondeu) faltas.push('responder a enquete');
+      const texto = esc(a.texto || '').replace(RX, u => `<span style="color:#7c3aed;word-break:break-all">${u}</span>`);
+      m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:620px;width:100%;max-height:92vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
+        <div style="font-size:12px;font-weight:700;color:#a21caf;text-transform:uppercase;letter-spacing:.04em">🎨 Comunicado do Marketing${pend.length > 1 ? ` · ${i + 1} de ${pend.length}` : ''}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:2px">${esc(a.autor)} · ${new Date(a.criado_em).toLocaleString('pt-BR')}${a.validade_ate ? ` · aparece todo dia até ${a.validade_ate.split('-').reverse().join('/')}` : ''}</div>
+        <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:10px">${esc(a.titulo || '')}</div>
+        <div style="font-size:14px;color:#0f172a;margin:10px 0 14px;white-space:pre-wrap;line-height:1.5">${texto}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          ${links.map((u, k) => `<button type="button" data-link="${k}" style="${btn};background:${a.clicou ? '#ecfdf5;color:#047857' : '#7c3aed;color:#fff'}">🔗 ${a.clicou ? '✓ Abrir o link de novo' : 'Abrir o link'}${links.length > 1 ? ' ' + (k + 1) : ''}</button>`).join('')}
+          ${(a.anexos || []).map(x => `<button type="button" data-anexo="${esc(x.id)}" style="${btn};background:${a.baixou ? '#ecfdf5;color:#047857' : '#7c3aed;color:#fff'}">⬇ ${a.baixou ? '✓ ' : ''}${esc(x.nome || 'arquivo')}</button>`).join('')}
+          ${a.enquete ? `<a href="marketing_comunicados.html" style="${btn};background:#d97706;color:#fff;text-decoration:none">📊 Responder a enquete</a>` : ''}
+        </div>
+        ${faltas.length ? `<div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:8px 10px;font-size:12.5px;font-weight:700;margin-bottom:10px">⚠ Falta ${faltas.join(' e ')}. A ciência libera depois disso, e o Marketing acompanha quem fez.</div>` : ''}
+        <button type="button" data-ciente style="width:100%;${btn};padding:12px;font-size:13px;background:${faltas.length ? '#cbd5e1;color:#64748b;cursor:not-allowed' : '#4f46e5;color:#fff'}" ${faltas.length ? 'disabled' : ''}>✓ Li e estou ciente</button>
+        <div style="text-align:center;margin-top:8px"><button type="button" data-depois style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">lembrar depois (volta ao abrir outra tela)</button></div></div>`;
+      m.querySelectorAll('[data-link]').forEach(b => b.onclick = async () => {
+        const u = links[Number(b.dataset.link)], w = window.open('about:blank', '_blank');
+        const { error } = await cli.rpc('fn_mkt_link', { p_id: a.id, p_url: u });
+        if (error) { if (w) w.close(); alert('Não foi possível abrir: ' + error.message); return; }
+        if (w) { w.opener = null; w.location.href = u; } else window.open(u, '_blank', 'noopener');
+        a.clicou = true; mostrar();
+      });
+      m.querySelectorAll('[data-anexo]').forEach(b => b.onclick = async () => {
+        const w = window.open('about:blank', '_blank');
+        const { data: path, error } = await cli.rpc('fn_mkt_baixar', { p_anexo: b.dataset.anexo });
+        if (error) { if (w) w.close(); alert('Não foi possível baixar: ' + error.message); return; }
+        const { data: url } = await cli.storage.from('marketing').createSignedUrl(path, 120);
+        if (url && url.signedUrl) { if (w) w.location.href = url.signedUrl; else window.open(url.signedUrl, '_blank'); } else if (w) w.close();
+        a.baixou = true; mostrar();
+      });
+      m.querySelector('[data-depois]').onclick = () => m.remove();
+      const bc = m.querySelector('[data-ciente]');
+      bc.onclick = async () => {
+        bc.disabled = true; bc.textContent = 'Registrando...';
+        const { error } = await cli.rpc('fn_mkt_popup_ciente', { p_id: a.id });
+        if (error) { alert(error.message); mostrar(); return; }
+        i++; if (i < pend.length) mostrar(); else m.remove();
+      };
+    };
+    mostrar(); document.body.appendChild(m);
+  }
+
   // adiantamento salarial aguardando o Gestor (regra de 15/10/2026): janela ao entrar (1x por sessão) + bolha vermelha no menu
   // aprovações do Gestor (adiantamento 15/10/2026, vale transporte 16/10/2026): janela ao entrar (1x por sessão) + bolha vermelha no menu
   const APROVACOES_GESTOR = [
@@ -509,8 +570,9 @@
       const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto'); };
     let linhas = [], urg = false, destino = 'marketing_pedidos.html';
     if (pf === 'LIDER') {
-      const c = (r.comunicados_sem_ciencia || 0) + (r.enquetes_abertas || 0), p = (r.respostas_mkt || 0) + (r.pedidos_aguardando_loja || 0);
+      const c = (r.comunicados_sem_ciencia || 0) + (r.enquetes_abertas || 0) + (r.comunicados_sem_executar || 0), p = (r.respostas_mkt || 0) + (r.pedidos_aguardando_loja || 0);
       bolha('marketing_comunicados.html', c, '#dc2626'); bolha('marketing_pedidos.html', p, '#dc2626');
+      if (r.comunicados_sem_executar) linhas.push(`${r.comunicados_sem_executar} comunicado(s) com link/arquivo que você ainda não abriu`);
       if (r.comunicados_sem_ciencia) linhas.push(`${r.comunicados_sem_ciencia} comunicado(s) do Marketing aguardando a sua ciência`);
       if (r.enquetes_abertas) linhas.push(`${r.enquetes_abertas} enquete(s) para responder`);
       if (r.respostas_mkt) linhas.push(`${r.respostas_mkt} resposta(s) nova(s) do Marketing nos seus pedidos`);
@@ -519,7 +581,8 @@
     } else {
       const ped = (r.pedidos_sem_resposta || 0) + (r.mensagens_novas || 0) + (pf === 'GESTOR' ? (r.patrocinios || 0) : 0);
       if (pf !== 'SUPERVISOR') bolha('marketing_pedidos.html', ped, r.pedidos_atrasados ? '#dc2626' : '#B54708');
-      bolha('marketing_comunicados.html', (r.comunicados_novos || 0) + (r.lojas_sem_abrir || 0), '#B54708');
+      bolha('marketing_comunicados.html', (r.comunicados_novos || 0) + (r.lojas_sem_abrir || 0) + (r.lojas_sem_executar || 0), r.lojas_sem_executar ? '#dc2626' : '#B54708');
+      if (r.lojas_sem_executar && pf !== 'GESTOR') { linhas.push(`${r.lojas_sem_executar} loja(s) ainda não abriram o link/arquivo dos comunicados`); destino = 'marketing_comunicados.html'; }
       if (pf === 'MARKETING') {
         if (r.pedidos_atrasados) linhas.push(`${r.pedidos_atrasados} pedido(s) com prazo VENCIDO`);
         if (r.pedidos_vencendo) linhas.push(`${r.pedidos_vencendo} pedido(s) vencendo hoje/amanhã`);
@@ -726,6 +789,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

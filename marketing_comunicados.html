@@ -179,24 +179,37 @@
           ${enq.comentario ? `<textarea id="eCom" rows="2" class="inp" placeholder="comentário (opcional)">${esc(resp ? resp.comentario || '' : '')}</textarea>` : ''}
           <button class="bt bg-amber-600 text-white" onclick="votar()">Enviar resposta</button></div>`;
       }
+      const temLink = /https?:\/\//i.test(m.texto || ''), temArq = (atual.anexos || []).length > 0;
       let acomp = '';
       if (atual.por_loja) {
-        acomp = `<div><div class="font-bold text-xs text-slate-600 mb-1">🏬 Andamento por loja</div><table class="w-full text-xs"><tr class="text-slate-500 text-left"><th class="py-1">Loja</th><th>Abriu</th><th>Ciência</th><th>Baixou</th>${m.tipo === 'ENQUETE' ? '<th>Resposta</th>' : ''}</tr>
+        acomp = `<div><div class="font-bold text-xs text-slate-600 mb-1">🏬 Andamento por loja</div><table class="w-full text-xs"><tr class="text-slate-500 text-left"><th class="py-1">Loja</th><th>Abriu</th><th>Ciência</th>${temLink ? '<th>Clicou no link</th>' : ''}<th>Baixou</th>${m.tipo === 'ENQUETE' ? '<th>Resposta</th>' : ''}</tr>
           ${atual.por_loja.map(l => { const ab = l.abriu || [], ci = ab.filter(a => a.ciencia), rs = l.resposta || [];
-            return `<tr class="border-t border-slate-100 ${ab.length ? '' : 'bg-rose-50'}"><td class="py-1 font-semibold">${esc(l.loja)}</td>
+            const ck = l.clicou || [], semExec = (temLink && !ck.length) || (temArq && !l.baixou);
+            return `<tr class="border-t border-slate-100 ${ab.length && !semExec ? '' : 'bg-rose-50'}"><td class="py-1 font-semibold">${esc(l.loja)}</td>
               <td>${ab.length ? ab.map(a => esc(a.email.split('@')[0]) + ' ' + dh(a.em)).join('<br>') : '<b class="text-rose-700">não abriu</b>'}</td>
               <td>${ci.length ? ci.map(a => dh(a.ciencia)).join('<br>') : m.exige_ciencia ? '<span class="text-amber-700">pendente</span>' : '-'}</td>
-              <td>${l.baixou || '-'}</td>${m.tipo === 'ENQUETE' ? `<td>${rs.map(r => r.opcoes.map(i => esc((enq.opcoes || [])[i])).join(', ') + (r.comentario ? ' · "' + esc(r.comentario) + '"' : '')).join('<br>') || '<span class="text-amber-700">não respondeu</span>'}</td>` : ''}</tr>`; }).join('')}</table>
+              ${temLink ? `<td>${ck.length ? ck.map(k => esc(k.email.split('@')[0]) + ' ' + dh(k.em)).join('<br>') : '<b class="text-rose-700">não clicou</b>'}</td>` : ''}<td>${l.baixou ? l.baixou + 'x' : temArq ? '<b class="text-rose-700">não baixou</b>' : '-'}</td>${m.tipo === 'ENQUETE' ? `<td>${rs.map(r => r.opcoes.map(i => esc((enq.opcoes || [])[i])).join(', ') + (r.comentario ? ' · "' + esc(r.comentario) + '"' : '')).join('<br>') || '<span class="text-amber-700">não respondeu</span>'}</td>` : ''}</tr>`; }).join('')}</table>
           ${(atual.outros || []).length ? `<div class="text-[11px] text-slate-500 mt-1">Também abriram: ${atual.outros.map(o => esc(o.email.split('@')[0]) + ' (' + nomePerfil(o.perfil) + ') ' + dh(o.em)).join(', ')}</div>` : ''}</div>`;
         if (atual.resultado) { const tot = atual.resultado.reduce((a, r) => a + r.votos, 0) || 1;
           acomp = `<div><div class="font-bold text-xs text-slate-600 mb-1">📊 Resultado</div>${atual.resultado.map(r => `<div class="flex items-center gap-2 text-xs"><span class="w-48 truncate">${esc(r.opcao)}</span><div class="flex-1 h-3 bg-slate-100 rounded"><div class="h-3 bg-amber-500 rounded" style="width:${Math.round(r.votos / tot * 100)}%"></div></div><b class="w-16 text-right">${r.votos} voto(s)</b></div>`).join('')}</div>` + acomp; }
       }
       $('dCorpo').innerHTML = `
         <div class="text-[11px] text-slate-500">${esc(m.autor_nome || m.autor_email)} (${nomePerfil(m.autor_perfil)}) · ${dh(m.criado_em)}${m.validade_ate ? ' · vale até ' + dbr(m.validade_ate) : ''}${m.cancelado_em ? ` · <b class="text-rose-700">retirado em ${dh(m.cancelado_em)}: ${esc(m.cancelado_motivo || '')}</b>` : ''}</div>
-        <div class="whitespace-pre-wrap">${esc(m.texto)}</div>
+        <div class="whitespace-pre-wrap">${textoComLinks(m.texto)}</div>
         ${atual.anexos.length ? `<div class="text-xs"><b>Arquivos</b> <span class="text-slate-400">(ao baixar fica registrado)</span>${listaAnexos(atual.anexos)}</div>` : ''}
         ${votacao}${acoes ? `<div>${acoes}</div>` : ''}${acomp}
         ${(meu || perfil === 'GESTOR') && !m.cancelado_em ? `<div class="text-right"><button class="bt text-rose-700" onclick="retirar()">Retirar comunicado</button></div>` : ''}`;
+    }
+    // links do comunicado (GN2, 11/11/2026): clicar registra quem abriu e quando (fn_mkt_link) e depois abre o endereço
+    function textoComLinks(t) {
+      return esc(t || '').replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="#" class="text-purple-700 underline font-semibold break-all" data-mklink="${u}" onclick="abrirLink(this);return false">🔗 ${u}</a>`);
+    }
+    async function abrirLink(el) {
+      const u = el.getAttribute('data-mklink'), w = window.open('about:blank', '_blank');
+      const { error } = await _supabase.rpc('fn_mkt_link', { p_id: atual.comunicado.id, p_url: u });
+      if (error) { if (w) w.close(); return alert(error.message); }
+      if (w) { w.opener = null; w.location.href = u; } else window.open(u, '_blank', 'noopener');
+      await abrir(atual.comunicado.id);
     }
     async function ciencia() { const { error } = await _supabase.rpc('fn_mkt_ciencia', { p_id: atual.comunicado.id }); if (error) return alert(error.message); await abrir(atual.comunicado.id); }
     async function votar() {
