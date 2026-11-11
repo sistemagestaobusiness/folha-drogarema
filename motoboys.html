@@ -95,6 +95,48 @@
           </div>
         </div>
       </div>
+
+      <!-- ================= TRANSFERÊNCIAS (GO, 11/11/2026) ================= -->
+      <div data-painel="transf" class="painel hidden space-y-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-wrap items-end gap-3">
+          <div><label class="lbl">De</label><input id="trIni" type="date" class="inp" onchange="carregarTransf()"></div>
+          <div><label class="lbl">Até</label><input id="trFim" type="date" class="inp" onchange="carregarTransf()"></div>
+          <div><label class="lbl">Situação</label><select id="trStatus" class="inp" onchange="montarTransf()"><option value="">Todas</option><option value="ENVIADA">Aguardando a loja de destino</option><option value="RECEBIDA">Recebidas</option><option value="CANCELADA">Canceladas</option></select></div>
+          <div class="flex-1 min-w-[180px]"><label class="lbl">Busca</label><input id="trBusca" class="inp" placeholder="nº, motoboy, nome..." oninput="montarTransf()"></div>
+          <span id="trResumo" class="text-[11px] text-slate-500 pb-2"></span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
+            <div class="px-4 pt-4 pb-2"><h3 class="font-black text-sm text-slate-800">Por motoboy (só recebidas)</h3><div class="text-[11px] text-slate-500">paga ao motoboy que entregou · valor da cidade da loja de origem · entra no fechamento da quinzena</div></div>
+            <table class="tb w-full"><thead><tr><th>Motoboy</th><th class="num">Transf.</th><th class="num">Valor</th></tr></thead><tbody id="tbTrMot"></tbody></table>
+          </div>
+          <div class="space-y-4">
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+              <h3 class="font-black text-xs text-slate-800">💲 Valor por transferência (por cidade)</h3>
+              <p class="text-[11px] text-slate-500">Vale a cidade da loja de origem. Só esta tela mostra valor; a loja não vê. Muda as transferências ainda não fechadas.</p>
+              <div id="trValores" class="space-y-1"></div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+              <h3 class="font-black text-xs text-slate-800">🛵 Motoboys que aparecem para as lojas</h3>
+              <p class="text-[11px] text-slate-500">Marque quem faz transferência. A lista vem do cadastro de motoboys (aba Motoboys e lojas).</p>
+              <div id="trMotoboys" class="space-y-1 max-h-60 overflow-auto"></div>
+            </div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+            <h3 class="font-black text-xs text-slate-800">🔑 Acesso das lojas (e-mail)</h3>
+            <p class="text-[11px] text-slate-500">Quem entra com este e-mail vê só a tela de transferências da loja. Use um e-mail só para isso (não pode ser de outro acesso do sistema). A conta de login (senha temporária) é criada pelo suporte do sistema.</p>
+            <div id="trAcessos" class="space-y-1"></div>
+            <div id="trFormAcesso" class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2"></div>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto max-h-[75vh]">
+          <table class="tb w-full"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Motoboy</th><th>Entregou ao motoboy</th><th>Recebeu</th><th>Situação</th><th class="num">Valor</th><th class="text-right">Supervisor</th></tr></thead><tbody id="tbTransf"></tbody></table>
+        </div>
+        <details class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <summary class="font-black text-xs text-slate-800 cursor-pointer">Histórico (lançamentos, confirmações, cancelamentos, valores, acessos e lista de motoboys)</summary>
+          <div id="trHist" class="space-y-1 text-[11px] max-h-96 overflow-auto mt-2"></div>
+        </details>
+      </div>
     </div>
   </div>
 
@@ -146,9 +188,11 @@
       const opc = CIDADES.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
       $('bCidadeF').innerHTML = (JAC ? '' : '<option value="">Todas</option>') + opc;
       $('nbCidade').innerHTML = (JAC ? '' : '<option value="">-</option>') + opc;
-      $('abas').innerHTML = [['quinzena', '🛵 ' + MODO.pers], ['bairros', '📍 Bairros e taxas'], ['motoboys', '👤 Motoboys e lojas']]
+      $('abas').innerHTML = [['quinzena', '🛵 ' + MODO.pers], ['bairros', '📍 Bairros e taxas'], ['motoboys', '👤 Motoboys e lojas'], ...(JAC ? [] : [['transf', '🔁 Transferências']])]
         .map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t}</button>`).join('');
       $('conteudo').classList.remove('hidden');
+      if (!JAC) { const h = new Date(), y = h.getFullYear(), mm = h.getMonth(), d = h.getDate(), f = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+        $('trIni').value = f(new Date(y, mm, d <= 15 ? 1 : 16)); $('trFim').value = f(d <= 15 ? new Date(y, mm, 15) : new Date(y, mm + 1, 0)); }
       trocarAba('quinzena');
       if (D.quinzenas.length) abrirQuinzena(D.quinzenas[0].id);
     }
@@ -169,6 +213,7 @@
       aba = a;
       document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-400'}`);
       document.querySelectorAll('.painel').forEach(p => p.classList.toggle('hidden', p.dataset.painel !== a));
+      if (a === 'transf') carregarTransf();
     }
 
     // ---------- pagamento: dia 20 / dia 5, antecipa para dia útil ----------
@@ -272,15 +317,17 @@
     function resumir() {
       const ok = Q.linhas.filter(l => l.situacao === 'OK');
       const por = new Map();
-      const pega = id => { if (!por.has(id)) por.set(id, { id, qtd: 0, val: 0, mais: 0, menos: 0, lojas: {} }); return por.get(id); };
+      const pega = id => { if (!por.has(id)) por.set(id, { id, qtd: 0, val: 0, mais: 0, menos: 0, tq: 0, tv: 0, lojas: {} }); return por.get(id); };
       ok.forEach(l => { const r = pega(l.motoboy_id); r.qtd += l.entregas; r.val += Number(l.total); r.lojas[l.loja] = (r.lojas[l.loja] || 0) + Number(l.total); });
+      // (GO) transferências entre lojas recebidas no período: pagas ao motoboy que entregou
+      (Q.transferencias || []).filter(t => t.status === 'RECEBIDA' && t.motoboy_id).forEach(t => { const r = pega(t.motoboy_id); r.tq += 1; r.tv += Number(t.valor || 0); });
       Q.ajustes.forEach(a => { const r = pega(a.motoboy_id); if (a.tipo === 'TRANSF_PAO') r.mais += Number(a.valor); else r.menos += Number(a.valor); });
       // mínimo semanal (Jacareí): quem fez pelo menos 1 entrega e ficou abaixo do mínimo recebe o complemento
       const congelado = Q.quinzena.status === 'FECHADA' ? new Map((Q.quinzena.resumo || []).map(x => [x.motoboy_id, Number(x.complemento_minimo || 0)])) : null;
       const minimo = Number(Q.minimo || 0);
       const lista = [...por.values()].map(r => {
         const comp = congelado ? (congelado.get(r.id) || 0) : (minimo > 0 && r.qtd >= 1 && r.val < minimo ? Math.round((minimo - r.val) * 100) / 100 : 0);
-        return { ...r, comp, m: motoboy(r.id), total: r.val + comp + r.mais - r.menos };
+        return { ...r, comp, m: motoboy(r.id), total: r.val + comp + r.tv + r.mais - r.menos };
       }).sort((a, b) => b.total - a.total);
       return lista;
     }
@@ -297,10 +344,12 @@
         if (['NAO_PAGA', 'LOJA_NAO_PAGA', 'SEM_ENTREGADOR', 'FORA'].includes(l.situacao)) { const k = l.situacao === 'LOJA_NAO_PAGA' ? 'Loja ' + l.loja + ' (não paga por aqui)' : l.situacao === 'SEM_ENTREGADOR' ? 'Sem entregador (retirada/balcão)' : l.situacao === 'FORA' ? (l.entregador + ' · loja ' + l.loja + ' (fora no fechamento)') : (l.entregador + ' (não se paga por aqui)'); fora.set(k, (fora.get(k) || 0) + l.entregas); }
       });
       const res = resumir();
-      const tot = res.reduce((t, r) => ({ qtd: t.qtd + r.qtd, val: t.val + r.val, comp: t.comp + r.comp, mais: t.mais + r.mais, menos: t.menos + r.menos, total: t.total + r.total }), { qtd: 0, val: 0, comp: 0, mais: 0, menos: 0, total: 0 });
+      const tot = res.reduce((t, r) => ({ qtd: t.qtd + r.qtd, val: t.val + r.val, comp: t.comp + r.comp, tq: t.tq + r.tq, tv: t.tv + r.tv, mais: t.mais + r.mais, menos: t.menos + r.menos, total: t.total + r.total }), { qtd: 0, val: 0, comp: 0, tq: 0, tv: 0, mais: 0, menos: 0, total: 0 });
+      const TR = Q.transferencias || [], trPend = TR.filter(t => t.status === 'ENVIADA'), trSemValor = TR.filter(t => t.status === 'RECEBIDA' && t.valor == null);
+      const temTr = !JAC;
       const temMin = Number(Q.minimo || 0) > 0;
       const lojasUsadas = [...new Set(res.flatMap(r => Object.keys(r.lojas)))].sort();
-      const pend = nd.size + nc.size;
+      const pend = nd.size + nc.size + (aberta ? trPend.length + trSemValor.length : 0);
 
       const cab = `<div class="bg-white border ${aberta ? 'border-amber-300' : 'border-emerald-300'} rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div class="space-y-0.5">
@@ -328,21 +377,25 @@
           <div class="flex flex-wrap gap-2">${[...nc.values()].map(r => `<div class="bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"><b>${esc(r.nome)}</b> · ${r.qtd} entrega(s) · loja(s) ${[...r.lojas].sort().join(', ')}
             <div class="mt-1 flex gap-2"><button onclick="cadastrarRapido('${esc(r.nome).replace(/'/g, '&#39;')}', true)" class="text-[11px] px-2 py-1 bg-emerald-600 text-white rounded font-bold cursor-pointer">Cadastrar: paga por aqui</button>
             <button onclick="cadastrarRapido('${esc(r.nome).replace(/'/g, '&#39;')}', false)" class="text-[11px] px-2 py-1 bg-slate-200 text-slate-700 rounded font-bold cursor-pointer">Não se paga por aqui</button></div></div>`).join('')}</div></div>` : ''}
+        ${trPend.length ? `<div><div class="text-xs font-bold text-rose-900 mb-1">${trPend.length} transferência(s) entre lojas sem confirmação de recebimento no período: a loja de destino confirma, ou confirme/cancele com justificativa na aba Transferências</div>
+          <div class="flex flex-wrap gap-2">${trPend.map(t => `<span class="bg-white border border-rose-200 rounded-lg px-2 py-1 text-[11px]">Nº <b>${esc(t.numero)}</b> · ${esc(t.origem)} → ${esc(t.destino)} · ${dh(t.data_hora)}</span>`).join('')}
+          <button onclick="trocarAba('transf')" class="text-[11px] px-2 py-1 bg-indigo-600 text-white rounded font-bold cursor-pointer">Abrir Transferências</button></div></div>` : ''}
+        ${trSemValor.length ? `<div class="text-xs font-bold text-rose-900">${trSemValor.length} transferência(s) de cidade sem valor por transferência: cadastre o valor na aba Transferências.</div>` : ''}
       </div>`;
 
       const resHtml = `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
-        <div class="px-4 pt-4 pb-2 flex flex-wrap items-baseline justify-between gap-2"><h3 class="font-black text-sm text-slate-800">Resumo por motoboy</h3><span class="text-[11px] text-slate-500">taxa do bairro × nº de entregas${temMin ? ' · mínimo de ' + rs(Q.minimo) + ' na semana para quem fez entrega' : ''}${aberta ? ' · valores da tabela de bairros de hoje' : ' · valores congelados no fechamento'}</span></div>
-        <table class="tb w-full"><thead><tr><th>Motoboy</th><th class="num">Entregas</th>${lojasUsadas.map(l => `<th class="num">Loja ${l}</th>`).join('')}<th class="num">Valor entregas</th>${temMin ? '<th class="num">Compl. mínimo</th>' : ''}<th class="num">Transf./Pão</th><th class="num">Abatimento</th><th class="num">Total</th><th></th></tr></thead><tbody>
+        <div class="px-4 pt-4 pb-2 flex flex-wrap items-baseline justify-between gap-2"><h3 class="font-black text-sm text-slate-800">Resumo por motoboy</h3><span class="text-[11px] text-slate-500">taxa do bairro × nº de entregas${temTr ? ' · transferências entre lojas recebidas (aba Transferências)' : ''}${temMin ? ' · mínimo de ' + rs(Q.minimo) + ' na semana para quem fez entrega' : ''}${aberta ? ' · valores da tabela de bairros de hoje' : ' · valores congelados no fechamento'}</span></div>
+        <table class="tb w-full"><thead><tr><th>Motoboy</th><th class="num">Entregas</th>${lojasUsadas.map(l => `<th class="num">Loja ${l}</th>`).join('')}<th class="num">Valor entregas</th>${temMin ? '<th class="num">Compl. mínimo</th>' : ''}${temTr ? '<th class="num">Transferências</th>' : ''}<th class="num">Transf./Pão</th><th class="num">Abatimento</th><th class="num">Total</th><th></th></tr></thead><tbody>
         ${res.map(r => `<tr><td><div class="font-bold">${esc(r.m.nome_alpha7)}</div>${r.m.nome_pdf ? `<div class="text-[10.5px] text-slate-400">${esc(r.m.nome_pdf)}</div>` : ''}</td><td class="num">${r.qtd}</td>
           ${lojasUsadas.map(l => `<td class="num text-slate-500">${r.lojas[l] ? brl(r.lojas[l]) : '-'}</td>`).join('')}
-          <td class="num">${brl(r.val)}</td>${temMin ? `<td class="num text-sky-700">${r.comp ? brl(r.comp) : '-'}</td>` : ''}<td class="num">${r.mais ? brl(r.mais) : '-'}</td><td class="num text-rose-700">${r.menos ? '−' + brl(r.menos) : '-'}</td><td class="num font-black">${rs(r.total)}</td>
-          <td class="text-right"><button onclick="pdfMotoboy('${r.id}')" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold cursor-pointer whitespace-nowrap">📄 PDF</button></td></tr>`).join('') || `<tr><td colspan="${7 + lojasUsadas.length + (temMin ? 1 : 0)}" class="text-center text-slate-400 py-6">Nenhuma entrega para pagar.</td></tr>`}
-        </tbody><tfoot><tr class="bg-slate-50 font-black"><td class="px-2 py-2">Total</td><td class="num px-2">${tot.qtd}</td>${lojasUsadas.map(l => `<td class="num px-2 text-slate-500">${brl(res.reduce((t, r) => t + (r.lojas[l] || 0), 0))}</td>`).join('')}<td class="num px-2">${brl(tot.val)}</td>${temMin ? `<td class="num px-2 text-sky-700">${brl(tot.comp)}</td>` : ''}<td class="num px-2">${brl(tot.mais)}</td><td class="num px-2 text-rose-700">${tot.menos ? '−' + brl(tot.menos) : '-'}</td><td class="num px-2 text-base">${rs(tot.total)}</td><td></td></tr></tfoot></table></div>`;
+          <td class="num">${brl(r.val)}</td>${temMin ? `<td class="num text-sky-700">${r.comp ? brl(r.comp) : '-'}</td>` : ''}${temTr ? `<td class="num text-violet-700">${r.tq ? `${brl(r.tv)} <span class="text-[10px] text-slate-400">(${r.tq})</span>` : '-'}</td>` : ''}<td class="num">${r.mais ? brl(r.mais) : '-'}</td><td class="num text-rose-700">${r.menos ? '−' + brl(r.menos) : '-'}</td><td class="num font-black">${rs(r.total)}</td>
+          <td class="text-right"><button onclick="pdfMotoboy('${r.id}')" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold cursor-pointer whitespace-nowrap">📄 PDF</button></td></tr>`).join('') || `<tr><td colspan="${7 + lojasUsadas.length + (temMin ? 1 : 0) + (temTr ? 1 : 0)}" class="text-center text-slate-400 py-6">Nenhuma entrega para pagar.</td></tr>`}
+        </tbody><tfoot><tr class="bg-slate-50 font-black"><td class="px-2 py-2">Total</td><td class="num px-2">${tot.qtd}</td>${lojasUsadas.map(l => `<td class="num px-2 text-slate-500">${brl(res.reduce((t, r) => t + (r.lojas[l] || 0), 0))}</td>`).join('')}<td class="num px-2">${brl(tot.val)}</td>${temMin ? `<td class="num px-2 text-sky-700">${brl(tot.comp)}</td>` : ''}${temTr ? `<td class="num px-2 text-violet-700">${brl(tot.tv)} <span class="text-[10px] text-slate-400">(${tot.tq})</span></td>` : ''}<td class="num px-2">${brl(tot.mais)}</td><td class="num px-2 text-rose-700">${tot.menos ? '−' + brl(tot.menos) : '-'}</td><td class="num px-2 text-base">${rs(tot.total)}</td><td></td></tr></tfoot></table></div>`;
 
       const pagaveis = D.motoboys.filter(m => m.paga && m.ativo);
       const ajHtml = `<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
         <h3 class="font-black text-sm text-slate-800">± Ajustes da ${MODO.per}</h3>
-        <p class="text-[11px] text-slate-500">Transf./Pão soma ao motoboy (transferência entre lojas, compra de pão); Abatimento desconta. Sempre com o motivo.</p>
+        <p class="text-[11px] text-slate-500">${JAC ? 'Transf./Pão soma ao motoboy (transferência entre lojas, compra de pão)' : 'Transf./Pão soma ao motoboy (só o que não passou pela tela de transferências das lojas, ex.: compra de pão)'}; Abatimento desconta. Sempre com o motivo.</p>
         ${Q.ajustes.length ? `<div class="space-y-1">${Q.ajustes.map(a => `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1.5">
           <span class="px-1.5 py-0.5 rounded text-[10px] font-black ${a.tipo === 'TRANSF_PAO' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'}">${a.tipo === 'TRANSF_PAO' ? '+ TRANSF./PÃO' : '− ABATIMENTO'}</span>
           <b>${esc(a.motoboy)}</b> · ${rs(a.valor)} · <span class="text-slate-600">${esc(a.motivo)}</span><span class="ml-auto text-[10px] text-slate-400">${esc(a.criado_por)} · ${dh(a.criado_em)}</span>
@@ -454,22 +507,150 @@
       const L = Q.linhas.filter(l => l.situacao === 'OK' && l.motoboy_id === id);
       const aj = Q.ajustes.filter(a => a.motoboy_id === id);
       const val = L.reduce((t, l) => t + Number(l.total), 0), mais = aj.filter(a => a.tipo === 'TRANSF_PAO').reduce((t, a) => t + Number(a.valor), 0), menos = aj.filter(a => a.tipo === 'ABATIMENTO').reduce((t, a) => t + Number(a.valor), 0);
-      const comp = (resumir().find(r => r.id === id) || {}).comp || 0, totNF = val + comp + mais - menos;
-      const corpo = `<div class="tot"><div><h1>Análise de Entrega · ${esc(nomePdf(m))}</h1><div class="sub">Período ${periodo(q)} · ${L.reduce((t, l) => t + l.entregas, 0)} entrega(s)${m.documento ? ' · ' + esc(m.documento) : ''} · NF para pagamento em ${dbr(p.util)}${q.status === 'ABERTA' ? ` · PRÉVIA (${MODO.per} ainda aberta)` : ''}</div></div><b>${rs(totNF)}</b></div>
+      const TRm = (Q.transferencias || []).filter(t => t.status === 'RECEBIDA' && t.motoboy_id === id), tv = TRm.reduce((t, x) => t + Number(x.valor || 0), 0);
+      const comp = (resumir().find(r => r.id === id) || {}).comp || 0, totNF = val + comp + tv + mais - menos;
+      const corpo = `<div class="tot"><div><h1>Análise de Entrega · ${esc(nomePdf(m))}</h1><div class="sub">Período ${periodo(q)} · ${L.reduce((t, l) => t + l.entregas, 0)} entrega(s)${TRm.length ? ' · ' + TRm.length + ' transferência(s)' : ''}${m.documento ? ' · ' + esc(m.documento) : ''} · NF para pagamento em ${dbr(p.util)}${q.status === 'ABERTA' ? ` · PRÉVIA (${MODO.per} ainda aberta)` : ''}</div></div><b>${rs(totNF)}</b></div>
         <table><thead><tr><th>Data</th><th>Entregador</th><th>Un. Neg.</th><th>Bairro</th><th class="n">Entregas</th><th class="n">Valor taxa</th><th class="n">Valor total</th></tr></thead><tbody>
         ${L.map(l => `<tr><td>${dbr(l.data)}</td><td>${esc(l.entregador)}</td><td>${esc(l.loja)}</td><td>${esc(l.bairro)}</td><td class="n">${l.entregas}</td><td class="n">${brl(l.taxa)}</td><td class="n">${brl(l.total)}</td></tr>`).join('')}
         </tbody></table>
-        <div class="box"><table><tr><td>Entregas</td><td class="n">${rs(val)}</td></tr>${comp ? `<tr><td>+ Complemento do mínimo semanal (${rs(Q.minimo)})</td><td class="n">${rs(comp)}</td></tr>` : ''}${aj.map(a => `<tr><td>${a.tipo === 'TRANSF_PAO' ? '+ Transf./Pão' : '− Abatimento'}: ${esc(a.motivo)}</td><td class="n">${a.tipo === 'TRANSF_PAO' ? '' : '−'}${rs(a.valor)}</td></tr>`).join('')}
+        ${TRm.length ? `<div class="box"><b>Transferências entre lojas (${TRm.length})</b><table style="margin-top:4px"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Recebido por</th><th class="n">Valor</th></tr></thead><tbody>
+        ${TRm.map(t => `<tr><td>${dh(t.data_hora)}</td><td>${esc(t.origem)} → ${esc(t.destino)}</td><td>${esc(t.numero)}</td><td>${esc(t.recebido_por || '')}</td><td class="n">${brl(t.valor)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+        <div class="box"><table><tr><td>Entregas</td><td class="n">${rs(val)}</td></tr>${TRm.length ? `<tr><td>+ Transferências entre lojas (${TRm.length})</td><td class="n">${rs(tv)}</td></tr>` : ''}${comp ? `<tr><td>+ Complemento do mínimo semanal (${rs(Q.minimo)})</td><td class="n">${rs(comp)}</td></tr>` : ''}${aj.map(a => `<tr><td>${a.tipo === 'TRANSF_PAO' ? '+ Transf./Pão' : '− Abatimento'}: ${esc(a.motivo)}</td><td class="n">${a.tipo === 'TRANSF_PAO' ? '' : '−'}${rs(a.valor)}</td></tr>`).join('')}
         <tr><td><b>Total a faturar (NF)</b></td><td class="n"><b>${rs(totNF)}</b></td></tr></table></div>`;
       janelaImpressao(`${nomePdf(m)} ${periodo(q)}`, corpo);
     }
     function imprimirResumo() {
       const q = Q.quinzena, p = pagamento(q), res = resumir(), tot = res.reduce((t, r) => t + r.total, 0);
       const corpo = `<div class="tot"><div><h1>Motoboys${JAC ? ' Jacareí' : ''} · ${MODO.per} ${periodo(q)}</h1><div class="sub">${q.status === 'FECHADA' ? 'Fechada por ' + esc(q.fechado_por) + ' em ' + dh(q.fechado_em) : `PRÉVIA (${MODO.per} aberta)`} · pagamento ${p.txt}</div></div><b>${rs(tot)}</b></div>
-        <table><thead><tr><th>Motoboy</th><th>Nome NF</th><th class="n">Entregas</th><th class="n">Valor entregas</th>${Number(Q.minimo || 0) > 0 ? '<th class="n">Compl. mínimo</th>' : ''}<th class="n">Transf./Pão</th><th class="n">Abatimento</th><th class="n">Total</th></tr></thead><tbody>
-        ${res.map(r => `<tr><td>${esc(r.m.nome_alpha7)}</td><td>${esc(r.m.nome_pdf || '')}</td><td class="n">${r.qtd}</td><td class="n">${brl(r.val)}</td>${Number(Q.minimo || 0) > 0 ? `<td class="n">${brl(r.comp)}</td>` : ''}<td class="n">${brl(r.mais)}</td><td class="n">${brl(r.menos)}</td><td class="n"><b>${brl(r.total)}</b></td></tr>`).join('')}
+        <table><thead><tr><th>Motoboy</th><th>Nome NF</th><th class="n">Entregas</th><th class="n">Valor entregas</th>${Number(Q.minimo || 0) > 0 ? '<th class="n">Compl. mínimo</th>' : ''}${JAC ? '' : '<th class="n">Transferências</th>'}<th class="n">Transf./Pão</th><th class="n">Abatimento</th><th class="n">Total</th></tr></thead><tbody>
+        ${res.map(r => `<tr><td>${esc(r.m.nome_alpha7)}</td><td>${esc(r.m.nome_pdf || '')}</td><td class="n">${r.qtd}</td><td class="n">${brl(r.val)}</td>${Number(Q.minimo || 0) > 0 ? `<td class="n">${brl(r.comp)}</td>` : ''}${JAC ? '' : `<td class="n">${brl(r.tv)}${r.tq ? ' (' + r.tq + ')' : ''}</td>`}<td class="n">${brl(r.mais)}</td><td class="n">${brl(r.menos)}</td><td class="n"><b>${brl(r.total)}</b></td></tr>`).join('')}
         </tbody></table>`;
       janelaImpressao(`Motoboys ${periodo(q)}`, corpo);
+    }
+
+    // ---------- transferências entre lojas (GO, 11/11/2026) ----------
+    // A loja lança e confirma em transferencias.html (perfil TRANSFERENCIA, sem valor). Aqui: valor por cidade, acesso das lojas,
+    // lista de motoboys, conferência, confirmação/cancelamento com justificativa. O fechamento vai junto com a quinzena.
+    let TRD = null, editAcesso = null;
+    const ACAO_TR = { LANCOU: 'lançou', RECEBEU: 'loja confirmou o recebimento', RECEBEU_PELO_SUPERVISOR: 'confirmado pelo Supervisor', CANCELOU: 'cancelou',
+                      VALOR_CIDADE: 'valor da cidade', ACESSO_LOJA: 'acesso de loja', MOTOBOY_LISTA: 'lista de motoboys' };
+    async function carregarTransf() {
+      if (JAC || !$('trIni').value || !$('trFim').value) return;
+      const { data, error } = await rpcRetentar(_supabase, 'fn_transf_painel', { p_ini: $('trIni').value, p_fim: $('trFim').value });
+      if (error) { $('tbTransf').innerHTML = `<tr><td colspan="9" class="text-rose-700 font-bold p-4">${esc(traduzirErro(error.message))}</td></tr>`; return; }
+      TRD = data; montarTransf();
+    }
+    function montarTransf() {
+      if (!TRD) return;
+      const st = $('trStatus').value, b = $('trBusca').value.trim().toUpperCase();
+      const nm = id => id ? (motoboy(id).nome_pdf || motoboy(id).nome_alpha7 || '-') : '-';
+      const L = TRD.transferencias.filter(t => (!st || t.status === st) && (!b || [t.numero, nm(t.motoboy_retirou_id), nm(t.motoboy_entregou_id), t.enviado_por, t.recebido_por, t.lancado_por].join(' ').toUpperCase().includes(b)));
+      const rec = TRD.transferencias.filter(t => t.status === 'RECEBIDA'), pend = TRD.transferencias.filter(t => t.status === 'ENVIADA');
+      $('trResumo').innerHTML = `${rec.length} recebida(s) · <b class="${pend.length ? 'text-amber-700' : ''}">${pend.length} aguardando</b> · ${rs(rec.reduce((t, x) => t + Number(x.valor || 0), 0))}`;
+      const por = new Map(); rec.forEach(t => { const r = por.get(t.motoboy_entregou_id) || { q: 0, v: 0 }; r.q++; r.v += Number(t.valor || 0); por.set(t.motoboy_entregou_id, r); });
+      $('tbTrMot').innerHTML = [...por.entries()].sort((a, c) => c[1].v - a[1].v).map(([id, r]) => `<tr><td class="font-bold">${esc(nm(id))}</td><td class="num">${r.q}</td><td class="num font-black">${rs(r.v)}</td></tr>`).join('')
+        || '<tr><td colspan="3" class="text-center text-slate-400 py-4">Nenhuma transferência recebida no período.</td></tr>';
+      const lista = D.motoboys.filter(m => m.ativo && m.faz_transferencia);
+      $('tbTransf').innerHTML = L.map(t => {
+        const s = { ENVIADA: ['aguardando', 'bg-amber-100 text-amber-800'], RECEBIDA: ['✓ recebida', 'bg-emerald-100 text-emerald-800'], CANCELADA: ['cancelada', 'bg-slate-200 text-slate-600'] }[t.status] || [t.status, ''];
+        const trocou = t.motoboy_entregou_id && t.motoboy_entregou_id !== t.motoboy_retirou_id, fechada = !!t.quinzena_id;
+        const entreCidades = t.cidade_destino && t.cidade !== t.cidade_destino;
+        return `<tr class="${t.status === 'CANCELADA' ? 'opacity-60' : ''}"><td class="whitespace-nowrap">${dh(t.data_hora)}</td>
+          <td class="whitespace-nowrap"><b>${esc(t.origem)}</b> → <b>${esc(t.destino)}</b><div class="text-[10px] ${entreCidades ? 'text-amber-700 font-bold' : 'text-slate-400'}">${nomeCidade(t.cidade)}${entreCidades ? ' → ' + nomeCidade(t.cidade_destino) : ''}</div></td>
+          <td class="font-bold">${esc(t.numero)}</td>
+          <td>${esc(nm(t.motoboy_entregou_id || t.motoboy_retirou_id))}${trocou ? `<div class="text-[10.5px] text-amber-700">retirou: ${esc(nm(t.motoboy_retirou_id))}</div>` : ''}</td>
+          <td>${esc(t.enviado_por)}<div class="text-[10.5px] text-slate-400">${esc(t.lancado_por)} · ${dh(t.lancado_em)}</div></td>
+          <td>${t.recebido_por ? `${esc(t.recebido_por)}<div class="text-[10.5px] text-slate-400">${esc(t.recebido_registro_por || '')} · ${dh(t.recebido_em)}</div>${t.recebido_justificativa ? `<div class="text-[10.5px] text-amber-700">pelo Supervisor: ${esc(t.recebido_justificativa)}</div>` : ''}` : '-'}</td>
+          <td><span class="px-1.5 py-0.5 rounded text-[10px] font-black ${s[1]}">${s[0]}</span>${fechada ? '<div class="text-[10px] text-emerald-700">quinzena fechada</div>' : ''}${t.cancelado_motivo ? `<div class="text-[10.5px] text-slate-500 mt-0.5">${esc(t.cancelado_motivo)} · ${esc(t.cancelado_por)}</div>` : ''}</td>
+          <td class="num">${t.status === 'RECEBIDA' ? (t.valor == null ? '<span class="text-rose-700 font-bold">sem valor</span>' : brl(t.valor)) : '-'}</td>
+          <td class="text-right whitespace-nowrap">${fechada || t.status === 'CANCELADA' ? '' : `${t.status === 'ENVIADA' ? `<select id="trm_${t.id}" class="inp !w-36 !py-1 !text-[11px] mb-1">${lista.map(m => `<option value="${m.id}" ${m.id === t.motoboy_retirou_id ? 'selected' : ''}>${esc(m.nome_pdf || m.nome_alpha7)}</option>`).join('')}</select><br>
+              <button onclick="receberTransf('${t.id}')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer">Confirmar no lugar</button> ` : ''}
+            <button onclick="cancelarTransf('${t.id}')" class="px-2 py-1 bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded text-[11px] font-bold cursor-pointer">Cancelar</button>`}</td></tr>`;
+      }).join('') || '<tr><td colspan="9" class="text-center text-slate-400 py-6">Nenhuma transferência no período.</td></tr>';
+
+      const cid = [...new Set(D.lojas.filter(l => l.cidade && (l.periodicidade || 'QUINZENAL') !== 'SEMANAL').map(l => l.cidade))].sort();
+      $('trValores').innerHTML = cid.map(c => { const v = TRD.valores.find(x => x.cidade === c);
+        return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1.5"><b class="w-24">${nomeCidade(c)}</b>
+          <input id="trv_${c}" class="inp !w-24 text-right ${v ? '' : 'border-rose-400 bg-rose-50'}" inputmode="decimal" placeholder="0,00" value="${v ? brl(v.valor) : ''}">
+          <span class="text-[10px] text-slate-400">${v ? esc(v.atualizado_por || '') + ' · ' + dh(v.atualizado_em) : 'sem valor'}</span>
+          <button onclick="salvarValorTr('${c}')" class="ml-auto px-2 py-1 bg-white border border-slate-300 rounded text-[11px] font-bold cursor-pointer">Salvar</button></div>`; }).join('');
+
+      $('trAcessos').innerHTML = TRD.acessos.map(a => `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1.5 ${a.ativo ? '' : 'opacity-50'}">
+          <b class="w-14">Loja ${esc(a.loja || '?')}</b><span class="truncate">${esc(a.email)}</span>${a.ativo ? '' : '<span class="text-[10px] text-slate-500">inativo</span>'}
+          <button onclick="editarAcesso('${esc(a.email)}')" class="ml-auto px-2 py-1 bg-white border border-slate-300 rounded text-[11px] font-bold cursor-pointer">Editar</button></div>`).join('')
+        || '<div class="text-xs text-slate-400">Nenhuma loja com acesso ainda.</div>';
+      montarFormAcesso();
+
+      const cands = D.motoboys.filter(m => m.ativo && m.paga);
+      $('trMotoboys').innerHTML = cands.map(m => `<label class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1 cursor-pointer">
+          <input type="checkbox" ${m.faz_transferencia ? 'checked' : ''} onchange="marcarMotTr('${m.id}', this.checked, this)"> ${esc(m.nome_pdf || m.nome_alpha7)}</label>`).join('') || '<div class="text-xs text-slate-400">Nenhum motoboy ativo que se paga por aqui.</div>';
+
+      const desc = h => { const d = h.detalhe || {};
+        if (h.acao === 'VALOR_CIDADE') return `${nomeCidade(d.cidade)}: ${d.antes == null ? '-' : rs(d.antes)} → ${rs(d.depois)}`;
+        if (h.acao === 'ACESSO_LOJA') return `Loja ${esc(d.loja)} · ${esc(d.email)}${d.email_antigo && d.email_antigo !== d.email ? ' (era ' + esc(d.email_antigo) + ')' : ''}${d.ativo === false ? ' · inativo' : ''}`;
+        if (h.acao === 'MOTOBOY_LISTA') return `${esc(nm(d.motoboy_id))}: ${d.na_lista ? 'entrou na lista' : 'saiu da lista'}`;
+        const t = TRD.transferencias.find(x => x.id === h.transf_id); const ref = t ? `Nº ${esc(t.numero)} (${esc(t.origem)} → ${esc(t.destino)})` : '';
+        if (h.acao === 'LANCOU') return `${ref} · motoboy ${esc(nm(d.motoboy_id))} · entregou: ${esc(d.enviado_por)}`;
+        if (h.acao === 'RECEBEU' || h.acao === 'RECEBEU_PELO_SUPERVISOR') return `${ref} · recebeu: ${esc(d.recebido_por)} · motoboy ${esc(nm(d.motoboy_entregou_id))}${d.motoboy_trocado ? ' (outro motoboy)' : ''}${d.justificativa ? ' · ' + esc(d.justificativa) : ''}`;
+        if (h.acao === 'CANCELOU') return `${ref} · ${esc(d.motivo)}`;
+        return ref; };
+      $('trHist').innerHTML = TRD.historico.map(h => `<div class="border-l-2 ${h.acao === 'CANCELOU' ? 'border-rose-400' : h.acao.startsWith('RECEBEU') ? 'border-emerald-400' : 'border-slate-300'} pl-2">
+          <b>${esc(ACAO_TR[h.acao] || h.acao)}</b> · ${esc(h.por || '')} · ${dh(h.em)}<div class="text-slate-500">${desc(h)}</div></div>`).join('') || '<div class="text-slate-400">-</div>';
+    }
+    async function salvarValorTr(c) {
+      const v = num($('trv_' + c).value);
+      if (v == null || v < 0) return alert('Informe o valor por transferência.');
+      if (!confirm(`${nomeCidade(c)}: ${rs(v)} por transferência?\n\nVale para todas as transferências recebidas que ainda não foram fechadas na quinzena.`)) return;
+      const { error } = await _supabase.rpc('fn_transf_valor_salvar', { p_cidade: c, p_valor: v });
+      if (error) return alert(traduzirErro(error.message));
+      await carregarTransf(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
+    }
+    function editarAcesso(email) { editAcesso = TRD.acessos.find(a => a.email === email) || null; montarFormAcesso(); }
+    function montarFormAcesso() {
+      const a = editAcesso || { ativo: true }, lojas = D.lojas.filter(l => l.cidade && (l.periodicidade || 'QUINZENAL') !== 'SEMANAL');
+      $('trFormAcesso').innerHTML = `<div class="text-xs font-black text-slate-700">${editAcesso ? '✎ Editar acesso' : '＋ Novo acesso de loja'}</div>
+        <div class="grid grid-cols-3 gap-2"><div><label class="lbl">Loja *</label><select id="taLoja" class="inp"><option value="">-</option>${lojas.map(l => `<option value="${l.loja_num}" ${a.loja === l.loja_num ? 'selected' : ''}>${l.loja_num}</option>`).join('')}</select></div>
+          <div class="col-span-2"><label class="lbl">E-mail de acesso *</label><input id="taEmail" class="inp lowercase" value="${esc(a.email || '')}" autocomplete="off"></div></div>
+        <label class="flex items-center gap-1.5 text-xs font-bold text-slate-600"><input type="checkbox" id="taAtivo" ${a.ativo ? 'checked' : ''}> ativo</label>
+        <div class="flex gap-2 justify-end">${editAcesso ? `<button onclick="editAcesso=null;montarFormAcesso()" class="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold cursor-pointer">Cancelar</button>` : ''}
+          <button onclick="salvarAcesso()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold cursor-pointer">Salvar acesso</button></div>`;
+    }
+    async function salvarAcesso() {
+      const p = { loja: $('taLoja').value, email: $('taEmail').value.trim().toLowerCase(), ativo: $('taAtivo').checked, email_antigo: editAcesso ? editAcesso.email : null };
+      if (!p.loja) return alert('Escolha a loja.');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(p.email)) return alert('Informe um e-mail válido.');
+      const troca = editAcesso && editAcesso.email !== p.email;
+      if (!confirm(`Loja ${p.loja}: ${p.email}${p.ativo ? '' : ' (inativo)'}${troca ? `\n\nO e-mail anterior (${editAcesso.email}) perde o acesso.` : ''}\n\nQuem entrar com este e-mail vê só a tela de transferências da loja ${p.loja}.`)) return;
+      const { error } = await _supabase.rpc('fn_transf_acesso_salvar', { p });
+      if (error) return alert(traduzirErro(error.message));
+      editAcesso = null; await carregarTransf();
+    }
+    async function marcarMotTr(id, sim, el) {
+      const { error } = await _supabase.rpc('fn_transf_motoboy_marcar', { p_id: id, p_sim: sim });
+      if (error) { el.checked = !sim; return alert(traduzirErro(error.message)); }
+      const m = motoboy(id); if (m.id) m.faz_transferencia = sim;
+      await carregarTransf();
+    }
+    async function receberTransf(id) {
+      const t = TRD.transferencias.find(x => x.id === id), mot = $('trm_' + id).value;
+      if (!mot) return alert('Escolha o motoboy que entregou.');
+      const nome = await pedirTexto(`Confirmar no lugar da Loja ${t.destino} o recebimento da transferência Nº ${t.numero}?\n\nNome de quem recebeu os produtos na loja:`, '');
+      if (!nome) return;
+      const j = await pedirTexto('Por que o Supervisor está confirmando no lugar da loja? (pelo menos 15 letras)', '');
+      if (!j) return;
+      if (j.replace(/[^A-Za-zÀ-ÿ]/g, '').length < 15) return alert('Explique com pelo menos 15 letras. Nada foi alterado.');
+      const { error } = await _supabase.rpc('fn_transf_receber', { p_id: id, p_recebido_por: nome, p_motoboy_entregou: mot, p_justificativa: j });
+      if (error) return alert(traduzirErro(error.message));
+      await carregarTransf(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
+    }
+    async function cancelarTransf(id) {
+      const t = TRD.transferencias.find(x => x.id === id);
+      const m = await pedirTexto(`Cancelar a transferência Nº ${t.numero} (Loja ${t.origem} → ${t.destino})?${t.status === 'RECEBIDA' ? '\n\nEla já foi recebida: o motoboy deixa de receber por ela.' : ''}\n\nExplique o motivo (pelo menos 10 letras):`, '');
+      if (!m) return;
+      if (m.replace(/[^A-Za-zÀ-ÿ]/g, '').length < 10) return alert('Explique o motivo com pelo menos 10 letras. Nada foi alterado.');
+      const { error } = await _supabase.rpc('fn_transf_cancelar', { p_id: id, p_motivo: m });
+      if (error) return alert(traduzirErro(error.message));
+      await carregarTransf(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
     }
 
     // ---------- bairros ----------

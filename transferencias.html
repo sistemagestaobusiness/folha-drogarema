@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transferências entre lojas - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 3px; }
+    .inp { width: 100%; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 9px; font-size: 14px; }
+    .inp:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+    .tb th { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; text-align: left; padding: 7px 8px; background: #f8fafc; position: sticky; top: 0; }
+    .tb td { padding: 6px 8px; border-top: 1px solid #f1f5f9; font-size: 12.5px; vertical-align: top; }
+  </style>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="sticky top-0 z-40 bg-[#F4F5F7]/95 backdrop-blur-sm py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 id="tituloTela" class="text-xl font-bold text-slate-900 tracking-wide">🔁 Transferências entre lojas</h1>
+        <p class="text-xs text-slate-500">A loja que envia lança a transferência; a loja que recebe confirma. O motoboy só recebe pela transferência que foi confirmada.</p>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <select id="selLoja" class="inp !w-36 hidden" onchange="carregar()"></select>
+        <button onclick="carregar()" class="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold cursor-pointer">↻ Atualizar</button>
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- lançar -->
+        <div id="boxLancar" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h2 class="font-black text-sm text-slate-800">📤 Nova transferência <span id="lblOrigem" class="text-indigo-700"></span></h2>
+          <div><label class="lbl">Data e hora da saída *</label><input id="tDataHora" type="datetime-local" class="inp"></div>
+          <div><label class="lbl">Loja de destino *</label><select id="tDestino" class="inp"></select></div>
+          <div><label class="lbl">Nº da transferência *</label><input id="tNumero" class="inp uppercase" maxlength="40" placeholder="ex.: 123456 ou PÃO" autocomplete="off"></div>
+          <div><label class="lbl">Motoboy que retirou *</label><select id="tMotoboy" class="inp"></select></div>
+          <div><label class="lbl">Quem entregou os produtos ao motoboy *</label><input id="tEnviadoPor" class="inp uppercase" placeholder="nome de quem separou e entregou" autocomplete="off"></div>
+          <button id="btnLancar" onclick="lancar()" class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-extrabold cursor-pointer">Lançar transferência</button>
+          <p class="text-[11px] text-slate-500 leading-relaxed">O número pode ter letras (ex.: <b>PÃO</b>). Lançamento de até 3 dias atrás. Enquanto a outra loja não confirmar, dá para cancelar com o motivo.</p>
+        </div>
+
+        <div class="lg:col-span-2 space-y-4">
+          <!-- chegando -->
+          <div class="bg-white border border-amber-300 rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="font-black text-sm text-slate-800">📥 Chegando na loja: confirme o recebimento <span id="qtdChegando" class="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px]"></span></h2>
+            <div id="listaChegando" class="space-y-2"></div>
+          </div>
+          <!-- enviadas pendentes -->
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+            <h2 class="font-black text-sm text-slate-800">⏳ Enviadas: aguardando a outra loja confirmar</h2>
+            <div id="listaEnviadas" class="space-y-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- histórico -->
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div class="px-4 pt-4 pb-2 flex flex-wrap items-end justify-between gap-3">
+          <h2 class="font-black text-sm text-slate-800">🗂 Histórico da loja (últimos 60 dias)</h2>
+          <div class="flex flex-wrap gap-2 items-end">
+            <div><label class="lbl">Situação</label><select id="fStatus" class="inp !w-40" onchange="montarHistorico()"><option value="">Todas</option><option value="ENVIADA">Aguardando</option><option value="RECEBIDA">Recebidas</option><option value="CANCELADA">Canceladas</option></select></div>
+            <div><label class="lbl">Busca</label><input id="fBusca" class="inp !w-52" placeholder="nº, motoboy, nome..." oninput="montarHistorico()"></div>
+          </div>
+        </div>
+        <div class="overflow-auto max-h-[60vh]"><table class="tb w-full"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Motoboy</th><th>Entregou ao motoboy</th><th>Recebeu</th><th>Situação</th></tr></thead><tbody id="tbHistorico"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const dh = ts => ts ? new Date(ts).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+    const letras = t => String(t || '').replace(/[^A-Za-zÀ-ÿ]/g, '').length;
+    const pad = n => String(n).padStart(2, '0');
+    const agoraLocal = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    const STATUS = { ENVIADA: ['aguardando', 'bg-amber-100 text-amber-800'], RECEBIDA: ['✓ recebida', 'bg-emerald-100 text-emerald-800'], CANCELADA: ['cancelada', 'bg-slate-200 text-slate-600'] };
+
+    let D = null, gestor = false, ocupado = false;
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      $('lblUsuario').innerText = (user.email || '').toLowerCase();
+      $('tDataHora').value = agoraLocal();
+      await carregar(true);
+      // atualiza sozinha a cada minuto (só quando ninguém está digitando)
+      setInterval(() => { const a = document.activeElement; if (!ocupado && !(a && /INPUT|SELECT|TEXTAREA/.test(a.tagName))) carregar(); }, 60000);
+    }
+
+    async function carregar(primeira) {
+      const p = gestor && $('selLoja').value ? { p_loja: $('selLoja').value } : {};
+      const { data, error } = await rpcRetentar(_supabase, 'fn_transf_loja_dados', p);
+      if (error) { $('aviso').innerText = /Sem acesso/.test(error.message) ? 'Este acesso não está liberado para as transferências. Fale com o Supervisor.' : 'Não foi possível carregar: ' + traduzirErro(error.message); $('aviso').classList.remove('hidden'); return; }
+      D = data; gestor = D.perfil === 'GESTOR';
+      $('lblPerfil').innerText = gestor ? 'GESTOR (consulta)' : 'LOJA ' + (D.loja || '-');
+      if (gestor && primeira) {
+        $('selLoja').innerHTML = '<option value="">escolha a loja</option>' + D.lojas.map(l => `<option value="${l.loja}">Loja ${l.loja}</option>`).join('');
+        $('selLoja').classList.remove('hidden');
+      }
+      $('tituloTela').innerText = '🔁 Transferências entre lojas' + (D.loja ? ' · Loja ' + D.loja : '');
+      $('lblOrigem').innerText = D.loja ? 'saindo da Loja ' + D.loja : '';
+      $('boxLancar').classList.toggle('hidden', gestor);
+      const dest = $('tDestino').value, mot = $('tMotoboy').value;
+      $('tDestino').innerHTML = '<option value="">-</option>' + D.lojas.filter(l => l.loja !== D.loja).map(l => `<option value="${l.loja}">Loja ${l.loja}</option>`).join('');
+      $('tMotoboy').innerHTML = '<option value="">-</option>' + D.motoboys.map(m => `<option value="${m.id}">${esc(m.nome)}</option>`).join('');
+      $('tDestino').value = dest; $('tMotoboy').value = mot;
+      $('aviso').classList.add('hidden'); $('conteudo').classList.remove('hidden');
+      montar();
+    }
+
+    function montar() {
+      const T = D.transferencias || [];
+      const chegando = T.filter(t => t.status === 'ENVIADA' && t.destino === D.loja);
+      const enviadas = T.filter(t => t.status === 'ENVIADA' && t.origem === D.loja);
+      const optMot = sel => D.motoboys.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.nome)}</option>`).join('');
+      $('qtdChegando').innerText = chegando.length || '';
+      $('qtdChegando').classList.toggle('hidden', !chegando.length);
+      $('listaChegando').innerHTML = chegando.length ? chegando.map(t => `<div class="border border-amber-200 bg-amber-50/40 rounded-lg p-3 space-y-2">
+          <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"><b class="text-slate-900">Nº ${esc(t.numero)}</b><span>da <b>Loja ${esc(t.origem)}</b></span>
+            <span class="text-slate-600">motoboy: <b>${esc(t.motoboy_retirou)}</b></span><span class="text-[11px] text-slate-500">saída ${dh(t.data_hora)} · entregou ao motoboy: ${esc(t.enviado_por)}</span></div>
+          ${gestor ? '' : `<div class="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
+            <div class="sm:col-span-2"><label class="lbl">Quem recebeu os produtos *</label><input id="rec_${t.id}" class="inp uppercase" autocomplete="off"></div>
+            <div class="sm:col-span-2"><label class="lbl">Motoboy que entregou *</label><select id="mot_${t.id}" class="inp">${optMot(t.motoboy_retirou_id)}</select></div>
+            <button onclick="receber('${t.id}')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold cursor-pointer">✓ Confirmar recebimento</button></div>
+            <div class="text-[10.5px] text-slate-500">Se outro motoboy trouxe os produtos, troque o nome: o pagamento vai para quem entregou.</div>`}
+        </div>`).join('') : '<div class="text-xs text-slate-400">Nenhuma transferência aguardando a sua confirmação.</div>';
+      $('listaEnviadas').innerHTML = enviadas.length ? enviadas.map(t => `<div class="flex flex-wrap items-center gap-x-3 gap-y-1 border border-slate-200 rounded-lg px-3 py-2 text-xs">
+          <b>Nº ${esc(t.numero)}</b><span>para a <b>Loja ${esc(t.destino)}</b></span><span>motoboy: ${esc(t.motoboy_retirou)}</span><span class="text-slate-500">saída ${dh(t.data_hora)} · ${esc(t.enviado_por)}</span>
+          ${gestor ? '' : `<button onclick="cancelar('${t.id}')" class="ml-auto text-[11px] px-2 py-1 bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded font-bold cursor-pointer">Cancelar</button>`}</div>`).join('')
+        : '<div class="text-xs text-slate-400">Nada aguardando.</div>';
+      montarHistorico();
+    }
+
+    function montarHistorico() {
+      if (!D) return;
+      const st = $('fStatus').value, b = $('fBusca').value.trim().toUpperCase();
+      const L = (D.transferencias || []).filter(t => (!st || t.status === st) && (!b || [t.numero, t.motoboy_retirou, t.motoboy_entregou, t.enviado_por, t.recebido_por].join(' ').toUpperCase().includes(b)));
+      $('tbHistorico').innerHTML = L.map(t => {
+        const s = STATUS[t.status] || [t.status, ''];
+        const trocou = t.motoboy_entregou && t.motoboy_entregou !== t.motoboy_retirou;
+        return `<tr class="${t.status === 'CANCELADA' ? 'opacity-60' : ''}"><td class="whitespace-nowrap">${dh(t.data_hora)}</td>
+          <td class="whitespace-nowrap"><b>${esc(t.origem)}</b> → <b>${esc(t.destino)}</b>${t.origem === D.loja ? ' <span class="text-[10px] text-slate-400">enviada</span>' : ' <span class="text-[10px] text-slate-400">recebida</span>'}</td>
+          <td class="font-bold">${esc(t.numero)}</td>
+          <td>${esc(t.motoboy_entregou || t.motoboy_retirou)}${trocou ? `<div class="text-[10.5px] text-amber-700">retirou: ${esc(t.motoboy_retirou)}</div>` : ''}</td>
+          <td>${esc(t.enviado_por)}<div class="text-[10.5px] text-slate-400">${esc(t.lancado_por)}</div></td>
+          <td>${t.recebido_por ? `${esc(t.recebido_por)}<div class="text-[10.5px] text-slate-400">${dh(t.recebido_em)}${t.recebido_justificativa ? ' · pelo Supervisor: ' + esc(t.recebido_justificativa) : ''}</div>` : '-'}</td>
+          <td><span class="px-1.5 py-0.5 rounded text-[10px] font-black ${s[1]}">${s[0]}</span>${t.cancelado_motivo ? `<div class="text-[10.5px] text-slate-500 mt-0.5">${esc(t.cancelado_motivo)} · ${esc(t.cancelado_por)}</div>` : ''}</td></tr>`;
+      }).join('') || '<tr><td colspan="7" class="text-center text-slate-400 py-6">Nenhuma transferência.</td></tr>';
+    }
+
+    async function lancar() {
+      const p = { data_hora: $('tDataHora').value ? new Date($('tDataHora').value).toISOString() : null, destino: $('tDestino').value,
+                  numero: $('tNumero').value.trim(), motoboy_id: $('tMotoboy').value, enviado_por: $('tEnviadoPor').value.trim() };
+      if (!p.data_hora) return alert('Informe a data e a hora da saída.');
+      if (!p.destino) return alert('Escolha a loja de destino.');
+      if (!p.numero) return alert('Informe o número da transferência (ou o que foi levado, ex.: PÃO).');
+      if (!p.motoboy_id) return alert('Escolha o motoboy que retirou.');
+      if (letras(p.enviado_por) < 3) return alert('Informe o nome de quem entregou os produtos ao motoboy.');
+      const nomeMot = $('tMotoboy').selectedOptions[0].text;
+      if (!confirm(`Lançar a transferência?\n\nNº ${p.numero.toUpperCase()}\nLoja ${D.loja} → Loja ${p.destino}\nMotoboy: ${nomeMot}\nEntregou ao motoboy: ${p.enviado_por.toUpperCase()}\nSaída: ${dh(p.data_hora)}`)) return;
+      const b = $('btnLancar'); b.disabled = true; b.innerText = 'Lançando...'; ocupado = true;
+      const { error } = await _supabase.rpc('fn_transf_lancar', { p });
+      b.disabled = false; b.innerText = 'Lançar transferência'; ocupado = false;
+      if (error) return alert(traduzirErro(error.message));
+      $('tNumero').value = ''; $('tDataHora').value = agoraLocal();
+      await carregar();
+    }
+
+    async function receber(id) {
+      const t = D.transferencias.find(x => x.id === id), nome = $('rec_' + id).value.trim(), mot = $('mot_' + id).value;
+      if (letras(nome) < 3) return alert('Informe o nome de quem recebeu os produtos.');
+      if (!mot) return alert('Escolha o motoboy que entregou.');
+      const nomeMot = $('mot_' + id).selectedOptions[0].text;
+      if (!confirm(`Confirmar o recebimento?\n\nNº ${t.numero} da Loja ${t.origem}\nRecebeu: ${nome.toUpperCase()}\nMotoboy que entregou: ${nomeMot}`)) return;
+      ocupado = true;
+      const { error } = await _supabase.rpc('fn_transf_receber', { p_id: id, p_recebido_por: nome, p_motoboy_entregou: mot, p_justificativa: null });
+      ocupado = false;
+      if (error) return alert(traduzirErro(error.message));
+      await carregar();
+    }
+
+    async function cancelar(id) {
+      const t = D.transferencias.find(x => x.id === id);
+      const m = await pedirTexto(`Cancelar a transferência Nº ${t.numero} para a Loja ${t.destino}?\n\nExplique o motivo (pelo menos 10 letras):`, '');
+      if (!m) return;
+      if (letras(m) < 10) return alert('Explique o motivo com pelo menos 10 letras. Nada foi alterado.');
+      const { error } = await _supabase.rpc('fn_transf_cancelar', { p_id: id, p_motivo: m });
+      if (error) return alert(traduzirErro(error.message));
+      await carregar();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
