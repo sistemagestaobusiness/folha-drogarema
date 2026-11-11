@@ -16,7 +16,7 @@
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
       <div>
         <h1 class="tit-sis text-xl font-bold text-slate-900">◐ Adiantamento salarial</h1>
-        <p class="text-xs text-slate-500">Lançamento do adiantamento do dia 15. Ao confirmar, vai para os lançamentos e para o Financeiro. Valor diferente do mês anterior passa antes pelo Gestor.</p>
+        <p class="text-xs text-slate-500">Lançamento do adiantamento do dia 15. Ao confirmar, vai para os lançamentos e para o Financeiro. Valor diferente do mês anterior passa antes pelo Gestor. Contábil e não contábil têm cada um o seu <b>🏦 Banco / 💵 Dinheiro</b>: o que for dinheiro chega ao Financeiro numa linha separada, marcada "em dinheiro (espécie)".</p>
       </div>
       <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
     </div>
@@ -138,11 +138,11 @@
         f.trava = f.pago || f.fora;
         // campos em branco todo mês (obriga a revisar); só vem preenchido o que já foi gravado neste mês
         const base = f.reg_id && f.status !== 'NAO_RECEBE'
-          ? { c: r2(f.valor_contabil), n: r2(f.valor_nao_contabil), meio: f.reg_meio }
-          : f.fora ? { c: r2(f.lanc_contabil), n: r2(f.lanc_nao_contabil), meio: f.meio }
-          : { c: null, n: null, meio: f.meio };
+          ? { c: r2(f.valor_contabil), n: r2(f.valor_nao_contabil), meio: f.reg_meio, meioC: f.reg_meio_contabil }
+          : f.fora ? { c: r2(f.lanc_contabil), n: r2(f.lanc_nao_contabil), meio: f.meio, meioC: f.meio_contabil }
+          : { c: null, n: null, meio: f.meio, meioC: f.meio_contabil };
         const recebe = f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe;
-        ed[f.funcionario_id] = { recebe, c: base.c, n: base.n, meio: base.meio || 'BANCO', motivo: f.motivo_rh || '' };
+        ed[f.funcionario_id] = { recebe, c: base.c, n: base.n, meio: base.meio || 'BANCO', meioC: base.meioC || 'BANCO', motivo: f.motivo_rh || '' };
       });
       // rascunho guardado neste computador (regra de 28/10/2026)
       const rasc = Rascunho.ler(chaveRasc()); let nR = 0;
@@ -176,8 +176,12 @@
     const mudou = f => { const e = ed[f.funcionario_id];
       if (!f.reg_id) return true;
       const recebeReg = f.status !== 'NAO_RECEBE';
-      return recebeReg !== e.recebe || (e.recebe && (r2(e.c) !== r2(f.valor_contabil) || r2(e.n) !== r2(f.valor_nao_contabil) || e.meio !== f.reg_meio)) || f.status === 'RECUSADO'; };
-    const meioAnt = f => Number(f.ant_dinheiro || 0) > 0 ? (Number(f.ant_dinheiro) < Number(f.ant_nao_contabil) ? '🏦+💵' : '💵') : (Number(f.ant_nao_contabil) > 0 ? '🏦' : '');
+      return recebeReg !== e.recebe || (e.recebe && (r2(e.c) !== r2(f.valor_contabil) || r2(e.n) !== r2(f.valor_nao_contabil) || e.meio !== f.reg_meio || e.meioC !== (f.reg_meio_contabil || 'BANCO'))) || f.status === 'RECUSADO'; };
+    // meio do mês anterior em cada coluna (🏦 banco, 💵 dinheiro, 🏦+💵 parte em cada)
+    const meioDe = (din, tot) => Number(din || 0) > 0 ? (Number(din) < Number(tot) ? '🏦+💵' : '💵') : (Number(tot) > 0 ? '🏦' : '');
+    const meioAnt = f => meioDe(f.ant_dinheiro, f.ant_nao_contabil), meioAntC = f => meioDe(f.ant_dinheiro_contabil, f.ant_contabil);
+    // Banco ou Dinheiro: um para o contábil (k='meioC') e outro para o não contábil (k='meio') — 11/11/2026
+    const selMeio = (id, k, v, dis) => `<select class="inp !py-0.5 !w-auto text-[10px] mt-0.5 ${v === 'DINHEIRO' ? '!bg-amber-300 !border-amber-500 font-bold' : ''}" ${dis} onchange="setMeio('${id}','${k}', this.value)" title="Como este valor é pago"><option value="BANCO" ${v !== 'DINHEIRO' ? 'selected' : ''}>🏦 Banco</option><option value="DINHEIRO" ${v === 'DINHEIRO' ? 'selected' : ''}>💵 Dinheiro</option></select>`;
 
     function situacao(f) {
       if (f.pago) return '<span class="px-2 py-0.5 rounded bg-slate-800 text-white font-bold">🔒 Pago pelo Financeiro</span>';
@@ -197,7 +201,7 @@
         const e = ed[f.funcionario_id], id = f.funcionario_id, dis = f.trava ? 'disabled' : '';
         const ref = r2(Number(f.salario_base) * 0.4);
         const cab = f.nome_loja !== lojaAnt ? (lojaAnt = f.nome_loja, `<tr><td colspan="10" class="px-3 pt-3 pb-1 text-[11px] font-black uppercase text-slate-500">${esc(f.nome_loja || 'sem loja')}</td></tr>`) : '';
-        const ant = `<td class="px-2 py-1.5 text-right font-mono text-[11px] text-slate-500 bg-slate-50">${num(f.ant_contabil)}</td>
+        const ant = `<td class="px-2 py-1.5 text-right font-mono text-[11px] text-slate-500 bg-slate-50 whitespace-nowrap">${num(f.ant_contabil)} <span class="text-[10px]">${meioAntC(f)}</span></td>
           <td class="px-2 py-1.5 text-right font-mono text-[11px] text-slate-500 bg-slate-50 whitespace-nowrap">${num(f.ant_nao_contabil)} <span class="text-[10px]">${meioAnt(f)}</span></td>
           <td class="px-2 py-1.5 text-right font-mono text-[11px] font-bold text-slate-700 bg-slate-50">${num(antTot(f))}</td>`;
         if (!e.recebe) return cab + `<tr class="lin nao">
@@ -219,9 +223,10 @@
           <td class="px-2 py-1.5 text-center"><input type="checkbox" class="w-4 h-4 accent-emerald-600" checked ${dis} onchange="setRecebe('${id}', this.checked)" title="Desmarque se este funcionário não recebe adiantamento"></td>
           ${ant}
           <td class="px-2 py-1.5 whitespace-nowrap"><input class="inp val !py-1" value="${vC}" placeholder="informar" ${dis} onchange="setVal('${id}','c',this)">
+            ${selMeio(id, 'meioC', e.meioC, dis)}
             <div class="text-[10px] ${acima ? 'text-amber-700 font-bold' : 'text-slate-400'}">${ref > 0 ? `40% = ${num(ref)}${acima ? ' · acima' : ''}` : 'sem salário'}</div></td>
           <td class="px-2 py-1.5 whitespace-nowrap"><input class="inp val !py-1" value="${vN}" placeholder="informar" ${dis} onchange="setVal('${id}','n',this)">
-            <select class="inp !py-0.5 !w-auto text-[10px] mt-0.5 ${e.meio === 'DINHEIRO' ? '!bg-amber-300 font-bold' : ''}" ${dis} onchange="setMeio('${id}', this.value)"><option value="BANCO" ${e.meio !== 'DINHEIRO' ? 'selected' : ''}>🏦 Banco</option><option value="DINHEIRO" ${e.meio === 'DINHEIRO' ? 'selected' : ''}>💵 Dinheiro</option></select></td>
+            ${selMeio(id, 'meio', e.meio, dis)}</td>
           <td class="px-2 py-1.5 text-right font-mono font-bold ${dif ? 'text-red-700' : 'text-slate-800'}">${preenchido(e) ? num(tot(e)) : '-'}</td>
           <td class="px-2 py-1.5">${obs}</td>
           <td class="px-3 py-1.5">${situacao(f)}${f.gestor_por && f.status === 'LANCADO' ? `<div class="text-[10px] text-slate-400 mt-0.5">aprovado por ${esc(f.gestor_por)}</div>` : ''}</td></tr>`;
@@ -234,11 +239,11 @@
     function salvarRasc() { clearTimeout(tRasc); tRasc = setTimeout(() => {
       const itens = {}; lista.forEach(f => { if (f.trava || !mudou(f)) return; const e = ed[f.funcionario_id];
         if (e.c === null && e.n === null && !e.motivo && e.recebe === (f.reg_id ? f.status !== 'NAO_RECEBE' : f.recebe)) return;
-        itens[f.funcionario_id] = { recebe: e.recebe, c: e.c, n: e.n, meio: e.meio, motivo: e.motivo }; });
+        itens[f.funcionario_id] = { recebe: e.recebe, c: e.c, n: e.n, meio: e.meio, meioC: e.meioC, motivo: e.motivo }; });
       Rascunho.gravar(chaveRasc(), itens); const r = Rascunho.ler(chaveRasc()); Rascunho.faixa($('boxRascunho'), Object.keys(itens).length, r && r.em, 'descartarRasc()'); }, 300); }
     async function descartarRasc() { if (!confirm('Descartar tudo o que foi digitado e não confirmado nesta competência?')) return; Rascunho.apagar(chaveRasc()); await carregar(); }
     function setRecebe(id, v) { ed[id].recebe = v; salvarRasc(); render(); }
-    function setMeio(id, v) { ed[id].meio = v; salvarRasc(); render(); }
+    function setMeio(id, k, v) { ed[id][k] = v; salvarRasc(); render(); }
     function setVal(id, k, el) {
       if (!String(el.value).trim()) { ed[id][k] = null; salvarRasc(); render(); return; }
       const n = lerNum(el.value);
@@ -260,8 +265,10 @@
       const pend = lista.filter(f => !f.trava && mudou(f)), difs = pend.filter(f => difere(f));
       const faltam = lista.filter(f => !f.trava && ed[f.funcionario_id].recebe && !preenchido(ed[f.funcionario_id]));
       const totAnt = rec.reduce((s, f) => s + antTot(f), 0), totAgora = sum(e => tot(e));
-      $('resumo').innerHTML = it('Recebem', `${rec.length} de ${lista.length}`) + it('Contábil', brl(sum(e => e.c || 0)))
-        + it('🏦 Não contábil banco', brl(sum(e => e.meio !== 'DINHEIRO' ? (e.n || 0) : 0))) + it('💵 Dinheiro', brl(sum(e => e.meio === 'DINHEIRO' ? (e.n || 0) : 0)), 'text-amber-700')
+      const banco = e => (e.meioC !== 'DINHEIRO' ? (e.c || 0) : 0) + (e.meio !== 'DINHEIRO' ? (e.n || 0) : 0);
+      const dinheiro = e => (e.meioC === 'DINHEIRO' ? (e.c || 0) : 0) + (e.meio === 'DINHEIRO' ? (e.n || 0) : 0);
+      $('resumo').innerHTML = it('Recebem', `${rec.length} de ${lista.length}`) + it('Contábil', brl(sum(e => e.c || 0))) + it('Não contábil', brl(sum(e => e.n || 0)))
+        + `<span class="px-2 rounded bg-sky-50 text-sky-900">🏦 Banco <b>${brl(sum(banco))}</b></span>` + `<span class="px-2 rounded bg-amber-200 text-amber-950">💵 Dinheiro (espécie) <b>${brl(sum(dinheiro))}</b></span>`
         + it('Total', brl(totAgora), 'text-emerald-700') + it('Mês anterior', brl(totAnt), 'text-slate-500')
         + it('Diferença', `${difs.length} pessoa(s)`, difs.length ? 'text-red-600' : 'text-slate-400')
         + it('A preencher', `${faltam.length}`, faltam.length ? 'text-amber-600' : 'text-slate-400');
@@ -284,7 +291,7 @@
       if (!pend.length) return alert('Nenhum adiantamento completo para confirmar.');
       const ficam = lista.filter(f => !f.trava && mudou(f)).length - pend.length;
       if (!confirm(`Confirmar ${pend.length} adiantamento(s) de ${comp()} com pagamento em ${dbr(venc)}?${ficam ? `\n\n${ficam} ficam para depois (incompletos): o que foi digitado neles continua guardado.` : ''}`)) return;
-      const itens = pend.map(f => { const e = ed[f.funcionario_id]; return { funcionario_id: f.funcionario_id, recebe: e.recebe, contabil: e.c || 0, nao_contabil: e.n || 0, meio: e.meio, motivo: e.motivo || null }; });
+      const itens = pend.map(f => { const e = ed[f.funcionario_id]; return { funcionario_id: f.funcionario_id, recebe: e.recebe, contabil: e.c || 0, nao_contabil: e.n || 0, meio: e.meio, meio_contabil: e.meioC, motivo: e.motivo || null }; });
       const b = $('btnConfirmar'); b.disabled = true; b.innerText = 'Gravando...';
       const { data, error } = await _supabase.rpc('fn_adiant_confirmar', { p_comp: comp(), p_venc: venc, p_itens: itens });
       b.innerText = '✓ Confirmar adiantamento';
@@ -311,7 +318,7 @@
           <div class="min-w-[200px] flex-1"><div class="font-bold text-slate-900 text-sm">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.nome_loja || '')} · ${esc(f.cargo || '')}</div>
             <div class="mt-1 text-[11px] text-slate-700"><b>Motivo do RH:</b> ${esc(f.motivo_rh || '-')}</div><div class="text-[10px] text-slate-400">${esc(f.enviado_por || '')} · ${dh(f.enviado_em)}</div></div>
           <table class="text-[11px] font-mono"><tr class="text-[9px] uppercase text-slate-400 font-sans"><td></td><td class="px-2 text-right">mês anterior</td><td class="px-2 text-right">agora</td></tr>
-            <tr><td class="font-sans text-slate-500">Contábil</td><td class="px-2 text-right">${num(f.ant_contabil)}</td><td class="px-2 text-right font-bold">${num(f.valor_contabil)}</td></tr>
+            <tr><td class="font-sans text-slate-500">Contábil${f.reg_meio_contabil === 'DINHEIRO' ? ' 💵' : ''}</td><td class="px-2 text-right">${num(f.ant_contabil)}</td><td class="px-2 text-right font-bold">${num(f.valor_contabil)}</td></tr>
             <tr><td class="font-sans text-slate-500">Não contábil${f.reg_meio === 'DINHEIRO' ? ' 💵' : ''}</td><td class="px-2 text-right">${num(f.ant_nao_contabil)}</td><td class="px-2 text-right font-bold">${num(f.valor_nao_contabil)}</td></tr>
             <tr class="border-t"><td class="font-sans font-bold">Total</td><td class="px-2 text-right">${num(antes)}</td><td class="px-2 text-right font-black">${num(agora)}</td></tr></table>
           <div class="text-center min-w-[90px]"><div class="text-[9px] uppercase text-slate-400">diferença</div><div class="text-base font-black ${d > 0 ? 'text-red-600' : 'text-emerald-700'}">${d > 0 ? '+' : ''}${brl(d)}</div>${antes === 0 ? '<div class="text-[10px] font-bold text-red-600">passa a receber</div>' : ''}</div>

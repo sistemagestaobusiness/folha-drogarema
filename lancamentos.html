@@ -460,7 +460,7 @@
     let listaGlobalFuncionarios = [];
     let listaGlobalEventos = [];
     // adiantamento salarial (regra de 15/10/2026): lançado só pela tela adiantamento.html
-    const EVENTOS_ADIANTAMENTO_TELA = [2025, 3001, 3002, 2065, 3019, 3032, 3013];
+    const EVENTOS_ADIANTAMENTO_TELA = [2025, 2074, 3001, 3002, 2065, 3019, 3032, 3013];
     // tela própria de cada evento bloqueado (adiantamento 15/10/2026; vale transporte 16/10/2026)
     const TELA_DO_EVENTO = c => [2065, 3019, 3032, 3013].includes(Number(c)) ? ['vale_transporte.html', 'Vale transporte'] : ['adiantamento.html', 'Adiantamento salarial'];
     // evento com tela própria (cadastro de eventos → tela_propria "arquivo|nome"; regra de 16/10/2026):
@@ -859,7 +859,7 @@
       });
 
       if (resultados.length === 0) {
-        divSugestoes.innerHTML = /^(2025|3001|3002)$|ADIANT/.test(termoLimpo) && !/FERIAS|ERRADO/.test(termoLimpo)
+        divSugestoes.innerHTML = /^(2025|2074|3001|3002)$|ADIANT/.test(termoLimpo) && !/FERIAS|ERRADO/.test(termoLimpo)
           ? `<div class="p-3 text-xs text-amber-800 bg-amber-50 text-center font-bold">Adiantamento salarial é lançado só pela tela <a href="adiantamento.html" class="underline">Adiantamento salarial</a>.</div>`
           : `<div class="p-3 text-xs text-slate-400 text-center">Nenhum evento encontrado</div>`;
         divSugestoes.classList.remove('hidden');
