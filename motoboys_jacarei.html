@@ -79,23 +79,6 @@
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto max-h-[70vh]"><table class="tb w-full"><thead><tr><th>Cidade</th><th>Bairro</th><th class="num">Taxa (R$)</th><th>Ativo</th><th>Atualizado</th><th></th></tr></thead><tbody id="tbBairros"></tbody></table></div>
       </div>
 
-      <!-- ================= MOTOBOYS ================= -->
-      <div data-painel="motoboys" class="painel hidden space-y-4">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
-            <table class="tb w-full"><thead><tr><th>Nome no Alpha7</th><th>Nome no PDF / NF</th><th>CNPJ/CPF</th><th>PIX</th><th>Paga por aqui?</th><th></th></tr></thead><tbody id="tbMotoboys"></tbody></table>
-          </div>
-          <div class="space-y-4">
-            <div id="formMotoboy" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2"></div>
-            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
-              <h3 class="font-black text-xs text-slate-800">🏪 Lojas (Un. Neg. do Alpha7)</h3>
-              <p id="dicaLojas" class="text-[11px] text-slate-500">A cidade da loja escolhe a tabela de bairros. Loja que "não paga por aqui" fica fora da conta. A loja 07 (Jacareí) tem tela própria, com apuração semanal.</p>
-              <div id="tbLojas" class="space-y-1"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- ================= TRANSFERÊNCIAS (GO, 11/11/2026) ================= -->
       <div data-painel="transf" class="painel hidden space-y-4">
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-wrap items-end gap-3">
@@ -118,7 +101,7 @@
             </div>
             <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
               <h3 class="font-black text-xs text-slate-800">🛵 Motoboys que aparecem para as lojas</h3>
-              <p class="text-[11px] text-slate-500">Marque quem faz transferência. A lista vem do cadastro de motoboys (aba Motoboys e lojas).</p>
+              <p class="text-[11px] text-slate-500">Quem aparece na lista das lojas é marcado na coluna "Transferências" da tela <a href="motoboys_cadastro.html" class="text-indigo-700 underline font-bold">Cadastro de motoboys</a>. Motoboy inativo não aparece para as lojas (continua no histórico).</p>
               <div id="trMotoboys" class="space-y-1 max-h-60 overflow-auto"></div>
             </div>
           </div>
@@ -188,13 +171,13 @@
         $('subTela').innerText = 'Apuração semanal (segunda a domingo) · pagamento na segunda-feira seguinte · mínimo de ' + rs(lojaJac().minimo_semanal) + ' por semana para o motoboy que fez entrega · PDF para a NF · pagamento lançado no Alpha7';
         $('dicaImport').innerHTML = 'No Alpha7: <b>Análise de Entrega</b> da <b>loja 07</b>, de <b>segunda a domingo</b>, exportar em Excel (mesmo modelo das outras lojas, com a coluna Un. Neg.). Linhas de outras lojas são ignoradas. Importar de novo a mesma semana (aberta) substitui as linhas.';
         $('tituloLista').innerText = '📅 Semanas';
-        $('dicaLojas').innerText = 'Loja 07 · Jacareí · apuração semanal. O mínimo semanal e a cidade são ajustados pelo suporte do sistema.';
       }
       const opc = CIDADES.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
       $('bCidadeF').innerHTML = (JAC ? '' : '<option value="">Todas</option>') + opc;
       $('nbCidade').innerHTML = (JAC ? '' : '<option value="">-</option>') + opc;
-      $('abas').innerHTML = [['quinzena', '🛵 ' + MODO.pers], ['bairros', '📍 Bairros e taxas'], ['motoboys', '👤 Motoboys e lojas'], ...(JAC ? [] : [['transf', '🔁 Transferências']])]
-        .map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t}</button>`).join('');
+      $('abas').innerHTML = [['quinzena', '🛵 ' + MODO.pers], ['bairros', '📍 Bairros e taxas'], ...(JAC ? [] : [['transf', '🔁 Transferências']])]
+        .map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t}</button>`).join('')
+        + `<a href="motoboys_cadastro.html" class="ml-auto pb-2 text-xs font-bold text-slate-500 hover:text-indigo-700">👤 Cadastro de motoboys e lojas ↗</a>`;
       $('conteudo').classList.remove('hidden');
       if (!JAC) { const h = new Date(), y = h.getFullYear(), mm = h.getMonth(), d = h.getDate(), f = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
         $('trIni').value = f(new Date(y, mm, d <= 15 ? 1 : 16)); $('trFim').value = f(d <= 15 ? new Date(y, mm, 15) : new Date(y, mm + 1, 0)); }
@@ -210,7 +193,7 @@
       D.quinzenas = (D.quinzenas || []).filter(q => (q.loja_num || null) === MODO.loja);
       D.bairros = (D.bairros || []).filter(b => JAC ? b.cidade === 'JACAREI' : b.cidade !== 'JACAREI');
       D.lojas = (D.lojas || []).filter(l => JAC ? l.loja_num === MODO.loja : (l.periodicidade || 'QUINZENAL') !== 'SEMANAL');
-      montarQuinzenas(); montarBairros(); montarMotoboys(); montarLojas();
+      montarQuinzenas(); montarBairros();
       return true;
     }
 
@@ -599,9 +582,8 @@
         || '<div class="text-xs text-slate-400">Nenhuma loja com acesso ainda.</div>';
       montarFormAcesso();
 
-      const cands = D.motoboys.filter(m => m.ativo && m.paga);
-      $('trMotoboys').innerHTML = cands.map(m => `<label class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1 cursor-pointer">
-          <input type="checkbox" ${m.faz_transferencia ? 'checked' : ''} onchange="marcarMotTr('${m.id}', this.checked, this)"> ${esc(m.nome_pdf || m.nome_alpha7)}</label>`).join('') || '<div class="text-xs text-slate-400">Nenhum motoboy ativo que se paga por aqui.</div>';
+      const naLista = D.motoboys.filter(m => m.ativo && m.faz_transferencia);
+      $('trMotoboys').innerHTML = naLista.map(m => `<div class="text-xs border border-slate-100 rounded-lg px-2 py-1">✓ ${esc(m.nome_pdf || m.nome_alpha7)}</div>`).join('') || '<div class="text-xs text-rose-700 font-bold">Nenhum motoboy marcado: as lojas não conseguem lançar.</div>';
 
       const desc = h => { const d = h.detalhe || {};
         if (h.acao === 'VALOR_CIDADE') return `${nomeCidade(d.cidade)}: ${d.antes == null ? '-' : rs(d.antes)} → ${rs(d.depois)}`;
@@ -642,12 +624,6 @@
       const { error } = await _supabase.rpc('fn_transf_acesso_salvar', { p });
       if (error) return alert(traduzirErro(error.message));
       editAcesso = null; await carregarTransf();
-    }
-    async function marcarMotTr(id, sim, el) {
-      const { error } = await _supabase.rpc('fn_transf_motoboy_marcar', { p_id: id, p_sim: sim });
-      if (error) { el.checked = !sim; return alert(traduzirErro(error.message)); }
-      const m = motoboy(id); if (m.id) m.faz_transferencia = sim;
-      await carregarTransf();
     }
     async function receberTransf(id) {
       const t = TRD.transferencias.find(x => x.id === id), mot = $('trm_' + id).value;
@@ -694,49 +670,6 @@
       const { error } = await _supabase.rpc('fn_mot_bairro_salvar', { p });
       if (error) { alert(traduzirErro(error.message)); return; }
       $('nbBairro').value = ''; $('nbValor').value = '';
-      await recarregar(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
-    }
-
-    // ---------- motoboys e lojas ----------
-    function montarMotoboys() {
-      $('tbMotoboys').innerHTML = D.motoboys.map(m => `<tr class="${m.ativo ? '' : 'opacity-50'}"><td class="font-bold">${esc(m.nome_alpha7)}${m.obs ? `<div class="text-[10.5px] font-normal text-slate-400">${esc(m.obs)}</div>` : ''}</td><td>${esc(m.nome_pdf || '-')}</td><td class="text-[11.5px]">${esc(m.documento || '-')}</td><td class="text-[11.5px]">${esc(m.pix || '-')}</td>
-        <td>${m.paga ? '<span class="text-emerald-700 font-bold text-xs">✓ sim</span>' : `<span class="text-slate-500 text-xs">não · ${esc(m.motivo_nao_paga || '')}</span>`}</td>
-        <td class="text-right"><button onclick="editarMotoboy('${m.id}')" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 rounded text-[11px] font-bold cursor-pointer">Editar</button></td></tr>`).join('');
-      montarFormMotoboy();
-    }
-    function editarMotoboy(id) { editMot = id; montarFormMotoboy(); $('formMotoboy').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    function montarFormMotoboy() {
-      const m = editMot ? motoboy(editMot) : { paga: true, ativo: true };
-      $('formMotoboy').innerHTML = `<h3 class="font-black text-xs text-slate-800">${editMot ? '✎ Editar motoboy' : '＋ Novo motoboy'}</h3>
-        <div><label class="lbl">Nome no Alpha7 * (igual ao relatório)</label><input id="mNome" class="inp uppercase" value="${esc(m.nome_alpha7 || '')}"></div>
-        <div><label class="lbl">Nome no PDF / razão social da NF</label><input id="mPdf" class="inp" value="${esc(m.nome_pdf || '')}"></div>
-        <div class="grid grid-cols-2 gap-2"><div><label class="lbl">CNPJ / CPF</label><input id="mDoc" class="inp" value="${esc(m.documento || '')}"></div><div><label class="lbl">Telefone</label><input id="mTel" class="inp" value="${esc(m.telefone || '')}"></div></div>
-        <div><label class="lbl">PIX</label><input id="mPix" class="inp" value="${esc(m.pix || '')}"></div>
-        <div class="flex gap-4 text-xs font-bold text-slate-700"><label class="flex items-center gap-1.5"><input type="checkbox" id="mPaga" ${m.paga ? 'checked' : ''} onchange="$('boxNaoPaga').classList.toggle('hidden', this.checked)"> paga por aqui</label>
-          <label class="flex items-center gap-1.5"><input type="checkbox" id="mAtivo" ${m.ativo ? 'checked' : ''}> ativo</label></div>
-        <div id="boxNaoPaga" class="${m.paga ? 'hidden' : ''}"><label class="lbl">Por que não se paga por aqui? *</label><input id="mMotivo" class="inp" value="${esc(m.motivo_nao_paga || '')}" placeholder="iFood, funcionário..."></div>
-        <div><label class="lbl">Observação</label><input id="mObs" class="inp" value="${esc(m.obs || '')}"></div>
-        <div class="flex gap-2 justify-end">${editMot ? `<button onclick="editMot=null;montarFormMotoboy()" class="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold cursor-pointer">Cancelar</button>` : ''}
-          <button onclick="salvarMotoboy()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold cursor-pointer">Salvar</button></div>`;
-    }
-    async function salvarMotoboy() {
-      const p = { id: editMot, nome_alpha7: $('mNome').value, nome_pdf: $('mPdf').value, documento: $('mDoc').value, telefone: $('mTel').value, pix: $('mPix').value,
-                  paga: $('mPaga').checked, ativo: $('mAtivo').checked, motivo_nao_paga: $('mMotivo').value, obs: $('mObs').value };
-      const { error } = await _supabase.rpc('fn_mot_motoboy_salvar', { p });
-      if (error) { alert(traduzirErro(error.message)); return; }
-      editMot = null; await recarregar(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
-    }
-    function montarLojas() {
-      if (JAC) { $('tbLojas').innerHTML = D.lojas.map(l => `<div class="text-xs border border-slate-100 rounded-lg px-2 py-1.5"><b>Loja ${esc(l.loja_num)}</b> · ${nomeCidade(l.cidade)} · semanal (segunda a domingo) · mínimo ${rs(l.minimo_semanal)} · ${l.paga ? 'paga por aqui' : 'não paga por aqui'}</div>`).join(''); return; }
-      $('tbLojas').innerHTML = D.lojas.map(l => `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-lg px-2 py-1.5">
-        <b class="w-14">Loja ${esc(l.loja_num)}</b>
-        <select id="lc_${l.loja_num}" class="inp !w-32 !py-1"><option value="MOGI" ${l.cidade === 'MOGI' ? 'selected' : ''}>Mogi</option><option value="GUARAREMA" ${l.cidade === 'GUARAREMA' ? 'selected' : ''}>Guararema</option></select>
-        <label class="flex items-center gap-1"><input type="checkbox" id="lp_${l.loja_num}" ${l.paga ? 'checked' : ''}> paga por aqui</label>
-        <button onclick="salvarLoja('${l.loja_num}')" class="ml-auto px-2 py-1 bg-white border border-slate-300 rounded text-[11px] font-bold cursor-pointer">Salvar</button></div>`).join('');
-    }
-    async function salvarLoja(n) {
-      const { error } = await _supabase.rpc('fn_mot_loja_salvar', { p_loja: n, p_cidade: $('lc_' + n).value, p_paga: $('lp_' + n).checked });
-      if (error) { alert(traduzirErro(error.message)); return; }
       await recarregar(); if (qSel && Q && Q.quinzena.status === 'ABERTA') abrirQuinzena(qSel);
     }
 
