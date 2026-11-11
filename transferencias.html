@@ -34,7 +34,11 @@
     <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
 
     <div id="conteudo" class="hidden space-y-4">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div id="abas" class="flex gap-5 border-b border-slate-300 px-1">
+        <button data-aba="pend" onclick="trocarAba('pend')" class="aba pb-2 text-xs font-bold cursor-pointer">🔁 Lançar e confirmar <span id="qtdAba" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px]"></span></button>
+        <button data-aba="hist" onclick="trocarAba('hist')" class="aba pb-2 text-xs font-bold cursor-pointer">🗂 Histórico</button>
+      </div>
+      <div data-painel="pend" class="painel grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- lançar -->
         <div id="boxLancar" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
           <h2 class="font-black text-sm text-slate-800">📤 Nova transferência <span id="lblOrigem" class="text-indigo-700"></span></h2>
@@ -42,7 +46,6 @@
           <div><label class="lbl">Loja de destino *</label><select id="tDestino" class="inp"></select></div>
           <div><label class="lbl">Nº da transferência *</label><input id="tNumero" class="inp uppercase" maxlength="40" placeholder="ex.: 123456 ou PÃO" autocomplete="off"></div>
           <div><label class="lbl">Motoboy que retirou *</label><select id="tMotoboy" class="inp"></select></div>
-          <div><label class="lbl">Quem entregou os produtos ao motoboy *</label><input id="tEnviadoPor" class="inp uppercase" placeholder="nome de quem separou e entregou" autocomplete="off"></div>
           <button id="btnLancar" onclick="lancar()" class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-extrabold cursor-pointer">Lançar transferência</button>
           <p class="text-[11px] text-slate-500 leading-relaxed">O número pode ter letras (ex.: <b>PÃO</b>). Lançamento de até 3 dias atrás. Enquanto a outra loja não confirmar, dá para cancelar com o motivo.</p>
         </div>
@@ -61,16 +64,18 @@
         </div>
       </div>
 
-      <!-- histórico -->
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
-        <div class="px-4 pt-4 pb-2 flex flex-wrap items-end justify-between gap-3">
-          <h2 class="font-black text-sm text-slate-800">🗂 Histórico da loja (últimos 60 dias)</h2>
-          <div class="flex flex-wrap gap-2 items-end">
-            <div><label class="lbl">Situação</label><select id="fStatus" class="inp !w-40" onchange="montarHistorico()"><option value="">Todas</option><option value="ENVIADA">Aguardando</option><option value="RECEBIDA">Recebidas</option><option value="CANCELADA">Canceladas</option></select></div>
-            <div><label class="lbl">Busca</label><input id="fBusca" class="inp !w-52" placeholder="nº, motoboy, nome..." oninput="montarHistorico()"></div>
-          </div>
+      <!-- histórico (finalizadas) -->
+      <div data-painel="hist" class="painel hidden bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div class="px-4 pt-4 pb-3 flex flex-wrap items-end gap-3">
+          <h2 class="font-black text-sm text-slate-800 w-full">🗂 Histórico da loja: transferências finalizadas (recebidas e canceladas)</h2>
+          <div><label class="lbl">De</label><input id="hIni" type="date" class="inp !w-40" onchange="carregarHistorico()"></div>
+          <div><label class="lbl">Até</label><input id="hFim" type="date" class="inp !w-40" onchange="carregarHistorico()"></div>
+          <div><label class="lbl">Motoboy</label><select id="hMotoboy" class="inp !w-56" onchange="montarHistorico()"><option value="">Todos</option></select></div>
+          <div><label class="lbl">Nº da transferência</label><input id="hNumero" class="inp !w-44 uppercase" placeholder="ex.: 123456" oninput="montarHistorico()" autocomplete="off"></div>
+          <div><label class="lbl">Situação</label><select id="hStatus" class="inp !w-36" onchange="montarHistorico()"><option value="">Todas</option><option value="RECEBIDA">Recebidas</option><option value="CANCELADA">Canceladas</option></select></div>
+          <span id="hResumo" class="text-[11px] text-slate-500 pb-2"></span>
         </div>
-        <div class="overflow-auto max-h-[60vh]"><table class="tb w-full"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Motoboy</th><th>Entregou ao motoboy</th><th>Recebeu</th><th>Situação</th></tr></thead><tbody id="tbHistorico"></tbody></table></div>
+        <div class="overflow-auto max-h-[65vh]"><table class="tb w-full"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Motoboy</th><th>Lançado por</th><th>Recebeu</th><th>Situação</th></tr></thead><tbody id="tbHistorico"></tbody></table></div>
       </div>
     </div>
   </div>
@@ -87,16 +92,25 @@
     const agoraLocal = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
     const STATUS = { ENVIADA: ['aguardando', 'bg-amber-100 text-amber-800'], RECEBIDA: ['✓ recebida', 'bg-emerald-100 text-emerald-800'], CANCELADA: ['cancelada', 'bg-slate-200 text-slate-600'] };
 
-    let D = null, gestor = false, ocupado = false;
+    let D = null, gestor = false, ocupado = false, H = null, aba = 'pend';
+    const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    function trocarAba(a) {
+      aba = a;
+      document.querySelectorAll('.aba').forEach(b => b.className = `aba pb-2 text-xs font-bold cursor-pointer ${b.dataset.aba === a ? 'border-b-2 border-indigo-600 text-indigo-700' : 'text-slate-400'}`);
+      document.querySelectorAll('.painel').forEach(p => p.classList.toggle('hidden', p.dataset.painel !== a));
+      if (a === 'hist') carregarHistorico();
+    }
 
     async function inicializar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
       $('lblUsuario').innerText = (user.email || '').toLowerCase();
       $('tDataHora').value = agoraLocal();
+      const h = new Date(); $('hIni').value = iso(new Date(h.getFullYear(), h.getMonth(), 1)); $('hFim').value = iso(h);
+      trocarAba('pend');
       await carregar(true);
       // atualiza sozinha a cada minuto (só quando ninguém está digitando)
-      setInterval(() => { const a = document.activeElement; if (!ocupado && !(a && /INPUT|SELECT|TEXTAREA/.test(a.tagName))) carregar(); }, 60000);
+      setInterval(() => { const a = document.activeElement; if (aba === 'pend' && !ocupado && !(a && /INPUT|SELECT|TEXTAREA/.test(a.tagName))) carregar(); }, 60000);
     }
 
     async function carregar(primeira) {
@@ -118,6 +132,7 @@
       $('tDestino').value = dest; $('tMotoboy').value = mot;
       $('aviso').classList.add('hidden'); $('conteudo').classList.remove('hidden');
       montar();
+      if (aba === 'hist') carregarHistorico();
     }
 
     function montar() {
@@ -127,9 +142,10 @@
       const optMot = sel => D.motoboys.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.nome)}</option>`).join('');
       $('qtdChegando').innerText = chegando.length || '';
       $('qtdChegando').classList.toggle('hidden', !chegando.length);
+      $('qtdAba').innerText = chegando.length || ''; $('qtdAba').classList.toggle('hidden', !chegando.length);
       $('listaChegando').innerHTML = chegando.length ? chegando.map(t => `<div class="border border-amber-200 bg-amber-50/40 rounded-lg p-3 space-y-2">
           <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"><b class="text-slate-900">Nº ${esc(t.numero)}</b><span>da <b>Loja ${esc(t.origem)}</b></span>
-            <span class="text-slate-600">motoboy: <b>${esc(t.motoboy_retirou)}</b></span><span class="text-[11px] text-slate-500">saída ${dh(t.data_hora)} · entregou ao motoboy: ${esc(t.enviado_por)}</span></div>
+            <span class="text-slate-600">motoboy: <b>${esc(t.motoboy_retirou)}</b></span><span class="text-[11px] text-slate-500">saída ${dh(t.data_hora)}</span></div>
           ${gestor ? '' : `<div class="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
             <div class="sm:col-span-2"><label class="lbl">Quem recebeu os produtos *</label><input id="rec_${t.id}" class="inp uppercase" autocomplete="off"></div>
             <div class="sm:col-span-2"><label class="lbl">Motoboy que entregou *</label><select id="mot_${t.id}" class="inp">${optMot(t.motoboy_retirou_id)}</select></div>
@@ -137,16 +153,29 @@
             <div class="text-[10.5px] text-slate-500">Se outro motoboy trouxe os produtos, troque o nome: o pagamento vai para quem entregou.</div>`}
         </div>`).join('') : '<div class="text-xs text-slate-400">Nenhuma transferência aguardando a sua confirmação.</div>';
       $('listaEnviadas').innerHTML = enviadas.length ? enviadas.map(t => `<div class="flex flex-wrap items-center gap-x-3 gap-y-1 border border-slate-200 rounded-lg px-3 py-2 text-xs">
-          <b>Nº ${esc(t.numero)}</b><span>para a <b>Loja ${esc(t.destino)}</b></span><span>motoboy: ${esc(t.motoboy_retirou)}</span><span class="text-slate-500">saída ${dh(t.data_hora)} · ${esc(t.enviado_por)}</span>
+          <b>Nº ${esc(t.numero)}</b><span>para a <b>Loja ${esc(t.destino)}</b></span><span>motoboy: ${esc(t.motoboy_retirou)}</span><span class="text-slate-500">saída ${dh(t.data_hora)}</span>
           ${gestor ? '' : `<button onclick="cancelar('${t.id}')" class="ml-auto text-[11px] px-2 py-1 bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded font-bold cursor-pointer">Cancelar</button>`}</div>`).join('')
         : '<div class="text-xs text-slate-400">Nada aguardando.</div>';
-      montarHistorico();
     }
 
+    // histórico: só o que já foi finalizado (recebido ou cancelado), por período
+    async function carregarHistorico() {
+      if (!D || (gestor && !D.loja)) { $('tbHistorico').innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Escolha a loja.</td></tr>'; return; }
+      if (!$('hIni').value || !$('hFim').value) return;
+      $('tbHistorico').innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Carregando...</td></tr>';
+      const { data, error } = await rpcRetentar(_supabase, 'fn_transf_loja_historico', { p_ini: $('hIni').value, p_fim: $('hFim').value, p_loja: gestor ? D.loja : null });
+      if (error) { $('tbHistorico').innerHTML = `<tr><td colspan="7" class="text-center text-rose-700 font-bold py-6">${esc(traduzirErro(error.message))}</td></tr>`; return; }
+      H = data || [];
+      const sel = $('hMotoboy').value, nomes = [...new Set(H.map(t => t.motoboy_entregou || t.motoboy_retirou).filter(Boolean))].sort();
+      $('hMotoboy').innerHTML = '<option value="">Todos</option>' + nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
+      montarHistorico();
+    }
     function montarHistorico() {
-      if (!D) return;
-      const st = $('fStatus').value, b = $('fBusca').value.trim().toUpperCase();
-      const L = (D.transferencias || []).filter(t => (!st || t.status === st) && (!b || [t.numero, t.motoboy_retirou, t.motoboy_entregou, t.enviado_por, t.recebido_por].join(' ').toUpperCase().includes(b)));
+      if (!H) return;
+      const st = $('hStatus').value, mot = $('hMotoboy').value, num = $('hNumero').value.trim().toUpperCase();
+      const L = H.filter(t => (!st || t.status === st) && (!mot || (t.motoboy_entregou || t.motoboy_retirou) === mot) && (!num || String(t.numero).toUpperCase().includes(num)));
+      $('hResumo').innerText = `${L.length} transferência(s) · ${L.filter(t => t.status === 'RECEBIDA').length} recebida(s) · ${L.filter(t => t.status === 'CANCELADA').length} cancelada(s)`;
+
       $('tbHistorico').innerHTML = L.map(t => {
         const s = STATUS[t.status] || [t.status, ''];
         const trocou = t.motoboy_entregou && t.motoboy_entregou !== t.motoboy_retirou;
@@ -154,22 +183,21 @@
           <td class="whitespace-nowrap"><b>${esc(t.origem)}</b> → <b>${esc(t.destino)}</b>${t.origem === D.loja ? ' <span class="text-[10px] text-slate-400">enviada</span>' : ' <span class="text-[10px] text-slate-400">recebida</span>'}</td>
           <td class="font-bold">${esc(t.numero)}</td>
           <td>${esc(t.motoboy_entregou || t.motoboy_retirou)}${trocou ? `<div class="text-[10.5px] text-amber-700">retirou: ${esc(t.motoboy_retirou)}</div>` : ''}</td>
-          <td>${esc(t.enviado_por)}<div class="text-[10.5px] text-slate-400">${esc(t.lancado_por)}</div></td>
+          <td class="text-[11.5px]">${esc(t.lancado_por)}<div class="text-[10.5px] text-slate-400">${dh(t.lancado_em)}</div></td>
           <td>${t.recebido_por ? `${esc(t.recebido_por)}<div class="text-[10.5px] text-slate-400">${dh(t.recebido_em)}${t.recebido_justificativa ? ' · pelo Supervisor: ' + esc(t.recebido_justificativa) : ''}</div>` : '-'}</td>
           <td><span class="px-1.5 py-0.5 rounded text-[10px] font-black ${s[1]}">${s[0]}</span>${t.cancelado_motivo ? `<div class="text-[10.5px] text-slate-500 mt-0.5">${esc(t.cancelado_motivo)} · ${esc(t.cancelado_por)}</div>` : ''}</td></tr>`;
-      }).join('') || '<tr><td colspan="7" class="text-center text-slate-400 py-6">Nenhuma transferência.</td></tr>';
+      }).join('') || '<tr><td colspan="7" class="text-center text-slate-400 py-6">Nenhuma transferência finalizada no período.</td></tr>';
     }
 
     async function lancar() {
       const p = { data_hora: $('tDataHora').value ? new Date($('tDataHora').value).toISOString() : null, destino: $('tDestino').value,
-                  numero: $('tNumero').value.trim(), motoboy_id: $('tMotoboy').value, enviado_por: $('tEnviadoPor').value.trim() };
+                  numero: $('tNumero').value.trim(), motoboy_id: $('tMotoboy').value };
       if (!p.data_hora) return alert('Informe a data e a hora da saída.');
       if (!p.destino) return alert('Escolha a loja de destino.');
       if (!p.numero) return alert('Informe o número da transferência (ou o que foi levado, ex.: PÃO).');
       if (!p.motoboy_id) return alert('Escolha o motoboy que retirou.');
-      if (letras(p.enviado_por) < 3) return alert('Informe o nome de quem entregou os produtos ao motoboy.');
       const nomeMot = $('tMotoboy').selectedOptions[0].text;
-      if (!confirm(`Lançar a transferência?\n\nNº ${p.numero.toUpperCase()}\nLoja ${D.loja} → Loja ${p.destino}\nMotoboy: ${nomeMot}\nEntregou ao motoboy: ${p.enviado_por.toUpperCase()}\nSaída: ${dh(p.data_hora)}`)) return;
+      if (!confirm(`Lançar a transferência?\n\nNº ${p.numero.toUpperCase()}\nLoja ${D.loja} → Loja ${p.destino}\nMotoboy: ${nomeMot}\nSaída: ${dh(p.data_hora)}`)) return;
       const b = $('btnLancar'); b.disabled = true; b.innerText = 'Lançando...'; ocupado = true;
       const { error } = await _supabase.rpc('fn_transf_lancar', { p });
       b.disabled = false; b.innerText = 'Lançar transferência'; ocupado = false;

@@ -101,14 +101,14 @@
         <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-wrap items-end gap-3">
           <div><label class="lbl">De</label><input id="trIni" type="date" class="inp" onchange="carregarTransf()"></div>
           <div><label class="lbl">Até</label><input id="trFim" type="date" class="inp" onchange="carregarTransf()"></div>
-          <div><label class="lbl">Situação</label><select id="trStatus" class="inp" onchange="montarTransf()"><option value="">Todas</option><option value="ENVIADA">Aguardando a loja de destino</option><option value="RECEBIDA">Recebidas</option><option value="CANCELADA">Canceladas</option></select></div>
-          <div class="flex-1 min-w-[180px]"><label class="lbl">Busca</label><input id="trBusca" class="inp" placeholder="nº, motoboy, nome..." oninput="montarTransf()"></div>
+          <div><label class="lbl">Motoboy</label><select id="trMot" class="inp !w-56" onchange="montarTransf()"><option value="">Todos</option></select></div>
+          <div><label class="lbl">Nº da transferência</label><input id="trNum" class="inp !w-44 uppercase" placeholder="ex.: 123456" oninput="montarTransf()" autocomplete="off"></div>
           <span id="trResumo" class="text-[11px] text-slate-500 pb-2"></span>
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
           <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto">
-            <div class="px-4 pt-4 pb-2"><h3 class="font-black text-sm text-slate-800">Por motoboy (só recebidas)</h3><div class="text-[11px] text-slate-500">paga ao motoboy que entregou · valor da cidade da loja de origem · entra no fechamento da quinzena</div></div>
-            <table class="tb w-full"><thead><tr><th>Motoboy</th><th class="num">Transf.</th><th class="num">Valor</th></tr></thead><tbody id="tbTrMot"></tbody></table>
+            <div class="px-4 pt-4 pb-2"><h3 class="font-black text-sm text-slate-800">Por motoboy</h3><div class="text-[11px] text-slate-500">só a confirmada é paga (ao motoboy que entregou) · valor da cidade da loja de origem · entra no fechamento da quinzena</div></div>
+            <table class="tb w-full"><thead><tr><th>Motoboy</th><th class="num">Confirmadas</th><th class="num">A pagar</th><th class="num">Pendentes</th></tr></thead><tbody id="tbTrMot"></tbody></table>
           </div>
           <div class="space-y-4">
             <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
@@ -129,8 +129,13 @@
             <div id="trFormAcesso" class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2"></div>
           </div>
         </div>
+        <div class="bg-white border border-amber-300 rounded-xl shadow-sm overflow-auto max-h-[60vh]">
+          <div class="px-4 pt-4 pb-2"><h3 class="font-black text-sm text-slate-800">⏳ Pendentes de confirmação <span id="trQtdPend" class="ml-1 text-[11px] text-amber-700"></span></h3><div class="text-[11px] text-slate-500">ainda não são pagas · todas as pendentes, de qualquer data · a quinzena não fecha com pendente no período</div></div>
+          <table class="tb w-full"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Motoboy que retirou</th><th>Lançado por</th><th class="text-right">Supervisor</th></tr></thead><tbody id="tbTrPend"></tbody></table>
+        </div>
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto max-h-[75vh]">
-          <table class="tb w-full"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Motoboy</th><th>Entregou ao motoboy</th><th>Recebeu</th><th>Situação</th><th class="num">Valor</th><th class="text-right">Supervisor</th></tr></thead><tbody id="tbTransf"></tbody></table>
+          <div class="px-4 pt-4 pb-2"><h3 class="font-black text-sm text-slate-800">✓ Confirmadas e canceladas no período</h3></div>
+          <table class="tb w-full"><thead><tr><th>Saída</th><th>De → Para</th><th>Nº</th><th>Motoboy</th><th>Lançado por</th><th>Recebeu</th><th>Situação</th><th class="num">Valor</th><th class="text-right">Supervisor</th></tr></thead><tbody id="tbTransf"></tbody></table>
         </div>
         <details class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
           <summary class="font-black text-xs text-slate-800 cursor-pointer">Histórico (lançamentos, confirmações, cancelamentos, valores, acessos e lista de motoboys)</summary>
@@ -542,31 +547,44 @@
     }
     function montarTransf() {
       if (!TRD) return;
-      const st = $('trStatus').value, b = $('trBusca').value.trim().toUpperCase();
       const nm = id => id ? (motoboy(id).nome_pdf || motoboy(id).nome_alpha7 || '-') : '-';
-      const L = TRD.transferencias.filter(t => (!st || t.status === st) && (!b || [t.numero, nm(t.motoboy_retirou_id), nm(t.motoboy_entregou_id), t.enviado_por, t.recebido_por, t.lancado_por].join(' ').toUpperCase().includes(b)));
-      const rec = TRD.transferencias.filter(t => t.status === 'RECEBIDA'), pend = TRD.transferencias.filter(t => t.status === 'ENVIADA');
-      $('trResumo').innerHTML = `${rec.length} recebida(s) · <b class="${pend.length ? 'text-amber-700' : ''}">${pend.length} aguardando</b> · ${rs(rec.reduce((t, x) => t + Number(x.valor || 0), 0))}`;
-      const por = new Map(); rec.forEach(t => { const r = por.get(t.motoboy_entregou_id) || { q: 0, v: 0 }; r.q++; r.v += Number(t.valor || 0); por.set(t.motoboy_entregou_id, r); });
-      $('tbTrMot').innerHTML = [...por.entries()].sort((a, c) => c[1].v - a[1].v).map(([id, r]) => `<tr><td class="font-bold">${esc(nm(id))}</td><td class="num">${r.q}</td><td class="num font-black">${rs(r.v)}</td></tr>`).join('')
-        || '<tr><td colspan="3" class="text-center text-slate-400 py-4">Nenhuma transferência recebida no período.</td></tr>';
+      const quem = t => t.motoboy_entregou_id || t.motoboy_retirou_id;
+      const selM = $('trMot').value, ids = [...new Set(TRD.transferencias.map(quem))].sort((a, c) => nm(a).localeCompare(nm(c)));
+      $('trMot').innerHTML = '<option value="">Todos</option>' + ids.map(id => `<option value="${id}" ${id === selM ? 'selected' : ''}>${esc(nm(id))}</option>`).join('');
+      const num = $('trNum').value.trim().toUpperCase();
+      const filtro = t => (!selM || quem(t) === selM) && (!num || String(t.numero).toUpperCase().includes(num));
+      const T = TRD.transferencias.filter(filtro);
+      const ini = $('trIni').value, fim = $('trFim').value, noPer = t => { const d = new Date(t.data_hora); const x = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; return x >= ini && x <= fim; };
+      const pend = T.filter(t => t.status === 'ENVIADA'), fin = T.filter(t => t.status !== 'ENVIADA'), rec = fin.filter(t => t.status === 'RECEBIDA');
+      const pendPer = pend.filter(noPer);
+      $('trResumo').innerHTML = `<b class="text-emerald-700">${rec.length} confirmada(s) · ${rs(rec.reduce((t, x) => t + Number(x.valor || 0), 0))}</b> · <b class="${pend.length ? 'text-amber-700' : ''}">${pend.length} pendente(s)</b>${pend.length !== pendPer.length ? ` (${pendPer.length} no período)` : ''}`;
+      const por = new Map(), pega = id => { if (!por.has(id)) por.set(id, { q: 0, v: 0, p: 0 }); return por.get(id); };
+      rec.forEach(t => { const r = pega(t.motoboy_entregou_id); r.q++; r.v += Number(t.valor || 0); });
+      pendPer.forEach(t => { pega(t.motoboy_retirou_id).p++; });
+      $('tbTrMot').innerHTML = [...por.entries()].sort((a, c) => c[1].v - a[1].v || c[1].p - a[1].p).map(([id, r]) => `<tr><td class="font-bold">${esc(nm(id))}</td><td class="num">${r.q || '-'}</td><td class="num font-black">${r.q ? rs(r.v) : '-'}</td><td class="num ${r.p ? 'text-amber-700 font-bold' : 'text-slate-400'}">${r.p || '-'}</td></tr>`).join('')
+        || '<tr><td colspan="4" class="text-center text-slate-400 py-4">Nenhuma transferência no período.</td></tr>';
       const lista = D.motoboys.filter(m => m.ativo && m.faz_transferencia);
-      $('tbTransf').innerHTML = L.map(t => {
-        const s = { ENVIADA: ['aguardando', 'bg-amber-100 text-amber-800'], RECEBIDA: ['✓ recebida', 'bg-emerald-100 text-emerald-800'], CANCELADA: ['cancelada', 'bg-slate-200 text-slate-600'] }[t.status] || [t.status, ''];
+      const deTo = t => { const ec = t.cidade_destino && t.cidade !== t.cidade_destino;
+        return `<td class="whitespace-nowrap"><b>${esc(t.origem)}</b> → <b>${esc(t.destino)}</b><div class="text-[10px] ${ec ? 'text-amber-700 font-bold' : 'text-slate-400'}">${nomeCidade(t.cidade)}${ec ? ' → ' + nomeCidade(t.cidade_destino) : ''}</div></td>`; };
+      const lanc = t => `<td class="text-[11.5px]">${esc(t.lancado_por)}<div class="text-[10.5px] text-slate-400">${dh(t.lancado_em)}</div></td>`;
+      $('trQtdPend').innerText = pend.length ? `(${pend.length})` : '';
+      $('tbTrPend').innerHTML = pend.map(t => `<tr class="${noPer(t) ? '' : 'bg-amber-50/40'}"><td class="whitespace-nowrap">${dh(t.data_hora)}${noPer(t) ? '' : '<div class="text-[10px] text-amber-700">fora do período</div>'}</td>${deTo(t)}
+          <td class="font-bold">${esc(t.numero)}</td><td>${esc(nm(t.motoboy_retirou_id))}</td>${lanc(t)}
+          <td class="text-right whitespace-nowrap"><select id="trm_${t.id}" class="inp !w-40 !py-1 !text-[11px] mb-1">${lista.map(m => `<option value="${m.id}" ${m.id === t.motoboy_retirou_id ? 'selected' : ''}>${esc(m.nome_pdf || m.nome_alpha7)}</option>`).join('')}</select><br>
+            <button onclick="receberTransf('${t.id}')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer">Confirmar no lugar</button>
+            <button onclick="cancelarTransf('${t.id}')" class="px-2 py-1 bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded text-[11px] font-bold cursor-pointer">Cancelar</button></td></tr>`).join('')
+        || '<tr><td colspan="6" class="text-center text-slate-400 py-5">Nenhuma transferência pendente de confirmação.</td></tr>';
+      $('tbTransf').innerHTML = fin.map(t => {
+        const s = { RECEBIDA: ['✓ confirmada', 'bg-emerald-100 text-emerald-800'], CANCELADA: ['cancelada', 'bg-slate-200 text-slate-600'] }[t.status] || [t.status, ''];
         const trocou = t.motoboy_entregou_id && t.motoboy_entregou_id !== t.motoboy_retirou_id, fechada = !!t.quinzena_id;
-        const entreCidades = t.cidade_destino && t.cidade !== t.cidade_destino;
-        return `<tr class="${t.status === 'CANCELADA' ? 'opacity-60' : ''}"><td class="whitespace-nowrap">${dh(t.data_hora)}</td>
-          <td class="whitespace-nowrap"><b>${esc(t.origem)}</b> → <b>${esc(t.destino)}</b><div class="text-[10px] ${entreCidades ? 'text-amber-700 font-bold' : 'text-slate-400'}">${nomeCidade(t.cidade)}${entreCidades ? ' → ' + nomeCidade(t.cidade_destino) : ''}</div></td>
+        return `<tr class="${t.status === 'CANCELADA' ? 'opacity-60' : ''}"><td class="whitespace-nowrap">${dh(t.data_hora)}</td>${deTo(t)}
           <td class="font-bold">${esc(t.numero)}</td>
-          <td>${esc(nm(t.motoboy_entregou_id || t.motoboy_retirou_id))}${trocou ? `<div class="text-[10.5px] text-amber-700">retirou: ${esc(nm(t.motoboy_retirou_id))}</div>` : ''}</td>
-          <td>${esc(t.enviado_por)}<div class="text-[10.5px] text-slate-400">${esc(t.lancado_por)} · ${dh(t.lancado_em)}</div></td>
+          <td>${esc(nm(quem(t)))}${trocou ? `<div class="text-[10.5px] text-amber-700">retirou: ${esc(nm(t.motoboy_retirou_id))}</div>` : ''}</td>${lanc(t)}
           <td>${t.recebido_por ? `${esc(t.recebido_por)}<div class="text-[10.5px] text-slate-400">${esc(t.recebido_registro_por || '')} · ${dh(t.recebido_em)}</div>${t.recebido_justificativa ? `<div class="text-[10.5px] text-amber-700">pelo Supervisor: ${esc(t.recebido_justificativa)}</div>` : ''}` : '-'}</td>
           <td><span class="px-1.5 py-0.5 rounded text-[10px] font-black ${s[1]}">${s[0]}</span>${fechada ? '<div class="text-[10px] text-emerald-700">quinzena fechada</div>' : ''}${t.cancelado_motivo ? `<div class="text-[10.5px] text-slate-500 mt-0.5">${esc(t.cancelado_motivo)} · ${esc(t.cancelado_por)}</div>` : ''}</td>
           <td class="num">${t.status === 'RECEBIDA' ? (t.valor == null ? '<span class="text-rose-700 font-bold">sem valor</span>' : brl(t.valor)) : '-'}</td>
-          <td class="text-right whitespace-nowrap">${fechada || t.status === 'CANCELADA' ? '' : `${t.status === 'ENVIADA' ? `<select id="trm_${t.id}" class="inp !w-36 !py-1 !text-[11px] mb-1">${lista.map(m => `<option value="${m.id}" ${m.id === t.motoboy_retirou_id ? 'selected' : ''}>${esc(m.nome_pdf || m.nome_alpha7)}</option>`).join('')}</select><br>
-              <button onclick="receberTransf('${t.id}')" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer">Confirmar no lugar</button> ` : ''}
-            <button onclick="cancelarTransf('${t.id}')" class="px-2 py-1 bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded text-[11px] font-bold cursor-pointer">Cancelar</button>`}</td></tr>`;
-      }).join('') || '<tr><td colspan="9" class="text-center text-slate-400 py-6">Nenhuma transferência no período.</td></tr>';
+          <td class="text-right whitespace-nowrap">${fechada || t.status === 'CANCELADA' ? '' : `<button onclick="cancelarTransf('${t.id}')" class="px-2 py-1 bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded text-[11px] font-bold cursor-pointer">Cancelar</button>`}</td></tr>`;
+      }).join('') || '<tr><td colspan="9" class="text-center text-slate-400 py-6">Nenhuma transferência confirmada ou cancelada no período.</td></tr>';
 
       const cid = [...new Set(D.lojas.filter(l => l.cidade && (l.periodicidade || 'QUINZENAL') !== 'SEMANAL').map(l => l.cidade))].sort();
       $('trValores').innerHTML = cid.map(c => { const v = TRD.valores.find(x => x.cidade === c);
@@ -590,7 +608,7 @@
         if (h.acao === 'ACESSO_LOJA') return `Loja ${esc(d.loja)} · ${esc(d.email)}${d.email_antigo && d.email_antigo !== d.email ? ' (era ' + esc(d.email_antigo) + ')' : ''}${d.ativo === false ? ' · inativo' : ''}`;
         if (h.acao === 'MOTOBOY_LISTA') return `${esc(nm(d.motoboy_id))}: ${d.na_lista ? 'entrou na lista' : 'saiu da lista'}`;
         const t = TRD.transferencias.find(x => x.id === h.transf_id); const ref = t ? `Nº ${esc(t.numero)} (${esc(t.origem)} → ${esc(t.destino)})` : '';
-        if (h.acao === 'LANCOU') return `${ref} · motoboy ${esc(nm(d.motoboy_id))} · entregou: ${esc(d.enviado_por)}`;
+        if (h.acao === 'LANCOU') return `${ref} · motoboy ${esc(nm(d.motoboy_id))}`;
         if (h.acao === 'RECEBEU' || h.acao === 'RECEBEU_PELO_SUPERVISOR') return `${ref} · recebeu: ${esc(d.recebido_por)} · motoboy ${esc(nm(d.motoboy_entregou_id))}${d.motoboy_trocado ? ' (outro motoboy)' : ''}${d.justificativa ? ' · ' + esc(d.justificativa) : ''}`;
         if (h.acao === 'CANCELOU') return `${ref} · ${esc(d.motivo)}`;
         return ref; };

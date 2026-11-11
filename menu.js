@@ -158,7 +158,7 @@
     document.documentElement.classList.add('menu-on');
     document.getElementById('menuSair').onclick = async () => {
       try { if (window.ACESSO_CLI) await window.ACESSO_CLI.auth.signOut(); } catch (e) {}
-      try { localStorage.removeItem('usuario_drogarema'); } catch (e) {}
+      try { localStorage.removeItem('usuario_drogarema'); sessionStorage.removeItem('abas_sistema'); } catch (e) {}
       location.replace('login.html');
     };
     const ativo = aside.querySelector('a.it.on'); if (ativo && ativo.scrollIntoView) ativo.scrollIntoView({ block: 'nearest' });
@@ -561,6 +561,35 @@
 
   // Marketing (regra de 28/10/2026): bolhas no menu e aviso fixo enquanto houver algo para abrir, dar ciência ou responder.
   // Líder: comunicados sem ciência, enquetes, respostas do Marketing. Marketing: pedidos sem resposta / vencendo / atrasados e mensagens novas.
+  // transferências entre lojas (GO3, 11/11/2026): loja vê janela ao abrir o sistema com o que chegou para confirmar;
+  // bolha no menu para a loja (Transferências) e para Supervisor/Gestor (Motoboys: total pendente, vermelho se há pendente de mais de 1 dia)
+  async function avisosTransferencias(abrirJanela) {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['TRANSFERENCIA', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window) return;
+    let r; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_transf_pendentes'); if (error || !data) return; r = data; } catch (e) { return; }
+    const bolha = (tela, n, cor) => { const it = document.querySelector(`#menuSistema a.it[data-menu="${tela}"]`); if (!it) return; let b = it.querySelector('.bolha.transf');
+      if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'bolha transf'; it.appendChild(b); } b.style.background = cor; b.style.color = '#fff'; b.textContent = n;
+      const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto'); };
+    if (pf !== 'TRANSFERENCIA') { bolha('motoboys.html', r.pendentes || 0, r.antigas ? '#dc2626' : '#B54708'); return; }
+    const ch = r.chegando || [];
+    bolha('transferencias.html', ch.length, '#dc2626');
+    if (!abrirJanela || !ch.length || document.getElementById('transfPopup')) return;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const m = document.createElement('div'); m.id = 'transfPopup';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
+      <div style="font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.04em">📥 Transferências chegando na Loja ${esc(r.loja)}</div>
+      <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${ch.length} transferência(s) aguardando a confirmação de recebimento</div>
+      <div style="font-size:13px;color:#475569;margin:6px 0 12px">Confirme assim que os produtos chegarem, com o nome de quem recebeu. O motoboy só recebe pela transferência confirmada.</div>
+      <div style="border:1px solid #fde68a;border-radius:10px;overflow:hidden;margin-bottom:14px">${ch.map(t => `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:8px 10px;border-top:1px solid #fef3c7;font-size:13px">
+        <b>Nº ${esc(t.numero)}</b><span>da Loja ${esc(t.origem)}</span><span style="color:#475569">${esc(t.motoboy || '')}</span><span style="margin-left:auto;color:#64748b;font-size:12px">${new Date(t.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span></div>`).join('')}</div>
+      <button type="button" data-ir style="width:100%;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:13px;cursor:pointer;background:#059669;color:#fff">Confirmar recebimento agora</button>
+      <div style="text-align:center;margin-top:8px"><button type="button" data-depois style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">lembrar depois</button></div></div>`;
+    m.querySelector('[data-depois]').onclick = () => m.remove();
+    m.querySelector('[data-ir]').onclick = () => { m.remove(); if (PAGINA !== 'transferencias.html') location.href = 'transferencias.html'; };
+    document.body.appendChild(m);
+  }
+
   async function avisosMarketing() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'MARKETING', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('marketing_pedidos.html')) return;
@@ -731,8 +760,14 @@
 
     const nativa = { chave: PAGINA + location.search, url: PAGINA + location.search, titulo: nomeTela(PAGINA) || document.title.replace(/\s*-\s*Business\s*$/, ''), nativa: true };
     let lista = [nativa], ativa = nativa;
-    try { (JSON.parse(sessionStorage.getItem('abas_sistema') || '[]') || []).forEach(t => { if (t && t.url && chaveUrl(t.url) !== nativa.chave ) lista.push({ chave: chaveUrl(t.url), url: t.url, titulo: t.titulo }); }); } catch (e) {}
-    const salvar = () => { try { sessionStorage.setItem('abas_sistema', JSON.stringify(lista.filter(t => !t.nativa).map(t => ({ url: t.url, titulo: t.titulo })))); } catch (e) {} };
+    // (11/11/2026) abas guardadas com o e-mail de quem abriu: outro usuário no mesmo navegador não herda as abas,
+    // e só volta aba de tela que o perfil atual pode abrir
+    const EU = String(window.ACESSO.email || '').toLowerCase();
+    const telaDe = u => { try { return (new URL(u, location.href).pathname.split('/').pop() || 'index.html').toLowerCase(); } catch (e) { return ''; } };
+    try { const g = JSON.parse(sessionStorage.getItem('abas_sistema') || 'null');
+      if (g && !Array.isArray(g) && g.email === EU) (g.abas || []).forEach(t => { if (t && t.url && chaveUrl(t.url) !== nativa.chave && (String(window.ACESSO.perfil || '').toUpperCase() === 'GESTOR' || telas.has(telaDe(t.url)))) lista.push({ chave: chaveUrl(t.url), url: t.url, titulo: t.titulo }); });
+      else sessionStorage.removeItem('abas_sistema'); } catch (e) {}
+    const salvar = () => { try { sessionStorage.setItem('abas_sistema', JSON.stringify({ email: EU, abas: lista.filter(t => !t.nativa).map(t => ({ url: t.url, titulo: t.titulo })) })); } catch (e) {} };
     const esc2 = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
     function desenhar() {
@@ -789,6 +824,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

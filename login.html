@@ -17,6 +17,7 @@
     (async () => {
       // chegando pelo link do e-mail de recuperação (ou com erro do link): fica no login para definir a senha nova (28/10/2026)
       if (/type=recovery|error=|error_code=/.test(location.hash + location.search)) return;
+      try { sessionStorage.removeItem('abas_sistema'); } catch (e) { }   // (11/11/2026) abas abertas não passam para o próximo usuário
       if (!localStorage.getItem('usuario_drogarema')) return;
       try {
         const c = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
