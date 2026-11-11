@@ -610,7 +610,9 @@
     } else {
       const ped = (r.pedidos_sem_resposta || 0) + (r.mensagens_novas || 0) + (pf === 'GESTOR' ? (r.patrocinios || 0) : 0);
       if (pf !== 'SUPERVISOR') bolha('marketing_pedidos.html', ped, r.pedidos_atrasados ? '#dc2626' : '#B54708');
-      bolha('marketing_comunicados.html', (r.comunicados_novos || 0) + (r.lojas_sem_abrir || 0) + (r.lojas_sem_executar || 0), r.lojas_sem_executar ? '#dc2626' : '#B54708');
+      // (GO6) a bolha mostra quantos COMUNICADOS têm pendência (não quantas lojas); no Supervisor já inclui o que ele não leu
+      bolha('marketing_comunicados.html', r.comunicados_pendentes != null ? r.comunicados_pendentes + (pf === 'MARKETING' ? (r.comunicados_novos || 0) : 0)
+        : (r.comunicados_novos || 0) + (r.lojas_sem_abrir || 0) + (r.lojas_sem_executar || 0), r.lojas_sem_executar ? '#dc2626' : '#B54708');
       if (r.lojas_sem_executar && pf !== 'GESTOR') { linhas.push(`${r.lojas_sem_executar} loja(s) ainda não abriram o link/arquivo dos comunicados`); destino = 'marketing_comunicados.html'; }
       if (pf === 'MARKETING') {
         if (r.pedidos_atrasados) linhas.push(`${r.pedidos_atrasados} pedido(s) com prazo VENCIDO`);

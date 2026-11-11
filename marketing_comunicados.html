@@ -48,6 +48,12 @@
         </div>
         <div class="grid sm:grid-cols-3 gap-3 text-xs">
           <div><label class="lbl">Vale até (opcional)</label><input type="date" id="nVal" class="inp font-mono"></div>
+          <div><label class="lbl">Repetir a janela nas lojas</label><select id="nRep" class="inp">
+            <option value="">Padrão: todo dia até o "Vale até" (sem data: até a ciência)</option>
+            <option value="0">Uma vez só (até a ciência)</option>
+            <option value="3">Todo dia por 3 dias</option><option value="5">Todo dia por 5 dias</option><option value="7">Todo dia por 7 dias</option>
+            <option value="15">Todo dia por 15 dias</option><option value="30">Todo dia por 30 dias</option></select>
+            <div class="text-[10.5px] text-slate-400 mt-0.5">A janela volta a cada dia até a loja dar ciência naquele dia. Nunca passa do "Vale até".</div></div>
           <label class="flex items-center gap-2 pt-5"><input type="checkbox" id="nCien" checked> exigir ciência das lojas</label>
         </div>
         <div><label class="lbl">Anexos (artes, fotos, PDF, vídeo) · até 50 MB cada</label><input type="file" id="nArq" multiple class="text-xs"></div>
@@ -145,7 +151,7 @@
         const tipo = $('nTipo').value, todas = $('dTodas').checked;
         const lj = [...document.querySelectorAll('.dLoja:checked')].map(c => c.value);
         const p = { tipo, titulo: $('nTit').value, texto: $('nTxt').value, para_todas: todas, lojas: lj, para_supervisor: !!($('dSup') && $('dSup').checked), para_marketing: !!($('dMkt') && $('dMkt').checked),
-          validade_ate: $('nVal').value, exige_ciencia: $('nCien').checked };
+          validade_ate: $('nVal').value, exige_ciencia: $('nCien').checked, popup_dias: $('nRep').value };
         if (tipo === 'ENQUETE') p.enquete = { opcoes: [...document.querySelectorAll('.opc')].map(i => i.value.trim()).filter(Boolean), multipla: $('nMult').checked, comentario: $('nCom').checked, encerra_em: $('nEnc').value || null };
         const destinos = todas ? 'todas as lojas' : lj.length + ' loja(s)';
         if (!confirm(`Enviar "${p.titulo}" para ${destinos}${p.para_supervisor ? ' + supervisor' : ''}${p.para_marketing ? ' + Marketing' : ''}?`)) return;
