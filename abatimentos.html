@@ -138,7 +138,7 @@
     const PARC = { PREVISTA: ['a lançar', 'bg-white border border-slate-300 text-slate-600'], LANCADA: ['lançada', 'bg-emerald-50 border border-emerald-300 text-emerald-800'], CANCELADA: ['cancelada', 'bg-slate-100 text-slate-400 line-through'] };
 
     let perfil = null, minhaLoja = null, meuEmail = '', aba = null, compAberta = null;
-    let lojas = [], funcs = [], abats = [], parcelas = [], hist = [], tipoNovo = 'VENCIDO', atual = null, abertos = new Set();
+    let lojas = [], funcs = [], abats = [], parcelas = [], hist = [], retPend = [], tipoNovo = 'VENCIDO', atual = null, abertos = new Set();
     const rh = () => ['RH', 'GESTOR'].includes(perfil);
     const podeSolicitar = () => ['SUPERVISOR', 'FINANCEIRO', 'RH', 'GESTOR'].includes(perfil);
     const nomeLoja = id => (lojas.find(l => l.id === id) || {}).nome_loja || '-';
@@ -176,7 +176,7 @@
         : [['novo', '➕ Novo abatimento'], ['lista', '📋 Minhas solicitações']];
       $('abas').innerHTML = abas.map(([k, t]) => `<button data-aba="${k}" onclick="trocarAba('${k}')" class="aba pb-2 text-xs font-bold cursor-pointer">${t} <span id="q_${k}" class="hidden ml-1 bg-amber-400 text-amber-950 px-1.5 rounded-full text-[10px]"></span></button>`).join('');
       atualizarBadges();
-      const pend = abats.filter(a => a.status === 'PENDENTE_LIDER').length;
+      const pend = abats.filter(a => a.status === 'PENDENTE_LIDER').length + retPend.length;
       trocarAba(perfil === 'LIDER' && !pend ? 'lista' : abas[0][0]);
     }
 
@@ -188,9 +188,12 @@
       ]);
       if (ra.error) { $('aviso').innerText = 'Não foi possível carregar. Recarregue a página; se continuar, avise o administrador. Detalhe: ' + traduzirErro(ra.error.message); $('aviso').classList.remove('hidden'); }
       abats = ra.data || []; parcelas = rp.data || []; hist = rhis.data || [];
+      // conferências de retaguarda com falta que ainda esperam a ciência do líder (o abatimento nasce com a ciência) — 12/11/2026
+      retPend = [];
+      try { const { data: rd } = await _supabase.rpc('fn_ret_dados'); retPend = ((rd && rd.conferencias) || []).filter(c => c.status === 'AGUARDANDO_CIENCIA' && Number(c.diferenca) < 0); } catch (e) { }
     }
     function atualizarBadges() {
-      const pend = abats.filter(a => a.status === 'PENDENTE_LIDER').length;
+      const pend = abats.filter(a => a.status === 'PENDENTE_LIDER').length + retPend.length;
       const el = $('q_aprovar'); if (el) { el.innerText = pend; el.classList.toggle('hidden', !pend); }
     }
 
@@ -268,8 +271,17 @@
       const tot = lista.reduce((s, a) => s + parseFloat(a.valor_total), 0);
       const desc = parcelas.filter(p => p.status === 'LANCADA' && lista.some(a => a.id === p.abatimento_id)).reduce((s, p) => s + parseFloat(p.valor), 0);
       $('lblTotais').innerHTML = `${lista.length} abatimento(s) · total ${fmtR(tot)} · já lançado em folha ${fmtR(desc)}${compAberta ? ` · competência aberta <b>${compAberta}</b>` : ''}`;
-      $('lista').innerHTML = lista.length ? lista.map(card).join('')
-        : `<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">${aba === 'aprovar' ? '🎉 Nenhum abatimento aguardando aprovação.' : 'Nenhum abatimento.'}</div>`;
+      // etapa anterior: retaguarda conferida, aguardando a ciência do líder (ainda não é abatimento)
+      const rp = (!st || st === 'PENDENTE_LIDER') && (!tp || tp === 'RETAGUARDA') ? retPend.filter(c => !lj || c.loja_id === lj) : [];
+      const blocoRet = rp.length ? `<div class="bg-yellow-50 border-2 border-dashed border-yellow-300 rounded-xl p-3 space-y-2">
+          <div class="text-xs font-extrabold text-yellow-900">💰 Retaguarda · aguardando a ciência do líder <span class="font-normal">(o abatimento nasce quando o líder der ciência da conferência)</span></div>
+          ${rp.map(c => `<div class="bg-white border border-yellow-200 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 items-center text-[12.5px]">
+            <b>${esc(c.loja)}</b><span>Conferência nº ${c.numero} · ${new Date(c.conferido_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+            <span class="text-rose-700 font-extrabold">falta ${fmtR(-c.diferenca)}</span><span class="text-slate-500">lançada por ${esc(c.conferido_por)}</span>
+            <span class="ml-auto flex items-center gap-2"><span class="text-[11px] font-bold text-slate-600">1 ✓ conferido → <span class="text-amber-700">2 ⏳ ciência do líder</span> → <span class="text-slate-400">3 desconto (líder aprova aqui)</span></span>
+            <a href="retaguarda.html" class="px-2 py-1 rounded-md bg-yellow-400 text-yellow-950 text-[11px] font-extrabold">${perfil === 'LIDER' ? 'Dar ciência' : 'Abrir'}</a></span></div>`).join('')}</div>` : '';
+      $('lista').innerHTML = blocoRet + (lista.length ? lista.map(card).join('')
+        : `<div class="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 text-sm">${aba === 'aprovar' ? (rp.length ? 'Nenhum abatimento aguardando aprovação.' : '🎉 Nenhum abatimento aguardando aprovação.') : 'Nenhum abatimento.'}</div>`);
     }
 
     function card(a) {

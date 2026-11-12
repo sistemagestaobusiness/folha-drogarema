@@ -67,7 +67,7 @@
             <button onclick="carregar()" class="btn bg-slate-800 text-white">Buscar</button>
           </div>
         </div>
-        <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Nº</th><th>Data</th><th>Loja</th><th class="text-right">Valor da loja</th><th class="text-right">Contado</th><th class="text-right">Diferença</th><th>Conferido por</th><th>Ciência do líder</th><th>Abatimento</th><th></th></tr></thead><tbody id="tbHist"></tbody></table></div>
+        <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Nº</th><th>Data</th><th>Loja</th><th class="text-right">Valor da loja</th><th class="text-right">Contado</th><th class="text-right">Diferença</th><th>Conferido por</th><th>Andamento</th><th></th></tr></thead><tbody id="tbHist"></tbody></table></div>
         <details class="border-t border-slate-100">
           <summary class="px-4 py-2.5 text-xs font-bold text-slate-600 cursor-pointer">Histórico de alterações do valor da retaguarda</summary>
           <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Data</th><th>Loja</th><th class="text-right">De</th><th class="text-right">Para</th><th>Motivo</th><th>Alterado por</th><th>Ciência do líder</th></tr></thead><tbody id="tbValHist"></tbody></table></div>
@@ -146,8 +146,9 @@
 
     function renderPend() {
       const confs = D.conferencias.filter(c => c.status === 'AGUARDANDO_CIENCIA');
+      const descPend = D.conferencias.filter(c => c.status === 'CIENTE' && c.abatimento_status === 'PENDENTE_LIDER');
       const vals = D.historico_valor.filter(h => !h.ciencia_em);
-      $('boxPend').classList.toggle('hidden', !confs.length && !vals.length);
+      $('boxPend').classList.toggle('hidden', !confs.length && !vals.length && !descPend.length);
       const lider = perfil === 'LIDER', gestor = perfil === 'GESTOR';
       $('tituloPend').innerText = lider ? '✍ Sua ciência é necessária (vale como a sua assinatura)' : '✍ Aguardando a ciência do líder';
       const cards = confs.map(c => {
@@ -158,6 +159,7 @@
         return `<div class="bg-white border border-amber-200 rounded-xl p-3 flex flex-wrap gap-3 items-center justify-between">
           <div class="text-sm"><div class="font-extrabold">Conferência nº ${c.numero} · ${esc(c.loja)} · ${dh(c.conferido_em)}</div>
             <div class="text-slate-600">Valor da loja <b class="font-mono">${brl(c.valor_esperado)}</b> · contado <b class="font-mono">${brl(c.valor_conferido)}</b> · ${difHtml(c.diferenca)}</div>
+            <div class="text-[12px] mt-0.5">${etapas(c)}</div>
             <div class="text-[11px] text-slate-500">Conferido por ${esc(c.conferido_por)} (${esc(c.conferido_perfil)})${c.obs ? ' · ' + esc(c.obs) : ''}</div>
             ${falta && lider ? `<div class="text-[11px] text-rose-700 font-bold mt-1">A falta de ${brl(-c.diferenca)} vai para Abatimentos: lá você escolhe de quem e em quantas parcelas será descontado.</div>` : ''}</div>
           <div class="flex gap-2 flex-wrap">${acoes}</div></div>`;
@@ -168,7 +170,28 @@
             <div class="text-[11px] text-slate-500">Motivo: ${esc(h.motivo)}</div></div>
           <div class="flex gap-2">${lider ? `<button onclick="cienciaValor('${h.id}')" class="btn !py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white">✍ Estou ciente do novo valor</button>`
             : gestor ? `<button onclick="cienciaValor('${h.id}', true)" class="btn bg-white border border-slate-300 text-slate-700">ciência no lugar do líder</button>` : '<span class="text-[11px] text-slate-400">aguardando o líder</span>'}</div></div>`);
-      $('listaPend').innerHTML = cards.concat(cardsV).join('');
+      const cardsD = descPend.map(c => `<div class="bg-white border border-rose-200 rounded-xl p-3 flex flex-wrap gap-3 items-center justify-between">
+          <div class="text-sm"><div class="font-extrabold">Conferência nº ${c.numero} · ${esc(c.loja)} · desconto de ${brl(-c.diferenca)} aguardando o líder aprovar</div>
+            <div class="text-slate-600">${etapas(c)}</div>
+            <div class="text-[11px] text-slate-500">Ciência de ${esc(c.ciencia_nome)} em ${dh(c.ciencia_em)} · abatimento #${c.abatimento_numero}: o líder escolhe de quem e em quantas parcelas</div></div>
+          <a href="abatimentos.html" class="btn !py-2.5 bg-rose-600 hover:bg-rose-700 text-white">${lider ? '✅ Aprovar o desconto' : 'Abrir Abatimentos'}</a></div>`);
+      $('listaPend').innerHTML = cards.concat(cardsD, cardsV).join('');
+    }
+
+    // andamento: 1 conferido (Financeiro/Supervisor) → 2 ciência do líder → 3 desconto aprovado pelo líder (Abatimentos) → 4 em folha / concluído
+    const ABAT_TXT = { PENDENTE_LIDER: ['⏳', 'aguardando o líder aprovar o desconto', 'text-amber-700'], APROVADO: ['✓', 'aprovado · parcelas entrando na folha', 'text-sky-700'],
+      CONCLUIDO: ['✓', 'descontado (concluído)', 'text-emerald-700'], RECUSADO: ['✕', 'desconto recusado', 'text-rose-700'], CANCELADO: ['⊘', 'desconto cancelado', 'text-slate-500'] };
+    function etapas(c, linhas) {
+      const ok = (t, cls) => `<span class="${cls || 'text-emerald-700'} font-bold">${t}</span>`, sep = linhas ? '<br>' : ' → ';
+      const e = [ok('1 ✓ conferido')];
+      if (c.status === 'AGUARDANDO_CIENCIA') e.push(ok('2 ⏳ ciência do líder', 'text-amber-700'));
+      else e.push(ok(`2 ✓ ciência ${esc(c.ciencia_nome || '')}`) + (linhas ? `<span class="text-[10px] text-slate-500"> ${dh(c.ciencia_em)}${c.ciencia_forcada ? ' · Gestor no lugar do líder' : ''}</span>` : ''));
+      if (Number(c.diferenca) < 0) {
+        if (!c.abatimento_numero) e.push(ok('3 desconto (após a ciência)', 'text-slate-400'));
+        else { const t = ABAT_TXT[c.abatimento_status] || ['', c.abatimento_status, 'text-slate-600'];
+          e.push(`<a href="abatimentos.html" class="${t[2]} font-bold underline">3 ${t[0]} abatimento #${c.abatimento_numero} · ${t[1]}</a>`); }
+      } else if (c.status === 'CIENTE') e.push(ok(Number(c.diferenca) > 0 ? '3 sem desconto (sobrou)' : '3 sem desconto', 'text-slate-500'));
+      return `<span class="text-[11.5px] leading-5">${e.join(sep)}</span>`;
     }
 
     function renderLojas() {
@@ -189,12 +212,12 @@
         const st = c.status === 'CANCELADA' ? `<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-600 text-[11px] font-bold">cancelada</span><div class="text-[10px] text-slate-500">${esc(c.cancelado_motivo || '')}</div>`
           : c.status === 'CIENTE' ? `<span class="text-emerald-700 font-bold text-[12px]">✍ ${esc(c.ciencia_nome)}</span><div class="text-[10px] text-slate-500">${dh(c.ciencia_em)}${c.ciencia_forcada ? ' · Gestor no lugar do líder: ' + esc(c.ciencia_obs || '') : ''}</div>`
           : '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-bold">aguardando ciência</span>';
-        const ab = c.abatimento_numero ? `<a href="abatimentos.html" class="text-indigo-700 font-bold underline">#${c.abatimento_numero}</a><div class="text-[10px] text-slate-500">${esc(c.abatimento_status || '')}</div>` : '-';
+        const ab = '';
         return `<tr class="${c.status === 'CANCELADA' ? 'opacity-60' : ''}"><td class="font-mono">${c.numero}</td><td class="whitespace-nowrap">${dh(c.conferido_em)}</td><td>${esc(c.loja)}</td>
           <td class="num">${brl(c.valor_esperado)}</td><td class="num font-bold">${brl(c.valor_conferido)}</td><td class="num">${difHtml(c.diferenca)}</td>
-          <td>${esc(c.conferido_por)}<div class="text-[10px] text-slate-500">${esc(c.conferido_perfil)}${c.obs ? ' · ' + esc(c.obs) : ''}</div></td><td>${st}</td><td>${ab}</td>
+          <td>${esc(c.conferido_por)}<div class="text-[10px] text-slate-500">${esc(c.conferido_perfil)}${c.obs ? ' · ' + esc(c.obs) : ''}</div></td><td>${c.status === 'CANCELADA' ? st : etapas(c, true)}</td>
           <td>${c.status !== 'CANCELADA' ? `<button onclick="imprimir('${c.id}')" class="btn bg-white border border-slate-300 text-slate-600 !px-2" title="Imprimir protocolo">🖨</button>` : ''}</td></tr>`;
-      }).join('') || '<tr><td colspan="10" class="text-center text-slate-400 py-6">Nenhuma conferência no período.</td></tr>';
+      }).join('') || '<tr><td colspan="9" class="text-center text-slate-400 py-6">Nenhuma conferência no período.</td></tr>';
       const hv = D.historico_valor.filter(h => !fl || h.loja_id === fl);
       $('tbValHist').innerHTML = hv.map(h => `<tr><td class="whitespace-nowrap">${dh(h.alterado_em)}</td><td>${esc(h.loja)}</td><td class="num">${brl(h.valor_anterior)}</td><td class="num font-bold">${brl(h.valor_novo)}</td>
         <td>${esc(h.motivo)}</td><td>${esc(h.alterado_por)}</td><td>${h.ciencia_em ? `<span class="text-emerald-700 font-bold">✍ ${esc(h.ciencia_nome)}</span><div class="text-[10px] text-slate-500">${dh(h.ciencia_em)}${h.ciencia_forcada ? ' · Gestor no lugar do líder' : ''}</div>` : '<span class="text-amber-700 font-bold text-[11px]">aguardando</span>'}</td></tr>`).join('')
