@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conferência de retaguarda - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 3px; }
+    .inp { width: 100%; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 9px; font-size: 14px; }
+    .inp:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+    .tb th { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; text-align: left; padding: 7px 8px; background: #f8fafc; }
+    .tb td { padding: 7px 8px; border-top: 1px solid #f1f5f9; font-size: 12.5px; vertical-align: top; }
+    .num { font-family: ui-monospace, monospace; text-align: right; white-space: nowrap; }
+    .btn { border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 800; cursor: pointer; }
+    #protocolo { display: none; }
+    @media print {
+      body > *:not(#protocolo) { display: none !important; }
+      #protocolo { display: block !important; font-family: Arial, sans-serif; color: #000; }
+      html.menu-on body { padding-left: 0 !important; }
+    }
+  </style>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">💰 Conferência de retaguarda</h1>
+        <p class="text-xs text-slate-500">O dinheiro de retaguarda é responsabilidade do líder. O Financeiro ou o Supervisor contam junto com o líder e lançam o valor; o líder dá ciência no sistema (vale como assinatura). Se faltar dinheiro, a diferença vai para Abatimentos e o líder escolhe de quem e em quantas parcelas.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="carregar()" class="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold cursor-pointer">↻ Atualizar</button>
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <!-- pendências de ciência -->
+      <div id="boxPend" class="hidden bg-amber-50 border-2 border-amber-300 rounded-2xl p-4">
+        <div class="text-sm font-extrabold text-amber-900 mb-2" id="tituloPend">✍ Aguardando a ciência do líder</div>
+        <div id="listaPend" class="space-y-2"></div>
+      </div>
+
+      <!-- lojas -->
+      <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
+          <div class="text-sm font-extrabold text-slate-800">🏪 Valor da retaguarda por loja</div>
+          <div class="text-[11px] text-slate-500" id="dicaValor"></div>
+        </div>
+        <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Loja</th><th class="text-right">Valor da retaguarda</th><th>Última conferência</th><th></th></tr></thead><tbody id="tbLojas"></tbody></table></div>
+      </div>
+
+      <!-- histórico -->
+      <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-end flex-wrap gap-2">
+          <div class="text-sm font-extrabold text-slate-800">🗂 Histórico das conferências</div>
+          <div class="flex gap-2 items-end flex-wrap">
+            <div><label class="lbl">De</label><input type="date" id="hIni" class="inp !py-1 !text-xs"></div>
+            <div><label class="lbl">Até</label><input type="date" id="hFim" class="inp !py-1 !text-xs"></div>
+            <div><label class="lbl">Loja</label><select id="hLoja" class="inp !py-1 !text-xs !w-40" onchange="renderHist()"></select></div>
+            <button onclick="carregar()" class="btn bg-slate-800 text-white">Buscar</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Nº</th><th>Data</th><th>Loja</th><th class="text-right">Valor da loja</th><th class="text-right">Contado</th><th class="text-right">Diferença</th><th>Conferido por</th><th>Ciência do líder</th><th>Abatimento</th><th></th></tr></thead><tbody id="tbHist"></tbody></table></div>
+        <details class="border-t border-slate-100">
+          <summary class="px-4 py-2.5 text-xs font-bold text-slate-600 cursor-pointer">Histórico de alterações do valor da retaguarda</summary>
+          <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Data</th><th>Loja</th><th class="text-right">De</th><th class="text-right">Para</th><th>Motivo</th><th>Alterado por</th><th>Ciência do líder</th></tr></thead><tbody id="tbValHist"></tbody></table></div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- janela: lançar conferência -->
+  <div id="mConf" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3">
+      <div class="flex justify-between"><div class="text-base font-extrabold">💰 Lançar conferência · <span id="cLoja"></span></div><button onclick="fechar('mConf')" class="text-slate-400 text-xl cursor-pointer">×</button></div>
+      <div class="bg-slate-50 rounded-lg p-3 text-sm">Valor da retaguarda da loja: <b id="cEsperado" class="font-mono"></b></div>
+      <div><label class="lbl">Valor contado (R$) *</label><input type="text" inputmode="decimal" id="cValor" class="inp font-mono text-lg" placeholder="0,00" oninput="mostrarDif()"></div>
+      <div id="cDif" class="text-sm font-bold"></div>
+      <div><label class="lbl">Observação <span id="cObsObrig">(opcional)</span></label><textarea id="cObs" rows="2" class="inp uppercase" maxlength="300" placeholder="Ex.: contado junto com o líder Fulano"></textarea></div>
+      <div class="text-[11px] text-slate-500">Conte junto com o líder. Depois de lançar, o líder dá ciência no sistema (no login dele): a ciência vale como a assinatura do papel.</div>
+      <button id="btnConf" onclick="salvarConf()" class="w-full btn !py-3 bg-emerald-600 hover:bg-emerald-700 text-white">Lançar conferência</button>
+    </div>
+  </div>
+
+  <!-- janela: alterar valor -->
+  <div id="mValor" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3">
+      <div class="flex justify-between"><div class="text-base font-extrabold">✎ Valor da retaguarda · <span id="vLoja"></span></div><button onclick="fechar('mValor')" class="text-slate-400 text-xl cursor-pointer">×</button></div>
+      <div class="bg-slate-50 rounded-lg p-3 text-sm">Valor atual: <b id="vAtual" class="font-mono"></b></div>
+      <div><label class="lbl">Novo valor (R$) *</label><input type="text" inputmode="decimal" id="vValor" class="inp font-mono text-lg" placeholder="0,00"></div>
+      <div><label class="lbl">Motivo da alteração * (mínimo 10 letras)</label><textarea id="vMotivo" rows="2" class="inp uppercase" maxlength="300" placeholder="Ex.: valor definido em reunião com o líder"></textarea></div>
+      <div class="text-[11px] text-slate-500">A alteração fica no histórico e o líder da loja precisa dar ciência do novo valor.</div>
+      <button id="btnValor" onclick="salvarValor()" class="w-full btn !py-3 bg-indigo-600 hover:bg-indigo-700 text-white">Salvar valor</button>
+    </div>
+  </div>
+
+  <div id="protocolo"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const dh = ts => ts ? new Date(ts).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+    const brl = v => v == null ? '-' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const letras = t => String(t || '').replace(/[^A-Za-zÀ-ÿ]/g, '').length;
+    const pad = n => String(n).padStart(2, '0');
+    const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const lerValor = s => { s = String(s || '').trim().replace(/\s|R\$/g, ''); if (!s) return null; if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); const v = Number(s); return isFinite(v) ? Math.round(v * 100) / 100 : NaN; };
+    const difHtml = d => { d = Number(d || 0); if (Math.abs(d) < 0.005) return '<span class="text-emerald-700 font-bold">✓ conferido</span>';
+      return d < 0 ? `<span class="text-rose-700 font-extrabold">faltou ${brl(-d)}</span>` : `<span class="text-sky-700 font-bold">sobrou ${brl(d)}</span>`; };
+    const fechar = id => $(id).classList.add('hidden');
+
+    let D = null, perfil = '', email = '', ocupado = false, atual = null;
+    const podeConferir = () => ['FINANCEIRO', 'SUPERVISOR', 'GESTOR'].includes(perfil);
+    const podeValor = () => ['FINANCEIRO', 'GESTOR'].includes(perfil);
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      $('lblUsuario').innerText = (user.email || '').toLowerCase();
+      const hoje = new Date(); const ini = new Date(hoje); ini.setMonth(ini.getMonth() - 6);
+      $('hIni').value = iso(ini); $('hFim').value = iso(hoje);
+      await carregar();
+    }
+
+    async function carregar() {
+      const { data, error } = await _supabase.rpc('fn_ret_dados', { p_ini: $('hIni').value || null, p_fim: $('hFim').value || null });
+      if (error) { $('aviso').innerText = error.message; $('aviso').classList.remove('hidden'); $('conteudo').classList.add('hidden'); return; }
+      D = data; perfil = D.perfil; email = D.email;
+      $('lblPerfil').innerText = perfil; $('aviso').classList.add('hidden'); $('conteudo').classList.remove('hidden');
+      $('dicaValor').innerText = podeValor() ? 'Financeiro e Gestor alteram o valor (com motivo); o líder dá ciência.' : 'Valor definido pelo Financeiro.';
+      const sel = $('hLoja'), v = sel.value;
+      sel.innerHTML = '<option value="">Todas</option>' + D.lojas.map(l => `<option value="${l.loja_id}">${esc(l.nome)}</option>`).join('');
+      sel.value = v; if (perfil === 'LIDER') sel.parentElement.classList.add('hidden');
+      renderPend(); renderLojas(); renderHist();
+    }
+
+    function renderPend() {
+      const confs = D.conferencias.filter(c => c.status === 'AGUARDANDO_CIENCIA');
+      const vals = D.historico_valor.filter(h => !h.ciencia_em);
+      $('boxPend').classList.toggle('hidden', !confs.length && !vals.length);
+      const lider = perfil === 'LIDER', gestor = perfil === 'GESTOR';
+      $('tituloPend').innerText = lider ? '✍ Sua ciência é necessária (vale como a sua assinatura)' : '✍ Aguardando a ciência do líder';
+      const cards = confs.map(c => {
+        const falta = Number(c.diferenca) < 0;
+        const acoes = lider ? `<button onclick="ciencia('${c.id}', ${falta})" class="btn !py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white">✍ Conferi junto e dou ciência</button>`
+          : `${gestor ? `<button onclick="ciencia('${c.id}', ${falta}, true)" class="btn bg-white border border-slate-300 text-slate-700">ciência no lugar do líder</button>` : ''}
+             ${(gestor || c.conferido_email === email) ? `<button onclick="cancelar('${c.id}')" class="btn bg-white border border-rose-300 text-rose-700">cancelar</button>` : ''}`;
+        return `<div class="bg-white border border-amber-200 rounded-xl p-3 flex flex-wrap gap-3 items-center justify-between">
+          <div class="text-sm"><div class="font-extrabold">Conferência nº ${c.numero} · ${esc(c.loja)} · ${dh(c.conferido_em)}</div>
+            <div class="text-slate-600">Valor da loja <b class="font-mono">${brl(c.valor_esperado)}</b> · contado <b class="font-mono">${brl(c.valor_conferido)}</b> · ${difHtml(c.diferenca)}</div>
+            <div class="text-[11px] text-slate-500">Conferido por ${esc(c.conferido_por)} (${esc(c.conferido_perfil)})${c.obs ? ' · ' + esc(c.obs) : ''}</div>
+            ${falta && lider ? `<div class="text-[11px] text-rose-700 font-bold mt-1">A falta de ${brl(-c.diferenca)} vai para Abatimentos: lá você escolhe de quem e em quantas parcelas será descontado.</div>` : ''}</div>
+          <div class="flex gap-2 flex-wrap">${acoes}</div></div>`;
+      });
+      const cardsV = vals.map(h => `<div class="bg-white border border-indigo-200 rounded-xl p-3 flex flex-wrap gap-3 items-center justify-between">
+          <div class="text-sm"><div class="font-extrabold">Valor da retaguarda alterado · ${esc(h.loja)} · ${dh(h.alterado_em)}</div>
+            <div class="text-slate-600">De <b class="font-mono">${brl(h.valor_anterior)}</b> para <b class="font-mono">${brl(h.valor_novo)}</b> · por ${esc(h.alterado_por)}</div>
+            <div class="text-[11px] text-slate-500">Motivo: ${esc(h.motivo)}</div></div>
+          <div class="flex gap-2">${lider ? `<button onclick="cienciaValor('${h.id}')" class="btn !py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white">✍ Estou ciente do novo valor</button>`
+            : gestor ? `<button onclick="cienciaValor('${h.id}', true)" class="btn bg-white border border-slate-300 text-slate-700">ciência no lugar do líder</button>` : '<span class="text-[11px] text-slate-400">aguardando o líder</span>'}</div></div>`);
+      $('listaPend').innerHTML = cards.concat(cardsV).join('');
+    }
+
+    function renderLojas() {
+      $('tbLojas').innerHTML = D.lojas.map(l => `<tr>
+        <td class="font-bold">${esc(l.nome)}</td>
+        <td class="num font-bold">${l.valor == null ? '<span class="text-amber-700">não cadastrado</span>' : brl(l.valor)}</td>
+        <td>${l.ultima ? dh(l.ultima) : '<span class="text-slate-400">nenhuma</span>'}</td>
+        <td class="text-right whitespace-nowrap">
+          ${podeConferir() && l.valor != null ? `<button onclick="abrirConf('${l.loja_id}')" class="btn bg-emerald-600 hover:bg-emerald-700 text-white">💰 Lançar conferência</button>` : ''}
+          ${podeValor() ? `<button onclick="abrirValor('${l.loja_id}')" class="btn bg-white border border-slate-300 text-slate-700">✎ ${l.valor == null ? 'cadastrar valor' : 'alterar valor'}</button>` : ''}
+        </td></tr>`).join('') || '<tr><td colspan="4" class="text-center text-slate-400 py-6">Nenhuma loja.</td></tr>';
+    }
+
+    function renderHist() {
+      const fl = $('hLoja').value;
+      const rows = D.conferencias.filter(c => !fl || c.loja_id === fl);
+      $('tbHist').innerHTML = rows.map(c => {
+        const st = c.status === 'CANCELADA' ? `<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-600 text-[11px] font-bold">cancelada</span><div class="text-[10px] text-slate-500">${esc(c.cancelado_motivo || '')}</div>`
+          : c.status === 'CIENTE' ? `<span class="text-emerald-700 font-bold text-[12px]">✍ ${esc(c.ciencia_nome)}</span><div class="text-[10px] text-slate-500">${dh(c.ciencia_em)}${c.ciencia_forcada ? ' · Gestor no lugar do líder: ' + esc(c.ciencia_obs || '') : ''}</div>`
+          : '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-bold">aguardando ciência</span>';
+        const ab = c.abatimento_numero ? `<a href="abatimentos.html" class="text-indigo-700 font-bold underline">#${c.abatimento_numero}</a><div class="text-[10px] text-slate-500">${esc(c.abatimento_status || '')}</div>` : '-';
+        return `<tr class="${c.status === 'CANCELADA' ? 'opacity-60' : ''}"><td class="font-mono">${c.numero}</td><td class="whitespace-nowrap">${dh(c.conferido_em)}</td><td>${esc(c.loja)}</td>
+          <td class="num">${brl(c.valor_esperado)}</td><td class="num font-bold">${brl(c.valor_conferido)}</td><td class="num">${difHtml(c.diferenca)}</td>
+          <td>${esc(c.conferido_por)}<div class="text-[10px] text-slate-500">${esc(c.conferido_perfil)}${c.obs ? ' · ' + esc(c.obs) : ''}</div></td><td>${st}</td><td>${ab}</td>
+          <td>${c.status !== 'CANCELADA' ? `<button onclick="imprimir('${c.id}')" class="btn bg-white border border-slate-300 text-slate-600 !px-2" title="Imprimir protocolo">🖨</button>` : ''}</td></tr>`;
+      }).join('') || '<tr><td colspan="10" class="text-center text-slate-400 py-6">Nenhuma conferência no período.</td></tr>';
+      const hv = D.historico_valor.filter(h => !fl || h.loja_id === fl);
+      $('tbValHist').innerHTML = hv.map(h => `<tr><td class="whitespace-nowrap">${dh(h.alterado_em)}</td><td>${esc(h.loja)}</td><td class="num">${brl(h.valor_anterior)}</td><td class="num font-bold">${brl(h.valor_novo)}</td>
+        <td>${esc(h.motivo)}</td><td>${esc(h.alterado_por)}</td><td>${h.ciencia_em ? `<span class="text-emerald-700 font-bold">✍ ${esc(h.ciencia_nome)}</span><div class="text-[10px] text-slate-500">${dh(h.ciencia_em)}${h.ciencia_forcada ? ' · Gestor no lugar do líder' : ''}</div>` : '<span class="text-amber-700 font-bold text-[11px]">aguardando</span>'}</td></tr>`).join('')
+        || '<tr><td colspan="7" class="text-center text-slate-400 py-4">Nenhuma alteração.</td></tr>';
+    }
+
+    function abrirConf(id) {
+      atual = D.lojas.find(l => l.loja_id === id); if (!atual) return;
+      $('cLoja').innerText = atual.nome; $('cEsperado').innerText = brl(atual.valor); $('cValor').value = ''; $('cObs').value = ''; mostrarDif();
+      $('mConf').classList.remove('hidden'); $('cValor').focus();
+    }
+    function mostrarDif() {
+      const v = lerValor($('cValor').value);
+      if (v == null || isNaN(v) || !atual) { $('cDif').innerHTML = ''; $('cObsObrig').innerText = '(opcional)'; return; }
+      const d = Math.round((v - Number(atual.valor)) * 100) / 100;
+      $('cDif').innerHTML = difHtml(d) + (d < 0 ? '<div class="text-[11px] text-rose-700 font-normal">Com a ciência do líder, a falta vai para Abatimentos (evento 3038, referência "retaguarda").</div>' : '');
+      $('cObsObrig').innerText = Math.abs(d) >= 0.005 ? '* (deu diferença)' : '(opcional)';
+    }
+    async function salvarConf() {
+      if (ocupado) return;
+      const v = lerValor($('cValor').value);
+      if (v == null || isNaN(v) || v < 0) return alert('Informe o valor contado.');
+      const d = Math.round((v - Number(atual.valor)) * 100) / 100, obs = $('cObs').value.trim();
+      if (Math.abs(d) >= 0.005 && letras(obs) < 5) return alert('Deu diferença: escreva uma observação (mínimo 5 letras).');
+      if (!confirm(`${atual.nome}: contado ${brl(v)} (valor da loja ${brl(atual.valor)}).\n${d < 0 ? 'FALTOU ' + brl(-d) : d > 0 ? 'Sobrou ' + brl(d) : 'Sem diferença.'}\n\nLançar a conferência?`)) return;
+      ocupado = true; $('btnConf').disabled = true;
+      const { data, error } = await _supabase.rpc('fn_ret_conferir', { p_loja: atual.loja_id, p_valor: v, p_obs: obs });
+      ocupado = false; $('btnConf').disabled = false;
+      if (error) return alert(error.message);
+      fechar('mConf'); alert(`Conferência nº ${data} lançada. Agora o líder dá ciência no sistema.`); carregar();
+    }
+
+    function abrirValor(id) {
+      atual = D.lojas.find(l => l.loja_id === id); if (!atual) return;
+      $('vLoja').innerText = atual.nome; $('vAtual').innerText = atual.valor == null ? 'não cadastrado' : brl(atual.valor); $('vValor').value = ''; $('vMotivo').value = '';
+      $('mValor').classList.remove('hidden'); $('vValor').focus();
+    }
+    async function salvarValor() {
+      if (ocupado) return;
+      const v = lerValor($('vValor').value), mot = $('vMotivo').value.trim();
+      if (v == null || isNaN(v) || v < 0) return alert('Informe o valor.');
+      if (letras(mot) < 10) return alert('Informe o motivo (mínimo 10 letras).');
+      ocupado = true; $('btnValor').disabled = true;
+      const { error } = await _supabase.rpc('fn_ret_valor_salvar', { p_loja: atual.loja_id, p_valor: v, p_motivo: mot });
+      ocupado = false; $('btnValor').disabled = false;
+      if (error) return alert(error.message);
+      fechar('mValor'); carregar();
+    }
+
+    async function ciencia(id, falta, noLugar) {
+      if (ocupado) return;
+      const c = D.conferencias.find(x => x.id === id); let obs = null;
+      if (noLugar) {
+        obs = prompt('Ciência no lugar do líder: escreva a justificativa (mínimo 15 letras).'); if (obs == null) return;
+        if (letras(obs) < 15) return alert('Justificativa com no mínimo 15 letras.');
+      } else if (!confirm(`Conferência nº ${c.numero}: contado ${brl(c.valor_conferido)} (valor da loja ${brl(c.valor_esperado)}).\n\n` +
+          `Confirmo que conferi o valor junto com ${c.conferido_por}. Esta ciência vale como a minha assinatura.` +
+          (falta ? `\n\nA falta de ${brl(-c.diferenca)} vai para Abatimentos: lá eu escolho de quem e em quantas parcelas será descontado.` : ''))) return;
+      ocupado = true;
+      const { data, error } = await _supabase.rpc('fn_ret_ciencia', { p_id: id, p_obs: obs });
+      ocupado = false;
+      if (error) return alert(error.message);
+      if (data && data.abatimento) {
+        if (confirm(`Ciência registrada. Foi criado o abatimento #${data.abatimento} de ${brl(-data.diferenca)}.\n\nAbrir Abatimentos agora para escolher de quem e em quantas parcelas?`)) { location.href = 'abatimentos.html'; return; }
+      } else alert('Ciência registrada.');
+      carregar();
+    }
+    async function cienciaValor(id, noLugar) {
+      if (ocupado) return;
+      const h = D.historico_valor.find(x => x.id === id); let obs = null;
+      if (noLugar) { obs = prompt('Ciência no lugar do líder: escreva a justificativa (mínimo 15 letras).'); if (obs == null) return; if (letras(obs) < 15) return alert('Justificativa com no mínimo 15 letras.'); }
+      else if (!confirm(`Estou ciente de que o valor da retaguarda da ${h.loja} passou para ${brl(h.valor_novo)}.`)) return;
+      ocupado = true;
+      const { error } = await _supabase.rpc('fn_ret_valor_ciencia', { p_id: id, p_obs: obs });
+      ocupado = false;
+      if (error) return alert(error.message);
+      carregar();
+    }
+    async function cancelar(id) {
+      const mot = prompt('Motivo do cancelamento (mínimo 10 letras):'); if (mot == null) return;
+      if (letras(mot) < 10) return alert('Motivo com no mínimo 10 letras.');
+      const { error } = await _supabase.rpc('fn_ret_cancelar', { p_id: id, p_motivo: mot });
+      if (error) return alert(error.message);
+      carregar();
+    }
+
+    // protocolo impresso (substitui o papel, se precisar arquivar)
+    function imprimir(id) {
+      const c = D.conferencias.find(x => x.id === id); if (!c) return;
+      const linha = (a, b) => `<tr><td style="padding:6px 8px;border:1px solid #999;width:45%"><b>${a}</b></td><td style="padding:6px 8px;border:1px solid #999">${b}</td></tr>`;
+      $('protocolo').innerHTML = `<div style="max-width:720px;margin:0 auto">
+        <h2 style="margin:0 0 4px">Protocolo de conferência — RETAGUARDA</h2><div style="font-size:12px;margin-bottom:12px">Nº ${c.numero} · emitido em ${dh(new Date().toISOString())}</div>
+        <table style="border-collapse:collapse;width:100%;font-size:13px">${linha('Loja', esc(c.loja))}${linha('Data da conferência', dh(c.conferido_em))}
+          ${linha('Valor da retaguarda da loja', brl(c.valor_esperado))}${linha('Valor conferido', brl(c.valor_conferido))}
+          ${linha('Diferença', Math.abs(c.diferenca) < 0.005 ? 'sem diferença' : (c.diferenca < 0 ? 'faltou ' : 'sobrou ') + brl(Math.abs(c.diferenca)))}
+          ${linha('Conferido por (Administrativo)', esc(c.conferido_por) + ' · ' + esc(c.conferido_perfil))}
+          ${linha('Ciência do líder (assinatura eletrônica)', c.ciencia_em ? esc(c.ciencia_nome) + ' em ' + dh(c.ciencia_em) + (c.ciencia_forcada ? ' (Gestor no lugar do líder)' : '') : 'AGUARDANDO')}
+          ${c.abatimento_numero ? linha('Abatimento gerado', '#' + c.abatimento_numero + ' (evento 3038 · retaguarda)') : ''}${c.obs ? linha('Observação', esc(c.obs)) : ''}</table>
+        <p style="font-size:12px;margin-top:14px">Fica estabelecido que qualquer diferença encontrada no valor da retaguarda, conferido pela loja juntamente com o Administrativo, será descontada em folha de pagamento da loja.</p></div>`;
+      window.print();
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

@@ -17,7 +17,7 @@
   const GRUPOS = [
     ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['aprovacoes_gestor.html', 'Aprovações do Gestor', '✅'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['contabilidade.html', 'Envio à contabilidade', '⇪'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
     ['Aprovações', [['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['cadastro_solicitacoes.html', 'Pedidos de cadastro', '☰'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑']]],
-    ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['noturno_lote.html', 'Adicional noturno', '☾'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
+    ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['noturno_lote.html', 'Adicional noturno', '☾'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'], ['retaguarda.html', 'Conferência de retaguarda', '$'],
       ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Consumo farmácia', '⇪']]],
     ['Jornada', [['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['freelance_solicitacao.html', 'Solicitações da loja', '✚']]],
     ['Fechar o mês', [['resumo_folha.html', 'Resumo da competência', '≡'], ['recibo_pagamento.html', 'Recibos', '▯'], ['holerite_entrega.html', 'Entrega de holerites', '✉']]],
@@ -590,6 +590,37 @@
     document.body.appendChild(m);
   }
 
+  // conferência de retaguarda (GR, 12/11/2026): o líder vê uma janela ao abrir o sistema enquanto houver conferência
+  // ou alteração do valor sem a ciência dele; bolha no menu para o líder e para Financeiro/Supervisor/Gestor (aguardando o líder)
+  async function avisosRetaguarda(abrirJanela) {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['LIDER', 'FINANCEIRO', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('retaguarda.html')) return;
+    let r; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_ret_pendentes'); if (error || !data) return; r = data; } catch (e) { return; }
+    const it = document.querySelector('#menuSistema a.it[data-menu="retaguarda.html"]');
+    const n = r.lider ? (r.conferencias || []).length + (r.valores || 0) : (r.aguardando || 0) + (r.valores || 0);
+    if (it) { let b = it.querySelector('.bolha.ret');
+      if (!n) { if (b) b.remove(); } else { if (!b) { b = document.createElement('span'); b.className = 'bolha ret'; it.appendChild(b); }
+        b.style.background = r.lider ? '#dc2626' : '#B54708'; b.style.color = '#fff'; b.textContent = n; const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto'); } }
+    if (!r.lider || !abrirJanela || !n || PAGINA === 'retaguarda.html' || document.getElementById('retPopup')) return;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const brl = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const cs = r.conferencias || [];
+    const m = document.createElement('div'); m.id = 'retPopup';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
+      <div style="font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.04em">💰 Conferência de retaguarda</div>
+      <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">Sua ciência é necessária</div>
+      <div style="font-size:13px;color:#475569;margin:6px 0 12px">A ciência no sistema vale como a sua assinatura no protocolo de conferência.</div>
+      ${cs.map(c => `<div style="border:1px solid #fde68a;border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:13px"><b>Conferência nº ${esc(c.numero)}</b> · ${new Date(c.conferido_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}<br>
+        Valor da loja ${brl(c.valor_esperado)} · contado <b>${brl(c.valor_conferido)}</b>${Number(c.diferenca) < 0 ? ` · <b style="color:#b91c1c">faltou ${brl(-c.diferenca)}</b>` : ''}<br><span style="color:#64748b;font-size:12px">conferido por ${esc(c.conferido_por)}</span></div>`).join('')}
+      ${r.valores ? `<div style="border:1px solid #c7d2fe;border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:13px">O valor da retaguarda da sua loja foi alterado: dê ciência do novo valor.</div>` : ''}
+      <button type="button" data-ir style="width:100%;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:13px;cursor:pointer;background:#059669;color:#fff;margin-top:6px">Abrir e dar ciência</button>
+      <div style="text-align:center;margin-top:8px"><button type="button" data-depois style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">lembrar depois</button></div></div>`;
+    m.querySelector('[data-depois]').onclick = () => m.remove();
+    m.querySelector('[data-ir]').onclick = () => { m.remove(); location.href = 'retaguarda.html'; };
+    document.body.appendChild(m);
+  }
+
   async function avisosMarketing() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'MARKETING', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('marketing_pedidos.html')) return;
@@ -826,6 +857,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); avisosRetaguarda(true); setInterval(() => avisosRetaguarda(false), 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

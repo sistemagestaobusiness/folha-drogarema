@@ -74,7 +74,7 @@
           <div><label class="lbl">Situação</label><select id="fStatus" onchange="renderLista()" class="inp !py-1.5">
             <option value="">Todas</option><option value="PENDENTE_LIDER">Aguardando líder</option><option value="APROVADO">Em andamento (parcelas a lançar)</option>
             <option value="CONCLUIDO">Concluído</option><option value="RECUSADO">Recusado</option><option value="CANCELADO">Cancelado</option></select></div>
-          <div><label class="lbl">Tipo</label><select id="fTipo" onchange="renderLista()" class="inp !py-1.5"><option value="">Todos</option><option value="VENCIDO">Produto vencido</option><option value="CAIXA">Fechamento de caixa</option><option value="OUTROS">Outros</option></select></div>
+          <div><label class="lbl">Tipo</label><select id="fTipo" onchange="renderLista()" class="inp !py-1.5"><option value="">Todos</option><option value="VENCIDO">Produto vencido</option><option value="CAIXA">Fechamento de caixa</option><option value="OUTROS">Outros</option><option value="RETAGUARDA">Retaguarda</option></select></div>
           <div id="boxFLoja"><label class="lbl">Loja</label><select id="fLoja" onchange="renderLista()" class="inp !py-1.5"></select></div>
           <div class="flex-1 min-w-[200px]"><label class="lbl">Busca</label><input id="fBusca" oninput="renderLista()" placeholder="nº, funcionário, justificativa..." class="inp !py-1.5"></div>
           <div id="lblTotais" class="text-[11px] text-slate-500 ml-auto"></div>
@@ -125,7 +125,8 @@
     const TIPOS = {
       VENCIDO: { txt: 'Produto vencido', ic: '💊', ev: '3037 · desconto medicamento vencido', cor: 'bg-rose-100 text-rose-800' },
       CAIXA:   { txt: 'Fechamento de caixa', ic: '💵', ev: '3038 · desconto fechamento de caixa', cor: 'bg-amber-100 text-amber-800' },
-      OUTROS:  { txt: 'Outros', ic: '📝', ev: '3039 · desconto outros', cor: 'bg-slate-200 text-slate-700' }
+      OUTROS:  { txt: 'Outros', ic: '📝', ev: '3039 · desconto outros', cor: 'bg-slate-200 text-slate-700' },
+      RETAGUARDA: { txt: 'Retaguarda', ic: '💰', ev: '3038 · desconto fechamento de caixa (retaguarda)', cor: 'bg-yellow-100 text-yellow-900' }   // gerado pela Conferência de retaguarda (GR, 12/11/2026)
     };
     const SIT = {
       PENDENTE_LIDER: { txt: '⏳ Aguardando líder', cls: 'bg-amber-100 text-amber-800' },
