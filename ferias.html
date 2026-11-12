@@ -94,16 +94,16 @@
       <div><label class="lbl">Funcionário *</label><select id="sFunc" onchange="carregarPeriodosModal()" class="inp font-bold"></select></div>
       <div><label class="lbl">Período aquisitivo</label><select id="sPeriodo" onchange="atualizarPrevia()" class="inp"></select><p id="sInfoPeriodo" class="text-[10px] text-slate-500 mt-1"></p></div>
       <div class="grid grid-cols-2 gap-2">
-        <div><label class="lbl">Início das férias *</label><input type="date" id="sInicio" onchange="atualizarPrevia()" class="inp font-mono"></div>
-        <div><label class="lbl">Dias de férias *</label><input type="number" id="sDias" min="5" max="30" value="30" oninput="atualizarPrevia()" class="inp font-mono"></div>
+        <div><label class="lbl">Início das férias *</label><input type="date" id="sInicio" onchange="montarDias(); atualizarPrevia()" class="inp font-mono"></div>
+        <div><label class="lbl">Dias de férias *</label><select id="sDias" onchange="atualizarPrevia()" class="inp font-mono font-bold"></select></div>
       </div>
-      <div class="flex flex-wrap gap-1" id="sAtalhos"></div>
       <div><label class="lbl">Vender dias (abono pecuniário)</label>
-        <select id="sAbono" onchange="atualizarPrevia()" class="inp"><option value="0">Não vender</option><option value="10">Vender 10 dias</option><option value="5">Vender 5 dias</option></select></div>
+        <select id="sAbono" onchange="montarDias(); atualizarPrevia()" class="inp"><option value="0">Não vender</option><option value="10">Vender 10 dias</option><option value="5">Vender 5 dias</option></select></div>
+      <div id="sInicioAviso" class="hidden rounded-lg p-3 bg-rose-50 border border-rose-300 text-rose-800 text-[11px] font-bold"></div>
       <div id="sPrevia" class="rounded-lg p-3 bg-sky-50 border border-sky-200 text-[11px]"></div>
       <div id="sEscala" class="hidden rounded-lg p-3 bg-white border border-slate-200 text-[11px] leading-snug space-y-1"></div>
       <div><label class="lbl">Observação</label><textarea id="sObs" rows="2" class="inp"></textarea></div>
-      <p class="text-[10px] text-slate-400">Regras CLT: até 3 períodos · um deles com pelo menos 14 dias · os demais com pelo menos 5 dias.</p>
+      <div class="text-[10px] text-slate-500 bg-slate-50 rounded-lg p-2 leading-snug"><b>Fracionamento (CLT):</b> até 3 períodos, com a concordância do funcionário · um dos períodos com no mínimo 14 dias corridos · os outros com no mínimo 5 dias corridos cada · não pode começar nos 2 dias antes de feriado ou da folga (repouso semanal) do funcionário. A lista de dias mostra só o que respeita essas regras.</div>
       <button onclick="enviarSolicitacao()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">ENVIAR SOLICITAÇÃO</button>
     </div>
   </div>
@@ -422,29 +422,90 @@
     function abrirSolicitar(funcId) {
       $('sFunc').innerHTML = funcs.map(f => `<option value="${f.id}">${esc(f.nome_registro)} · ${esc(nomeLoja(f.loja_id))}</option>`).join('');
       if (funcId) $('sFunc').value = funcId;
-      $('sInicio').value = ''; $('sDias').value = 30; $('sAbono').value = '0'; $('sObs').value = '';
-      $('sAtalhos').innerHTML = [30, 20, 15, 14, 10, 5].map(n => `<button type="button" onclick="document.getElementById('sDias').value=${n}; atualizarPrevia()" class="px-2 py-1 border border-slate-300 rounded text-[11px] font-bold cursor-pointer hover:bg-slate-50">${n} dias</button>`).join('');
+      $('sInicio').value = ''; $('sAbono').value = '0'; $('sObs').value = '';
       carregarPeriodosModal();
       $('mSolic').classList.remove('hidden');
     }
     function carregarPeriodosModal() {
-      const ps = periodos.filter(p => p.funcionario_id === $('sFunc').value && p.status === 'ABERTO' && p.saldo > 0);
+      // só períodos que ainda permitem férias em 2027 (vencem a partir de 05/01/2027); os anteriores são controle manual do RH
+      const ps = periodos.filter(p => p.funcionario_id === $('sFunc').value && p.status === 'ABERTO' && p.saldo > 0 && p.limite_gozo >= '2027-01-05');
       $('sPeriodo').innerHTML = ps.map(p => `<option value="${p.id}">${dbr(p.aquisitivo_inicio)} a ${dbr(p.aquisitivo_fim)} · saldo ${p.saldo} dia(s) · vence ${dbr(p.limite_gozo)}</option>`).join('') || '<option value="">Sem saldo disponível</option>';
+      $('sPeriodo').onchange = () => { montarDias(); atualizarPrevia(); };
+      montarDias(true);
       atualizarPrevia();
     }
+    // dias permitidos neste pedido (fracionamento CLT, regra do RH de 12/11/2026 — o banco confere a mesma regra):
+    // até 3 períodos; um com 14+ dias; os demais com 5+; o que sobrar do saldo tem de caber nos períodos que restam.
+    function opcoesDias(p, abono) {
+      if (!p) return [];
+      const partes = solic.filter(s => s.periodo_id === p.id && ativa(s) && s.status !== 'ESCALA');   // 2026 (só escala) não conta
+      const ant = Number(p.dias_gozados_anterior || 0);
+      const qtd = partes.length + (ant > 0 ? 1 : 0), maior = Math.max(0, ant, ...partes.map(s => Number(s.dias)));
+      const S = Number(p.saldo) - abono, resta = 3 - qtd - 1;
+      if (qtd >= 3 || S < 1) return [];
+      if (Number(p.dias_direito) < 14) return [S];   // direito reduzido por faltas: tudo de uma vez
+      const ok = [];
+      for (let d = S; d >= 5; d--) {
+        const R = S - d;
+        if (!(R === 0 || (resta >= 1 && R >= 5))) continue;
+        if (!(maior >= 14 || d >= 14 || (resta >= 1 && R >= 14))) continue;
+        ok.push(d);
+      }
+      return ok;
+    }
+    function montarDias(inicial) {
+      const p = periodos.find(x => x.id === $('sPeriodo').value), abono = parseInt($('sAbono').value, 10) || 0;
+      const ini = $('sInicio').value, escala = !!ini && ini < '2027-01-01';
+      $('sAbono').disabled = escala; if (escala) $('sAbono').value = '0';
+      // 2026: controle manual do RH, só para a escala (sem regra de fracionamento nem saldo)
+      const ant = parseInt($('sDias').value, 10), ops = escala ? Array.from({ length: 30 }, (_, k) => 30 - k) : opcoesDias(p, abono);
+      $('sDias').innerHTML = ops.length ? ops.map(d => `<option value="${d}">${d} dias${!escala && p && d === Number(p.saldo) - abono ? ' (todo o saldo)' : ''}</option>`).join('')
+        : `<option value="">${p && abono ? 'Sem opção com este abono' : 'Sem dias disponíveis'}</option>`;
+      if (!inicial && ops.includes(ant)) $('sDias').value = ant;
+    }
+    // início: não pode cair nos 2 dias antes de feriado ou da folga do funcionário (escala; sem escala, o domingo)
+    let inicioErro = null, inicioSeq = 0, feriadosTodos = null;
+    async function validarInicio() {
+      const box = $('sInicioAviso'), f = func($('sFunc').value), ini = $('sInicio').value, seq = ++inicioSeq;
+      inicioErro = null; box.classList.add('hidden');
+      if (!f.id || !ini || ini < '2027-01-01') return;   // 2026: só escala (controle manual do RH)
+      if (!feriadosTodos) { const { data } = await _supabase.from('feriados').select('data, nome, loja_id'); feriadosTodos = data || []; }
+      if (EC) { try { await EC.garantir(ini, addDias(ini, 2)); } catch (e) { } }
+      if (seq !== inicioSeq) return;
+      const motivos = [];
+      for (const k of [1, 2]) {
+        const d = addDias(ini, k);
+        const fer = feriadosTodos.find(x => String(x.data).slice(0, 10) === d && (!x.loja_id || x.loja_id === f.loja_id));
+        if (fer) { motivos.push(`${dbr(d)} é feriado (${fer.nome})`); continue; }
+        let folga = false, semEscala = true;
+        if (EC) { const r = EC.dia(f, d, { previsto: true }); if (r && !['SEM', 'FORA'].includes(r.tipo)) { semEscala = false; folga = r.tipo === 'FOLGA'; } }
+        if (semEscala) folga = new Date(d + 'T12:00:00').getDay() === 0;
+        if (folga) motivos.push(`${dbr(d)} é folga (repouso semanal)${semEscala ? ' — domingo; a escala do funcionário não está cadastrada' : ' na escala do funcionário'}`);
+      }
+      if (motivos.length) {
+        inicioErro = `Não pode iniciar as férias em ${dbr(ini)}: ${motivos.join(' e ')}. As férias não podem começar nos 2 dias antes de feriado ou da folga.`;
+        box.innerText = '⛔ ' + inicioErro; box.classList.remove('hidden');
+      }
+    }
+
     function atualizarPrevia() {
+      validarInicio();
       const p = periodos.find(x => x.id === $('sPeriodo').value);
       const ini = $('sInicio').value, dias = parseInt($('sDias').value, 10) || 0, abono = parseInt($('sAbono').value, 10) || 0;
       if (!p) { $('sPrevia').innerHTML = 'Este funcionário não tem saldo de férias disponível.'; return; }
-      const partes = solic.filter(s => s.periodo_id === p.id && ativa(s));
+      const partes = solic.filter(s => s.periodo_id === p.id && ativa(s) && s.status !== 'ESCALA');
       $('sInfoPeriodo').innerText = partes.length ? `Já programado: ${partes.map(s => `${dbr(s.data_inicio)} (${s.dias}d)`).join(', ')}` : '';
+      if (ini && ini < '2027-01-01') {   // 2026: controle manual do RH
+        $('sPrevia').innerHTML = `<b>${dbr(ini)} → ${dbr(addDias(ini, dias - 1))}</b> · ${dias} dia(s) · retorna em <b>${dbr(addDias(ini, dias))}</b>`
+          + '<div class="mt-1 text-sky-800">ℹ Férias que começam em 2026 são <b>controle manual do RH</b>: aqui entram só para a escala (saber quem está fora e quem precisa de freelance). Não usam o saldo do sistema.</div>';
+        impactoLoja(); return;
+      }
       const avisos = [];
       const antecipada = ini && p.aquisitivo_fim >= ini;   // costume da Drogarema: férias antes de completar os 12 meses
       if (dias + abono > p.saldo) avisos.push(`⚠ Saldo insuficiente: restam ${p.saldo} dia(s).`);
       if (dias < 5) avisos.push('⚠ Mínimo de 5 dias por período.');
       if (partes.length >= 2) avisos.push('⚠ Este seria o 3º (último) período permitido.');
       if (ini && addDias(ini, dias - 1) > p.limite_gozo) avisos.push(`⚠ Termina depois do vencimento (${dbr(p.limite_gozo)}): gera pagamento em dobro.`);
-      if (ini && [5, 6].includes(new Date(ini + 'T12:00:00').getDay())) avisos.push('⚠ A CLT não permite iniciar férias 2 dias antes de feriado ou do descanso semanal (evite sexta/sábado).');
       $('sPrevia').innerHTML = ini ? `<b>${dbr(ini)} → ${dbr(addDias(ini, dias - 1))}</b> · ${dias} dia(s)${abono ? ` + ${abono} vendidos` : ''} · retorna em <b>${dbr(addDias(ini, dias))}</b><br>Saldo após: ${p.saldo - dias - abono} dia(s)` : 'Informe o início.';
       if (antecipada) $('sPrevia').innerHTML += `<div class="mt-1 text-sky-800">ℹ <b>Férias antecipadas</b>: o período aquisitivo só completa 12 meses em ${dbr(p.aquisitivo_fim)}. É permitido (costume da empresa); os dias saem do saldo deste período.</div>`;
       if (avisos.length) $('sPrevia').innerHTML += `<div class="mt-1 text-amber-800 font-bold">${avisos.join('<br>')}</div>`;
@@ -489,6 +550,8 @@
     async function enviarSolicitacao() {
       if (!$('sPeriodo').value) return alert('Sem saldo disponível.');
       if (!$('sInicio').value) return alert('Informe o início.');
+      if (!$('sDias').value) return alert('Não há quantidade de dias permitida para este período (veja o saldo e as partes já programadas).');
+      await validarInicio(); if (inicioErro) return alert(inicioErro);
       const { error } = await _supabase.rpc('fn_ferias_solicitar', { p_funcionario: $('sFunc').value, p_periodo: $('sPeriodo').value, p_inicio: $('sInicio').value,
         p_dias: parseInt($('sDias').value, 10), p_abono: parseInt($('sAbono').value, 10) || 0, p_obs: $('sObs').value.trim() || null });
       if (error) return alert(error.message);
