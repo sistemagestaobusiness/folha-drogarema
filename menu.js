@@ -17,11 +17,11 @@
   const GRUPOS = [
     ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['aprovacoes_gestor.html', 'Aprovações do Gestor', '✅'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['contabilidade.html', 'Envio à contabilidade', '⇪'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
     ['Aprovações', [['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['cadastro_solicitacoes.html', 'Pedidos de cadastro', '☰'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑']]],
-    ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['noturno_lote.html', 'Adicional noturno', '☾'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'], ['retaguarda.html', 'Conferência de retaguarda', '$'],
+    ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['noturno_lote.html', 'Adicional noturno', '☾'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
       ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Consumo farmácia', '⇪']]],
     ['Jornada', [['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['freelance_solicitacao.html', 'Solicitações da loja', '✚']]],
     ['Fechar o mês', [['resumo_folha.html', 'Resumo da competência', '≡'], ['recibo_pagamento.html', 'Recibos', '▯'], ['holerite_entrega.html', 'Entrega de holerites', '✉']]],
-    ['Financeiro', [['financeiro.html', 'Pagamentos', '$'], ['fluxo_caixa.html', 'Fluxo de caixa', '≋'], ['fin_saldos.html', 'Saldos e aplicações', '▤'], ['conciliacao.html', 'Conciliação bancária', '⇄'], ['fin_importar.html', 'Importar Alpha7 · Financeiro', '⇪'], ['fin_base.html', 'Base do fluxo', '⚙']]],
+    ['Financeiro', [['financeiro.html', 'Pagamentos', '$'], ['fluxo_caixa.html', 'Fluxo de caixa', '≋'], ['fin_saldos.html', 'Saldos e aplicações', '▤'], ['conciliacao.html', 'Conciliação bancária', '⇄'], ['fin_importar.html', 'Importar Alpha7 · Financeiro', '⇪'], ['fin_base.html', 'Base do fluxo', '⚙'], ['retaguarda.html', 'Conferência de retaguarda', '$']]],
     ['Relatórios', [['relatorio_faltas.html', 'Relatório de faltas', '☷'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['relatorio_quinto_dia.html', 'Pagamento do 5º dia útil', '$']]],
     ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
     ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['organograma.html', 'Organograma', '⌂'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
@@ -755,15 +755,83 @@
     avisar(); setTimeout(avisar, 1500);
   }
 
+  // pesquisa de telas (GS, 12/11/2026): digita parte do nome (ex.: "ret", "conf ret", "adiant") e abre a tela.
+  // Lista só as telas do perfil (as mesmas do menu). Setas ↑↓ escolhem, Enter abre, Esc fecha; Ctrl+K vai para a pesquisa.
+  function buscaTelas(abrir) {
+    const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const esc3 = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const gestor = String(window.ACESSO.perfil || '').toUpperCase() === 'GESTOR';
+    const itens = [];
+    GRUPOS.forEach(([g, lst]) => lst.forEach(([arq, nome, ic]) => {
+      if (!telas.has(arq) || itens.some(x => x.arq === arq)) return;
+      const n = arq === 'pendencias.html' && gestor ? 'Central de pendências' : nome;
+      itens.push({ arq, nome: n, grupo: g || 'Início', ic, chave: norm(n + ' ' + (g || '') + ' ' + arq.replace('.html', '').replace(/_/g, ' ')) });
+    }));
+    const box = document.createElement('div'); box.id = 'buscaTela';
+    box.innerHTML = '<input type="text" placeholder="Pesquisar tela… (Ctrl+K)" autocomplete="off" spellcheck="false"><span class="lupa">🔍</span>';
+    const lst = document.createElement('div'); lst.id = 'buscaLista';
+    document.body.appendChild(box); document.body.appendChild(lst);
+    const inp = box.querySelector('input');
+    let res = [], sel = 0;
+    // cada pedaço digitado tem de aparecer no começo de alguma palavra (ex.: "conf ret" → Conferência de retaguarda)
+    const marcar = (txt, partes) => { let h = esc3(txt); partes.forEach(p => { if (!p) return; h = h.replace(new RegExp('(^|[\\s(·/-])(' + p.split('').map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('') + ')', 'i'), '$1<mark>$2</mark>'); }); return h; };
+    function filtrar() {
+      const q = norm(inp.value).trim(), partes = q.split(/\s+/).filter(Boolean);
+      if (!partes.length) { res = itens.slice(); }
+      else res = itens.map(it => {
+          const pal = it.chave.split(/[\s·/()-]+/).filter(Boolean);
+          let pts = 0;
+          for (const p of partes) { const k = pal.findIndex(w => w.startsWith(p)); if (k >= 0) pts += k < 3 ? 3 : 2; else if (it.chave.includes(p)) pts += 1; else return null; }
+          if (norm(it.nome).startsWith(partes[0])) pts += 3;
+          return { it, pts };
+        }).filter(Boolean).sort((a, b) => b.pts - a.pts || a.it.nome.localeCompare(b.it.nome)).map(x => x.it);
+      sel = 0; desenharLista(partes);
+    }
+    function desenharLista(partes) {
+      lst.innerHTML = (partes.length ? '' : '<div class="tit">Telas disponíveis no seu perfil</div>')
+        + (res.length ? res.map((it, k) => `<div class="r ${k === sel ? 'sel' : ''}" data-k="${k}"><i>${esc3(it.ic)}</i><div><div>${marcar(it.nome, partes)}</div><small>${esc3(it.grupo)}</small></div></div>`).join('')
+          : '<div class="vazio">Nenhuma tela encontrada no seu perfil.</div>');
+      lst.style.display = 'block';
+      const s = lst.querySelector('.r.sel'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'nearest' });
+    }
+    const fecharLista = () => { lst.style.display = 'none'; };
+    const ir = it => { if (!it) return; fecharLista(); inp.value = ''; inp.blur(); abrir(it.arq, it.nome); };
+    inp.addEventListener('input', filtrar);
+    inp.addEventListener('focus', filtrar);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (res.length) { sel = (sel + 1) % res.length; desenharLista(norm(inp.value).trim().split(/\s+/).filter(Boolean)); } }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (res.length) { sel = (sel - 1 + res.length) % res.length; desenharLista(norm(inp.value).trim().split(/\s+/).filter(Boolean)); } }
+      else if (e.key === 'Enter') { e.preventDefault(); ir(res[sel]); }
+      else if (e.key === 'Escape') { inp.value = ''; fecharLista(); inp.blur(); }
+    });
+    lst.addEventListener('mousedown', e => { const r = e.target.closest('.r'); if (r) { e.preventDefault(); ir(res[+r.dataset.k]); } });
+    document.addEventListener('mousedown', e => { if (!box.contains(e.target) && !lst.contains(e.target)) fecharLista(); });
+    document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); inp.focus(); inp.select(); } });
+    window.__buscaTelaFoco = () => { inp.focus(); inp.select(); };
+  }
+
   function abas() {
     const css2 = document.createElement('style');
     css2.textContent = `
-      #abasBar { position: fixed; top: 0; left: ${L}px; right: 0; height: 34px; z-index: 44; background: #E7E9EE; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; overflow-x: auto; overflow-y: hidden; font-family: inherit; scrollbar-width: none; }
+      #abasBar { position: fixed; top: 0; left: ${L}px; right: 290px; height: 34px; z-index: 44; background: #E7E9EE; display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; overflow-x: auto; overflow-y: hidden; font-family: inherit; scrollbar-width: none; }
       #abasBar::-webkit-scrollbar { display: none; }
       #abasBar.rola { padding: 0 30px; }
       .abasSeta { position: fixed; top: 0; height: 34px; width: 26px; z-index: 45; border: 0; background: #cbd5e1; color: #334155; font-weight: 800; font-size: 13px; cursor: pointer; display: none; }
       .abasSeta:hover { background: #94a3b8; color: #fff; }
-      #abasEsq { left: ${L}px; } #abasDir { right: 0; }
+      #abasEsq { left: ${L}px; } #abasDir { right: 290px; }
+      /* pesquisa de telas (GS, 12/11/2026): à direita das abas, só as telas do perfil */
+      #buscaTela { position: fixed; top: 0; right: 0; width: 290px; height: 34px; z-index: 46; background: #E7E9EE; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; }
+      #buscaTela input { width: 100%; height: 26px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 0 28px 0 9px; font-size: 12.5px; background: #fff; color: #0f172a; outline: none; font-family: inherit; }
+      #buscaTela input:focus { border-color: #c69560; box-shadow: 0 0 0 2px #f3e3cf; }
+      #buscaTela .lupa { position: absolute; right: 16px; top: 9px; font-size: 12px; color: #94a3b8; pointer-events: none; }
+      #buscaLista { position: fixed; top: 33px; right: 8px; width: 420px; max-width: calc(100vw - 16px); max-height: 60vh; overflow: auto; z-index: 99990; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 14px 34px rgba(15,23,42,.25); display: none; font-family: inherit; }
+      #buscaLista .r { display: flex; gap: 8px; align-items: center; padding: 8px 12px; font-size: 13px; color: #1e293b; cursor: pointer; border-left: 3px solid transparent; }
+      #buscaLista .r.sel { background: #f1f5f9; border-left-color: #c69560; }
+      #buscaLista .r i { font-style: normal; width: 18px; text-align: center; color: #64748b; }
+      #buscaLista .r small { color: #64748b; font-size: 11.5px; }
+      #buscaLista mark { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
+      #buscaLista .vazio { padding: 12px; font-size: 12.5px; color: #64748b; }
+      #buscaLista .tit { padding: 7px 12px 4px; font-size: 10.5px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
       html.menu-oculto #abasEsq { left: 54px; }
       html.menu-oculto #abasBar, html.menu-oculto #abasArea { left: 54px; }
       #abasBar .aba { display: flex; align-items: center; gap: 6px; max-width: 220px; height: 28px; padding: 0 6px 0 12px; border-radius: 8px 8px 0 0; background: #D5D9E0; color: #364152; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; user-select: none; }
@@ -775,7 +843,7 @@
       #abasArea { position: fixed; top: 34px; left: ${L}px; right: 0; bottom: 0; z-index: 43; background: #F4F5F7; display: none; }
       #abasArea iframe { width: 100%; height: 100%; border: 0; display: none; background: #F4F5F7; }
       html.com-abas body { margin-top: 34px !important; }
-      @media print { #abasBar, #abasArea { display: none !important; } html.com-abas body { margin-top: 0 !important; } }`;
+      @media print { #abasBar, #abasArea, #buscaTela, #buscaLista { display: none !important; } html.com-abas body { margin-top: 0 !important; } }`;
     document.head.appendChild(css2);
     const bar = document.createElement('div'); bar.id = 'abasBar';
     const area = document.createElement('div'); area.id = 'abasArea';
@@ -848,6 +916,7 @@
       const url = linkInterno(a); if (!url) return;
       e.preventDefault(); abrir(url, (a.textContent || '').trim());
     }, true);
+    buscaTelas(abrir);
     window.__abasSistema = {
       abrir,
       titulo: (win, tit) => { const t = lista.find(x => x.frame && x.frame.contentWindow === win); if (t && !nomeTela(t.chave.split('?')[0]) && tit) { t.titulo = tit.replace(/\s*-\s*Business\s*$/, ''); salvar(); desenhar(); } }
