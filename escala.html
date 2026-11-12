@@ -51,6 +51,7 @@
 
       <div id="painelRetiradas" class="noprint hidden"></div>
       <div id="avisoPadrao" class="noprint hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs"></div>
+      <div id="avisoAtestados" class="noprint hidden bg-pink-50 border border-pink-300 text-pink-900 rounded-xl p-3 text-xs"></div>
 
       <div id="legenda" class="noprint flex flex-wrap gap-2 text-[10px] font-bold">
         <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800">7:00 manhã</span>
@@ -106,6 +107,7 @@
         <div class="col-span-2"><label class="lbl">Trabalha na loja</label><select id="dLoja" class="inp"></select></div>
       </div>
       <div id="dBoxFeriado" class="hidden"></div>
+      <div id="dBoxAtestado" class="hidden"></div>
       <div><label class="lbl">Repetir até (opcional)</label><input type="date" id="dAte" class="inp font-mono"><p class="text-[10px] text-slate-400">Ex.: atestado de 5 dias. Aplica o mesmo em todos os dias do intervalo.</p>
         <label class="flex items-center gap-1 mt-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" id="dMesmoDia" class="accent-slate-700"> só neste dia da semana (ex.: todas as terças até a data)</label></div>
       <div><label class="lbl">Observação</label><input id="dObs" class="inp" placeholder="ex.: troca de folga com Fulana"></div>
@@ -411,6 +413,7 @@
       if (semPadrao.length) avisos.push(`${semPadrao.length} funcionário(s) sem horário padrão: ${semPadrao.slice(0, 6).map(f => esc(primeiroNome(f.nome_registro))).join(', ')}${semPadrao.length > 6 ? '…' : ''}.`);
       $('avisoPadrao').innerHTML = avisos.length ? `⚠ ${avisos.join(' ')} ${visao !== 'config' ? `<button onclick="trocarVisao('config')" class="ml-2 underline font-bold cursor-pointer">Configurar agora</button>` : ''}` : '';
       $('avisoPadrao').classList.toggle('hidden', !avisos.length);
+      carregarAtestadosPend();
       document.querySelectorAll('.edit').forEach(b => b.classList.toggle('hidden', !podeEditar));
       if (visao === 'mes') renderMes();
       if (visao === 'semana') renderSemana();
@@ -609,6 +612,7 @@
       tipoDia = k;
       document.querySelectorAll('.tdia').forEach(b => b.className = `tdia px-2 py-2 rounded-lg border font-bold cursor-pointer ${b.dataset.t === k ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-300'}`);
       $('dBoxHora').classList.toggle('hidden', k !== 'TRABALHO');
+      montarAtestado();
       if (editando) { const pedir = precisaPedir(k);
         $('dBtnSalvar').innerText = pedir ? 'PEDIR RETIRADA (vai para aprovação)' : 'SALVAR';
         const bj = $('dJustRet'); if (bj) bj.closest('div').classList.toggle('hidden', !pedir); }
@@ -628,7 +632,72 @@
         p_loja: tipoDia === 'TRABALHO' ? $('dLoja').value : null, p_obs: $('dObs').value.trim() || null });
       if (error) return alert(String(error.message).startsWith('RETIRADA_PEDIR:')
         ? String(error.message).replace('RETIRADA_PEDIR: ', '') + '\n\nAbra o dia sozinho (sem "Repetir até") para pedir a retirada.' : 'Erro: ' + error.message);
+      // atestado: o arquivo vai junto (prazo de 5 dias após o 1º dia; caso extremo com foto)
+      if (tipoDia === 'ATESTADO' && $('dArqAt') && $('dArqAt').files[0]) {
+        const ok = await enviarAtestado(f, datas[0], datas[datas.length - 1]);
+        if (!ok) alert('O dia foi salvo como atestado, mas o arquivo não foi enviado. Abra o dia de novo e use "Enviar atestado".');
+      }
       fechar('mDia'); await garantirPeriodo(true); renderizar();
+    }
+
+    // ------------------------------------------------------------------
+    // ATESTADO MÉDICO (regra de 12/11/2026): enviar ao RH em até 5 dias após a emissão/falta.
+    // Caso extremo (internação ou dificuldade de locomoção): vale a foto, com o motivo; o original é entregue depois.
+    // ------------------------------------------------------------------
+    const exDe = (fid, iso) => excecoes.find(e => e.funcionario_id === fid && e.data === iso);
+    function inicioAtestado(fid, iso) {   // 1º dia da sequência de AT que inclui o dia
+      let d = iso; while (exDe(fid, addDias(d, -1)) && exDe(fid, addDias(d, -1)).tipo === 'ATESTADO') d = addDias(d, -1); return d;
+    }
+    function fimAtestado(fid, iso) { let d = iso; while (exDe(fid, addDias(d, 1)) && exDe(fid, addDias(d, 1)).tipo === 'ATESTADO') d = addDias(d, 1); return d; }
+    function montarAtestado() {
+      const box = $('dBoxAtestado'); if (!box) return;
+      if (!editando || tipoDia !== 'ATESTADO') { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      const { f, iso } = editando, ex = exDe(f.id, iso), salvo = ex && ex.tipo === 'ATESTADO';
+      const ini = salvo ? inicioAtestado(f.id, iso) : iso, prazo = addDias(ini, 5), atrasado = hoje() > prazo;
+      if (salvo && ex.documento_id) {
+        box.innerHTML = `<div class="bg-emerald-50 border border-emerald-300 rounded-lg p-2.5 text-emerald-900 font-bold">📎 Atestado já enviado ao RH para este dia.</div>`;
+      } else {
+        box.innerHTML = `<div class="bg-pink-50 border border-pink-300 rounded-lg p-2.5 space-y-2">
+          <div class="font-black text-pink-900">📎 Atestado médico <span class="font-normal text-slate-500">(anexar aqui é opcional)</span></div>
+          <div class="text-[11px] ${atrasado ? 'text-rose-700 font-bold' : 'text-slate-700'}">O atestado precisa chegar ao RH em até <b>5 dias</b> após a emissão/falta: prazo <b>${dbr(prazo)}</b>${atrasado ? ' — PRAZO VENCIDO (o RH decide)' : ''}.</div>
+          <div class="text-[10px] text-slate-500">Se tiver o arquivo (PDF ou foto) neste computador, anexe abaixo. Se não conseguir (sem scanner ou WhatsApp no computador), entregue o atestado em papel ao RH dentro do prazo: o RH anexa no abono.</div>
+          <input type="file" id="dArqAt" accept=".pdf,image/*" class="block w-full text-[11px] file:mr-2 file:px-2 file:py-1 file:rounded file:border-0 file:bg-pink-700 file:text-white file:font-bold">
+          <label class="flex items-center gap-1 text-[11px] font-bold text-slate-700 cursor-pointer"><input type="checkbox" id="dExtremo" onchange="document.getElementById('dExtremoMot').classList.toggle('hidden', !this.checked)" class="accent-pink-700"> Caso extremo: só a foto (o original é entregue depois)</label>
+          <select id="dExtremoMot" class="inp hidden"><option value="">motivo do caso extremo…</option><option value="INTERNACAO">Internação</option><option value="LOCOMOCAO">Dificuldade de locomoção</option></select>
+          ${salvo ? `<button onclick="enviarAtestadoDia()" class="w-full px-2.5 py-2 bg-pink-700 hover:bg-pink-800 text-white rounded-lg font-bold cursor-pointer">📎 Enviar atestado (${dbr(ini)}${fimAtestado(f.id, iso) > ini ? ' a ' + dbr(fimAtestado(f.id, iso)) : ''})</button>`
+                  : '<div class="text-[10px] text-slate-500">Se escolher um arquivo, ele é enviado junto quando você salvar o dia como atestado (vale para todos os dias do "Repetir até"). Sem arquivo, o dia é salvo normalmente.</div>'}
+        </div>`;
+      }
+      box.classList.remove('hidden');
+    }
+    async function enviarAtestado(f, ini, fim) {
+      const arq = $('dArqAt') && $('dArqAt').files[0]; if (!arq) { alert('Escolha o arquivo do atestado (PDF ou foto).'); return false; }
+      if (arq.size > 15 * 1024 * 1024) { alert('Arquivo muito grande (máximo 15 MB).'); return false; }
+      const extremo = $('dExtremo').checked, mot = $('dExtremoMot').value;
+      if (extremo && !mot) { alert('Caso extremo: escolha o motivo (internação ou dificuldade de locomoção).'); return false; }
+      const nome = (arq.name || 'atestado').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
+      const caminho = `atestados/${f.id}/${Date.now()}_${nome}`;
+      const { error: e1 } = await _supabase.storage.from('documentos').upload(caminho, arq, { contentType: arq.type || undefined });
+      if (e1) { alert('Falha ao enviar o arquivo: ' + e1.message); return false; }
+      const { error: e2 } = await _supabase.rpc('fn_atestado_enviar', { p_funcionario: f.id, p_ini: ini, p_fim: fim, p_path: caminho, p_caso_extremo: extremo,
+        p_motivo: extremo ? mot : null, p_analise: /pdf$/i.test(arq.type || arq.name) ? null : 'imagem: conferir visualmente' });
+      if (e2) { alert('Arquivo enviado, mas não foi registrado: ' + e2.message); return false; }
+      return true;
+    }
+    async function enviarAtestadoDia() {
+      const { f, iso } = editando, ini = inicioAtestado(f.id, iso), fim = fimAtestado(f.id, iso);
+      if (!await enviarAtestado(f, ini, fim)) return;
+      alert('Atestado enviado ao RH.' + (hoje() > addDias(ini, 5) ? '\n\nAtenção: fora do prazo de 5 dias — o RH vai decidir.' : ''));
+      fechar('mDia'); await garantirPeriodo(true); renderizar();
+    }
+    let atPendSeq = 0;
+    async function carregarAtestadosPend() {
+      const box = $('avisoAtestados'); if (!box || !lojaSel) return; const seq = ++atPendSeq;
+      let lista = []; try { const { data } = await _supabase.rpc('fn_atestados_pendentes', { p_loja: lojaSel }); lista = data || []; } catch (e) { }
+      if (seq !== atPendSeq) return;
+      box.classList.toggle('hidden', !lista.length);
+      box.innerHTML = lista.length ? `<b>📎 ${lista.length} atestado(s) da escala ainda sem documento no sistema</b> · o atestado precisa chegar ao RH em até 5 dias após a falta (anexe no dia marcado AT, se puder, ou entregue o papel ao RH):`
+        + `<div class="mt-1 flex flex-wrap gap-1">${lista.map(a => `<span class="px-2 py-0.5 rounded ${a.atrasado ? 'bg-rose-600 text-white' : 'bg-white border border-pink-300'} font-bold">${esc(primeiroNome(a.nome))} · ${dbr(a.ini).slice(0, 5)}${a.dias > 1 ? '–' + dbr(a.fim).slice(0, 5) : ''} · ${a.atrasado ? 'ATRASADO (prazo ' + dbr(a.prazo).slice(0, 5) + ')' : 'prazo ' + dbr(a.prazo).slice(0, 5)}</span>`).join('')}</div>` : '';
     }
 
     // ------------------------------------------------------------------

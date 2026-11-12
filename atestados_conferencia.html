@@ -93,7 +93,12 @@
       const s = SIT[sitDe(d)];
       const auto = d.analise_auto ? `<div class="text-[11px] ${/não encontrei|não foi possível/.test(d.analise_auto) ? 'text-amber-700 font-bold' : 'text-slate-500'}">🔎 leitura automática: ${esc(d.analise_auto)}</div>` : '';
       const origem = d.abono_data ? `abono da falta de <b>${dbr(d.abono_data)}</b> (${esc(String(d.abono_tipo || '').toLowerCase())}) por ${esc(d.abonado_por || '')}`
-        : d.solicitacao_id ? 'atestado de falta coberta por freelance' : `documento de ${dbr(d.data_referencia)}`;
+        : d.solicitacao_id ? 'atestado de falta coberta por freelance'
+        : `atestado enviado pela loja: <b>${dbr(d.data_referencia)}${d.data_fim_referencia && d.data_fim_referencia !== d.data_referencia ? ' a ' + dbr(d.data_fim_referencia) : ''}</b>`;
+      // GW (12/11/2026): prazo de 5 dias e caso extremo (foto; original entregue depois)
+      const selos = (d.fora_prazo ? '<span class="bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">⏰ enviado fora do prazo (5 dias)</span>' : '')
+        + (d.caso_extremo ? `<span class="bg-fuchsia-100 text-fuchsia-800 px-2 py-0.5 rounded text-[10px] font-bold">📷 caso extremo · ${d.extremo_motivo === 'INTERNACAO' ? 'internação' : 'dificuldade de locomoção'} · ${d.original_recebido_em ? 'original recebido em ' + dataHora(d.original_recebido_em) : 'ORIGINAL PENDENTE'}</span>` : '');
+      const btOriginal = d.caso_extremo && !d.original_recebido_em ? `<button onclick="originalRecebido('${d.id}')" class="px-3 py-1.5 bg-white border border-fuchsia-400 text-fuchsia-800 hover:bg-fuchsia-50 rounded-lg text-[11px] font-bold cursor-pointer">📄 Original recebido</button>` : '';
       const hist = (d.conferencia_historico || []).map(h => `<div>• ${dataHora(h.em)} · <b>${h.status === 'VALIDO' ? '✅ válido' : '✕ não é atestado / ilegível'}</b>${h.obs ? ' · ' + esc(h.obs) : ''} <span class="text-slate-400">${esc(h.por || '')}</span></div>`).join('');
       const acoes = podeConferir() ? `
         <button onclick="conferir('${d.id}', true)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">✓ É atestado válido</button>
@@ -102,7 +107,7 @@
         <div class="flex flex-col md:flex-row justify-between gap-3">
           <div class="space-y-1 text-xs min-w-0">
             <div class="flex flex-wrap items-center gap-2"><span class="bg-slate-800 text-white px-2 py-0.5 rounded text-[10px] font-bold">${esc(d.nome_loja || 'sem loja')}</span>
-              <span class="${s.cls} px-2 py-0.5 rounded text-[10px] font-bold">${s.txt}</span></div>
+              <span class="${s.cls} px-2 py-0.5 rounded text-[10px] font-bold">${s.txt}</span>${selos}</div>
             <div class="text-base font-black text-slate-900">${esc(d.nome_registro)}</div>
             <div class="text-[11px]">${origem}</div>
             <div class="text-[10px] text-slate-500">📎 anexado em ${dataHora(d.enviado_em)} por ${esc(d.enviado_por || '')}${d.conferido_em ? ` · conferido em <b>${dataHora(d.conferido_em)}</b> por ${esc(d.conferido_por)}` : ''}</div>
@@ -112,9 +117,17 @@
           </div>
           <div class="flex flex-col items-end gap-1.5 shrink-0">
             <button onclick="abrir('${esc(d.arquivo_path)}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">👁 Abrir documento</button>
-            ${acoes}
+            ${acoes}${btOriginal}
           </div>
         </div></div>`;
+    }
+
+    async function originalRecebido(id) {
+      const d = docs.find(x => x.id === id);
+      if (!confirm(`Confirmar que o ORIGINAL do atestado de ${d.nome_registro} foi entregue?`)) return;
+      const { error } = await _supabase.rpc('fn_atestado_original', { p_id: id });
+      if (error) return alert(error.message);
+      await carregar();
     }
 
     async function abrir(caminho) {
