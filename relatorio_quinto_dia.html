@@ -17,13 +17,14 @@
     .seg { display: inline-flex; border: 1px solid #D0D5DD; border-radius: 7px; overflow: hidden; }
     .seg button { border: 0; padding: 5px 11px; font: inherit; font-size: 12.5px; font-weight: 600; background: #fff; color: var(--cinza-tx); cursor: pointer; }
     .seg button.on { background: var(--escuro); color: #fff; }
-    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
     .kpis .card.p { padding: 8px 12px; }
     .kpis .v { font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-top: 2px; }
     @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .q { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
-    .q th, .q td { padding: 5px 9px; white-space: nowrap; border-bottom: 1px solid var(--linha); text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; }
-    .q th { font-family: Inter, sans-serif; font-size: 10.5px; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; background: #fff; position: sticky; top: 0; z-index: 1; }
+    .q th, .q td { padding: 5px 7px; white-space: nowrap; border-bottom: 1px solid var(--linha); text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .q th { font-family: Inter, sans-serif; font-size: 10px; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .03em; background: #fff; position: sticky; top: 0; z-index: 1; white-space: normal; line-height: 1.25; vertical-align: bottom; }
+    .q th:not(.l) { width: 13%; } .q th.fn { width: 5%; }
     .q .l { text-align: left; font-family: Inter, sans-serif; }
     .q tr.grp td { font-weight: 600; cursor: pointer; }
     .q tr.grp td.l .chev { display: inline-block; width: 13px; color: var(--sub); }
@@ -61,8 +62,8 @@
   <div class="kpis" id="kpis"></div>
 
   <section class="card rola" style="max-height: 62vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td class="l">Carregando…</td></tr></tbody></table></section>
-  <p class="nota">Valores da folha de agora, com a mesma conta do Resumo da competência (a fila do Financeiro acompanha sozinha; a tela se atualiza sozinha). <b>Pagamento via banco = débito do 5º dia útil nas contas</b> (o total bate com o quadro de débito por conta abaixo). <b>Total pago = dinheiro + banco</b> (líquido da folha enviado ao Financeiro).
-    Banco (−) comissão = pagamento via banco menos a comissão. Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
+  <p class="nota">Valores da folha de agora, com a mesma conta do Resumo da competência (a fila do Financeiro acompanha sozinha; a tela se atualiza sozinha). <b>Total pago = comissão + dinheiro + banco</b> (líquido da folha enviado ao Financeiro). Dinheiro e banco aparecem <b>sem a comissão</b> (a comissão sai do banco; se a pessoa recebe em dinheiro, do dinheiro), para a soma das três colunas fechar no total pago.
+    O valor final pago pelo banco é conferido na Conciliação bancária. Comissão = valor fixo (2021), Sidney (2020), vitaminas (2022) e quarentena (2023)<span id="notaTodas"></span>, pela loja do cadastro do funcionário.
     Clique na loja para ver os funcionários. <b>Clique num valor para copiar</b> (sem ponto de milhar, pronto para colar no Alpha7).</p>
 
   <div id="toast"></div>
@@ -143,9 +144,14 @@
       linhas.forEach(l => { const k = modo === 'loja' ? l.loja : l.empresa + (l.cnpj ? ' · ' + l.cnpj : ''); (g[k] = g[k] || []).push(l); });
       return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
     }
+    // (12/11/2026) total pago = comissão + dinheiro + banco: a comissão sai do banco (e, se não couber, do dinheiro) de cada pessoa
+    function partes(l) {
+      const c = comDe(l), cb = Math.min(c, Math.max(l.banco, 0)), cd = Math.min(c - cb, Math.max(l.dinheiro, 0));
+      return { com: cb + cd, dinSem: l.dinheiro - cd, bancoSem: l.banco - cb };
+    }
     function somar(ls) {
-      const t = { n: ls.length, liquido: 0, com: 0, dinheiro: 0, banco: 0, aPagar: 0, porBanco: {} };
-      ls.forEach(l => { t.liquido += l.liquido; t.com += comDe(l); t.dinheiro += l.dinheiro; t.banco += l.banco; t.aPagar += l.aPagar;
+      const t = { n: ls.length, liquido: 0, com: 0, dinheiro: 0, banco: 0, dinSem: 0, bancoSem: 0, aPagar: 0, porBanco: {} };
+      ls.forEach(l => { const pt = partes(l); t.liquido += l.liquido; t.com += pt.com; t.dinheiro += l.dinheiro; t.banco += l.banco; t.dinSem += pt.dinSem; t.bancoSem += pt.bancoSem; t.aPagar += l.aPagar;
         Object.entries(l.pagoBanco).forEach(([b, v]) => t.porBanco[b] = (t.porBanco[b] || 0) + v); });
       t.salario = t.liquido - t.com; return t;
     }
@@ -156,12 +162,12 @@
     function render() {
       $('notaTodas').innerText = $('fTodas').checked ? ', genérico e similar (2018) e perfumaria (2019)' : '';
       const bancos = bancosUsados(), T = somar(linhas);
-      // colunas pedidas em 22/10/2026: comissão, dinheiro, banco, banco − comissão (o total do banco = débito do 5º dia útil nas contas)
-      $('kpis').innerHTML = [['Comissão', T.com, 'eventos ' + codsCom().join(', ')], ['Pagamento em dinheiro', T.dinheiro, 'pago em espécie'],
-        ['Pagamento via banco', T.banco, `débito nas contas · ${T.n} funcionário(s)` + (T.aPagar > 0.005 ? ` · a pagar ${brl(T.aPagar)}` : '')], ['Banco (−) comissão', T.banco - T.com, 'pagamento via banco menos a comissão'], ['Total pago', T.dinheiro + T.banco, 'dinheiro + banco = líquido da folha']]
+      // (12/11/2026) colunas: comissão + dinheiro + banco = total pago; débito nas contas = banco com a comissão (extrato)
+      $('kpis').innerHTML = [['Comissão', T.com, 'eventos ' + codsCom().join(', ')], ['Pagamento em dinheiro', T.dinSem, 'em espécie, sem a comissão'],
+        ['Pagamento via banco', T.bancoSem, 'sem a comissão' + (T.aPagar > 0.005 ? ` · a pagar ${brl(T.aPagar)}` : '')], ['Total pago', T.com + T.dinSem + T.bancoSem, `comissão + dinheiro + banco · ${T.n} funcionário(s)`]]
         .map(([t, v, d]) => `<div class="card p"><div class="desc">${t}</div><div class="v">${brl(v)}</div><div class="desc">${d}</div></div>`).join('');
-      const cab = `<thead><tr><th class="l">${modo === 'loja' ? 'Loja' : 'Empresa'}</th><th>Func.</th><th class="cm">Valor da comissão</th><th class="dn">Pagamento em dinheiro</th><th class="bk">Pagamento via banco</th><th>Banco (−) comissão</th><th class="tp">Total pago</th></tr></thead>`;
-      const lin = (rot, t, cls, attr = '') => `<tr class="${cls}" ${attr}><td class="l">${rot}</td><td>${t.n}</td>${nc(t.com, 'cm')}${nc(t.dinheiro, 'dn')}${nc(t.banco, 'bk')}${n(t.banco - t.com)}${nc(t.dinheiro + t.banco, 'tp')}</tr>`;
+      const cab = `<thead><tr><th class="l">${modo === 'loja' ? 'Loja' : 'Empresa'}</th><th class="fn">Func.</th><th class="cm">Valor da comissão</th><th class="dn">Pagamento em dinheiro</th><th class="bk">Pagamento via banco</th><th class="tp">Total pago</th></tr></thead>`;
+      const lin = (rot, t, cls, attr = '') => `<tr class="${cls}" ${attr}><td class="l">${rot}</td><td>${t.n}</td>${nc(t.com, 'cm')}${nc(t.dinSem, 'dn')}${nc(t.bancoSem, 'bk')}${nc(t.com + t.dinSem + t.bancoSem, 'tp')}</tr>`;
       let h = cab + '<tbody>';
       grupos().forEach(([k, ls]) => {
         const ab = abertos.has(k);
@@ -194,8 +200,8 @@
 
     function exportarCsv() {
       const bancos = bancosUsados(), f = v => r2(v).toFixed(2).replace('.', ',');
-      const L = [['Loja', 'Empresa', 'CNPJ', 'Funcionário', 'Valor da comissão', 'Pagamento em dinheiro', 'Pagamento via banco', 'Banco (-) comissão', 'Total pago']];
-      linhas.forEach(l => { const c = comDe(l); L.push([l.loja, l.empresa, l.cnpj, l.nome, f(c), f(l.dinheiro), f(l.banco), f(l.banco - c), f(l.dinheiro + l.banco)]); });
+      const L = [['Loja', 'Empresa', 'CNPJ', 'Funcionário', 'Valor da comissão', 'Pagamento em dinheiro (sem comissão)', 'Pagamento via banco (sem comissão)', 'Total pago']];
+      linhas.forEach(l => { const pt = partes(l); L.push([l.loja, l.empresa, l.cnpj, l.nome, f(pt.com), f(pt.dinSem), f(pt.bancoSem), f(pt.com + pt.dinSem + pt.bancoSem)]); });
       const csv = '﻿' + L.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `quinto_dia_${$('fComp').value}.csv`; a.click();
     }
