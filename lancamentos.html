@@ -1412,12 +1412,22 @@
     }
     // ABONO SÓ COM ANEXO (regra de 15/10/2026): escolhe o arquivo, envia, registra na ficha e devolve o id do documento.
     // Se for PDF com texto, procura sinais de atestado (só um indicativo; quem confere é o supervisor).
-    function escolherArquivo() {
+    // (12/11/2026) o seletor abria escondido e "desistia" sozinho quando a janela voltava o foco (erro "nenhum arquivo escolhido"):
+    // agora é uma janela da própria tela, com o botão de escolher o arquivo que a pessoa clica.
+    function escolherArquivo(titulo) {
       return new Promise(ok => {
-        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.pdf,image/*';
-        inp.onchange = () => ok(inp.files[0] || null);
-        window.addEventListener('focus', () => setTimeout(() => ok(inp.files[0] || null), 800), { once: true });
-        inp.click();
+        const m = document.createElement('div');
+        m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+        m.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:20px;font-family:inherit;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+          <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:6px">📎 ${titulo || 'Anexar o atestado'}</div>
+          <div style="font-size:12.5px;color:#475569;margin-bottom:12px">Escolha o arquivo do atestado (PDF ou foto).</div>
+          <input type="file" accept=".pdf,image/*" style="width:100%;font-size:13px;margin-bottom:14px">
+          <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" data-c style="padding:8px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-weight:700;cursor:pointer">Cancelar</button>
+          <button type="button" data-ok style="padding:8px 14px;border-radius:8px;border:0;background:#059669;color:#fff;font-weight:800;cursor:pointer">Abonar com este arquivo</button></div></div>`;
+        const inp = m.querySelector('input'), fim = v => { m.remove(); ok(v); };
+        m.querySelector('[data-c]').onclick = () => fim(null);
+        m.querySelector('[data-ok]').onclick = () => { if (!inp.files[0]) return alert('Escolha o arquivo do atestado.'); fim(inp.files[0]); };
+        document.body.appendChild(m);
       });
     }
     async function analisarAtestado(arq) {
@@ -1435,9 +1445,11 @@
       } catch (e) { return 'não foi possível ler o PDF: conferir visualmente'; }
     }
     async function anexarAtestadoAbono(fid, data) {
-      if (!confirm(`Abonar ${dmEscala(data)} (sem desconto e sem banco de horas)?\n\nO abono só é aceito com o documento (atestado). Escolha o arquivo (foto ou PDF) na próxima tela.`)) return null;
-      const arq = await escolherArquivo();
-      if (!arq) { alert('Abono não feito: nenhum arquivo escolhido.'); return null; }
+      // atestado já enviado pela loja na escala (GW, 12/11/2026): usa o mesmo documento
+      try { const { data: ed } = await _supabase.from('escala_dias').select('documento_id').eq('funcionario_id', fid).eq('data', data).maybeSingle();
+        if (ed && ed.documento_id && confirm(`O atestado de ${dmEscala(data)} já foi enviado pela loja.\n\nAbonar ${dmEscala(data)} com esse atestado (sem desconto e sem banco de horas)?`)) return ed.documento_id; } catch (e) { }
+      const arq = await escolherArquivo(`Abonar ${dmEscala(data)} com atestado (sem desconto e sem banco de horas)`);
+      if (!arq) return null;
       const analise = await analisarAtestado(arq);
       if (/não encontrei/.test(analise) && !confirm(`Atenção: ${analise}.\n\nO arquivo pode não ser um atestado. Abonar mesmo assim? (o supervisor vai conferir)`)) return null;
       const nomeArq = arq.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_');
