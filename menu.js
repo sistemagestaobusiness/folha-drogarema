@@ -122,17 +122,34 @@
   (document.head || document.documentElement).appendChild(css);
   if (!document.querySelector('link[href*="family=Inter"]')) { const fl = document.createElement('link'); fl.rel = 'stylesheet'; fl.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'; (document.head || document.documentElement).appendChild(fl); }
 
+  // grupos do menu conforme o perfil (o mesmo vale para a pesquisa de telas)
+  function gruposDoPerfil() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    let gs = GRUPOS;
+    // líder (DZ, 28/10/2026): "Pedidos de cadastro" é um pedido que ele faz, não uma aprovação; fica em Cadastros, antes do Organograma
+    if (pf === 'LIDER') gs = gs.map(([g, itens]) => {
+      const cad = GRUPOS[1][1].find(i => i[0] === 'cadastro_solicitacoes.html');
+      if (g === 'Aprovações') return [g, itens.filter(i => i[0] !== 'cadastro_solicitacoes.html')];
+      if (g === 'Cadastros') return [g, [cad, ...itens]];
+      return [g, itens]; });
+    // Conferência de retaguarda (12/11/2026): no grupo Financeiro só para o Gestor; para líder, supervisor e financeiro
+    // fica em "Lançar na folha", logo abaixo de Abatimentos (a falta vira abatimento)
+    if (pf !== 'GESTOR') {
+      const ret = GRUPOS.flatMap(([, it]) => it).find(i => i[0] === 'retaguarda.html');
+      gs = gs.map(([g, itens]) => {
+        itens = itens.filter(i => i[0] !== 'retaguarda.html');
+        if (g === 'Lançar na folha' && ret) { const k = itens.findIndex(i => i[0] === 'abatimentos.html'); itens = itens.slice(); itens.splice(k >= 0 ? k + 1 : itens.length, 0, ret); }
+        return [g, itens]; });
+    }
+    return gs;
+  }
+
   function montar() {
     if (document.getElementById('menuSistema')) return;
     const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     let guard = {}; try { guard = JSON.parse(localStorage.getItem('menu_grupos') || '{}') || {}; } catch (e) {}
     // líder (DZ, 28/10/2026): "Pedidos de cadastro" é um pedido que ele faz, não uma aprovação; fica em Cadastros, antes do Organograma
-    const LIDER_MENU = String(window.ACESSO.perfil || '').toUpperCase() === 'LIDER';
-    const grupos = !LIDER_MENU ? GRUPOS : GRUPOS.map(([g, itens]) => {
-      const cad = GRUPOS[1][1].find(i => i[0] === 'cadastro_solicitacoes.html');
-      if (g === 'Aprovações') return [g, itens.filter(i => i[0] !== 'cadastro_solicitacoes.html')];
-      if (g === 'Cadastros') return [g, [cad, ...itens]];
-      return [g, itens]; });
+    const grupos = gruposDoPerfil();
     const corpo = grupos.map(([g, itens]) => { const vis = itens.filter(i => telas.has(i[0])); if (!vis.length) return '';
       const its = vis.map(([arq, nome, ic]) => (arq === 'pendencias.html' && String(window.ACESSO.perfil || '').toUpperCase() === 'GESTOR' ? ['pendencias.html', 'Central de pendências', ic] : [arq, nome, ic])).map(([arq, nome, ic]) => `<a class="it ${arq === PAGINA ? 'on' : ''}" href="${arq}" data-menu="${arq}"><i>${ic}</i><span>${nome}</span></a>`).join('');
       if (!g) return its;
@@ -762,7 +779,7 @@
     const esc3 = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const gestor = String(window.ACESSO.perfil || '').toUpperCase() === 'GESTOR';
     const itens = [];
-    GRUPOS.forEach(([g, lst]) => lst.forEach(([arq, nome, ic]) => {
+    gruposDoPerfil().forEach(([g, lst]) => lst.forEach(([arq, nome, ic]) => {
       if (!telas.has(arq) || itens.some(x => x.arq === arq)) return;
       const n = arq === 'pendencias.html' && gestor ? 'Central de pendências' : nome;
       itens.push({ arq, nome: n, grupo: g || 'Início', ic, chave: norm(n + ' ' + (g || '') + ' ' + arq.replace('.html', '').replace(/_/g, ' ')) });

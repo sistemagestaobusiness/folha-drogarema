@@ -183,6 +183,12 @@
                   class="w-full bg-white border border-amber-300 rounded-lg p-2 text-slate-800 text-xs uppercase focus:outline-none focus:border-amber-600">
                 <div class="text-[10px] text-amber-800 mt-1">Muda só este lançamento do mês: o salário do cadastro continua o mesmo.</div>
               </div>
+              <div id="boxJust3039" class="hidden mt-2 bg-rose-50 border border-rose-300 rounded-lg p-2.5">
+                <label class="block text-[11px] font-bold text-rose-800 uppercase mb-1">3039 Desconto outros · justificativa obrigatória *</label>
+                <input type="text" id="inputJust3039" maxlength="200" placeholder="O que está sendo descontado? Ex.: quebra de caixa do dia 12/10; uniforme extraviado..."
+                  class="w-full bg-white border border-rose-300 rounded-lg p-2 text-slate-800 text-xs uppercase focus:outline-none focus:border-rose-600">
+                <div class="text-[10px] text-rose-800 mt-1">Mínimo 10 letras. Se existe um evento próprio (farmácia, Mogi Care, vale-transporte...), use o evento próprio.</div>
+              </div>
             </div>
 
             <!-- Painel Oculto 1 -->
@@ -2173,6 +2179,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       const vazio = String(document.getElementById('valorLancamento').value || '').trim() === '';
       const mostra = !!ev && String(ev.codigo_evento) === '2024' && salCad > 1 && !vazio && Math.abs(v - salCad) > 0.05;
       box.classList.toggle('hidden', !mostra);
+      document.getElementById('boxJust3039').classList.toggle('hidden', !(ev && String(ev.codigo_evento) === '3039'));   // 3039 sempre com justificativa (11/11/2026)
       if (mostra) document.getElementById('lblJustSal').innerText = `Salário diferente do cadastro (R$ ${salCad.toFixed(2).replace('.', ',')}) · justificativa *`;
     }
 
@@ -2199,6 +2206,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
 
       document.getElementById('checkFixo').checked = !!item.fixo;
       { const mj = String(item.motivo_ajuste || '').match(/SALARIO EDITADO \(cadastro R\$ [\d.]+\): ([^|]+)/); document.getElementById('inputJustSal').value = mj ? mj[1].trim() : ''; setTimeout(checarSalario, 0); }
+      { const m3 = String(item.motivo_ajuste || '').match(/DESCONTO OUTROS: ([^|]+)/); document.getElementById('inputJust3039').value = m3 ? m3[1].trim() : ''; }
 
       const pag = mapaPagExtras[item.id];
       document.getElementById('inputVencimentoPag').value = (pag && pag.vencimento) || item.vencimento_pagamento || '';
@@ -2236,6 +2244,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       travarCampoEvento(false);
       document.getElementById('valorLancamento').value = '';
       document.getElementById('inputJustSal').value = ''; document.getElementById('boxJustSal').classList.add('hidden');
+      document.getElementById('inputJust3039').value = ''; document.getElementById('boxJust3039').classList.add('hidden');
       preencherPainelAjuste(1, null);
       preencherPainelAjuste(2, null);
       document.getElementById('checkFixo').checked = false;
@@ -2317,6 +2326,17 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         return;
       }
       { const suf = (rubrica.match(SUFIXO_SISTEMA) || [''])[0]; rubrica = nomeDoCadastro(eventoSel) + (suf ? ' ' + suf.trim() : ''); }
+      // 3039 DESCONTO OUTROS: justificativa obrigatória (mínimo 10 letras), também no banco (regra de 11/11/2026)
+      let just3039 = null;
+      if (String(eventoSel.codigo_evento) === '3039') {
+        const j = removerAcentosEColocarMaiuscula(document.getElementById('inputJust3039').value).trim();
+        if (j.replace(/[^A-Z]/g, '').length < 10) {
+          document.getElementById('boxJust3039').classList.remove('hidden');
+          alert('3039 - DESCONTO OUTROS precisa de justificativa (mínimo 10 letras).\n\nDiga o que está sendo descontado. Se existe um evento próprio (farmácia, Mogi Care, vale-transporte...), use o evento próprio.');
+          document.getElementById('inputJust3039').focus(); return;
+        }
+        just3039 = 'DESCONTO OUTROS: ' + j;
+      }
       const ehReembolso = catSel === 'REEMBOLSO';
 
       // Lançamento já PAGO pelo Financeiro: grava somente a troca do evento
@@ -2331,7 +2351,9 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
           alert('Nada mudou: o evento escolhido é o mesmo.\n\nEste lançamento já foi PAGO. Se faltou algum dia ou valor, faça um NOVO lançamento só com a diferença.');
           return;
         }
-        const { error: errTroca } = await _supabase.from('folha_itens').update({ rubrica }).eq('id', idEdicao);
+        const troca = { rubrica };
+        if (just3039) troca.motivo_ajuste = just3039 + (orig.motivo_ajuste && !/DESCONTO OUTROS:/.test(orig.motivo_ajuste) ? ' | ' + orig.motivo_ajuste : '');
+        const { error: errTroca } = await _supabase.from('folha_itens').update(troca).eq('id', idEdicao);
         if (errTroca) { alert('Erro ao trocar o evento: ' + errTroca.message); return; }
         cancelarEdicao();
         carregarLancamentosNovo();
@@ -2460,6 +2482,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       if (noturno) motivo_ajuste = noturno.motivo + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
       if (he100) motivo_ajuste = he100 + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
       if (salEdit) motivo_ajuste = salEdit + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
+      if (just3039) motivo_ajuste = just3039 + (motivo_ajuste ? ' | ' + motivo_ajuste : '');
 
       const parcela_atual = aj1 ? aj1.parcela_atual : (itemOriginal.parcela_atual || 1);
       const total_parcelas = aj1 ? aj1.total_parcelas : (itemOriginal.total_parcelas || 1);
