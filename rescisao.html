@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rescisão - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .lbl { display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 3px; }
+    .inp { width: 100%; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 9px; font-size: 14px; }
+    .inp:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+    .inp:disabled { background: #f1f5f9; color: #64748b; }
+    .tb th { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; text-align: left; padding: 7px 8px; background: #f8fafc; }
+    .tb td { padding: 7px 8px; border-top: 1px solid #f1f5f9; font-size: 12.5px; vertical-align: top; }
+    .num { font-family: ui-monospace, monospace; text-align: right; white-space: nowrap; }
+    .btn { border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 800; cursor: pointer; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .chip { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+    .ver { border-radius: 10px; padding: 7px 10px; font-size: 12.5px; line-height: 1.35; }
+    .ver.ERRO { background: #fff1f2; border: 1px solid #fda4af; color: #9f1239; }
+    .ver.ATENCAO { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
+    .ver.OK { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+    tr.fora td { color: #94a3b8; }
+    @media print {
+      body { background: #fff !important; padding: 0 !important; }
+      html.menu-on body { padding-left: 0 !important; }
+      .nao-imprime, #menuSistema { display: none !important; }
+      #boxDetalhe { border: 0 !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-4 sm:p-6 font-sans">
+  <div class="max-w-[1300px] mx-auto space-y-4">
+
+    <div class="py-3 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 nao-imprime">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 tracking-wide">✂ Rescisão</h1>
+        <p class="text-xs text-slate-500 max-w-3xl">A rescisão é paga <b>sempre fora do 5º dia útil</b>, com data própria. Lançar a rescisão atualiza o cadastro (data de rescisão), para o adiantamento e o VT e tira a pessoa da folha. Os eventos vêm do TRCT da contabilidade (mais algum ajuste não contábil). Finalizada pelo RH, vai direto ao Financeiro pagar.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="carregar()" class="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold cursor-pointer">↻ Atualizar</button>
+        <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
+      </div>
+    </div>
+
+    <div id="aviso" class="hidden bg-rose-50 border border-rose-300 text-rose-800 rounded-xl p-4 text-sm font-bold nao-imprime"></div>
+
+    <div id="conteudo" class="hidden space-y-4">
+      <!-- pendências -->
+      <div id="boxPend" class="hidden bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 nao-imprime">
+        <div class="text-sm font-extrabold text-amber-900 mb-2">⚠ Pendências de rescisão</div>
+        <div id="listaPend" class="space-y-2"></div>
+      </div>
+
+      <!-- lista -->
+      <div id="boxLista" class="bg-white border border-slate-200 rounded-2xl overflow-hidden nao-imprime">
+        <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
+          <div class="text-sm font-extrabold text-slate-800">📋 Rescisões</div>
+          <div class="flex items-center gap-3">
+            <label class="text-[11px] text-slate-600 flex items-center gap-1 cursor-pointer"><input type="checkbox" id="chkTodas" onchange="carregar()"> mostrar todas</label>
+            <button onclick="abrirNova()" class="btn bg-rose-700 hover:bg-rose-800 text-white">+ Nova rescisão</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Nº</th><th>Funcionário</th><th>Desligamento</th><th>Tipo</th><th>Competência(s)</th><th class="text-right">Líquido</th><th>Pagamento</th><th>Situação</th></tr></thead><tbody id="tbLista"></tbody></table></div>
+      </div>
+
+      <!-- detalhe -->
+      <div id="boxDetalhe" class="hidden bg-white border-2 border-rose-200 rounded-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-rose-100 bg-rose-50/60 flex justify-between items-start flex-wrap gap-2">
+          <div>
+            <div class="text-[11px] font-extrabold text-rose-700 uppercase tracking-wide" id="dTitulo">Rescisão</div>
+            <div class="text-lg font-extrabold text-slate-900" id="dNome">-</div>
+            <div class="text-[11.5px] text-slate-600" id="dCadastro"></div>
+          </div>
+          <div class="flex items-center gap-2 nao-imprime">
+            <button onclick="window.print()" class="btn bg-white border border-slate-300 text-slate-700">🖨 Imprimir</button>
+            <button onclick="fecharDetalhe()" class="btn bg-white border border-slate-300 text-slate-700">✕ Fechar</button>
+          </div>
+        </div>
+        <div class="p-4 space-y-4">
+          <div id="dAvisoStatus"></div>
+
+          <!-- dados -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3" id="dDados">
+            <div><label class="lbl">Desligamento (último dia)</label><input type="date" id="fData" class="inp"></div>
+            <div><label class="lbl">Tipo de desligamento</label><select id="fTipo" class="inp"></select></div>
+            <div><label class="lbl">Aviso prévio</label><select id="fAviso" class="inp"></select></div>
+            <div><label class="lbl">Observação</label><input id="fObs" class="inp" maxlength="300"></div>
+          </div>
+
+          <!-- eventos -->
+          <div class="border border-slate-200 rounded-xl overflow-hidden">
+            <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 flex justify-between items-center flex-wrap gap-2">
+              <div class="text-[12.5px] font-extrabold text-slate-800">Eventos <span class="font-normal text-slate-500">(TRCT da contabilidade + ajustes não contábeis)</span></div>
+              <div class="text-[11px] text-slate-500" id="dComps"></div>
+            </div>
+            <div class="overflow-x-auto"><table class="tb w-full"><thead><tr><th>Comp.</th><th>Evento</th><th>Natureza</th><th class="text-right">Provento</th><th class="text-right">Desconto</th><th>Observação / origem</th><th class="nao-imprime"></th></tr></thead><tbody id="tbItens"></tbody></table></div>
+            <div id="boxIncluir" class="p-3 border-t border-slate-200 bg-slate-50/60 grid grid-cols-1 md:grid-cols-12 gap-2 items-end nao-imprime">
+              <div class="md:col-span-4"><label class="lbl">Evento</label><input id="iEvento" list="dlEventos" class="inp" placeholder="código ou nome (ex.: 2045)"><datalist id="dlEventos"></datalist></div>
+              <div class="md:col-span-2"><label class="lbl">Valor (R$)</label><input id="iValor" class="inp num" inputmode="decimal" placeholder="0,00"></div>
+              <div class="md:col-span-2" id="boxIComp"><label class="lbl">Competência</label><select id="iComp" class="inp"></select></div>
+              <div class="md:col-span-3"><label class="lbl">Observação <span id="iObsDica" class="normal-case font-normal"></span></label><input id="iObs" class="inp" maxlength="200"></div>
+              <div class="md:col-span-1"><button id="btnIncluir" onclick="salvarItem()" class="w-full btn !py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white">Incluir</button></div>
+              <div class="md:col-span-12 text-[11px] text-slate-500" id="iInfo"></div>
+            </div>
+          </div>
+
+          <!-- totais + TRCT + pagamento -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div class="border border-slate-200 rounded-xl p-3 space-y-1 text-[12.5px]" id="dTotais"></div>
+            <div class="border border-slate-200 rounded-xl p-3 space-y-2">
+              <div class="text-[12.5px] font-extrabold text-slate-800">Conferência com o TRCT</div>
+              <div><label class="lbl">Líquido do TRCT (contabilidade)</label><input id="fTrct" class="inp num" inputmode="decimal" placeholder="0,00"></div>
+              <div id="boxTrctJust" class="hidden"><label class="lbl">Justificativa da diferença (mín. 15 letras)</label><input id="fTrctJust" class="inp" maxlength="300"></div>
+              <div id="dTrctDif" class="text-[12px]"></div>
+            </div>
+            <div class="border border-slate-200 rounded-xl p-3 space-y-2">
+              <div class="text-[12.5px] font-extrabold text-slate-800">Pagamento (fora do 5º dia útil)</div>
+              <div><label class="lbl">Data de pagamento</label><input type="date" id="fPag" class="inp"><div class="text-[11px] text-slate-500 mt-1" id="dPrazo"></div></div>
+              <div id="boxPrazoJust" class="hidden"><label class="lbl">Justificativa (depois do prazo legal, mín. 15 letras)</label><input id="fPrazoJust" class="inp" maxlength="300"></div>
+              <div class="grid grid-cols-2 gap-2">
+                <div><label class="lbl">Contábil</label><select id="fMeioC" class="inp"><option value="BANCO">🏦 Banco</option><option value="DINHEIRO">💵 Dinheiro</option></select></div>
+                <div><label class="lbl">Não contábil</label><select id="fMeioN" class="inp"><option value="BANCO">🏦 Banco</option><option value="DINHEIRO">💵 Dinheiro</option></select></div>
+              </div>
+              <div class="text-[11px] text-rose-700 font-bold" id="dRegraDin"></div>
+            </div>
+          </div>
+
+          <!-- verificações -->
+          <div>
+            <div class="text-[12.5px] font-extrabold text-slate-800 mb-2">🔎 Verificações</div>
+            <div id="dVerif" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+          </div>
+
+          <div id="dPagamentos"></div>
+
+          <!-- ações -->
+          <div class="flex flex-wrap gap-2 justify-end border-t border-slate-100 pt-3 nao-imprime" id="dAcoes"></div>
+
+          <details class="text-[11.5px] text-slate-600 nao-imprime"><summary class="cursor-pointer font-bold">Histórico</summary><div id="dHist" class="mt-2 space-y-1"></div></details>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- nova rescisão / registrar já paga -->
+  <div id="modalNova" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg p-5 space-y-3 max-h-[92vh] overflow-auto">
+      <div class="flex justify-between items-start"><div class="text-base font-extrabold text-slate-900" id="nTitulo">Nova rescisão</div><button onclick="fechar('modalNova')" class="text-slate-400 text-xl leading-none cursor-pointer">×</button></div>
+      <div id="nInfo" class="text-[12px] text-slate-600"></div>
+      <div id="boxNFunc"><label class="lbl">Funcionário</label><input id="nFunc" list="dlFuncs" class="inp" placeholder="digite o nome"><datalist id="dlFuncs"></datalist></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="lbl">Desligamento (último dia)</label><input type="date" id="nData" class="inp"></div>
+        <div><label class="lbl">Tipo</label><select id="nTipo" class="inp"></select></div>
+      </div>
+      <div id="boxNAviso"><label class="lbl">Aviso prévio</label><select id="nAviso" class="inp"></select></div>
+      <div><label class="lbl">Observação</label><input id="nObs" class="inp" maxlength="300"></div>
+      <div id="nResumo" class="text-[12px] bg-rose-50 border border-rose-200 rounded-lg p-3 text-rose-900"></div>
+      <button id="btnNova" onclick="criar()" class="w-full btn !py-3 bg-rose-700 hover:bg-rose-800 text-white">Lançar rescisão</button>
+    </div>
+  </div>
+
+  <!-- motivo (cancelar / reabrir) -->
+  <div id="modalMotivo" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-3">
+      <div class="flex justify-between items-start"><div class="text-base font-extrabold text-slate-900" id="mTitulo">-</div><button onclick="fechar('modalMotivo')" class="text-slate-400 text-xl leading-none cursor-pointer">×</button></div>
+      <div id="mInfo" class="text-[12px] text-slate-600"></div>
+      <div><label class="lbl">Motivo (mínimo 15 letras)</label><textarea id="mMotivo" rows="3" class="inp"></textarea></div>
+      <button id="btnMotivo" class="w-full btn !py-3 bg-rose-700 hover:bg-rose-800 text-white">Confirmar</button>
+    </div>
+  </div>
+
+  <!-- confirmar envio -->
+  <div id="modalEnviar" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg p-5 space-y-3 max-h-[92vh] overflow-auto">
+      <div class="flex justify-between items-start"><div class="text-base font-extrabold text-slate-900">Finalizar e enviar ao Financeiro</div><button onclick="fechar('modalEnviar')" class="text-slate-400 text-xl leading-none cursor-pointer">×</button></div>
+      <div id="eResumo" class="text-[13px]"></div>
+      <div id="eAvisos" class="space-y-2"></div>
+      <label id="boxEConf" class="hidden flex items-start gap-2 text-[12.5px] font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-lg p-2 cursor-pointer"><input type="checkbox" id="eConf" class="mt-0.5"> Conferi os avisos acima e o valor está certo.</label>
+      <button id="btnEnviar" onclick="enviar()" class="w-full btn !py-3 bg-emerald-600 hover:bg-emerald-700 text-white">Enviar ao Financeiro</button>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://jmetpmdnaxwabeccimgg.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k';
+    const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const dh = ts => ts ? new Date(ts).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+    const dbr = iso => iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '-';
+    const num = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const brl = v => v == null ? '-' : 'R$ ' + num(v);
+    const letras = t => String(t || '').replace(/[^A-Za-zÀ-ÿ]/g, '').length;
+    const pad = n => String(n).padStart(2, '0');
+    const isoDe = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const somaDias = (iso, n) => { const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number); return isoDe(new Date(a, m - 1, d + n)); };
+    const hoje = () => isoDe(new Date());
+    const lerValor = s => { s = String(s || '').trim().replace(/\s|R\$/g, ''); if (!s) return null; if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); const v = Number(s); return isFinite(v) ? Math.round(v * 100) / 100 : NaN; };
+    const fechar = id => $(id).classList.add('hidden');
+
+    const TIPOS = { SEM_JUSTA_CAUSA: 'Dispensa sem justa causa', PEDIDO_DEMISSAO: 'Pedido de demissão', JUSTA_CAUSA: 'Justa causa', ACORDO: 'Acordo (art. 484-A)', TERMINO_CONTRATO: 'Término de contrato (experiência)', OUTRO: 'Outro' };
+    const AVISOS = { NAO_SE_APLICA: 'Não se aplica', TRABALHADO: 'Trabalhado', INDENIZADO: 'Indenizado (empresa paga)', DISPENSADO: 'Dispensado', DESCONTADO: 'Descontado (empregado não cumpriu)' };
+    const STATUS = { RASCUNHO: ['Rascunho', 'bg-amber-100 text-amber-800'], ENVIADA: ['No Financeiro', 'bg-sky-100 text-sky-800'], REGISTRADA: ['Registrada (já paga)', 'bg-slate-200 text-slate-700'], CANCELADA: ['Cancelada', 'bg-slate-100 text-slate-500 line-through'] };
+    const PAGST = { PENDENTE: ['a pagar', 'bg-amber-100 text-amber-800'], PAGO: ['pago', 'bg-emerald-100 text-emerald-800'], PROBLEMA: ['devolvido', 'bg-rose-600 text-white'], CANCELADO: ['cancelado', 'bg-slate-100 text-slate-500'] };
+    const opcoes = (obj, sel) => Object.entries(obj).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+
+    let D = null, DET = null, atualId = null, ocupado = false, editItem = null, modoNova = 'NORMAL';
+
+    async function inicializar() {
+      const { data: { user } } = await _supabase.auth.getUser();
+      if (!user) { location.href = 'login.html'; return; }
+      $('lblUsuario').innerText = (user.email || '').toLowerCase();
+      $('nTipo').innerHTML = opcoes(TIPOS, 'SEM_JUSTA_CAUSA'); $('nAviso').innerHTML = opcoes(AVISOS, 'NAO_SE_APLICA');
+      $('fTipo').innerHTML = opcoes(TIPOS); $('fAviso').innerHTML = opcoes(AVISOS);
+      ['fData', 'fTipo', 'fAviso', 'fObs', 'fTrct', 'fTrctJust', 'fPag', 'fPrazoJust', 'fMeioC', 'fMeioN'].forEach(id => $(id).addEventListener('change', () => salvarDados(id)));
+      $('fTrct').addEventListener('input', mostrarTrct);
+      $('iEvento').addEventListener('input', dicaEvento);
+      ['nFunc', 'nData', 'nTipo', 'nAviso'].forEach(id => $(id).addEventListener('input', resumoNova));
+      try { if (window.DiaUtil) await DiaUtil.carregar(_supabase); } catch (e) { }
+      const id = new URLSearchParams(location.search).get('id');
+      await carregar(id || null);
+    }
+
+    async function carregar(abrirId) {
+      const { data, error } = await _supabase.rpc('fn_rescisao_dados', { p_id: null, p_todas: $('chkTodas').checked });
+      if (error) { $('aviso').innerText = error.message; $('aviso').classList.remove('hidden'); $('conteudo').classList.add('hidden'); return; }
+      D = data; $('lblPerfil').innerText = D.perfil; $('aviso').classList.add('hidden'); $('conteudo').classList.remove('hidden');
+      $('dlEventos').innerHTML = (D.eventos || []).map(e => `<option value="${e.codigo} - ${esc(e.descricao)}">${e.tipo === 'DESCONTO' ? 'desconto' : 'provento'} · ${e.natureza === 'NAO_CONTABIL' ? 'não contábil' : 'contábil'}${e.rescisao ? ' · rescisão' : ''}</option>`).join('');
+      $('dlFuncs').innerHTML = (D.funcionarios || []).map(f => `<option value="${esc(f.nome)}">${esc(f.loja || '')} · ${esc(f.cargo || '')}${String(f.status || '').toUpperCase() !== 'ATIVO' ? ' · INATIVO' : ''}</option>`).join('');
+      renderPend(); renderLista();
+      const alvo = abrirId || atualId;
+      if (alvo) await abrir(alvo); else fecharDetalhe();
+    }
+
+    function renderPend() {
+      const ps = D.pendencias || [];
+      $('boxPend').classList.toggle('hidden', !ps.length);
+      $('listaPend').innerHTML = ps.map(p => {
+        const bt = p.tipo === 'REGISTRAR' ? `<button class="btn bg-rose-700 text-white" onclick="abrirRegistrar('${p.funcionario_id}')">Registrar rescisão</button>`
+          : `<button class="btn bg-white border border-amber-400 text-amber-900" onclick="abrir('${p.id}')">Abrir</button>`;
+        return `<div class="flex items-center gap-3 flex-wrap bg-white border ${p.urgente ? 'border-rose-300' : 'border-amber-200'} rounded-xl px-3 py-2">
+          <div class="flex-1 min-w-[240px]"><b class="text-[13px]">${esc(p.nome)}</b> ${p.urgente ? '<span class="chip bg-rose-600 text-white">urgente</span>' : ''}<div class="text-[12px] text-slate-600">${esc(p.detalhe)}</div></div>${bt}</div>`;
+      }).join('');
+    }
+
+    function renderLista() {
+      const l = D.lista || [];
+      $('tbLista').innerHTML = l.length ? l.map(r => {
+        const st = STATUS[r.status] || [r.status, 'bg-slate-100'], pg = r.pagamento ? PAGST[r.pagamento] : null;
+        return `<tr class="hover:bg-slate-50 cursor-pointer ${r.id === atualId ? 'bg-rose-50' : ''}" onclick="abrir('${r.id}')">
+          <td class="font-bold">${r.numero}</td><td><b>${esc(r.nome)}</b><div class="text-[11px] text-slate-500">${esc(r.loja || '')}</div></td>
+          <td>${dbr(r.data_rescisao)}</td><td>${esc(TIPOS[r.tipo] || r.tipo)}</td><td>${(r.competencias || []).join(' + ') || '<span class="text-slate-400">já paga na folha</span>'}</td>
+          <td class="num font-bold">${r.valor_total != null ? brl(r.valor_total) : '-'}</td>
+          <td>${r.data_pagamento ? dbr(r.data_pagamento) : '-'} ${pg ? `<span class="chip ${pg[1]}">${pg[0]}</span>` : ''}</td>
+          <td><span class="chip ${st[1]}">${st[0]}</span></td></tr>`;
+      }).join('') : '<tr><td colspan="8" class="text-center text-slate-400 py-6">Nenhuma rescisão.</td></tr>';
+    }
+
+    function fecharDetalhe() { atualId = null; DET = null; $('boxDetalhe').classList.add('hidden'); if (D) renderLista(); }
+
+    async function abrir(id) {
+      const { data, error } = await _supabase.rpc('fn_rescisao_dados', { p_id: id, p_todas: $('chkTodas').checked });
+      if (error) return alert(error.message);
+      D = data; DET = data.detalhe; atualId = id; renderPend(); renderLista(); renderDetalhe();
+      $('boxDetalhe').classList.remove('hidden');
+    }
+
+    const editavel = () => DET && DET.rescisao.status === 'RASCUNHO';
+
+    function renderDetalhe() {
+      const r = DET.rescisao, f = DET.funcionario || {}, st = STATUS[r.status] || [r.status, ''];
+      $('dTitulo').innerHTML = `Rescisão nº ${r.numero} · <span class="chip ${st[1]}">${st[0]}</span>`;
+      $('dNome').innerText = f.nome || '-';
+      $('dCadastro').innerHTML = [f.cargo, f.loja, f.empresa, f.admissao ? 'admissão ' + dbr(f.admissao) : null, f.salario ? 'salário ' + brl(f.salario) : null,
+        `cadastro <b>${esc(f.status || '')}</b>${f.data_rescisao ? ' · rescisão ' + dbr(f.data_rescisao) : ''}`].filter(Boolean).map(x => String(x).startsWith('cadastro') ? x : esc(x)).join(' · ');
+      const ed = editavel();
+      // aviso de situação
+      let av = '';
+      if (r.modo === 'JA_PAGA') av = `<div class="ver OK">Rescisão registrada depois de paga no 5º dia útil (antes da tela existir). O cadastro foi acertado; a folha já paga fica como está e a pessoa não entra mais na folha a partir de ${esc(f.fora_desde || '')}.</div>`;
+      else if (r.status === 'ENVIADA') av = `<div class="ver OK"><b>Enviada ao Financeiro</b> em ${dh(r.enviado_em)} por ${esc(r.enviado_por || '')}. Para corrigir antes do pagamento: <b>Reabrir</b>.</div>`;
+      else if (r.status === 'CANCELADA') av = `<div class="ver ATENCAO">Cancelada em ${dh(r.cancelado_em)}: ${esc(r.cancelado_motivo || '')}</div>`;
+      else av = `<div class="ver ATENCAO">Rascunho: a pessoa já está fora da folha a partir de <b>${esc((r.competencias || [])[0] || '')}</b>. Lance os eventos do TRCT, confira as verificações e envie ao Financeiro.</div>`;
+      $('dAvisoStatus').innerHTML = av;
+
+      $('fData').value = r.data_rescisao || ''; $('fTipo').value = r.tipo; $('fAviso').value = r.aviso; $('fObs').value = r.obs || '';
+      $('fTrct').value = r.liquido_trct != null ? num(r.liquido_trct) : ''; $('fTrctJust').value = r.trct_justificativa || '';
+      $('fPag').value = r.data_pagamento || ''; $('fPrazoJust').value = r.prazo_justificativa || '';
+      $('fMeioC').value = r.meio_contabil; $('fMeioN').value = r.meio_nao_contabil;
+      ['fData', 'fTipo', 'fAviso', 'fObs', 'fTrct', 'fTrctJust', 'fPag', 'fPrazoJust', 'fMeioC', 'fMeioN'].forEach(id => $(id).disabled = !ed);
+      const regra = f.regra_dinheiro;
+      if (regra === 'TOTAL') { $('fMeioC').disabled = true; $('fMeioN').disabled = true; }
+      if (regra === 'NAO_CONTABIL') $('fMeioN').disabled = true;
+      $('dRegraDin').innerText = regra === 'TOTAL' ? '💵 Regra fixa: tudo em DINHEIRO para esta pessoa.' : regra === 'NAO_CONTABIL' ? '💵 Regra fixa: o não contábil é pago em DINHEIRO.' : '';
+      $('dDados').classList.toggle('hidden', r.modo === 'JA_PAGA');
+
+      // competências
+      const comps = DET.comps || [];
+      $('dComps').innerHTML = comps.length ? 'Competência(s) pagas nesta rescisão: ' + comps.map(c => `<span class="chip ${c.status === 'FECHADO' ? 'bg-slate-200 text-slate-600' : 'bg-indigo-100 text-indigo-800'}">${c.comp}${c.status === 'FECHADO' ? ' · fechada' : ''}</span>`).join(' ')
+        + (comps.length > 1 ? ' <span class="text-amber-700 font-bold">· a folha de ' + comps[0].comp + ' não foi paga no 5º dia útil e vai junto</span>' : '') : '';
+      $('iComp').innerHTML = comps.map(c => `<option value="${c.comp}"${c.comp === r.competencia ? ' selected' : ''}>${c.comp}</option>`).join('');
+      $('boxIComp').classList.toggle('hidden', comps.length < 2);
+
+      renderItens(); renderTotais(); renderVerif(); renderPagamentos(); renderAcoes();
+      $('boxIncluir').classList.toggle('hidden', !ed || r.modo === 'JA_PAGA');
+      $('dHist').innerHTML = (r.historico || []).slice().reverse().map(h => `<div>${dh(h.em)} · <b>${esc(String(h.acao || '').replace(/_/g, ' ').toLowerCase())}</b> ${esc(h.por || '')}${h.motivo ? ' · ' + esc(h.motivo) : ''}${h.evento ? ' · ' + h.evento + ' ' + brl(h.valor) : ''}${h.rubrica ? ' · ' + esc(h.rubrica) + ' ' + brl(h.valor) : ''}${h.total != null ? ' · total ' + brl(h.total) : ''}</div>`).join('');
+      mostrarTrct(); mostrarPrazo();
+    }
+
+    function compAberta(comp) { const c = (DET.comps || []).find(x => x.comp === comp); return !c || c.status !== 'FECHADO'; }
+
+    function renderItens() {
+      const its = DET.itens || [], ed = editavel(), r = DET.rescisao;
+      if (r.modo === 'JA_PAGA') { $('tbItens').innerHTML = '<tr><td colspan="7" class="text-slate-500 py-4 text-center">Os eventos desta rescisão já foram pagos na folha (5º dia útil).</td></tr>'; return; }
+      $('tbItens').innerHTML = its.length ? its.map(i => {
+        const desc = i.tipo === 'DESCONTO', daTela = String(i.referencia || '').startsWith('Rescisão nº');
+        const origem = daTela ? '<span class="chip bg-rose-100 text-rose-800">rescisão</span>' : '<span class="chip bg-slate-100 text-slate-600">lançado antes</span>';
+        const fora = !i.no_liquido ? `<span class="chip bg-slate-200 text-slate-600">pago à parte (${esc(String(i.pago_a_parte || '').toLowerCase().replace('_', ' '))}) · não entra</span>` : '';
+        const pode = ed && compAberta(i.competencia) && i.pagamento_status !== 'PAGO';
+        return `<tr class="${i.no_liquido ? '' : 'fora'}"><td>${esc(i.competencia)}</td><td class="font-bold">${esc(i.rubrica)}</td>
+          <td>${i.natureza === 'NAO_CONTABIL' ? '<span class="chip bg-violet-100 text-violet-800">não contábil</span>' : '<span class="chip bg-slate-100 text-slate-700">contábil</span>'}</td>
+          <td class="num ${desc ? '' : 'text-emerald-700 font-bold'}">${desc ? '' : num(i.valor)}</td><td class="num ${desc ? 'text-rose-700 font-bold' : ''}">${desc ? num(i.valor) : ''}</td>
+          <td class="text-[11.5px]">${esc(i.motivo || '')} ${origem} ${fora}</td>
+          <td class="nao-imprime whitespace-nowrap">${pode ? `<button class="text-indigo-700 font-bold text-[11px] mr-2 cursor-pointer" onclick="editarItem('${i.id}')">editar</button><button class="text-rose-700 font-bold text-[11px] cursor-pointer" onclick="excluirItem('${i.id}')">excluir</button>` : ''}</td></tr>`;
+      }).join('') : '<tr><td colspan="7" class="text-slate-400 py-4 text-center">Nenhum evento ainda.</td></tr>';
+    }
+
+    function renderTotais() {
+      const v = DET.valores || {}, r = DET.rescisao, its = (DET.itens || []).filter(i => i.no_liquido);
+      const s = (fn) => its.filter(fn).reduce((t, i) => t + (i.tipo === 'DESCONTO' ? -1 : 1) * Number(i.valor), 0);
+      const prov = its.filter(i => i.tipo !== 'DESCONTO').reduce((t, i) => t + Number(i.valor), 0), desc = its.filter(i => i.tipo === 'DESCONTO').reduce((t, i) => t + Number(i.valor), 0);
+      const linha = (rot, val, cls = '') => `<div class="flex justify-between gap-2 ${cls}"><span>${rot}</span><span class="num">${brl(val)}</span></div>`;
+      let h = `<div class="text-[12.5px] font-extrabold text-slate-800 mb-1">Totais</div>` + linha('Proventos', prov) + linha('Descontos', -desc, 'text-rose-700')
+        + `<div class="border-t border-slate-100 my-1"></div>` + linha('Contábil', v.contabil) + linha('Não contábil', v.nao_contabil);
+      if ((r.competencias || []).length > 1) h += linha('↳ contábil só de ' + r.competencia + ' (TRCT)', v.contabil_rescisao, 'text-slate-500 text-[11.5px]');
+      h += `<div class="flex justify-between gap-2 mt-2 bg-rose-50 border border-rose-200 rounded-lg px-2 py-2"><span class="font-extrabold text-rose-900">Líquido da rescisão</span><span class="num font-extrabold text-rose-900 text-[15px]">${brl(r.status === 'ENVIADA' && r.valor_total != null ? r.valor_total : v.total)}</span></div>`;
+      if (Number(DET.decimo_saldo || 0) > 0.009 && editavel())
+        h += `<button class="w-full mt-2 btn bg-violet-700 text-white" onclick="lancar3036()">Lançar 3036 (desconto do 13º antecipado) ${brl(DET.decimo_saldo)}</button>`;
+      $('dTotais').innerHTML = h;
+    }
+
+    function mostrarTrct() {
+      if (!DET) return;
+      const v = DET.valores || {}, t = lerValor($('fTrct').value);
+      if (t == null || isNaN(t)) { $('dTrctDif').innerHTML = '<span class="text-slate-500">Informe o líquido do termo de rescisão para conferir os eventos contábeis.</span>'; $('boxTrctJust').classList.add('hidden'); return; }
+      const d = Math.round((Number(v.contabil_rescisao || 0) - t) * 100) / 100;
+      $('boxTrctJust').classList.toggle('hidden', Math.abs(d) < 0.01);
+      $('dTrctDif').innerHTML = Math.abs(d) < 0.01 ? '<span class="text-emerald-700 font-bold">✓ Eventos contábeis batem com o TRCT</span>'
+        : `<span class="text-rose-700 font-bold">Diferença de ${brl(d)}</span> <span class="text-slate-500">(eventos contábeis ${brl(v.contabil_rescisao)})</span>`;
+    }
+
+    function mostrarPrazo() {
+      if (!DET) return; const r = DET.rescisao; if (!r.data_rescisao) return;
+      const prazo = somaDias(r.data_rescisao, 10), dp = $('fPag').value;
+      $('dPrazo').innerHTML = `Prazo legal: até <b>${dbr(prazo)}</b> (10 dias corridos após o desligamento).`;
+      $('boxPrazoJust').classList.toggle('hidden', !(dp && dp > prazo));
+    }
+
+    function renderVerif() {
+      const vs = DET.verificacoes || [], ord = { ERRO: 0, ATENCAO: 1, OK: 2 };
+      const ic = { ERRO: '⛔', ATENCAO: '⚠', OK: '✓' };
+      $('dVerif').innerHTML = vs.length ? vs.slice().sort((a, b) => ord[a.nivel] - ord[b.nivel]).map(x => `<div class="ver ${x.nivel}"><b>${ic[x.nivel] || ''} ${esc(x.titulo)}</b><div>${esc(x.detalhe || '')}</div></div>`).join('')
+        : '<div class="text-slate-400 text-[12px]">Nada a apontar.</div>';
+    }
+
+    function renderPagamentos() {
+      const ps = DET.pagamentos || [];
+      $('dPagamentos').innerHTML = ps.length ? `<div class="text-[12.5px] font-extrabold text-slate-800 mb-2">💳 Pagamento no Financeiro</div><div class="space-y-1">${ps.map(p => {
+        const st = PAGST[p.status] || [p.status, ''];
+        return `<div class="flex flex-wrap gap-3 items-center border ${p.meio === 'DINHEIRO' ? 'border-amber-400 bg-amber-50' : 'border-sky-200 bg-sky-50'} rounded-lg px-3 py-2 text-[12.5px]">
+          <b>${p.meio === 'DINHEIRO' ? '💵 DINHEIRO' : '🏦 BANCO/PIX'}</b><span class="num font-extrabold">${brl(p.valor)}</span><span>vence ${dbr(p.vencimento)}</span><span class="chip ${st[1]}">${st[0]}</span>
+          ${p.pago_em ? `<span>pago em ${dbr(p.pago_em)}</span>` : ''}${p.problema && p.status === 'PROBLEMA' ? `<span class="text-rose-700 font-bold">${esc(p.problema)}</span>` : ''}<span class="text-slate-500 text-[11px]">${esc(p.descricao || '')}</span></div>`;
+      }).join('')}</div>` : '';
+    }
+
+    function renderAcoes() {
+      const r = DET.rescisao, pago = (DET.pagamentos || []).some(p => p.status === 'PAGO');
+      const b = [];
+      if (r.status === 'RASCUNHO') {
+        b.push(`<button class="btn bg-white border border-rose-300 text-rose-700" onclick="pedirMotivo('CANCELAR')">Cancelar rescisão</button>`);
+        b.push(`<button class="btn !px-5 !py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px]" onclick="abrirEnviar()">Finalizar e enviar ao Financeiro →</button>`);
+      } else if (r.status === 'ENVIADA' && !pago) b.push(`<button class="btn bg-white border border-amber-400 text-amber-900" onclick="pedirMotivo('REABRIR')">Reabrir para corrigir</button>`);
+      else if (r.status === 'REGISTRADA') b.push(`<button class="btn bg-white border border-rose-300 text-rose-700" onclick="pedirMotivo('CANCELAR')">Cancelar registro</button>`);
+      $('dAcoes').innerHTML = b.join('');
+    }
+
+    // ---------- dados ----------
+    async function salvarDados(campo) {
+      if (!editavel() || ocupado) return;
+      if (campo === 'fPag' && $('fPag').value) {
+        const d = window.DiaUtil ? await DiaUtil.conferir($('fPag').value, _supabase) : $('fPag').value;
+        if (d === null) { $('fPag').value = DET.rescisao.data_pagamento || ''; return; }
+        $('fPag').value = d;
+        if (d < hoje()) { alert('A data de pagamento não pode ser no passado.'); $('fPag').value = DET.rescisao.data_pagamento || ''; return; }
+      }
+      if (campo === 'fData' && $('fData').value !== DET.rescisao.data_rescisao &&
+          !confirm('Mudar a data do desligamento recalcula as competências da rescisão e atualiza o cadastro. Continuar?')) { $('fData').value = DET.rescisao.data_rescisao; return; }
+      let trct = $('fTrct').value.trim();
+      if (trct) { const v = lerValor(trct); if (v == null || isNaN(v) || v < 0) { alert('Líquido do TRCT inválido.'); return; } trct = String(v); }
+      const p = { data_rescisao: $('fData').value, tipo: $('fTipo').value, aviso: $('fAviso').value, obs: $('fObs').value, liquido_trct: trct,
+        trct_justificativa: $('fTrctJust').value, data_pagamento: $('fPag').value, prazo_justificativa: $('fPrazoJust').value,
+        meio_contabil: $('fMeioC').value, meio_nao_contabil: $('fMeioN').value };
+      ocupado = true;
+      const { error } = await _supabase.rpc('fn_rescisao_salvar', { p_id: atualId, p });
+      ocupado = false;
+      if (error) { alert(error.message); return abrir(atualId); }
+      await abrir(atualId);
+    }
+
+    // ---------- eventos ----------
+    function eventoDigitado() { const c = parseInt(String($('iEvento').value).trim(), 10); return (D.eventos || []).find(e => e.codigo === c) || null; }
+    function dicaEvento() {
+      const e = eventoDigitado();
+      $('iObsDica').innerText = e && e.codigo === 3039 ? '(obrigatória: o que está sendo descontado)' : '';
+      $('iInfo').innerHTML = e ? `${e.tipo === 'DESCONTO' ? '<b class="text-rose-700">desconto</b>' : '<b class="text-emerald-700">provento</b>'} · ${e.natureza === 'NAO_CONTABIL' ? 'não contábil (fora do TRCT)' : 'contábil (vem do TRCT)'}` : '';
+    }
+    function editarItem(id) {
+      const i = (DET.itens || []).find(x => x.id === id); if (!i) return;
+      editItem = id; $('iEvento').value = i.rubrica; $('iValor').value = num(i.valor); $('iComp').value = i.competencia; $('iObs').value = i.motivo || '';
+      $('btnIncluir').innerText = 'Salvar'; dicaEvento(); $('iValor').focus();
+    }
+    async function salvarItem() {
+      if (ocupado) return;
+      const e = eventoDigitado(); if (!e) return alert('Escolha o evento da lista (digite o código).');
+      const v = lerValor($('iValor').value); if (v == null || isNaN(v) || v <= 0) return alert('Informe o valor.');
+      if (e.codigo === 3039 && letras($('iObs').value) < 10) return alert('3039 - DESCONTO OUTROS: diga na observação o que está sendo descontado (mínimo 10 letras).');
+      ocupado = true; $('btnIncluir').disabled = true;
+      const { error } = await _supabase.rpc('fn_rescisao_item_salvar', { p_id: atualId, p_item: editItem, p_evento: e.codigo, p_valor: v, p_comp: $('iComp').value || null, p_obs: $('iObs').value || null });
+      ocupado = false; $('btnIncluir').disabled = false;
+      if (error) return alert(error.message);
+      editItem = null; $('iEvento').value = ''; $('iValor').value = ''; $('iObs').value = ''; $('btnIncluir').innerText = 'Incluir'; dicaEvento();
+      await abrir(atualId); $('iEvento').focus();
+    }
+    async function excluirItem(id) {
+      const i = (DET.itens || []).find(x => x.id === id); if (!i) return;
+      if (!confirm(`Excluir ${i.rubrica} (${brl(i.valor)})?`)) return;
+      const { error } = await _supabase.rpc('fn_rescisao_item_excluir', { p_id: atualId, p_item: id });
+      if (error) return alert(error.message);
+      await abrir(atualId);
+    }
+    async function lancar3036() {
+      if (!confirm(`Lançar 3036 - desconto da antecipação do 13º de ${brl(DET.decimo_saldo)}?`)) return;
+      const { error } = await _supabase.rpc('fn_rescisao_item_salvar', { p_id: atualId, p_item: null, p_evento: 3036, p_valor: Number(DET.decimo_saldo), p_comp: DET.rescisao.competencia, p_obs: 'Antecipação do 13º recebida' });
+      if (error) return alert(error.message);
+      await abrir(atualId);
+    }
+
+    // ---------- nova / registrar ----------
+    function abrirNova() {
+      modoNova = 'NORMAL'; $('nTitulo').innerText = 'Nova rescisão'; $('boxNFunc').classList.remove('hidden'); $('boxNAviso').classList.remove('hidden');
+      $('nFunc').value = ''; $('nFunc').disabled = false; $('nData').value = ''; $('nObs').value = ''; $('nTipo').value = 'SEM_JUSTA_CAUSA'; $('nAviso').value = 'NAO_SE_APLICA';
+      $('nInfo').innerHTML = 'Lance assim que o desligamento for confirmado: a partir daqui a pessoa sai da folha e nada mais é pago no 5º dia útil.';
+      $('btnNova').innerText = 'Lançar rescisão'; resumoNova(); $('modalNova').classList.remove('hidden'); $('nFunc').focus();
+    }
+    function abrirRegistrar(fid) {
+      const p = (D.pendencias || []).find(x => x.funcionario_id === fid); if (!p) return;
+      modoNova = 'JA_PAGA'; $('nTitulo').innerText = 'Registrar rescisão já paga';
+      $('nFunc').value = p.nome; $('nFunc').disabled = true; $('nFunc').dataset.id = fid; $('nData').value = ''; $('nObs').value = ''; $('nTipo').value = 'SEM_JUSTA_CAUSA';
+      $('boxNAviso').classList.add('hidden');
+      $('nInfo').innerHTML = `<b>${esc(p.nome)}</b>: ${esc(p.detalhe)}<br>A rescisão foi paga junto da folha (5º dia útil), antes desta tela. O registro acerta o cadastro (data de rescisão), para adiantamento e VT e tira da folha a partir da competência seguinte. <b>Nada é pago de novo.</b>`;
+      $('btnNova').innerText = 'Registrar'; resumoNova(); $('modalNova').classList.remove('hidden'); $('nData').focus();
+    }
+    function funcEscolhido() {
+      if (modoNova === 'JA_PAGA') return { id: $('nFunc').dataset.id, nome: $('nFunc').value };
+      const n = String($('nFunc').value).trim().toUpperCase(); return (D.funcionarios || []).find(f => String(f.nome).toUpperCase() === n) || null;
+    }
+    function compDoFato(iso) { const [a, m, d] = String(iso).split('-').map(Number); let mm = m, aa = a; if (d >= 26) { mm++; if (mm > 12) { mm = 1; aa++; } } return pad(mm) + '/' + aa; }
+    function resumoNova() {
+      const f = funcEscolhido(), dt = $('nData').value;
+      if (!f || !dt) { $('nResumo').innerHTML = 'Escolha o funcionário e a data do desligamento.'; return; }
+      if (modoNova === 'JA_PAGA') { $('nResumo').innerHTML = `O cadastro de <b>${esc(f.nome)}</b> recebe a rescisão em <b>${dbr(dt)}</b> (INATIVO). Nenhum pagamento é gerado.`; return; }
+      $('nResumo').innerHTML = `<b>${esc(f.nome)}</b> · desligamento <b>${dbr(dt)}</b> (competência do fato ${compDoFato(dt)}).<br>
+        • Cadastro recebe a data de rescisão (fica INATIVO no dia).<br>• Adiantamento e VT deixam de ser gerados.<br>
+        • Sai da folha: nada vai no 5º dia útil (se a folha do mês anterior ainda não foi paga, ela vai junto da rescisão).<br>
+        • Os lançamentos dela passam a ser feitos só nesta tela.<br>• Prazo legal de pagamento: até <b>${dbr(somaDias(dt, 10))}</b>.`;
+    }
+    async function criar() {
+      if (ocupado) return;
+      const f = funcEscolhido(); if (!f) return alert('Escolha o funcionário da lista.');
+      const dt = $('nData').value; if (!dt) return alert('Informe a data do desligamento.');
+      if (modoNova === 'NORMAL' && !confirm(`Lançar a rescisão de ${f.nome} (desligamento ${dbr(dt)})? O cadastro é atualizado e a pessoa sai da folha.`)) return;
+      ocupado = true; $('btnNova').disabled = true;
+      const { data, error } = await _supabase.rpc('fn_rescisao_criar', { p_func: f.id, p_data: dt, p_tipo: $('nTipo').value, p_aviso: modoNova === 'JA_PAGA' ? 'NAO_SE_APLICA' : $('nAviso').value, p_obs: $('nObs').value || null, p_modo: modoNova });
+      ocupado = false; $('btnNova').disabled = false;
+      if (error) return alert(error.message);
+      fechar('modalNova'); atualId = data; await carregar(data);
+    }
+
+    // ---------- enviar / reabrir / cancelar ----------
+    function abrirEnviar() {
+      const vs = DET.verificacoes || [], erros = vs.filter(x => x.nivel === 'ERRO'), at = vs.filter(x => x.nivel === 'ATENCAO'), r = DET.rescisao, v = DET.valores || {};
+      if (erros.length) return alert('Antes de enviar, resolva:\n\n' + erros.map(x => '• ' + x.titulo + (x.detalhe ? ': ' + x.detalhe : '')).join('\n'));
+      const regra = (DET.funcionario || {}).regra_dinheiro, mc = regra === 'TOTAL' ? 'DINHEIRO' : r.meio_contabil, mn = regra ? 'DINHEIRO' : r.meio_nao_contabil;
+      const ic = m => m === 'DINHEIRO' ? '💵 dinheiro' : '🏦 banco';
+      const separa = mc !== mn && Number(v.contabil) > 0.005 && Number(v.nao_contabil) > 0.005;
+      $('eResumo').innerHTML = Number(v.total) > 0.005
+        ? `<b>${esc(DET.funcionario.nome)}</b> · líquido <b class="text-rose-800">${brl(v.total)}</b> · pagamento em <b>${dbr(r.data_pagamento)}</b><br>`
+          + (separa ? `Dois pagamentos: contábil ${brl(v.contabil)} (${ic(mc)}) e não contábil ${brl(v.nao_contabil)} (${ic(mn)}).` : `Um pagamento (${ic(Number(v.contabil) > 0.005 ? mc : mn)}).`)
+          + '<br><span class="text-slate-500 text-[12px]">Vai direto ao Financeiro como "Rescisão", fora do 5º dia útil.</span>'
+        : `<b>${esc(DET.funcionario.nome)}</b> · líquido zero: a rescisão é finalizada sem pagamento.`;
+      $('eAvisos').innerHTML = at.map(x => `<div class="ver ATENCAO"><b>⚠ ${esc(x.titulo)}</b><div>${esc(x.detalhe || '')}</div></div>`).join('');
+      $('boxEConf').classList.toggle('hidden', !at.length); $('eConf').checked = false;
+      $('modalEnviar').classList.remove('hidden');
+    }
+    async function enviar() {
+      if (ocupado) return;
+      const temAviso = (DET.verificacoes || []).some(x => x.nivel === 'ATENCAO');
+      if (temAviso && !$('eConf').checked) return alert('Marque que conferiu os avisos.');
+      ocupado = true; $('btnEnviar').disabled = true;
+      const { error } = await _supabase.rpc('fn_rescisao_enviar', { p_id: atualId, p_confirmo: true });
+      ocupado = false; $('btnEnviar').disabled = false;
+      if (error) return alert(error.message);
+      fechar('modalEnviar'); await carregar(atualId);
+    }
+    function pedirMotivo(acao) {
+      $('mMotivo').value = '';
+      if (acao === 'REABRIR') { $('mTitulo').innerText = 'Reabrir rescisão'; $('mInfo').innerText = 'O pagamento ainda não feito é cancelado no Financeiro e a rescisão volta a rascunho para correção. Depois, envie de novo.'; }
+      else { $('mTitulo').innerText = DET.rescisao.status === 'REGISTRADA' ? 'Cancelar registro' : 'Cancelar rescisão'; $('mInfo').innerText = 'Use só se o desligamento não aconteceu. O cadastro, o adiantamento e o VT voltam como estavam. Exclua antes os eventos lançados nesta rescisão.'; }
+      $('btnMotivo').onclick = () => confirmarMotivo(acao);
+      $('modalMotivo').classList.remove('hidden'); $('mMotivo').focus();
+    }
+    async function confirmarMotivo(acao) {
+      const m = $('mMotivo').value.trim(); if (letras(m) < 15) return alert('Informe o motivo (mínimo 15 letras).');
+      const { error } = await _supabase.rpc(acao === 'REABRIR' ? 'fn_rescisao_reabrir' : 'fn_rescisao_cancelar', { p_id: atualId, p_motivo: m });
+      if (error) return alert(error.message);
+      fechar('modalMotivo'); await carregar(atualId);
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>

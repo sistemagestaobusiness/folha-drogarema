@@ -17,7 +17,7 @@
   const GRUPOS = [
     ['', [['index.html', 'Painel', '▦'], ['pendencias.html', 'Pendências', '◉'], ['aprovacoes_gestor.html', 'Aprovações do Gestor', '✅'], ['rh_aprovacao_freelance.html', 'Aprovação do RH', '✓'], ['conferencia_fechamento.html', 'Conferência do fechamento', '☑'], ['contabilidade.html', 'Envio à contabilidade', '⇪'], ['avisos_lideres.html', 'Avisos para os líderes', '✉']]],
     ['Aprovações', [['supervisor_freelance.html', 'Aprovação do supervisor', '✓'], ['cadastro_solicitacoes.html', 'Pedidos de cadastro', '☰'], ['atestados_conferencia.html', 'Conferência de atestados', '✚'], ['supervisor_checklist.html', 'Check list do supervisor', '☑']]],
-    ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['noturno_lote.html', 'Adicional noturno', '☾'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'],
+    ['Lançar na folha', [['lancamentos.html', 'Lançamentos', '✎'], ['noturno_lote.html', 'Adicional noturno', '☾'], ['vale_transporte.html', 'Vale transporte', '⇢'], ['adiantamento.html', 'Adiantamento salarial', '◐'], ['planos.html', 'Planos', '✚'], ['emprestimos.html', 'Empréstimos', '⇄'], ['abatimentos.html', 'Abatimentos', '−'], ['rescisao.html', 'Rescisão', '✂'],
       ['importar_alpha7.html', 'Importar Alpha7', '⇪'], ['importar_consumo_farmacia.html', 'Consumo farmácia', '⇪']]],
     ['Jornada', [['escala.html', 'Escala', '▤'], ['banco_horas.html', 'Banco de horas', '◷'], ['ferias.html', 'Férias', '☼'], ['decimo_terceiro.html', '13º salário', '★'], ['freelance_solicitacao.html', 'Solicitações da loja', '✚']]],
     ['Fechar o mês', [['resumo_folha.html', 'Resumo da competência', '≡'], ['recibo_pagamento.html', 'Recibos', '▯'], ['holerite_entrega.html', 'Entrega de holerites', '✉']]],
@@ -638,6 +638,33 @@
     document.body.appendChild(m);
   }
 
+  // rescisão (HB, 12/11/2026): bolha no menu para RH/Gestor; o RH vê uma janela ao abrir o sistema enquanto houver
+  // pendência urgente (rescisão lançada com cadastro ATIVO, rascunho perto do prazo legal, pagamento devolvido)
+  async function avisosRescisao(abrirJanela) {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['RH', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('rescisao.html')) return;
+    let r; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_rescisao_pendencias'); if (error || !data) return; r = data; } catch (e) { return; }
+    const n = r.n || 0, it = document.querySelector('#menuSistema a.it[data-menu="rescisao.html"]');
+    if (it) { let b = it.querySelector('.bolha.resc');
+      if (!n) { if (b) b.remove(); } else { if (!b) { b = document.createElement('span'); b.className = 'bolha resc'; it.appendChild(b); }
+        b.style.background = r.urgentes ? '#dc2626' : '#B54708'; b.style.color = '#fff'; b.textContent = n; const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto'); } }
+    if (pf !== 'RH' || !abrirJanela || !r.urgentes || PAGINA === 'rescisao.html' || document.getElementById('rescPopup')) return;
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const urg = (r.itens || []).filter(x => x.urgente);
+    const m = document.createElement('div'); m.id = 'rescPopup';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
+      <div style="font-size:12px;font-weight:700;color:#be123c;text-transform:uppercase;letter-spacing:.04em">✂ Rescisão</div>
+      <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${urg.length} pendência(s) de rescisão para resolver</div>
+      <div style="font-size:13px;color:#475569;margin:6px 0 12px">Rescisão é paga sempre fora do 5º dia útil e o cadastro precisa estar certo para a pessoa sair da folha.</div>
+      ${urg.map(x => `<div style="border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:13px"><b>${esc(x.nome)}</b><br><span style="color:#475569;font-size:12px">${esc(x.detalhe)}</span></div>`).join('')}
+      <button type="button" data-ir style="width:100%;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:13px;cursor:pointer;background:#be123c;color:#fff;margin-top:6px">Abrir a tela de Rescisão</button>
+      <div style="text-align:center;margin-top:8px"><button type="button" data-depois style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">lembrar depois</button></div></div>`;
+    m.querySelector('[data-depois]').onclick = () => m.remove();
+    m.querySelector('[data-ir]').onclick = () => { m.remove(); location.href = 'rescisao.html'; };
+    document.body.appendChild(m);
+  }
+
   async function avisosMarketing() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'MARKETING', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('marketing_pedidos.html')) return;
@@ -943,6 +970,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); avisosRetaguarda(true); setInterval(() => avisosRetaguarda(false), 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); avisosRetaguarda(true); setInterval(() => avisosRetaguarda(false), 120000); avisosRescisao(true); setInterval(() => avisosRescisao(false), 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

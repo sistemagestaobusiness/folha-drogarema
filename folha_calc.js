@@ -13,9 +13,11 @@
   const ehSocio = f => [f && f.cargo, f && f.organograma_funcao].some(v => /^S[OÓ]CIO/i.test(String(v || '').trim()));
   // Saiu da empresa: cadastro INATIVO (com data de rescisão até esta competência, ou sem data) não entra mais na folha.
   // A rescisão é tratada na tela de rescisão. Mesma regra do banco: fn_func_fora_da_folha.
+  // (HB, 12/11/2026) rescisão lançada na tela de Rescisão: fora da folha a partir de funcionarios.rescisao_fora_desde
   const foraDaFolha = (f, comp) => {
-    if (!f || String(f.status || 'ATIVO').toUpperCase() !== 'INATIVO') return false;   // mesma regra do banco: só INATIVO
-    if (ordComp(comp) < VIGENCIA) return false;
+    if (!f || ordComp(comp) < VIGENCIA) return false;
+    if (f.rescisao_fora_desde) return ordComp(comp) >= ordComp(f.rescisao_fora_desde);
+    if (String(f.status || 'ATIVO').toUpperCase() !== 'INATIVO') return false;   // mesma regra do banco: só INATIVO
     const cr = compDoFato(f.data_rescisao);
     return !cr || ordComp(cr) <= ordComp(comp);
   };
@@ -118,5 +120,5 @@
     document.addEventListener('click', () => { if (pendente) setTimeout(checar, 300); }, true);
   }
 
-  window.FolhaCalc = { ordComp, compDoFato, ehSocio, foraDaFolha, naFolha, regrasEventos, calcular, vigiar, VERSAO: 3 };
+  window.FolhaCalc = { ordComp, compDoFato, ehSocio, foraDaFolha, naFolha, regrasEventos, calcular, vigiar, VERSAO: 4 };
 })();
