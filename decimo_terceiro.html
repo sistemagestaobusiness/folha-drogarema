@@ -35,7 +35,9 @@
           <li><b>Antecipação</b> (pedido do funcionário ao longo do ano): o RH lança <b>nesta tela</b> (botão "+ antecipar"). Até o <b>teto seguro</b> (saldo líquido: já descontados o INSS e o IRRF estimados do 13º, sem dependentes) vai direto para o Financeiro; <b>acima do teto</b> (ou na própria ficha do RH) passa antes pelo Gestor. Depois que o Financeiro paga, o evento <b id="evAnt">-</b> entra sozinho em Lançamentos (3º quadro).</li>
           <li><b>13º esperado</b> = (salário base + acordo de férias/13º do cadastro) × avos ÷ 12. Avos: mês com 15 dias ou mais trabalhados (regra contábil). <b>Saldo a pagar</b> = esperado − o que já foi pago − antecipações ainda no Gestor/Financeiro.</li>
           <li>Antecipações de abr–set/2026 vêm da planilha do RH (só registro, já pagas).</li>
-          <li><b>Novembro/dezembro</b>: a contabilidade manda o holerite do 13º; o RH lança <b id="evParc">-</b> (e INSS/IRRF). Quem recebeu antecipação: lançar junto o desconto <b id="evComp">-</b> — o sistema oferece isso sozinho ao salvar a parcela.</li>
+          <li><b>Novembro/dezembro</b>: a contabilidade manda o holerite do 13º; o RH lança <b>nesta tela</b> (botões <b>1ª parcela</b> e <b>2ª parcela</b>) os eventos <b id="evParc">-</b>. Desde 13/11/2026 os eventos do 13º <b>não são lançados em Lançamentos</b>.
+            <br><b>1ª parcela</b> (até 30/11): sem INSS/IRRF; quem recebeu antecipação pode ter o desconto <b id="evComp">-</b> já nela (opcional).
+            <br><b>2ª parcela</b> (até 20/12): o sistema confere o que já foi pago (antecipação + 1ª parcela), desconta toda a antecipação em aberto e confere o INSS e o IRRF informados com a tabela; se o líquido ficar negativo, não deixa lançar. Diferença na tabela ou no 13º esperado pede justificativa.</li>
           <li><b>Rescisão</b> com antecipação em aberto: lançar o desconto <b id="evCompResc">-</b> junto do pagamento da rescisão.</li>
           <li><b>Trava</b>: enquanto houver antecipação sem desconto, o Financeiro <b>não consegue</b> marcar como pago o 13º nem a rescisão desse funcionário. Exceção só pelo Gestor (baixa com motivo).</li>
         </ol>
@@ -129,7 +131,29 @@
       <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Justificativa <span id="aObrig" class="text-red-600 hidden">* (acima do teto seguro)</span></label>
         <input id="aMotivo" maxlength="300" class="inp" placeholder="motivo / pedido do funcionário"></div>
       <button onclick="salvarAnt()" id="aBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg cursor-pointer">✓ Lançar antecipação</button>
+      <p id="aNovDez" class="hidden text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-2">Novembro/dezembro: parcela do 13º NÃO é antecipação. Use os botões "1ª parcela" e "2ª parcela" da tabela.</p>
       <p class="text-[10px] text-slate-400">Vai para o Financeiro pagar na data informada. O evento 2066 só entra em Lançamentos depois do pagamento confirmado.</p>
+    </div>
+  </div>
+
+  <!-- MODAL: PARCELA (13/11/2026) -->
+  <div id="mParc" class="hidden fixed inset-0 bg-slate-900/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-lg mx-auto my-10 p-5 space-y-3 shadow-2xl text-xs">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2"><h3 id="pTitulo" class="font-black text-sm">PARCELA DO 13º</h3><button onclick="fechar('mParc')" class="text-slate-400 font-bold cursor-pointer">✕</button></div>
+      <div id="pInfo" class="bg-slate-50 rounded-lg p-2 space-y-0.5"></div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="col-span-2"><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Valor bruto da parcela (holerite do 13º) *</label><input type="number" step="0.01" min="0" id="pBruto" oninput="prevParc()" class="inp font-mono"></div>
+        <div class="p2"><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">INSS 13º (holerite) *</label><input type="number" step="0.01" min="0" id="pInss" oninput="prevParc()" class="inp font-mono"><div id="pInssTab" class="text-[10px] text-slate-500 mt-0.5"></div></div>
+        <div class="p2"><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">IRRF 13º (holerite) *</label><input type="number" step="0.01" min="0" id="pIrrf" oninput="prevParc()" class="inp font-mono"><div id="pIrrfTab" class="text-[10px] text-slate-500 mt-0.5"></div></div>
+        <div class="p1 col-span-2" id="boxPComp"><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Descontar antecipação nesta 1ª parcela (opcional)</label><input type="number" step="0.01" min="0" id="pComp" oninput="prevParc()" class="inp font-mono"></div>
+        <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Data do pagamento *</label><input type="date" id="pVenc" onchange="prevParc()" class="inp font-mono"></div>
+      </div>
+      <div id="pCalc" class="border border-slate-200 rounded-lg p-2 space-y-0.5"></div>
+      <div id="pErros" class="space-y-1"></div>
+      <div id="pAvisos" class="space-y-1"></div>
+      <div><label class="block text-[10px] font-bold uppercase text-slate-500 mb-0.5">Justificativa <span id="pObrig" class="text-red-600 hidden">* (há avisos)</span></label><input id="pObs" maxlength="300" class="inp" placeholder="ex.: conferido com o holerite da contabilidade"></div>
+      <button onclick="salvarParc()" id="pBtn" class="w-full bg-sky-700 hover:bg-sky-800 text-white font-bold py-2.5 rounded-lg cursor-pointer">✓ Lançar parcela</button>
+      <p class="text-[10px] text-slate-400">Vai para o Financeiro pagar na data informada (pagamento "13º"). O desconto da antecipação, o INSS e o IRRF entram no mesmo pagamento.</p>
     </div>
   </div>
 
@@ -252,7 +276,7 @@
       if (aba === 'mensal') return renderMensal(ls);
       if (aba === 'aprovacao') return renderAprovacao();
       $('tabela').innerHTML = ls.map(l => {
-        const parc = (v, pago) => num(v) > 0 ? `<span class="font-mono font-bold ${pago ? 'text-emerald-700' : 'text-sky-700'}">${fmtR(v)}</span><div class="text-[9px] ${pago ? 'text-emerald-600' : 'text-amber-600'}">${pago ? 'PAGO' : 'a pagar'}</div>` : '<span class="text-slate-300">—</span>';
+        const parc = (v, pago, n) => num(v) > 0 ? `<span class="font-mono font-bold ${pago ? 'text-emerald-700' : 'text-sky-700'}">${fmtR(v)}</span><div class="text-[9px] ${pago ? 'text-emerald-600' : 'text-amber-600'}">${pago ? 'PAGO' : 'a pagar'}${!pago && ['RH', 'GESTOR'].includes(perfil) ? ` <button onclick="event.stopPropagation(); tirarParc('${l.funcionario_id}', ${n})" class="noprint text-rose-500 hover:text-rose-700 font-bold cursor-pointer" title="Tirar esta parcela (ainda não paga)">✕</button>` : ''}</div>` : '<span class="text-slate-300">—</span>';
         const ants = movs.filter(m => m.funcionario_id === l.funcionario_id && m.papel === 'ANTECIPACAO' && !['RECUSADO', 'CANCELADO'].includes(m.status)).sort((x, y) => String(x.data).localeCompare(String(y.data)));
         const listaAnt = ants.length ? ants.map(m => `<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="font-mono text-slate-500 w-14">${MESES[m.mes - 1]}/${String(ano).slice(2)}</span>
             <span class="font-mono font-bold w-20 text-right">${fmtR(m.valor)}</span>${chipStatus(m)}
@@ -265,11 +289,14 @@
           <td class="p-2 text-center font-mono">${l.avos}/12</td>
           <td class="p-2 text-right font-mono">${esp ? `<b>${fmtR(esp)}</b>${num(l.estimativa_acordo) ? `<div class="text-[9px] text-slate-400">contábil ${fmtR(l.estimativa)}<br>acordo ${fmtR(l.estimativa_acordo)}</div>` : ''}` : '<span class="text-slate-300" title="sem salário base nem acordo no cadastro">—</span>'}</td>
           <td class="p-2 text-[11px]">${listaAnt}</td>
-          <td class="p-2 text-center">${parc(l.parcela1, l.parcela1_pago)}</td>
-          <td class="p-2 text-center">${parc(l.parcela2, l.parcela2_pago)}</td>
+          <td class="p-2 text-center">${parc(l.parcela1, l.parcela1_pago, 1)}</td>
+          <td class="p-2 text-center">${parc(l.parcela2, l.parcela2_pago, 2)}</td>
           <td class="p-2 text-right font-mono font-black ${saldo < -0.009 ? 'text-red-700' : saldo > 0.009 ? 'text-slate-900' : 'text-slate-300'}">${esp || num(l.pago) ? fmtR(saldo) : '—'}${saldo < -0.009 ? '<div class="text-[9px]">pago acima do esperado</div>' : ''}${num(l.pendente) ? `<div class="text-[9px] text-amber-600 font-normal">${fmtR(l.pendente)} em aprovação/pagamento</div>` : ''}</td>
           <td class="p-2"><span class="px-2 py-1 rounded-lg text-[10px] font-bold ${l.s.cls}">${l.s.txt}</span></td>
-          <td class="p-2 noprint">${['RH', 'GESTOR'].includes(perfil) && !l.data_rescisao ? `<button onclick="abrirAnt('${l.funcionario_id}')" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded font-bold text-[10px] whitespace-nowrap cursor-pointer">+ antecipar</button>` : ''}</td></tr>`;
+          <td class="p-2 noprint">${['RH', 'GESTOR'].includes(perfil) && !l.data_rescisao ? `<div class="flex flex-col gap-1">
+            ${!num(l.parcela1) && !num(l.parcela2) ? `<button onclick="abrirParc('${l.funcionario_id}', 1)" class="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 rounded font-bold text-[10px] whitespace-nowrap cursor-pointer">1ª parcela</button>` : ''}
+            ${!num(l.parcela2) ? `<button onclick="abrirParc('${l.funcionario_id}', 2)" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded font-bold text-[10px] whitespace-nowrap cursor-pointer">2ª parcela</button>` : ''}
+            <button onclick="abrirAnt('${l.funcionario_id}')" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded font-bold text-[10px] whitespace-nowrap cursor-pointer">+ antecipar</button></div>` : ''}</td></tr>`;
       }).join('') || '<tr><td colspan="9" class="p-6 text-center text-slate-400">Nenhum funcionário neste filtro.</td></tr>';
     }
 
@@ -319,7 +346,7 @@
         <div class="text-[10px] text-slate-500">INSS e IRRF saem na 2ª parcela: antecipar acima do líquido deixa o funcionário devendo. Acima do teto, só com o Gestor.</div>`;
       $('aValor').value = ''; $('aMotivo').value = ''; $('aMeio').value = 'BANCO';
       const d = new Date(); $('aVenc').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      checarAnt();
+      checarAnt(); $('aNovDez').classList.toggle('hidden', new Date().getMonth() < 10);
       $('mAnt').classList.remove('hidden'); $('aValor').focus();
     }
     function checarAnt() {
@@ -335,6 +362,7 @@
       const venc = await DiaUtil.conferir($('aVenc').value, _supabase); if (venc === null) return;
       $('aVenc').value = venc;
       if (v > num(atual.teto) + 0.005 && mot.length < 10) return alert('Valor acima do teto seguro (líquido do 13º): informe a justificativa (mínimo 10 letras).');
+      if (new Date().getMonth() >= 10 && !confirm('ATENÇÃO: em novembro e dezembro a 1ª e a 2ª parcela do 13º são lançadas nos botões "1ª parcela" e "2ª parcela", NÃO como antecipação.\n\nÉ mesmo uma ANTECIPAÇÃO (pedido fora da parcela)?')) return;
       if (!confirm(`Lançar antecipação de 13º de ${fmtR(v)} para ${atual.nome}, pagamento em ${dbr(venc)}?`)) return;
       $('aBtn').disabled = true;
       const { data, error } = await _supabase.rpc('fn_decimo_antecipar', { p_func: atual.funcionario_id, p_valor: v, p_vencimento: venc, p_meio: $('aMeio').value, p_motivo: mot || null });
@@ -347,6 +375,69 @@
       const mot = (await pedirTexto('Cancelar esta antecipação (ainda não paga)? Informe o motivo (mínimo 10 letras):') || '').trim();
       if (!mot) return;
       const { error } = await _supabase.rpc('fn_decimo_antecip_cancelar', { p_id: id, p_motivo: mot });
+      if (error) return alert(error.message);
+      carregar();
+    }
+
+    // ---------------- parcelas (13/11/2026: o 13º só é lançado por esta tela) ----------------
+    let parcN = 1, parcT = null;
+    function proxDiaUtil(iso) { return (window.DiaUtil && DiaUtil.anterior) ? DiaUtil.anterior(iso) : iso; }
+    function abrirParc(fid, n) {
+      atual = linhas.find(x => x.funcionario_id === fid); parcN = n;
+      $('pTitulo').innerText = (n === 1 ? '1ª PARCELA' : '2ª PARCELA') + ' DO 13º · ' + atual.nome;
+      document.querySelectorAll('#mParc .p2').forEach(e => e.classList.toggle('hidden', n !== 2));
+      document.querySelectorAll('#mParc .p1').forEach(e => e.classList.toggle('hidden', n !== 1));
+      $('pBruto').value = ''; $('pInss').value = ''; $('pIrrf').value = ''; $('pObs').value = '';
+      $('pComp').value = n === 1 && num(atual.saldo_antecipacao) > 0 ? num(atual.saldo_antecipacao).toFixed(2) : '';
+      $('boxPComp').classList.toggle('hidden', n !== 1 || !(num(atual.saldo_antecipacao) > 0));
+      let v = `${ano}-${n === 1 ? '11-30' : '12-20'}`; try { v = proxDiaUtil(v) || v; } catch (e) {}
+      $('pVenc').value = v;
+      $('mParc').classList.remove('hidden'); $('pBruto').focus(); prevParc();
+    }
+    async function prevParc() {
+      if (!atual) return; const n = parcN;
+      const { data, error } = await _supabase.rpc('fn_decimo_parcela', { p_func: atual.funcionario_id, p_parcela: n, p_bruto: num($('pBruto').value),
+        p_inss: num($('pInss').value), p_irrf: num($('pIrrf').value), p_compensar: n === 1 && $('pComp').value !== '' ? num($('pComp').value) : null,
+        p_vencimento: $('pVenc').value || null, p_obs: $('pObs').value || null, p_gravar: false });
+      if (error) { $('pErros').innerHTML = `<div class="bg-rose-50 border border-rose-300 text-rose-800 rounded p-2 font-bold">${esc(traduzirErro ? traduzirErro(error.message) : error.message)}</div>`; return; }
+      parcT = data; const c = data, L = (t, v, cls = '') => `<div class="flex justify-between ${cls}"><span>${t}</span><span class="font-mono">${v}</span></div>`;
+      $('pInfo').innerHTML = L(`13º esperado (${c.avos}/12)`, `<b>${fmtR(c.esperado)}</b>`) + L('Metade (referência da 1ª parcela)', fmtR(c.metade), 'text-slate-500')
+        + L('Antecipação já paga no ano', fmtR(c.antecipado_pago)) + (num(c.antecipado_pendente) ? L('Antecipação ainda no Gestor/Financeiro', fmtR(c.antecipado_pendente), 'text-amber-700 font-bold') : '')
+        + L('Antecipação ainda sem desconto', `<b>${fmtR(c.saldo_antecipacao)}</b>`, num(c.saldo_antecipacao) ? 'text-rose-700' : '')
+        + (n === 2 ? L('1ª parcela lançada (bruto)', fmtR(c.parcela1)) + L('1ª parcela (líquido)', fmtR(c.parcela1_liquido), 'text-slate-500') : '');
+      $('pInssTab').innerText = n === 2 && c.inss_tabela != null ? `tabela 2026 sobre ${fmtR(c.total_13)}: ${fmtR(c.inss_tabela)}` : '';
+      $('pIrrfTab').innerText = n === 2 && c.irrf_tabela != null ? `estimado (sem dependentes): ${fmtR(c.irrf_tabela)}` : '';
+      $('pCalc').innerHTML = `<div class="font-black text-[11px] uppercase text-slate-500">Conferência</div>` + L(n === 1 ? '1ª parcela (bruto)' : '2ª parcela (bruto)', fmtR(c.bruto))
+        + (n === 2 ? L('− INSS', fmtR(c.inss)) + L('− IRRF', fmtR(c.irrf)) : '') + (num(c.compensacao) ? L('− Desconto da antecipação', fmtR(c.compensacao), 'text-rose-700') : '')
+        + L('= Líquido a pagar', `<b>${fmtR(c.liquido)}</b>`, `border-t border-slate-200 pt-1 font-black ${num(c.liquido) < 0 ? 'text-red-700' : 'text-emerald-800'}`)
+        + (n === 2 ? L('13º do ano (1ª + 2ª, bruto)', fmtR(c.total_13), 'text-slate-500') + L('Total que o funcionário recebe no ano (antecipação + 1ª + 2ª)', fmtR(c.recebido_total), 'text-slate-500') : '');
+      const erros = (c.erros || []).filter(e => !/justificativa/.test(e));
+      $('pErros').innerHTML = erros.map(e => `<div class="bg-rose-50 border border-rose-300 text-rose-800 rounded p-2 font-bold">⛔ ${esc(e)}</div>`).join('');
+      $('pAvisos').innerHTML = (c.avisos || []).map(a => `<div class="bg-amber-50 border border-amber-300 text-amber-900 rounded p-2">⚠ ${esc(a)}</div>`).join('');
+      $('pObrig').classList.toggle('hidden', !(c.avisos || []).length);
+      $('pBtn').disabled = erros.length > 0;
+    }
+    async function salvarParc() {
+      if (!atual) return;
+      const venc = await DiaUtil.conferir($('pVenc').value, _supabase); if (venc === null) return; $('pVenc').value = venc;
+      await prevParc(); const c = parcT; if (!c) return;
+      if ((c.erros || []).some(e => !/justificativa/.test(e))) return alert('Resolva antes:\n\n' + c.erros.join('\n'));
+      if ((c.avisos || []).length && $('pObs').value.trim().replace(/[^A-Za-zÀ-ÿ]/g, '').length < 10) return alert('Há avisos: escreva a justificativa (mínimo 10 letras).');
+      if (!confirm(`Lançar a ${parcN}ª parcela do 13º de ${atual.nome}?\n\nBruto ${fmtR(c.bruto)}${parcN === 2 ? ` · INSS ${fmtR(c.inss)} · IRRF ${fmtR(c.irrf)}` : ''}${num(c.compensacao) ? ` · desconto da antecipação ${fmtR(c.compensacao)}` : ''}\nLíquido a pagar: ${fmtR(c.liquido)} em ${dbr(venc)}`)) return;
+      $('pBtn').disabled = true;
+      const { data, error } = await _supabase.rpc('fn_decimo_parcela', { p_func: atual.funcionario_id, p_parcela: parcN, p_bruto: num($('pBruto').value),
+        p_inss: num($('pInss').value), p_irrf: num($('pIrrf').value), p_compensar: parcN === 1 && $('pComp').value !== '' ? num($('pComp').value) : null,
+        p_vencimento: venc, p_obs: $('pObs').value || null, p_gravar: true });
+      $('pBtn').disabled = false;
+      if (error) return alert('Não foi lançado: ' + error.message);
+      if (!data.gravado) return alert('Não foi lançado:\n\n' + (data.erros || []).join('\n'));
+      fechar('mParc'); carregar();
+    }
+    async function tirarParc(fid, n) {
+      const l = linhas.find(x => x.funcionario_id === fid);
+      const mot = (await pedirTexto(`Tirar a ${n}ª parcela do 13º de ${l ? l.nome : ''} (ainda não paga)? O pagamento sai do Financeiro. Informe o motivo (mínimo 10 letras):`) || '').trim();
+      if (!mot) return;
+      const { error } = await _supabase.rpc('fn_decimo_parcela_excluir', { p_func: fid, p_parcela: n, p_motivo: mot });
       if (error) return alert(error.message);
       carregar();
     }
