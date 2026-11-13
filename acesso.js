@@ -343,12 +343,42 @@ if (!window.__alertTraduzido) {
       const REINICIO = Date.parse('2026-11-09T05:00:00-03:00');
       const reiniciar = async () => {
         try { localStorage.removeItem('usuario_drogarema'); sessionStorage.removeItem('abas_sistema'); } catch (e) { }
+        // renova no cache do navegador a tela, as abas abertas e os scripts comuns: depois do login já vem tudo atualizado
+        try {
+          const W = window.top !== window ? window.top : window, us = [W.location.href, 'acesso.js', 'login.html', 'versao.txt'];
+          W.document.querySelectorAll('iframe').forEach(f => { if (f.src) us.push(f.src); });
+          W.document.querySelectorAll('script[src]').forEach(sc => { if (sc.src.indexOf(location.origin) === 0) us.push(sc.src); });
+          await Promise.race([Promise.all(us.map(u => fetch(u, { cache: 'reload' }).catch(() => { }))), new Promise(r => setTimeout(r, 4000))]);
+        } catch (e) { }
         try { await cli.auth.signOut({ scope: 'local' }); } catch (e) { }
         (window.top !== window ? window.top : window).location.replace('login.html?reinicio=1');
       };
-      const entrouAntes = () => Date.now() >= REINICIO && !(Date.parse(user.last_sign_in_at || '') >= REINICIO);
+      // ENCERRAMENTO DIÁRIO (13/11/2026): todo dia às 23:59 (Brasília) todos os acessos são encerrados: as abas do sistema
+      // são fechadas, o cache das telas é renovado e é preciso entrar de novo com e-mail e senha (atualização chega para todos).
+      // Vale o horário do último login digitado (a renovação automática da sessão não conta): login antes do último 23:59 = sai.
+      // Também resolve a tela do dia anterior que o navegador reabria já logada.
+      const SP = (ms, o) => new Date(ms).toLocaleString('en-CA', Object.assign({ timeZone: 'America/Sao_Paulo', hour12: false }, o));
+      const corte = ms => {   // último 23:59 de Brasília até ms
+        const d = SP(ms, { year: 'numeric', month: '2-digit', day: '2-digit' }), hm = SP(ms, { hour: '2-digit', minute: '2-digit' }).replace(/^24/, '00');
+        let c = Date.parse(d + 'T23:59:00-03:00'); if (hm < '23:59') c -= 864e5; return c;
+      };
+      const entrou = Date.parse(user.last_sign_in_at || '') || 0;
+      const entrouAntes = () => (Date.now() >= REINICIO && !(entrou >= REINICIO)) || entrou < corte(Date.now());
       if (entrouAntes()) { await reiniciar(); return; }
-      if (window.top === window && Date.now() < REINICIO) { const t = setInterval(() => { if (entrouAntes()) { clearInterval(t); reiniciar(); } }, 60000); }
+      if (window.top === window) {
+        let avisado = false;
+        const t = setInterval(() => {
+          if (entrouAntes()) { clearInterval(t); reiniciar(); return; }
+          const hm = SP(Date.now(), { hour: '2-digit', minute: '2-digit' });
+          if (!avisado && hm >= '23:54' && hm < '23:59') {
+            avisado = true;
+            const f = document.createElement('div');
+            f.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:100000;background:#7c2d12;color:#fff;font:600 13px system-ui,sans-serif;padding:10px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:92vw;text-align:center';
+            f.textContent = 'Às 23:59 o sistema fecha todas as telas e pede o login de novo (e-mail e senha). Salve o que está fazendo.';
+            document.body.appendChild(f);
+          }
+        }, 30000);
+      }
       const { data, error } = await cli.rpc('fn_minhas_telas');
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }
