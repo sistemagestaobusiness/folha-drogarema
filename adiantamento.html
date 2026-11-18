@@ -168,7 +168,8 @@
 
     // ------------------------------------------------------------------ lançamento
     const antTot = f => r2(Number(f.ant_contabil) + Number(f.ant_nao_contabil));
-    const preenchido = e => e.c !== null && e.n !== null;
+    // (18/11/2026) basta uma das colunas: a outra em branco conta como zero (antes o botão Confirmar ficava desativado)
+    const preenchido = e => e.c !== null || e.n !== null;
     const tot = e => r2((e.c || 0) + (e.n || 0));
     // regra: vai para o Gestor só se o TOTAL (contábil + não contábil) mudar; trocar a divisão não precisa de aprovação
     const difere = f => { const e = ed[f.funcionario_id]; return e.recebe && preenchido(e) && tot(e) !== antTot(f); };
@@ -222,10 +223,10 @@
           <td class="px-3 py-1.5"><div class="font-bold text-slate-900">${esc(f.nome)}</div><div class="text-[10px] text-slate-500">${esc(f.cargo || '')}${f.registrado ? '' : ' · sem registro'}</div></td>
           <td class="px-2 py-1.5 text-center"><input type="checkbox" class="w-4 h-4 accent-emerald-600" checked ${dis} onchange="setRecebe('${id}', this.checked)" title="Desmarque se este funcionário não recebe adiantamento"></td>
           ${ant}
-          <td class="px-2 py-1.5 whitespace-nowrap"><input class="inp val !py-1" value="${vC}" placeholder="informar" ${dis} onchange="setVal('${id}','c',this)">
+          <td class="px-2 py-1.5 whitespace-nowrap"><input class="inp val !py-1" value="${vC}" placeholder="${e.n !== null ? '0,00' : 'informar'}" ${dis} onchange="setVal('${id}','c',this)">
             ${selMeio(id, 'meioC', e.meioC, dis)}
             <div class="text-[10px] ${acima ? 'text-amber-700 font-bold' : 'text-slate-400'}">${ref > 0 ? `40% = ${num(ref)}${acima ? ' · acima' : ''}` : 'sem salário'}</div></td>
-          <td class="px-2 py-1.5 whitespace-nowrap"><input class="inp val !py-1" value="${vN}" placeholder="informar" ${dis} onchange="setVal('${id}','n',this)">
+          <td class="px-2 py-1.5 whitespace-nowrap"><input class="inp val !py-1" value="${vN}" placeholder="${e.c !== null ? '0,00' : 'informar'}" ${dis} onchange="setVal('${id}','n',this)">
             ${selMeio(id, 'meio', e.meio, dis)}</td>
           <td class="px-2 py-1.5 text-right font-mono font-bold ${dif ? 'text-red-700' : 'text-slate-800'}">${preenchido(e) ? num(tot(e)) : '-'}</td>
           <td class="px-2 py-1.5">${obs}</td>
