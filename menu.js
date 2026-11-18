@@ -665,6 +665,61 @@
     document.body.appendChild(m);
   }
 
+  // (18/11/2026) FERIADO trabalhado sem decisão (fn_feriado_pendencias faz a triangulação: escala × folga compensatória × hora extra ×
+  // dispensa, sem farmacêutico com adicional fixo). Sem pendência real = nenhuma mensagem. Prazo: 5 dias depois do feriado;
+  // a cada dia o aviso fica mais rígido. Líder: todo dia/toda tela conforme o nível · Supervisor: a partir do 3º dia · RH: último dia/vencido.
+  async function avisosFeriado(abrirJanela) {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('escala.html')) return;
+    let r; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_feriado_pendencias'); if (error || !data) return; r = data; } catch (e) { return; }
+    const SPd = new Date().toLocaleString('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).slice(0, 10);
+    const minDias = pf === 'LIDER' ? -99 : pf === 'SUPERVISOR' ? 3 : pf === 'RH' ? 5 : 6;
+    const its = (r.itens || []).filter(x => Number(x.dias) >= minDias);
+    const passados = its.filter(x => !x.futuro);
+    const it = document.querySelector('#menuSistema a.it[data-menu="escala.html"]');
+    if (it) { let b = it.querySelector('.bolha.fer');
+      if (!passados.length) { if (b) b.remove(); } else { if (!b) { b = document.createElement('span'); b.className = 'bolha fer'; it.appendChild(b); }
+        b.style.background = '#c026d3'; b.style.color = '#fff'; b.title = 'Feriado trabalhado sem decisão na escala'; b.textContent = passados.length;
+        const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto'); } }
+    if (!abrirJanela || !its.length || PAGINA === 'escala.html' || pf === 'GESTOR' || document.getElementById('ferPopup')) return;
+    const dbr = d => String(d).slice(8, 10) + '/' + String(d).slice(5, 7);
+    const lib = d => SPd <= String(r.liberado_ate || '') && ['2026-11-02', '2026-11-15'].includes(d);
+    const nivel = x => { const d = Number(x.dias);
+      if (d < 0) return { n: 0, cor: '#0369a1', txt: `Feriado em ${dbr(x.data)}: já pode registrar a decisão (prazo ${dbr(x.prazo)})` };
+      if (d <= 1) return { n: 1, cor: '#b45309', txt: `Registre até ${dbr(x.prazo)} (faltam ${5 - d} dias)` };
+      if (d <= 3) return { n: 2, cor: '#c2410c', txt: `ATENÇÃO: faltam ${5 - d} dias para o prazo (${dbr(x.prazo)})` };
+      if (d === 4) return { n: 3, cor: '#dc2626', txt: `URGENTE: amanhã (${dbr(x.prazo)}) é o último dia` };
+      if (d === 5) return { n: 4, cor: '#991b1b', txt: 'ÚLTIMO DIA: o prazo termina HOJE' };
+      return { n: 5, cor: '#7f1d1d', txt: `PRAZO VENCIDO há ${d - 5} dia(s)${lib(x.data) ? ` · liberado só até ${dbr(r.liberado_ate)}` : ' · agora só o RH altera'}` }; };
+    const pior = Math.max(...its.map(x => nivel(x).n));
+    // níveis 0 e 1 (e RH): uma vez por dia; do 2 em diante (líder/supervisor): a cada tela aberta
+    const chave = 'ferAviso_' + pf + '_' + SPd + '_' + pior;
+    if (pior <= 1 || pf === 'RH') { try { if (localStorage.getItem(chave)) return; } catch (e) { } }
+    const travar = pf === 'LIDER' && (pior === 4 || (pior === 5 && its.some(x => nivel(x).n === 5 && lib(x.data))));
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const grupos = {}; its.forEach(x => { const k = x.data + '|' + x.loja; (grupos[k] = grupos[k] || []).push(x); });
+    const corPior = nivel(its.find(x => nivel(x).n === pior)).cor;
+    const titulo = pf === 'LIDER' ? `${its.length} pessoa(s) da sua loja na escala do feriado sem decisão`
+      : pf === 'SUPERVISOR' ? `Feriado: ${its.length} pessoa(s) sem decisão há 3 dias ou mais` : `Feriado: ${its.length} pessoa(s) sem decisão no prazo final ou vencido`;
+    const m = document.createElement('div'); m.id = 'ferPopup';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:600px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit;border-top:8px solid ${corPior}">
+      <div style="font-size:12px;font-weight:800;color:${corPior};text-transform:uppercase;letter-spacing:.04em">🎉 Feriado · decisão na escala</div>
+      <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${titulo}</div>
+      <div style="font-size:13px;color:#475569;margin:6px 0 12px">Quem trabalhou no feriado precisa de <b>folga compensatória</b>, <b>hora extra 100%</b> ou <b>"Não vai trabalhar"</b>; quem não trabalhou, marque Folga ou Falta no dia. O prazo é de <b>5 dias</b> depois do feriado. Sem isso o RH não lança na folha.</div>
+      ${Object.keys(grupos).sort().map(k => { const g = grupos[k], nv = nivel(g[0]);
+        return `<div style="border:2px solid ${nv.cor};border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px">
+          <div style="font-weight:800;color:${nv.cor}">${dbr(g[0].data)} · ${esc(g[0].feriado)}${pf === 'LIDER' ? '' : ' · ' + esc(g[0].loja)}</div>
+          <div style="font-weight:800;color:${nv.cor};font-size:12px">${esc(nv.txt)}</div>
+          <div style="color:#334155;font-size:12px;margin-top:4px">${g.map(x => esc(x.nome) + ' (' + esc(x.entrada || '') + '–' + esc(x.saida || '') + ')').join(' · ')}</div></div>`; }).join('')}
+      <button type="button" data-ir style="width:100%;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:13px;cursor:pointer;background:${corPior};color:#fff;margin-top:6px">${pf === 'RH' ? 'Abrir a Conferência do fechamento' : 'Abrir a escala e resolver agora'}</button>
+      ${travar ? `<div style="text-align:center;margin-top:8px;font-size:11.5px;color:#991b1b;font-weight:700">Prazo final: este aviso aparece em toda tela até a escala ser acertada.</div>`
+        : `<div style="text-align:center;margin-top:8px"><button type="button" data-depois style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">lembrar depois</button></div>`}</div>`;
+    const d = m.querySelector('[data-depois]'); if (d) d.onclick = () => { try { localStorage.setItem(chave, '1'); } catch (e) { } m.remove(); };
+    m.querySelector('[data-ir]').onclick = () => { try { localStorage.setItem(chave, '1'); } catch (e) { } m.remove(); location.href = pf === 'RH' ? 'conferencia_fechamento.html' : 'escala.html'; };
+    document.body.appendChild(m);
+  }
+
   async function avisosMarketing() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'MARKETING', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('marketing_pedidos.html')) return;
@@ -970,6 +1025,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); avisosRetaguarda(true); setInterval(() => avisosRetaguarda(false), 120000); avisosRescisao(true); setInterval(() => avisosRescisao(false), 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); avisosRetaguarda(true); setInterval(() => avisosRetaguarda(false), 120000); avisosRescisao(true); setInterval(() => avisosRescisao(false), 120000); avisosFeriado(true); setInterval(() => avisosFeriado(false), 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

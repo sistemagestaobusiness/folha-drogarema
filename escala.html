@@ -52,6 +52,7 @@
       <div id="painelRetiradas" class="noprint hidden"></div>
       <div id="avisoPadrao" class="noprint hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs"></div>
       <div id="avisoAtestados" class="noprint hidden bg-pink-50 border border-pink-300 text-pink-900 rounded-xl p-3 text-xs"></div>
+      <div id="avisoFeriados" class="noprint hidden rounded-xl p-3 text-xs"></div>
 
       <div id="legenda" class="noprint flex flex-wrap gap-2 text-[10px] font-bold">
         <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800">7:00 manhã</span>
@@ -413,7 +414,7 @@
       if (semPadrao.length) avisos.push(`${semPadrao.length} funcionário(s) sem horário padrão: ${semPadrao.slice(0, 6).map(f => esc(primeiroNome(f.nome_registro))).join(', ')}${semPadrao.length > 6 ? '…' : ''}.`);
       $('avisoPadrao').innerHTML = avisos.length ? `⚠ ${avisos.join(' ')} ${visao !== 'config' ? `<button onclick="trocarVisao('config')" class="ml-2 underline font-bold cursor-pointer">Configurar agora</button>` : ''}` : '';
       $('avisoPadrao').classList.toggle('hidden', !avisos.length);
-      carregarAtestadosPend();
+      carregarAtestadosPend(); carregarFeriadosPend();
       document.querySelectorAll('.edit').forEach(b => b.classList.toggle('hidden', !podeEditar));
       if (visao === 'mes') renderMes();
       if (visao === 'semana') renderSemana();
@@ -622,7 +623,7 @@
       if (precisaPedir(tipoDia)) return pedirRetirada();
       // prazo (regra de 29/10/2026): líder e supervisor alteram a escala até 5 dias para trás; com 6 dias de atraso bloqueia (fale com o RH)
       // (18/11/2026) liberação temporária: feriados de 02/11 e 15/11 podem ser acertados até 20/11 (mesma regra no banco: fn_feriado_liberado)
-      const ferLib = ['2026-11-02', '2026-11-15'].includes(iso) && hoje() <= '2026-11-20' && !ate;
+      const ferLib = ['2026-11-02', '2026-11-15'].includes(iso) && hoje() <= FER_LIBERADO_ATE && !ate;
       if (['LIDER', 'SUPERVISOR'].includes(perfil) && !ferLib) { const lim = addDias(hoje(), -5);
         if (iso < lim) return alert(`Fora do prazo: a escala só pode ser alterada até 5 dias para trás (a partir de ${dbr(lim)}). Fale com o RH.`); }
       if (ate && ate < iso) return alert('"Repetir até" precisa ser depois do dia escolhido.');
@@ -692,6 +693,40 @@
       alert('Atestado enviado ao RH.' + (hoje() > addDias(ini, 5) ? '\n\nAtenção: fora do prazo de 5 dias — o RH vai decidir.' : ''));
       fechar('mDia'); await garantirPeriodo(true); renderizar();
     }
+    // (18/11/2026) feriado trabalhado sem decisão: aparece enquanto houver alguém da loja na escala trabalhando no feriado
+    // sem folga compensatória, hora extra 100% ou "não vai trabalhar". Prazo: 5 dias depois do feriado; a cada dia o aviso fica mais rígido.
+    const FER_LIBERADO_ATE = '2026-11-20';   // liberação dos feriados 02/11 e 15/11 (HL1)
+    function nivelFeriado(it) {
+      const d = Number(it.dias), pz = dbr(it.prazo).slice(0, 5), lib = hoje() <= FER_LIBERADO_ATE && ['2026-11-02', '2026-11-15'].includes(it.data);
+      if (d < 0) return { n: 0, cls: 'bg-sky-50 border-sky-300 text-sky-900', txt: `Feriado em ${dbr(it.data).slice(0, 5)}: já pode registrar a decisão (prazo ${pz})` };
+      if (d <= 1) return { n: 1, cls: 'bg-amber-50 border-amber-300 text-amber-900', txt: `Registre até ${pz} (faltam ${5 - d} dias)` };
+      if (d <= 3) return { n: 2, cls: 'bg-orange-100 border-orange-400 text-orange-900', txt: `ATENÇÃO: faltam ${5 - d} dias para o prazo (${pz})` };
+      if (d === 4) return { n: 3, cls: 'bg-red-100 border-red-500 text-red-900', txt: `URGENTE: amanhã (${pz}) é o último dia` };
+      if (d === 5) return { n: 4, cls: 'bg-red-600 border-red-700 text-white', txt: 'ÚLTIMO DIA: o prazo termina HOJE' };
+      return { n: 5, cls: 'bg-red-700 border-red-900 text-white', txt: `PRAZO VENCIDO há ${d - 5} dia(s): o supervisor e o RH foram avisados${lib ? ` · liberado excepcionalmente até ${dbr(FER_LIBERADO_ATE)} para acertar na escala` : ''}` };
+    }
+    let ferPendSeq = 0, ferPend = [];
+    async function carregarFeriadosPend() {
+      const box = $('avisoFeriados'); if (!box || !lojaSel) return; const seq = ++ferPendSeq;
+      let r = null; try { const { data } = await _supabase.rpc('fn_feriado_pendencias'); r = data; } catch (e) { }
+      if (seq !== ferPendSeq) return;
+      ferPend = ((r && r.itens) || []).filter(x => x.loja_id === lojaSel);
+      if (!ferPend.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      const grupos = {}; ferPend.forEach(x => (grupos[x.data] = grupos[x.data] || []).push(x));
+      const pior = Math.max(...ferPend.map(x => nivelFeriado(x).n)), cab = nivelFeriado(ferPend.find(x => nivelFeriado(x).n === pior));
+      box.className = 'noprint rounded-xl p-3 text-xs border-2 ' + cab.cls;
+      box.innerHTML = `<div class="font-black text-[13px]">🎉 Feriado: ${ferPend.length} pessoa(s) na escala sem decisão</div>
+        <div class="mt-0.5">Para cada pessoa que trabalhou (ou vai trabalhar) no feriado: <b>folga compensatória</b>, <b>hora extra 100%</b> ou <b>"Não vai trabalhar"</b>. Se não trabalhou, marque Folga ou Falta no dia. Clique no nome para abrir o dia.</div>`
+        + Object.keys(grupos).sort().map(dt => { const g = grupos[dt], nv = nivelFeriado(g[0]);
+          return `<div class="mt-2"><div class="font-bold">${dbr(dt)} · ${esc(g[0].feriado)} · ${esc(nv.txt)}</div><div class="mt-1 flex flex-wrap gap-1">${g.map(x =>
+            `<button type="button" onclick="abrirFeriadoPend('${x.funcionario_id}','${x.data}')" class="px-2 py-0.5 rounded bg-white text-slate-800 border border-slate-300 font-bold cursor-pointer hover:bg-slate-50">${esc(primeiroNome(x.nome))} · ${esc(x.entrada || '')}–${esc(x.saida || '')}</button>`).join('')}</div></div>`; }).join('');
+    }
+    async function abrirFeriadoPend(fid, iso) {
+      if (!func(fid)) return alert('Funcionário fora desta loja/escala.');
+      if (iso.slice(0, 7) !== (dataRef || hoje()).slice(0, 7)) { dataRef = iso; await garantirPeriodo(true); renderizar(); }
+      abrirEdicao(fid, iso);
+    }
+
     let atPendSeq = 0;
     async function carregarAtestadosPend() {
       const box = $('avisoAtestados'); if (!box || !lojaSel) return; const seq = ++atPendSeq;
