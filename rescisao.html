@@ -111,13 +111,13 @@
           <!-- totais + TRCT + pagamento -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div class="border border-slate-200 rounded-xl p-3 space-y-1 text-[12.5px]" id="dTotais"></div>
-            <div class="border border-slate-200 rounded-xl p-3 space-y-2">
+            <div class="border border-slate-200 rounded-xl p-3 space-y-2" id="boxTrct">
               <div class="text-[12.5px] font-extrabold text-slate-800">Conferência com o TRCT</div>
               <div><label class="lbl">Líquido do TRCT (contabilidade)</label><input id="fTrct" class="inp num" inputmode="decimal" placeholder="0,00"></div>
               <div id="boxTrctJust" class="hidden"><label class="lbl">Justificativa da diferença (mín. 15 letras)</label><input id="fTrctJust" class="inp" maxlength="300"></div>
               <div id="dTrctDif" class="text-[12px]"></div>
             </div>
-            <div class="border border-slate-200 rounded-xl p-3 space-y-2">
+            <div class="border border-slate-200 rounded-xl p-3 space-y-2" id="boxPagto">
               <div class="text-[12.5px] font-extrabold text-slate-800">Pagamento (fora do 5º dia útil)</div>
               <div><label class="lbl">Data de pagamento</label><input type="date" id="fPag" class="inp"><div class="text-[11px] text-slate-500 mt-1" id="dPrazo"></div></div>
               <div id="boxPrazoJust" class="hidden"><label class="lbl">Justificativa (depois do prazo legal, mín. 15 letras)</label><input id="fPrazoJust" class="inp" maxlength="300"></div>
@@ -296,6 +296,7 @@
       if (regra === 'NAO_CONTABIL') $('fMeioN').disabled = true;
       $('dRegraDin').innerText = regra === 'TOTAL' ? '💵 Regra fixa: tudo em DINHEIRO para esta pessoa.' : regra === 'NAO_CONTABIL' ? '💵 Regra fixa: o não contábil é pago em DINHEIRO.' : '';
       $('dDados').classList.toggle('hidden', r.modo === 'JA_PAGA');
+      $('boxTrct').classList.toggle('hidden', r.modo === 'JA_PAGA'); $('boxPagto').classList.toggle('hidden', r.modo === 'JA_PAGA');
 
       // competências
       const comps = DET.comps || [];
@@ -314,7 +315,17 @@
 
     function renderItens() {
       const its = DET.itens || [], ed = editavel(), r = DET.rescisao;
-      if (r.modo === 'JA_PAGA') { $('tbItens').innerHTML = '<tr><td colspan="7" class="text-slate-500 py-4 text-center">Os eventos desta rescisão já foram pagos na folha (5º dia útil).</td></tr>'; return; }
+      if (r.modo === 'JA_PAGA') {   // (18/11/2026) só consulta: eventos da folha em que a rescisão foi paga no 5º dia útil
+        const pf = DET.pago_na_folha, pi = (pf && pf.itens) || [];
+        $('tbItens').innerHTML = pi.length ? pi.map(i => { const desc = i.tipo === 'DESCONTO';
+          return `<tr class="${i.no_liquido ? '' : 'fora'}"><td>${esc(i.competencia)}</td><td class="font-bold">${esc(i.rubrica)}</td>
+            <td>${i.natureza === 'NAO_CONTABIL' ? '<span class="chip bg-violet-100 text-violet-800">não contábil</span>' : '<span class="chip bg-slate-100 text-slate-700">contábil</span>'}</td>
+            <td class="num ${desc ? '' : 'text-emerald-700 font-bold'}">${desc ? '' : num(i.valor)}</td><td class="num ${desc ? 'text-rose-700 font-bold' : ''}">${desc ? num(i.valor) : ''}</td>
+            <td class="text-[11.5px]">${esc(i.motivo || '')} ${i.rescisao ? '<span class="chip bg-rose-100 text-rose-800">rescisão</span>' : '<span class="chip bg-slate-100 text-slate-600">folha do mês</span>'}${i.no_liquido ? '' : ' <span class="chip bg-slate-200 text-slate-600">pago à parte · não entra</span>'}</td>
+            <td></td></tr>`; }).join('')
+          : '<tr><td colspan="7" class="text-slate-500 py-4 text-center">Os eventos desta rescisão já foram pagos na folha (5º dia útil).</td></tr>';
+        return;
+      }
       $('tbItens').innerHTML = its.length ? its.map(i => {
         const desc = i.tipo === 'DESCONTO', daTela = String(i.referencia || '').startsWith('Rescisão nº');
         const origem = daTela ? '<span class="chip bg-rose-100 text-rose-800">rescisão</span>' : '<span class="chip bg-slate-100 text-slate-600">lançado antes</span>';
@@ -329,6 +340,7 @@
     }
 
     function renderTotais() {
+      if (DET.rescisao.modo === 'JA_PAGA') return renderTotaisJaPaga();
       const v = DET.valores || {}, r = DET.rescisao, its = (DET.itens || []).filter(i => i.no_liquido);
       const s = (fn) => its.filter(fn).reduce((t, i) => t + (i.tipo === 'DESCONTO' ? -1 : 1) * Number(i.valor), 0);
       const prov = its.filter(i => i.tipo !== 'DESCONTO').reduce((t, i) => t + Number(i.valor), 0), desc = its.filter(i => i.tipo === 'DESCONTO').reduce((t, i) => t + Number(i.valor), 0);
@@ -339,6 +351,23 @@
       h += `<div class="flex justify-between gap-2 mt-2 bg-rose-50 border border-rose-200 rounded-lg px-2 py-2"><span class="font-extrabold text-rose-900">Líquido da rescisão</span><span class="num font-extrabold text-rose-900 text-[15px]">${brl(r.status === 'ENVIADA' && r.valor_total != null ? r.valor_total : v.total)}</span></div>`;
       if (Number(DET.decimo_saldo || 0) > 0.009 && editavel())
         h += `<button class="w-full mt-2 btn bg-violet-700 text-white" onclick="lancar3036()">Lançar 3036 (desconto do 13º antecipado) ${brl(DET.decimo_saldo)}</button>`;
+      $('dTotais').innerHTML = h;
+    }
+
+    // (18/11/2026) rescisão já paga no 5º dia útil: totais da folha em que foi paga × o que o Financeiro pagou. Nada a lançar.
+    function renderTotaisJaPaga() {
+      const pf = DET.pago_na_folha || {}, its = (pf.itens || []).filter(i => i.no_liquido), q = pf.quinto_dia;
+      const sg = i => (i.tipo === 'DESCONTO' ? -1 : 1) * Number(i.valor);
+      const prov = its.filter(i => i.tipo !== 'DESCONTO').reduce((t, i) => t + Number(i.valor), 0), desc = its.filter(i => i.tipo === 'DESCONTO').reduce((t, i) => t + Number(i.valor), 0);
+      const liq = Math.round(its.reduce((t, i) => t + sg(i), 0) * 100) / 100, resc = Math.round(its.filter(i => i.rescisao).reduce((t, i) => t + sg(i), 0) * 100) / 100;
+      const linha = (rot, val, cls = '') => `<div class="flex justify-between gap-2 ${cls}"><span>${rot}</span><span class="num">${brl(val)}</span></div>`;
+      let h = `<div class="text-[12.5px] font-extrabold text-slate-800 mb-1">Folha ${esc(pf.competencia || '')} (paga no 5º dia útil)</div>` + linha('Proventos', prov) + linha('Descontos', -desc, 'text-rose-700')
+        + `<div class="border-t border-slate-100 my-1"></div>` + linha('↳ só os eventos da rescisão', resc, 'text-slate-500 text-[11.5px]')
+        + `<div class="flex justify-between gap-2 mt-2 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-2"><span class="font-extrabold text-emerald-900">Líquido da folha ${esc(pf.competencia || '')}</span><span class="num font-extrabold text-emerald-900 text-[15px]">${brl(liq)}</span></div>`;
+      if (q) { const d = Math.round((Number(q.valor) - liq) * 100) / 100;
+        h += `<div class="text-[12px] mt-1">5º dia útil: <b>${brl(q.valor)}</b> · ${q.status === 'PAGO' ? '✓ pago' + (q.pago_em ? ' em ' + dbr(q.pago_em) : '') : esc(String(q.status || '').toLowerCase())}
+          ${Math.abs(d) < 0.01 ? '<span class="text-emerald-700 font-bold"> · confere com os eventos</span>' : `<span class="text-rose-700 font-bold"> · diferença de ${brl(d)}</span>`}</div>`; }
+      h += `<div class="text-[11.5px] text-slate-600 mt-2">Nada a lançar: os valores já estão na folha de ${esc(pf.competencia || '')} e foram pagos. Correção, só pela folha da competência.</div>`;
       $('dTotais').innerHTML = h;
     }
 
