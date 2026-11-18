@@ -376,7 +376,7 @@
         <table class="tb w-full"><thead><tr><th>Motoboy</th><th class="num">Entregas</th>${lojasUsadas.map(l => `<th class="num">Loja ${l}</th>`).join('')}<th class="num">Valor entregas</th>${temMin ? '<th class="num">Compl. mínimo</th>' : ''}${temTr ? '<th class="num">Transferências</th>' : ''}<th class="num">Transf./Pão</th><th class="num">Abatimento</th><th class="num">Total</th><th></th></tr></thead><tbody>
         ${res.map(r => `<tr><td><div class="font-bold">${esc(r.m.nome_alpha7)}</div>${r.m.nome_pdf ? `<div class="text-[10.5px] text-slate-400">${esc(r.m.nome_pdf)}</div>` : ''}</td><td class="num">${r.qtd}</td>
           ${lojasUsadas.map(l => `<td class="num text-slate-500">${r.lojas[l] ? brl(r.lojas[l]) : '-'}</td>`).join('')}
-          <td class="num">${brl(r.val)}</td>${temMin ? `<td class="num text-sky-700">${r.comp ? brl(r.comp) : '-'}</td>` : ''}${temTr ? `<td class="num text-violet-700">${r.tq ? `${brl(r.tv)} <span class="text-[10px] text-slate-400">(${r.tq})</span>` : '-'}</td>` : ''}<td class="num">${r.mais ? brl(r.mais) : '-'}</td><td class="num text-rose-700">${r.menos ? '−' + brl(r.menos) : '-'}</td><td class="num font-black">${rs(r.total)}</td>
+          <td class="num">${brl(r.val)}</td>${temMin ? `<td class="num text-sky-700">${r.comp ? brl(r.comp) : '-'}</td>` : ''}${temTr ? `<td class="num text-violet-700">${r.tq ? `<a href="#" onclick="verTransf('${r.id}');return false;" title="Ver de onde vieram (aba Transferências, período desta ${MODO.per})" class="underline decoration-dotted hover:text-violet-900">${brl(r.tv)} <span class="text-[10px] text-slate-400">(${r.tq})</span></a>` : '-'}</td>` : ''}<td class="num">${r.mais ? brl(r.mais) : '-'}</td><td class="num text-rose-700">${r.menos ? '−' + brl(r.menos) : '-'}</td><td class="num font-black">${rs(r.total)}</td>
           <td class="text-right"><button onclick="pdfMotoboy('${r.id}')" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold cursor-pointer whitespace-nowrap">📄 PDF</button></td></tr>`).join('') || `<tr><td colspan="${7 + lojasUsadas.length + (temMin ? 1 : 0) + (temTr ? 1 : 0)}" class="text-center text-slate-400 py-6">Nenhuma entrega para pagar.</td></tr>`}
         </tbody><tfoot><tr class="bg-slate-50 font-black"><td class="px-2 py-2">Total</td><td class="num px-2">${tot.qtd}</td>${lojasUsadas.map(l => `<td class="num px-2 text-slate-500">${brl(res.reduce((t, r) => t + (r.lojas[l] || 0), 0))}</td>`).join('')}<td class="num px-2">${brl(tot.val)}</td>${temMin ? `<td class="num px-2 text-sky-700">${brl(tot.comp)}</td>` : ''}${temTr ? `<td class="num px-2 text-violet-700">${brl(tot.tv)} <span class="text-[10px] text-slate-400">(${tot.tq})</span></td>` : ''}<td class="num px-2">${brl(tot.mais)}</td><td class="num px-2 text-rose-700">${tot.menos ? '−' + brl(tot.menos) : '-'}</td><td class="num px-2 text-base">${rs(tot.total)}</td><td></td></tr></tfoot></table></div>`;
 
@@ -522,6 +522,12 @@
     let TRD = null, editAcesso = null;
     const ACAO_TR = { LANCOU: 'lançou', RECEBEU: 'loja confirmou o recebimento', RECEBEU_PELO_SUPERVISOR: 'confirmado pelo Supervisor', CANCELOU: 'cancelou',
                       VALOR_CIDADE: 'valor da cidade', ACESSO_LOJA: 'acesso de loja', MOTOBOY_LISTA: 'lista de motoboys' };
+    // (18/11/2026) clique no valor de transferências do resumo: abre a aba no período da quinzena, filtrada no motoboy
+    let trMotPend = null;
+    function verTransf(id) {
+      $('trIni').value = String(Q.quinzena.periodo_ini).slice(0, 10); $('trFim').value = String(Q.quinzena.periodo_fim).slice(0, 10);
+      $('trNum').value = ''; trMotPend = id; trocarAba('transf');
+    }
     async function carregarTransf() {
       if (JAC || !$('trIni').value || !$('trFim').value) return;
       const { data, error } = await rpcRetentar(_supabase, 'fn_transf_painel', { p_ini: $('trIni').value, p_fim: $('trFim').value });
@@ -532,6 +538,7 @@
       if (!TRD) return;
       const nm = id => id ? (motoboy(id).nome_pdf || motoboy(id).nome_alpha7 || '-') : '-';
       const quem = t => t.motoboy_entregou_id || t.motoboy_retirou_id;
+      if (trMotPend !== null) { $('trMot').innerHTML = `<option value="${trMotPend}"></option>`; $('trMot').value = trMotPend; trMotPend = null; }
       const selM = $('trMot').value, ids = [...new Set(TRD.transferencias.map(quem))].sort((a, c) => nm(a).localeCompare(nm(c)));
       $('trMot').innerHTML = '<option value="">Todos</option>' + ids.map(id => `<option value="${id}" ${id === selM ? 'selected' : ''}>${esc(nm(id))}</option>`).join('');
       const num = $('trNum').value.trim().toUpperCase();
