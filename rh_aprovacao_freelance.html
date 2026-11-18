@@ -98,7 +98,8 @@
           <label id="lblCompensar" class="cursor-pointer"><input type="radio" name="apModo" value="COMPENSAR" onchange="atualizarModal()"> Compensar horas devidas (sem pagamento)</label>
         </div>
         <div id="boxValor"><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor a pagar (R$) *</label>
-          <input type="number" id="apValor" step="0.01" min="0" placeholder="0,00" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+          <input type="number" id="apValor" step="0.01" min="0" placeholder="0,00" class="w-full border border-slate-300 rounded p-2 text-xs font-mono">
+          <p id="apSugerido" class="hidden text-[10px] text-emerald-800 mt-1"></p></div>
         <div id="boxEventoPag"><label class="block text-[10px] font-bold text-slate-500 uppercase">Evento na folha *</label>
           <select id="apEventoPag" class="w-full border border-slate-300 rounded p-2 text-xs"></select></div>
         <p id="apInfoFreela" class="text-[10px] text-slate-500"></p>
@@ -322,6 +323,7 @@
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
                 ${r.funcionario_ausente_id ? ` faltou: <b class="text-rose-700">${esc(nome(r.funcionario_ausente_id))}</b> <span class="text-[10px]">${txtSaldo(r.funcionario_ausente_id)}</span>` : ''}</div>
               ${r.observacao_lider ? `<div class="text-[11px] text-slate-600 italic">Líder: "${esc(r.observacao_lider)}"</div>` : ''}
+              ${r.valor_sugerido ? `<div class="text-[11px] bg-emerald-50 border-l-2 border-emerald-400 pl-2 text-emerald-900">💡 Valor sugerido pelo supervisor: <b>${fmtR(r.valor_sugerido)}</b>${r.valor_sugerido_por ? ' · ' + esc(r.valor_sugerido_por) : ''}</div>` : ''}
               ${blocoContestacao(r)}
               ${escalaInfo(r)}
               ${sup}${rh}${canc}${fin}
@@ -429,7 +431,10 @@
       document.getElementById('apDataPrevista').value = '';
       document.getElementById('apCompFolha').innerText = compDoFato(r.data_servico).comp || '-';
       document.getElementById('apLiderPediu').innerHTML = `Líder pediu: <b>${esc(r.forma_pagamento || '-')}</b> · confirme ou altere a forma acima.`;
-      document.getElementById('apValor').value = '';
+      // (18/11/2026) freelance de limpeza: valor sugerido pelo supervisor vem preenchido; o RH confirma ou altera
+      document.getElementById('apValor').value = r.valor_sugerido ? r.valor_sugerido : '';
+      document.getElementById('apSugerido').innerHTML = r.valor_sugerido ? `💡 Sugerido pelo supervisor (${esc(r.valor_sugerido_por || '')}): <b>${fmtR(r.valor_sugerido)}</b> · confira e confirme, ou altere.` : '';
+      document.getElementById('apSugerido').classList.toggle('hidden', !r.valor_sugerido);
       document.querySelector('input[name="apModo"][value="PAGAR"]').checked = true;
       const deve = (saldos[r.funcionario_id] || 0) < 0;
       document.getElementById('lblCompensar').classList.toggle('opacity-40', !deve);

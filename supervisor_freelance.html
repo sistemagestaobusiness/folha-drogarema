@@ -88,6 +88,12 @@
         <button onclick="fecharModal()" class="text-slate-400 hover:text-slate-700 font-bold cursor-pointer">✕</button>
       </div>
       <div id="modalResumo" class="text-xs text-slate-600"></div>
+      <!-- (18/11/2026) freelance de limpeza: o supervisor pode sugerir o valor; o RH confirma ou altera -->
+      <div id="boxSugerido" class="hidden bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+        <label class="block text-xs font-bold text-emerald-800 uppercase mb-1">Valor sugerido (R$) · opcional</label>
+        <input type="number" id="modalValorSug" step="0.01" min="0" placeholder="0,00" class="w-full bg-white border border-slate-300 rounded p-2 text-xs font-mono">
+        <p class="text-[10px] text-emerald-800 mt-1">Freelance de limpeza: o valor vai preenchido para o RH, que confirma ou altera. Pode deixar em branco.</p>
+      </div>
       <div>
         <label id="modalLabel" class="block text-xs font-bold text-slate-600 uppercase mb-1">Observação</label>
         <textarea id="modalObs" rows="3" class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-xs"></textarea>
@@ -264,6 +270,7 @@
               ${blocoContestacao(r)}
               ${escalaInfo(r)}
               ${r.status === 'CANCELADA' ? `<div class="text-[11px] bg-rose-50 border-l-2 border-rose-400 pl-2 text-rose-800"><b>🚫 Cancelada${r.cancelado_por ? ' por ' + esc(r.cancelado_por) : ''}${r.cancelado_em ? ' em ' + new Date(r.cancelado_em).toLocaleString('pt-BR') : ''}:</b> ${esc(r.cancelado_motivo || 'sem motivo informado')}</div>` : ''}
+              ${r.valor_sugerido ? `<div class="text-[11px] text-emerald-800">💡 Valor sugerido: <b>R$ ${parseFloat(r.valor_sugerido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</b>${r.valor_pago != null && r.status === 'APROVADA' ? ` · RH pagou R$ ${parseFloat(r.valor_pago).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}</div>` : ''}
               ${aba === 'hist' && r.supervisor_obs ? `<div class="text-[11px] bg-slate-50 border-l-2 border-slate-300 pl-2">Obs.: ${esc(r.supervisor_obs)}</div>` : ''}
             </div>
             ${acoes}
@@ -334,16 +341,27 @@
         ? 'A solicitação segue para a aprovação final do RH.'
         : 'A solicitação volta para o líder com o motivo, e o RH é avisado.';
       document.getElementById('modalObs').value = '';
+      decisao.sugere = aprovar && !!reg && podeSugerir(reg);
+      document.getElementById('boxSugerido').classList.toggle('hidden', !decisao.sugere);
+      document.getElementById('modalValorSug').value = reg && reg.valor_sugerido ? reg.valor_sugerido : '';
       const btn = document.getElementById('modalBtn');
       btn.className = `w-full text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer ${aprovar ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`;
       document.getElementById('modal').classList.remove('hidden');
     }
+    // valor sugerido: só freelance de limpeza (faxina), supervisor ou Gestor
+    const podeSugerir = r => ['SUPERVISOR', 'GESTOR'].includes(perfil) && (r.tipo_solicitacao || 'FREELANCE') === 'FREELANCE' && normTxt(r.cargo_exercido).startsWith('LIMPEZA');
     function fecharModal() { document.getElementById('modal').classList.add('hidden'); }
 
     async function confirmarDecisao() {
       const obs = document.getElementById('modalObs').value.trim();
       const btn = document.getElementById('modalBtn');
+      const vSug = decisao.sugere ? document.getElementById('modalValorSug').value.trim() : '';
+      if (vSug && !(parseFloat(vSug) > 0)) return alert('Valor sugerido inválido. Deixe em branco ou informe um valor maior que zero.');
       btn.disabled = true;
+      if (vSug) {
+        const { error: eSug } = await _supabase.rpc('fn_freelance_valor_sugerido', { p_id: decisao.id, p_valor: parseFloat(vSug) });
+        if (eSug) { btn.disabled = false; alert('Valor sugerido não gravado: ' + eSug.message); return; }
+      }
       const { error } = await _supabase.rpc('fn_freelance_decisao_supervisor', { p_id: decisao.id, p_aprovar: decisao.aprovar, p_obs: obs || null });
       btn.disabled = false;
       if (error) { alert(error.message); return; }
