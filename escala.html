@@ -65,7 +65,8 @@
         <span class="px-2 py-1 rounded bg-pink-200 text-pink-900">AT atestado</span>
         <span class="px-2 py-1 rounded bg-purple-200 text-purple-900">AF afastado</span>
         <span class="px-2 py-1 rounded bg-white border border-slate-300 text-slate-600">→ em outra loja</span>
-        <span class="px-2 py-1 rounded bg-violet-100 text-violet-800">★ freelance / HE</span>
+        <span class="px-2 py-1 rounded bg-violet-100 text-violet-800">★ freelance</span>
+        <span class="px-2 py-1 rounded bg-white border border-slate-200 text-slate-700"><span class="px-1 rounded bg-green-600 text-white text-[9px] font-black">100%</span> feriado pago (HE 100%) · <span class="px-1 rounded bg-violet-600 text-white text-[9px] font-black">100%…</span> aguardando aprovação · <span class="px-1 rounded bg-red-600 text-white text-[9px] font-black">!</span> feriado sem decisão · <span class="px-1 rounded bg-red-600 text-white text-[9px] font-black">2×</span> escala + freelance no mesmo horário</span>
         <span class="px-2 py-1 rounded bg-white border-2 border-slate-700 text-slate-600">borda = alterado no dia</span>
       </div>
 
@@ -128,7 +129,12 @@
     th.col-dom { background:#ffe4e6; color:#9f1239; }
     .col-sab { background:#f0f9ff; border-left:1px solid #bae6fd; border-right:1px solid #bae6fd; }
     th.col-sab { background:#e0f2fe; color:#075985; }
-    .cel { min-width:34px; height:30px; font-size:10px; font-weight:800; text-align:center; border-radius:6px; line-height:30px; white-space:nowrap; }
+    .cel { position:relative; min-width:34px; height:30px; font-size:10px; font-weight:800; text-align:center; border-radius:6px; line-height:30px; white-space:nowrap; }
+    /* (18/11/2026, HR) pagamento do feriado / hora extra no próprio quadrado da pessoa */
+    .tag-pg { position:absolute; top:-5px; right:-5px; z-index:2; font-size:7px; line-height:11px; padding:0 3px; border-radius:5px; font-weight:900; letter-spacing:-.2px; box-shadow:0 0 0 1px #fff; }
+    .tag-pg.ok { background:#16a34a; color:#fff; } .tag-pg.pend { background:#7c3aed; color:#fff; } .tag-pg.falta { background:#dc2626; color:#fff; }
+    .cel.fer-pend { box-shadow:inset 0 0 0 2px #dc2626; animation:ferPisca 1.6s ease-in-out infinite; }
+    @keyframes ferPisca { 50% { box-shadow:inset 0 0 0 2px #fca5a5; } }
     .mini { width:74px; padding:4px; font-size:11px; }
     @media print {
       @page { size: A4 landscape; margin: 8mm; }
@@ -345,19 +351,31 @@
           lista.push({ f, r: { ...r, veioDe: f.loja_id } });
         }
       });
-      const extras = freelas.filter(s => s.loja_id === lojaSel && s.data_servico === iso).map(s => ({
-        f: func(s.funcionario_id), extra: s,
-        r: { tipo: 'TRABALHO', entrada: hm(s.hora_inicio), saida: hm(s.hora_fim), extra: true }
-      }));
-      return { lista, extras };
+      // (18/11/2026, HR) hora extra ou pagamento do feriado de quem já está na escala trabalhando no dia:
+      // fica no próprio quadrado da pessoa (selo), não numa linha ★ embaixo. Freelance continua embaixo.
+      const anexos = [], extras = [];
+      freelas.filter(s => s.loja_id === lojaSel && s.data_servico === iso).forEach(s => {
+        const x = { f: func(s.funcionario_id), extra: s, r: { tipo: 'TRABALHO', entrada: hm(s.hora_inicio), saida: hm(s.hora_fim), extra: true } };
+        // a mesma pessoa na escala trabalhando num horário que se sobrepõe ao do pedido
+        const mesmo = lista.find(p => p.f.id === s.funcionario_id && p.r.tipo === 'TRABALHO' && p.r.entrada && p.r.saida);
+        const sobrepoe = mesmo && x.r.entrada && x.r.saida && (() => {
+          let a1 = toMin(mesmo.r.entrada), b1 = toMin(mesmo.r.saida), a2 = toMin(x.r.entrada), b2 = toMin(x.r.saida);
+          if (b1 <= a1) b1 += 1440; if (b2 <= a2) b2 += 1440; return a2 < b1 && a1 < b2; })();
+        const pagamento = s.tipo_solicitacao === 'HORA_EXTRA' || s.motivo === 'FERIADO';
+        // no mesmo horário do turno: fica só no quadrado da pessoa (não repete o nome embaixo)
+        //   hora extra / feriado = selo do pagamento; freelance = alerta "2×" (escala e freelance no mesmo horário: falta acertar)
+        if (sobrepoe) { if (pagamento) (mesmo.pags = mesmo.pags || []).push(s); else mesmo.dup = s; anexos.push(x); }
+        else extras.push(x);   // em outro horário: pessoa a mais trabalhando, fica embaixo
+      });
+      return { lista, extras, anexos };
     }
 
     // cobertura por meia hora dentro do funcionamento
     function cobertura(iso) {
       const h = horario[dow(iso)];
-      const { lista, extras } = pessoasDia(iso);
-      const trab = [...lista, ...extras].filter(p => p.r.tipo === 'TRABALHO' && p.r.entrada && p.r.saida);
-      const n = trab.length;
+      const { lista, extras, anexos } = pessoasDia(iso);
+      const trab = [...lista, ...extras, ...anexos].filter(p => p.r.tipo === 'TRABALHO' && p.r.entrada && p.r.saida);
+      const n = new Set(trab.map(p => (p.f && p.f.id) || p.extra.id)).size;   // a mesma pessoa conta uma vez
       if (!h || h.aberta === false || !h.abre || !h.fecha) return { n, slots: [], minimo: h ? h.minimo : null, falta: false, h };
       let a = toMin(h.abre), b = toMin(h.fecha); if (b <= a) b += 1440;
       const slots = [];
@@ -430,9 +448,17 @@
       // feriado: dispensado pela loja (FD) e folga compensatória (FC) aparecem diferentes da folga comum
       if (r.tipo === 'FOLGA' && /^DISPENSADO NO FERIADO/i.test(r.obs || '')) { txt = 'FD'; cls = 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-300'; }
       else if (r.tipo === 'FOLGA' && /^Folga compensat/i.test(r.obs || '')) { txt = 'FC'; cls = 'bg-fuchsia-50 text-fuchsia-700 border border-dashed border-fuchsia-300'; }
-      const dica = `${p.f.nome_registro} · ${DSEM[dow(iso)]} ${dbr(iso)}\n${r.tipo === 'TRABALHO' ? r.entrada + ' às ' + r.saida : t.txt}${r.veioDe ? '\nveio da ' + nomeLoja(r.veioDe) : ''}${r.obs ? '\n' + r.obs : ''}`;
+      let dica = `${p.f.nome_registro} · ${DSEM[dow(iso)]} ${dbr(iso)}\n${r.tipo === 'TRABALHO' ? r.entrada + ' às ' + r.saida : t.txt}${r.veioDe ? '\nveio da ' + nomeLoja(r.veioDe) : ''}${r.obs ? '\n' + r.obs : ''}`;
+      let selo = '';
+      (p.pags || []).forEach(s => {
+        const fer = s.motivo === 'FERIADO', ok = ['APROVADA', 'PAGO', 'PAGA'].includes(s.status);
+        selo = `<span class="tag-pg ${ok ? 'ok' : 'pend'}">${fer ? '100%' : 'HE'}${ok ? '' : '…'}</span>`;
+        dica += `\n${fer ? 'Feriado pago como hora extra 100%' : 'Hora extra'}: ${hm(s.hora_inicio) || '?'} às ${hm(s.hora_fim) || '?'} · ${ok ? 'aprovada' : 'aguardando ' + (s.status === 'PENDENTE_SUPERVISOR' ? 'o supervisor' : 'o RH')}`;
+      });
+      if (p.dup) { selo = '<span class="tag-pg falta">2×</span>'; dica += `\n⚠ Também tem FREELANCE no mesmo horário (${hm(p.dup.hora_inicio)} às ${hm(p.dup.hora_fim)}): se era folga, marque F na escala; se estava escalada, o freelance não deveria existir`; }
+      const fp = r.tipo === 'TRABALHO' && feriadoDe(iso) ? `data-fp="${p.f.id}_${iso}"` : '';
       const clic = p.extra ? '' : `onclick="abrirEdicao('${p.f.id}','${iso}')"`;
-      return `<div class="cel ${cls} ${borda} ${clic ? 'cursor-pointer hover:opacity-80' : ''}" title="${esc(dica)}" ${clic}>${esc(txt)}</div>`;
+      return `<div class="cel ${cls} ${borda} ${clic ? 'cursor-pointer hover:opacity-80' : ''}" title="${esc(dica)}" ${fp} ${clic}>${esc(txt)}${selo}</div>`;
     }
 
     // quem trabalha 3 domingos seguidos (a regra do comércio pede 1 domingo de folga a cada 3 semanas)
@@ -476,7 +502,7 @@
           <div class="text-[9px] text-slate-400">${esc(f.cargo || '')}${outra ? ' · de ' + esc(nomeLoja(f.loja_id)) : ''}${padroes[f.id] && !outra ? ' · ' + hm(padroes[f.id].entrada) + '–' + hm(padroes[f.id].saida) : ''}</div></td>
           ${dias.map(d => { const p = porDia[d].lista.find(x => x.f.id === f.id); return `<td class="p-0.5 ${colCls(d)}">${p ? celula(p, d) : '<div class="cel"></div>'}</td>`; }).join('')}</tr>`;
       }).join('');
-      const extras = [...extrasNomes.entries()].map(([fid, f]) => `<tr class="border-t border-violet-100 bg-violet-50/40"><td class="sticky left-0 bg-violet-50 z-10 p-1.5"><div class="text-[11px] font-bold text-violet-900 truncate max-w-[190px]">★ ${esc(f.nome_registro)}</div><div class="text-[9px] text-violet-500">freelance / hora extra</div></td>
+      const extras = [...extrasNomes.entries()].map(([fid, f]) => `<tr class="border-t border-violet-100 bg-violet-50/40"><td class="sticky left-0 bg-violet-50 z-10 p-1.5"><div class="text-[11px] font-bold text-violet-900 truncate max-w-[190px]">★ ${esc(f.nome_registro)}</div><div class="text-[9px] text-violet-500">${soFreelance(f) ? 'freelance' : 'hora extra / freelance fora do turno'}</div></td>
         ${dias.map(d => { const s = porDia[d].extras.find(x => x.extra.funcionario_id === fid);
           return `<td class="p-0.5 ${colCls(d)}">${s ? `<div class="cel bg-violet-100 text-violet-800" title="${esc((s.extra.tipo_solicitacao || 'FREELANCE') + ' · ' + (s.r.entrada || '?') + ' às ' + (s.r.saida || '?') + ' · ' + s.extra.status)}">★${s.r.entrada ? curto(s.r.entrada) : ''}</div>` : '<div class="cel"></div>'}</td>`; }).join('')}</tr>`).join('');
       const rodape = dias.map(d => { const c = cobertura(d);
@@ -500,6 +526,7 @@
       // se a pessoa rolou com a mão, mantém; senão (primeira vez ou a tela ainda montando), recalcula até hoje
       const mexeu = window._escalaRol === chaveRol && Math.abs(rolAntes - (window._escalaRolAuto || 0)) > 2;
       if (mexeu) gm.scrollLeft = rolAntes; else { window._escalaRol = chaveRol; rolarHoje(); }
+      marcarFeriadoPend();
       // o menu lateral entra depois e muda a largura: refaz enquanto a pessoa não tiver rolado
       if (!window._escalaRO && window.ResizeObserver) { window._escalaRO = new ResizeObserver(() => { if (Math.abs(gm.scrollLeft - (window._escalaRolAuto || 0)) <= 2) rolarHoje(); }); window._escalaRO.observe(gm); }
     }
@@ -711,6 +738,7 @@
       let r = null; try { const { data } = await _supabase.rpc('fn_feriado_pendencias'); r = data; } catch (e) { }
       if (seq !== ferPendSeq) return;
       ferPend = ((r && r.itens) || []).filter(x => x.loja_id === lojaSel);
+      marcarFeriadoPend();
       if (!ferPend.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
       const grupos = {}; ferPend.forEach(x => (grupos[x.data] = grupos[x.data] || []).push(x));
       const pior = Math.max(...ferPend.map(x => nivelFeriado(x).n)), cab = nivelFeriado(ferPend.find(x => nivelFeriado(x).n === pior));
@@ -720,6 +748,18 @@
         + Object.keys(grupos).sort().map(dt => { const g = grupos[dt], nv = nivelFeriado(g[0]);
           return `<div class="mt-2"><div class="font-bold">${dbr(dt)} · ${esc(g[0].feriado)} · ${esc(nv.txt)}</div><div class="mt-1 flex flex-wrap gap-1">${g.map(x =>
             `<button type="button" onclick="abrirFeriadoPend('${x.funcionario_id}','${x.data}')" class="px-2 py-0.5 rounded bg-white text-slate-800 border border-slate-300 font-bold cursor-pointer hover:bg-slate-50">${esc(primeiroNome(x.nome))} · ${esc(x.entrada || '')}–${esc(x.saida || '')}</button>`).join('')}</div></div>`; }).join('');
+    }
+    // (HR) quadrado da pessoa que trabalhou no feriado sem decisão: borda vermelha piscando + selo "!"
+    function marcarFeriadoPend() {
+      const pend = new Set(ferPend.map(x => x.funcionario_id + '_' + x.data));
+      document.querySelectorAll('[data-fp]').forEach(el => {
+        const on = pend.has(el.getAttribute('data-fp'));
+        el.classList.toggle('fer-pend', on);
+        let tg = el.querySelector('.tag-pg.fpend');
+        if (on && !tg && !el.querySelector('.tag-pg')) { tg = document.createElement('span'); tg.className = 'tag-pg falta fpend'; tg.textContent = '!'; el.appendChild(tg); }
+        if (!on && tg) tg.remove();
+        if (on && !/falta decidir/.test(el.title)) el.title += '\n⚠ FERIADO: falta decidir — folga compensatória, hora extra 100% ou marcar que não trabalhou';
+      });
     }
     async function abrirFeriadoPend(fid, iso) {
       if (!func(fid)) return alert('Funcionário fora desta loja/escala.');
