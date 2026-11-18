@@ -325,7 +325,20 @@ if (!window.__alertTraduzido) {
   }
   const raiz = document.documentElement;
   raiz.style.visibility = 'hidden';
-  const liberar = () => { raiz.style.visibility = ''; };
+  // (18/11/2026, HN) banco lento: a tela não fica em branco sem explicação. Depois de 8 s aparece o aviso
+  // "o banco está demorando" com "Tentar de novo"; a conferência de acesso é repetida sozinha se falhar por lentidão.
+  let avisoLento = null;
+  const tLento = setTimeout(() => {
+    try {
+      avisoLento = document.createElement('div');
+      avisoLento.style.cssText = 'visibility:visible;position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:100001;background:#fff;color:#0f172a;font:500 14px system-ui,sans-serif;padding:20px 24px;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);border-top:6px solid #b45309;max-width:92vw;width:420px;text-align:center';
+      avisoLento.innerHTML = '<div style="font-weight:800;font-size:16px;margin-bottom:6px">O sistema está demorando para responder</div><div style="color:#475569;font-size:13px;margin-bottom:14px">O banco de dados está lento neste momento. A tela abre sozinha assim que ele responder; não é preciso sair do sistema.</div><button type="button" style="border:0;border-radius:10px;padding:10px 18px;font-weight:800;cursor:pointer;background:#b45309;color:#fff">Tentar de novo</button>';
+      avisoLento.querySelector('button').onclick = () => location.reload();
+      raiz.appendChild(avisoLento);
+    } catch (e) { }
+  }, 8000);
+  const liberar = () => { clearTimeout(tLento); if (avisoLento) { avisoLento.remove(); avisoLento = null; } raiz.style.visibility = ''; };
+  const transitorio = e => /fetch|network|timeout|Failed|upstream|57014|503|502|504|canceling statement/i.test(String((e && (e.message || e.code)) || ''));
   const cli = window.supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
   (async () => {
     try {
@@ -379,7 +392,12 @@ if (!window.__alertTraduzido) {
           }
         }, 30000);
       }
-      const { data, error } = await cli.rpc('fn_minhas_telas');
+      let data, error;
+      for (let i = 0; i < 4; i++) {   // (HN) lentidão do banco: tenta de novo antes de desistir
+        ({ data, error } = await cli.rpc('fn_minhas_telas'));
+        if (!error || !transitorio(error)) break;
+        await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+      }
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }
       window.ACESSO = data; window.ACESSO.email = user.email; window.ACESSO_CLI = cli;
@@ -388,7 +406,7 @@ if (!window.__alertTraduzido) {
       try { if (document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo(cli); } catch (e) { }
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {
-        const sm = document.createElement('script'); sm.src = 'menu.js?v=56'; (document.head || document.documentElement).appendChild(sm);
+        const sm = document.createElement('script'); sm.src = 'menu.js?v=57'; (document.head || document.documentElement).appendChild(sm);
       }
       const telas = new Set((data.telas || []).map(t => String(t).toLowerCase()));
       if (!telas.has(PAGINA)) {

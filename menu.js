@@ -668,10 +668,15 @@
   // (18/11/2026) FERIADO trabalhado sem decisão (fn_feriado_pendencias faz a triangulação: escala × folga compensatória × hora extra ×
   // dispensa, sem farmacêutico com adicional fixo). Sem pendência real = nenhuma mensagem. Prazo: 5 dias depois do feriado;
   // a cada dia o aviso fica mais rígido. Líder: todo dia/toda tela conforme o nível · Supervisor: a partir do 3º dia · RH: último dia/vencido.
+  // (18/11/2026, HN) consultas repetidas só com a aba visível (aba escondida não pesa no banco) e a cada 5 min
+  const seVisivel = f => () => { if (!document.hidden) f(); };
+
   async function avisosFeriado(abrirJanela) {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('escala.html')) return;
+    const t0 = Date.now();
     let r; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_feriado_pendencias'); if (error || !data) return; r = data; } catch (e) { return; }
+    const lento = Date.now() - t0 > 8000;   // (HN) banco lento: não abre a janela travada agora (a bolha no menu continua)
     const SPd = new Date().toLocaleString('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).slice(0, 10);
     const minDias = pf === 'LIDER' ? -99 : pf === 'SUPERVISOR' ? 3 : pf === 'RH' ? 5 : 6;
     const its = (r.itens || []).filter(x => Number(x.dias) >= minDias);
@@ -696,6 +701,9 @@
     const chave = 'ferAviso_' + pf + '_' + SPd + '_' + pior;
     if (pior <= 1 || pf === 'RH') { try { if (localStorage.getItem(chave)) return; } catch (e) { } }
     const travar = pf === 'LIDER' && (pior === 4 || (pior === 5 && its.some(x => nivel(x).n === 5 && lib(x.data))));
+    // (HN) janela travada: a líder pode continuar o que está fazendo por 30 min; depois volta em toda tela
+    const chaveAdiar = 'ferAdiar_' + pf + '_' + SPd;
+    if (travar) { if (lento) return; try { if (Date.now() < Number(localStorage.getItem(chaveAdiar) || 0)) return; } catch (e) { } }
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const grupos = {}; its.forEach(x => { const k = x.data + '|' + x.loja; (grupos[k] = grupos[k] || []).push(x); });
     const corPior = nivel(its.find(x => nivel(x).n === pior)).cor;
@@ -713,9 +721,11 @@
           <div style="font-weight:800;color:${nv.cor};font-size:12px">${esc(nv.txt)}</div>
           <div style="color:#334155;font-size:12px;margin-top:4px">${g.map(x => esc(x.nome) + ' (' + esc(x.entrada || '') + '–' + esc(x.saida || '') + ')').join(' · ')}</div></div>`; }).join('')}
       <button type="button" data-ir style="width:100%;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:13px;cursor:pointer;background:${corPior};color:#fff;margin-top:6px">${pf === 'RH' ? 'Abrir a Conferência do fechamento' : 'Abrir a escala e resolver agora'}</button>
-      ${travar ? `<div style="text-align:center;margin-top:8px;font-size:11.5px;color:#991b1b;font-weight:700">Prazo final: este aviso aparece em toda tela até a escala ser acertada.</div>`
+      ${travar ? `<div style="text-align:center;margin-top:8px;font-size:11.5px;color:#991b1b;font-weight:700">Prazo final: este aviso aparece em toda tela até a escala ser acertada.</div>
+        <div style="text-align:center;margin-top:6px"><button type="button" data-adiar style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">continuar o que estou fazendo e resolver em 30 min</button></div>`
         : `<div style="text-align:center;margin-top:8px"><button type="button" data-depois style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">lembrar depois</button></div>`}</div>`;
     const d = m.querySelector('[data-depois]'); if (d) d.onclick = () => { try { localStorage.setItem(chave, '1'); } catch (e) { } m.remove(); };
+    const ad = m.querySelector('[data-adiar]'); if (ad) ad.onclick = () => { try { localStorage.setItem(chaveAdiar, String(Date.now() + 30 * 60000)); } catch (e) { } m.remove(); };
     m.querySelector('[data-ir]').onclick = () => { try { localStorage.setItem(chave, '1'); } catch (e) { } m.remove(); location.href = pf === 'RH' ? 'conferencia_fechamento.html' : 'escala.html'; };
     document.body.appendChild(m);
   }
@@ -1025,6 +1035,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(avisosMarketing, 120000); avisosTransferencias(true); setInterval(() => avisosTransferencias(false), 60000); avisosRetaguarda(true); setInterval(() => avisosRetaguarda(false), 120000); avisosRescisao(true); setInterval(() => avisosRescisao(false), 120000); avisosFeriado(true); setInterval(() => avisosFeriado(false), 120000); popupMarketing(); pendenciasMenu(); setInterval(pendenciasMenu, 120000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(seVisivel(avisosMarketing), 300000); avisosTransferencias(true); setInterval(seVisivel(() => avisosTransferencias(false)), 60000); avisosRetaguarda(true); setInterval(seVisivel(() => avisosRetaguarda(false)), 300000); avisosRescisao(true); setInterval(seVisivel(() => avisosRescisao(false)), 300000); avisosFeriado(true); setInterval(seVisivel(() => avisosFeriado(false)), 300000); popupMarketing(); pendenciasMenu(); setInterval(seVisivel(pendenciasMenu), 300000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
