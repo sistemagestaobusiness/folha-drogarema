@@ -25,6 +25,7 @@
     </div>
   </div>
   <div id="aviso" class="alerta verm"></div>
+  <div id="andamento" class="alerta neutro" style="display: none; margin-top: 8px"></div>
 
   <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px">
     <label id="drop" class="drop">
@@ -89,7 +90,7 @@
     const brl = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const dbr = iso => iso ? String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4) : '-';
     const LOTE = 2000;
-    let perfil = null, fixo = '2000-01-01', lido = null, nomeArquivo = '';
+    let perfil = null, fixo = '2000-01-01', lido = null, nomeArquivo = '', meuEmail = '';
     const veValores = () => perfil !== 'SUPERVISOR';
 
     function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
@@ -187,35 +188,57 @@
 
     function limpar() { lido = null; $('boxLido').style.display = 'none'; $('arquivo').value = ''; $('dropSub').innerText = 'O sistema reconhece as abas sozinho: BASE CP, EXTRATO e VENDA A7'; }
 
+    // (18/11/2026, HM) envio em partes numeradas (reenviar a mesma parte não duplica), conferência do arquivo inteiro
+    // e aplicação em segundo plano pelo próprio banco: sem limite de tempo da tela, uma carga por vez para todos.
+    const espera = ms => new Promise(r => setTimeout(r, ms));
+    async function rpcParte(nome, args) {
+      let ultimo;
+      for (let i = 0; i < 4; i++) {
+        const { data, error } = await _supabase.rpc(nome, args);
+        if (!error) return data;
+        ultimo = error;
+        if (/não está mais aberta|Sem acesso/i.test(error.message || '')) break;   // erro de regra: não adianta repetir
+        await espera(3000 * (i + 1));
+      }
+      throw ultimo;
+    }
+    let cargaAcompanhar = null, t0Carga = 0;
     async function enviar() {
       if (!lido) return;
       $('btnEnviar').disabled = true; aviso('');
-      const t0 = Date.now();
+      t0Carga = Date.now();
       try {
         const { data: carga, error: e0 } = await _supabase.rpc('fn_fin_carga_iniciar', { p_arquivo: nomeArquivo });
         if (e0) throw e0;
         const lotes = [];
-        ['cp', 'extrato', 'venda'].forEach(t => { for (let k = 0; k < lido[t].length; k += LOTE) lotes.push([t, lido[t].slice(k, k + LOTE)]); });
+        ['cp', 'extrato', 'venda'].forEach(t => { for (let k = 0, s = 1; k < lido[t].length; k += LOTE, s++) lotes.push([t, lido[t].slice(k, k + LOTE), s]); });
         let feitos = 0;
-        const prog = () => { $('barra').style.width = Math.round(feitos / (lotes.length + 1) * 100) + '%'; $('lblProg').innerText = `Enviando ${feitos} de ${lotes.length} partes…`; };
+        const prog = () => { $('barra').style.width = Math.round(feitos / (lotes.length + 2) * 100) + '%'; $('lblProg').innerText = `Enviando ${feitos} de ${lotes.length} partes…`; };
         prog();
-        // 3 partes por vez
+        // 2 partes por vez (cada parte tenta de novo sozinha se o banco demorar)
         let pos = 0;
-        const trabalhar = async () => { while (pos < lotes.length) { const [t, l] = lotes[pos++];
-          const { error } = await _supabase.rpc('fn_fin_carga_lote', { p_carga: carga, p_tipo: t, p_linhas: l }); if (error) throw error; feitos++; prog(); } };
-        await Promise.all([trabalhar(), trabalhar(), trabalhar()]);
-        $('lblProg').innerText = 'Atualizando a base (contas a pagar, extrato e venda)…';
-        const { data: r, error: e2 } = await _supabase.rpc('fn_fin_carga_aplicar', { p_carga: carga });
-        if (e2) throw e2;
-        feitos = lotes.length + 1; $('barra').style.width = '100%';
-        $('lblProg').innerText = `Pronto em ${Math.round((Date.now() - t0) / 1000)} s · contas a pagar ${Number(r.cp || 0).toLocaleString('pt-BR')} títulos · extrato até ${dbr(r.extrato_ate)} · venda até ${dbr(r.venda_ate)}`;
+        const trabalhar = async () => { while (pos < lotes.length) { const [t, l, s] = lotes[pos++];
+          await rpcParte('fn_fin_carga_lote', { p_carga: carga, p_tipo: t, p_linhas: l, p_seq: s }); feitos++; prog(); } };
+        await Promise.all([trabalhar(), trabalhar()]);
+        $('lblProg').innerText = 'Conferindo se o arquivo chegou inteiro…';
+        await rpcParte('fn_fin_carga_concluir', { p_carga: carga, p_esperado: { cp: lido.cp.length, extrato: lido.extrato.length, venda: lido.venda.length } });
         lido = null;
-        mostrarSemGrupo();
+        feitos = lotes.length + 1; prog();
+        $('lblProg').innerText = 'Arquivo recebido inteiro. O sistema está atualizando a base: pode fechar esta tela, a atualização continua.';
+        cargaAcompanhar = carga;
         await carregarCargas();
       } catch (e) {
         aviso('A carga não foi concluída e nada foi alterado: ' + esc(e.message || e));
         $('btnEnviar').disabled = false;
+        await carregarCargas();
       }
+    }
+
+    // acompanha a carga em andamento (de qualquer pessoa) até terminar
+    let timerAcomp = null;
+    function acompanhar(ativo) {
+      clearTimeout(timerAcomp);
+      if (ativo) timerAcomp = setTimeout(carregarCargas, 5000);
     }
 
     // pendências de classificação calculadas na hora (21/10/2026): somem assim que corrigidas
@@ -239,7 +262,10 @@
       const l = data || [];
       $('tbCargas').innerHTML = l.length ? l.map(c => { const r = c.resumo || {};
         const sit = c.status === 'APLICADA' ? '<span class="pill p-ok">ok</span>'
-          : c.status === 'ENVIANDO' ? '<span class="pill p-aten">enviando</span>' : '<span class="pill p-info">não concluída</span>';
+          : c.status === 'ENVIANDO' ? '<span class="pill p-aten">enviando</span>'
+          : c.status === 'NA_FILA' || c.status === 'APLICANDO' ? '<span class="pill p-aten">atualizando a base</span>'
+          : c.status === 'ERRO' ? `<span class="pill p-crit" title="${esc(c.erro || '')}">erro · nada alterado</span>`
+          : '<span class="pill p-info">não concluída</span>';
         return `<tr><td>${new Date(c.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td><td>${esc(String(c.por || '').split('@')[0])}</td><td>${esc(c.arquivo || '')}</td>
           <td class="n">${r.cp != null ? Number(r.cp).toLocaleString('pt-BR') : '-'}</td><td class="n">${r.extrato != null ? Number(r.extrato).toLocaleString('pt-BR') : '-'}</td><td>${r.extrato_ate ? 'extrato ' + dbr(r.extrato_ate).slice(0, 5) : '-'}${r.venda_ate ? ' · venda ' + dbr(r.venda_ate).slice(0, 5) : ''}</td><td>${sit}</td></tr>`; }).join('')
         : '<tr><td colspan="7" class="desc">Nenhuma carga ainda.</td></tr>';
@@ -251,11 +277,39 @@
         const dias = Math.floor((Date.now() - new Date(ult.em).getTime()) / 86400000);
         $('ultPill').innerHTML = dias >= 1 ? `<span class="pill ${dias >= 2 ? 'p-crit' : 'p-aten'}">${dias} dia(s) sem carga</span>` : '<span class="pill p-ok">carga de hoje</span>';
       } else { $('ultTit').innerText = 'nenhuma ainda'; }
+      mostrarAndamento(l, ult);
+    }
+
+    // (18/11/2026, HM) carga em andamento: todos veem quem está importando; ninguém começa outra ao mesmo tempo
+    const hhmm = t => t ? new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const quem = c => String(c.por || '').split('@')[0];
+    function mostrarAndamento(l, ult) {
+      const box = $('andamento');
+      const fila = l.find(c => c.status === 'NA_FILA' || c.status === 'APLICANDO');
+      const env = l.find(c => c.status === 'ENVIANDO' && Date.now() - new Date(c.atualizado_em || c.em).getTime() < 15 * 60000);
+      const minha = cargaAcompanhar ? l.find(c => c.id === cargaAcompanhar) : null;
+      let html = '';
+      if (fila) html = `<span class="pill p-aten">atualizando</span><span>O sistema está atualizando a base com o arquivo enviado por <b>${esc(quem(fila))}</b> às ${hhmm(fila.fila_em || fila.em)}. Leva alguns minutos; esta tela avisa quando terminar.</span>`;
+      else if (env) html = `<span class="pill p-aten">enviando</span><span><b>${esc(quem(env))}</b> está enviando o arquivo desde as ${hhmm(env.em)}. Aguarde terminar antes de importar de novo.</span>`;
+      box.innerHTML = html; box.style.display = html ? 'flex' : 'none';
+      if (minha && minha.status === 'APLICADA') {
+        const r = minha.resumo || {};
+        $('barra').style.width = '100%';
+        $('lblProg').innerText = `Pronto em ${Math.round((Date.now() - t0Carga) / 1000)} s · contas a pagar ${Number(r.cp || 0).toLocaleString('pt-BR')} títulos · extrato até ${dbr(r.extrato_ate)} · venda até ${dbr(r.venda_ate)}`;
+        cargaAcompanhar = null;
+      } else if (minha && minha.status === 'ERRO') {
+        aviso('A atualização da base não foi concluída e nada foi alterado: ' + esc(minha.erro || 'erro no banco') + '. Envie o arquivo de novo.');
+        $('lblProg').innerText = ''; $('btnEnviar').disabled = false; cargaAcompanhar = null;
+      }
+      // bloqueia o botão enquanto outra carga está ativa (o banco também recusa)
+      if ($('btnEnviar') && lido) $('btnEnviar').disabled = !!(fila || (env && quem(env) !== meuEmail.split('@')[0]));
+      acompanhar(!!(fila || env || cargaAcompanhar));
     }
 
     async function iniciar() {
       const { data: { user } } = await _supabase.auth.getUser();
       if (!user) { location.href = 'login.html'; return; }
+      meuEmail = String(user.email || '').toLowerCase();
       const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario'); perfil = u ? String(u.perfil || '').toUpperCase() : null;
       const { data: f } = await _supabase.rpc('fn_fin_fixo'); if (f) fixo = String(f).slice(0, 10);
       const drop = $('drop'), inp = $('arquivo');
