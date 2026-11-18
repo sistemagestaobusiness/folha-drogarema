@@ -74,6 +74,7 @@
 
       <!-- RESUMO -->
       <div id="cards" class="noprint grid grid-cols-2 md:grid-cols-5 gap-3"></div>
+      <div id="previsao" class="noprint"></div>
 
       <!-- ALERTAS -->
       <div id="alertas"></div>
@@ -249,6 +250,48 @@
       return { cls: 'bg-slate-100 text-slate-500', txt: 'Aguardando nov/dez', ordem: 6 };
     }
 
+    // (18/11/2026) PREVISÃO DE CAIXA do 13º: quanto sai em cada parcela, já descontadas as antecipações.
+    // 1ª parcela: lançada = valor lançado − desconto da antecipação lançado; não lançada = metade do esperado − antecipação a descontar (mínimo 0).
+    // 2ª parcela: lançada = bruto − INSS − IRRF − desconto lançado; não lançada = esperado − 1ª (bruto) − INSS e IRRF estimados − antecipação que sobrou.
+    // Quem já saiu com o 13º pago na rescisão (saldo zero e sem parcela) fica de fora.
+    function previsaoCaixa(ls) {
+      const comp = (fid, mes) => -movs.filter(m => m.funcionario_id === fid && m.papel === 'COMPENSACAO' && Number(m.mes) === mes && !['RECUSADO', 'CANCELADO'].includes(m.status)).reduce((t, m) => t + num(m.valor), 0);
+      const P = { l1: 0, l1n: 0, l1pago: 0, f1: 0, f1n: 0, f1zero: 0, d1: 0, l2: 0, l2n: 0, l2pago: 0, b2: 0, inss: 0, irrf: 0, ant2: 0, f2: 0, f2n: 0, neg: 0, negN: 0, antPago: 0 };
+      ls.forEach(l => {
+        const p1 = num(l.parcela1), p2 = num(l.parcela2), esp = num(l.esperado), sa = num(l.saldo_antecipacao);
+        P.antPago += num(l.antecipado_pago);
+        if (!p1 && !p2 && num(l.saldo_a_pagar) <= 0.009) { if (num(l.saldo_a_pagar) < -0.009) { P.neg += num(l.saldo_a_pagar); P.negN++; } return; }
+        const metade = Math.round(esp / 2 * 100) / 100;
+        let p1b, resto;
+        if (p1 > 0) { const c1 = comp(l.funcionario_id, 11), liq = p1 - c1; p1b = p1; resto = sa;
+          if (l.parcela1_pago) P.l1pago += liq; else { P.l1 += liq; P.l1n++; } P.d1 += c1; }
+        else { const liq = Math.max(metade - sa, 0); p1b = metade; resto = Math.max(sa - metade, 0); P.f1 += liq; P.f1n++; if (liq <= 0.009) P.f1zero++; P.d1 += Math.min(sa, metade); }
+        if (p2 > 0) { const liq = p2 - num(l.inss) - num(l.irrf) - comp(l.funcionario_id, 12);
+          if (l.parcela2_pago) P.l2pago += liq; else { P.l2 += liq; P.l2n++; } }
+        else { const b = esp - p1b, ie = num(l.inss_est), ir = num(l.irrf_est), liq = b - ie - ir - resto;
+          P.b2 += b; P.inss += ie; P.irrf += ir; P.ant2 += resto; P.f2n++;
+          if (liq < 0) { P.neg += liq; P.negN++; } else P.f2 += liq; }
+      });
+      const t1 = P.l1 + P.f1, t2 = P.l2 + P.f2, L = (t, v, cls = '') => `<div class="flex justify-between gap-3 ${cls}"><span>${t}</span><span class="font-mono whitespace-nowrap">${v}</span></div>`;
+      const filtro = $('fLoja').value || $('fSituacao').value || $('fNome').value.trim() ? ' · só o filtro atual' : '';
+      $('previsao').innerHTML = `<div class="bg-white rounded-xl border-2 border-sky-200 p-3">
+        <div class="flex items-baseline justify-between flex-wrap gap-2"><div class="text-xs font-black uppercase text-sky-800">💰 Previsão de caixa do 13º ${ano}${filtro}</div>
+          <div class="text-[10px] text-slate-400">líquido que sai do caixa, já descontadas as antecipações · INSS/IRRF estimados pela tabela (sem dependentes) até a 2ª parcela ser lançada</div></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2 text-[11px] text-slate-600">
+          <div class="rounded-lg bg-sky-50 p-2"><div class="text-[10px] uppercase font-bold text-slate-500">1ª parcela · até 30/11</div><div class="text-xl font-black text-slate-900">${fmtR(t1)}</div>
+            ${L(`Lançada, a pagar (${P.l1n})`, fmtR(P.l1))}${L(`Falta lançar (${P.f1n}) · estimado`, fmtR(P.f1))}
+            ${P.f1zero ? L(`↳ ${P.f1zero} sem 1ª parcela: antecipação cobre a metade`, '', 'text-slate-400') : ''}
+            ${L('Antecipação descontada nesta parcela', '− ' + fmtR(P.d1), 'text-rose-700')}${P.l1pago ? L('Já paga', fmtR(P.l1pago), 'text-emerald-700') : ''}</div>
+          <div class="rounded-lg bg-sky-50 p-2"><div class="text-[10px] uppercase font-bold text-slate-500">2ª parcela · até 20/12</div><div class="text-xl font-black text-slate-900">${fmtR(t2)}</div>
+            ${P.f2n ? L(`Bruto (${P.f2n})`, fmtR(P.b2)) + L('− INSS estimado', fmtR(P.inss)) + L('− IRRF estimado', fmtR(P.irrf)) + L('− Antecipação que sobra para descontar', fmtR(P.ant2), 'text-rose-700') : ''}
+            ${P.l2n ? L(`Lançada, a pagar (${P.l2n})`, fmtR(P.l2)) : ''}${P.l2pago ? L('Já paga', fmtR(P.l2pago), 'text-emerald-700') : ''}
+            ${P.negN ? L(`↳ ${P.negN} com antecipação maior que o 13º (${fmtR(-P.neg)} a acertar)`, '', 'text-amber-700') : ''}</div>
+          <div class="rounded-lg bg-slate-900 text-slate-200 p-2"><div class="text-[10px] uppercase font-bold text-slate-400">Total a sair do caixa (nov + dez)</div><div class="text-xl font-black text-white">${fmtR(t1 + t2)}</div>
+            ${L('1ª parcela', fmtR(t1))}${L('2ª parcela', fmtR(t2))}
+            ${L('Antecipações já pagas no ano (fora desta conta)', fmtR(P.antPago), 'text-slate-400')}</div>
+        </div></div>`;
+    }
+
     function filtradas() {
       const loja = $('fLoja').value, sit = $('fSituacao').value, termo = norm($('fNome').value.trim());
       return linhas.filter(l => (!loja || l.loja_id === loja) && (!termo || norm(l.nome).includes(termo))
@@ -267,7 +310,8 @@
         + card('A descontar', fmtR(soma(aDesc, 'saldo_antecipacao')), `${aDesc.length} funcionário(s)`, aDesc.length ? 'border-rose-400 ring-2 ring-rose-100' : '')
         + card('1ª parcela lançada', linhas.filter(l => num(l.parcela1) > 0).length + ' / ' + linhas.length, fmtR(soma(linhas, 'parcela1')))
         + card('2ª parcela lançada', linhas.filter(l => num(l.parcela2) > 0).length + ' / ' + linhas.length, fmtR(soma(linhas, 'parcela2')))
-        + card('Saldo a pagar (total)', fmtR(soma(linhas, 'saldo_a_pagar')), `esperado ${fmtR(soma(linhas, 'esperado'))} · (salário + acordo) × avos ÷ 12`);
+        + card('Saldo a pagar (total)', fmtR(soma(linhas, 'saldo_a_pagar')), `bruto, antes de INSS/IRRF e com a 1ª parcela lançada contada como paga · esperado ${fmtR(soma(linhas, 'esperado'))}`);
+      previsaoCaixa(filtradas());
       const resc = aDesc.filter(l => l.data_rescisao);
       $('alertas').innerHTML = aDesc.length ? `<div class="bg-rose-50 border border-rose-300 rounded-xl p-3 text-xs space-y-1">
           <div class="font-black text-rose-800">⚠ ${aDesc.length} funcionário(s) já receberam antecipação e AINDA NÃO TÊM o desconto lançado</div>
