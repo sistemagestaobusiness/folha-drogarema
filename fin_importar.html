@@ -14,6 +14,7 @@
     .drop { display: flex; align-items: center; gap: 18px; padding: 22px; border: 2px dashed #D0D5DD; border-radius: 10px; background: #fff; cursor: pointer; }
     .drop.sobre { border-color: var(--ouro); background: #FFFBF5; }
     .barra { height: 8px; background: var(--linha); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+    @keyframes finCargaVai { 0% { transform: translateX(-100%) } 100% { transform: translateX(250%) } }
     .barra div { height: 8px; background: var(--escuro); width: 0; transition: width .2s; }
   </style>
 </head>
@@ -25,7 +26,6 @@
     </div>
   </div>
   <div id="aviso" class="alerta verm"></div>
-  <div id="andamento" class="alerta neutro" style="display: none; margin-top: 8px"></div>
 
   <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px">
     <label id="drop" class="drop">
@@ -229,7 +229,9 @@
         const lotes = [];
         ['cp', 'extrato', 'venda'].forEach(t => { for (let k = 0, s = 1; k < lido[t].length; k += LOTE, s++) lotes.push([t, lido[t].slice(k, k + LOTE), s]); });
         let feitos = 0;
-        const prog = () => { $('barra').style.width = Math.round(feitos / (lotes.length + 2) * 100) + '%'; $('lblProg').innerText = `Enviando ${feitos} de ${lotes.length} partes…`; };
+        enviandoAqui = true;
+        const prog = () => { $('barra').style.width = Math.round(feitos / (lotes.length + 2) * 100) + '%'; $('lblProg').innerText = `Enviando ${feitos} de ${lotes.length} partes…`;
+          janelaCarga('andamento', 'Enviando o arquivo do Alpha7', `Parte <b>${feitos}</b> de <b>${lotes.length}</b>. Não feche esta tela até o envio terminar.`); };
         prog();
         // 2 partes por vez (cada parte tenta de novo sozinha se o banco demorar)
         let pos = 0;
@@ -241,9 +243,11 @@
         lido = null;
         feitos = lotes.length + 1; prog();
         $('lblProg').innerText = 'Arquivo recebido inteiro. O sistema está atualizando a base: pode fechar esta tela, a atualização continua.';
-        cargaAcompanhar = carga;
+        cargaAcompanhar = carga; enviandoAqui = false;
+        janelaCarga('andamento', 'O sistema está atualizando a base do financeiro', 'Arquivo recebido inteiro. Leva poucos minutos; pode até fechar esta tela, a atualização continua.');
         await carregarCargas();
       } catch (e) {
+        enviandoAqui = false; janelaCarga('erro', 'A carga não foi concluída', `Nada foi alterado na base.<br><span style="font-size:12px;color:#64748b">${esc(e.message || e)}</span>`, true);
         aviso('A carga não foi concluída e nada foi alterado: ' + esc(e.message || e));
         $('btnEnviar').disabled = false;
         await carregarCargas();
@@ -299,27 +303,42 @@
     // (18/11/2026, HM) carga em andamento: todos veem quem está importando; ninguém começa outra ao mesmo tempo
     const hhmm = t => t ? new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
     const quem = c => String(c.por || '').split('@')[0];
+    // (18/11/2026, HQ) janela no meio da tela enquanto a carga não termina (não fecha sozinha); verde/vermelha no fim com OK
+    let enviandoAqui = false;
+    function janelaCarga(tipo, titulo, texto, fechar) {
+      let el = $('janCarga');
+      if (!tipo) { if (el) el.remove(); return; }
+      if (!el) { el = document.createElement('div'); el.id = 'janCarga';
+        el.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+        document.body.appendChild(el); }
+      const cor = { andamento: '#d97706', ok: '#16a34a', erro: '#dc2626' }[tipo], icone = { andamento: '⏳', ok: '✅', erro: '⛔' }[tipo];
+      el.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,.35);border-top:10px solid ${cor};text-align:center">
+        <div style="font-size:34px">${icone}</div><div style="font-size:19px;font-weight:800;color:#0f172a;margin-top:4px">${titulo}</div>
+        <div style="font-size:14px;color:#334155;margin-top:8px">${texto}</div>
+        ${tipo === 'andamento' ? '<div style="height:8px;background:#fde68a;border-radius:999px;overflow:hidden;margin:16px 0 4px"><div style="height:8px;width:40%;background:#d97706;border-radius:999px;animation:finCargaVai 1.4s linear infinite"></div></div><div style="font-size:12px;color:#64748b;margin-top:8px">Não abra o Fluxo de caixa antes de terminar: os números ainda não estão completos. Esta janela fecha sozinha quando a base estiver pronta.</div>' : ''}
+        ${fechar ? `<button type="button" class="btn e" style="margin-top:16px;min-width:140px" onclick="janelaCarga()">OK</button>` : ''}</div>`;
+    }
     function mostrarAndamento(l, ult) {
-      const box = $('andamento');
       const fila = l.find(c => c.status === 'NA_FILA' || c.status === 'APLICANDO');
       const env = l.find(c => c.status === 'ENVIANDO' && Date.now() - new Date(c.atualizado_em || c.em).getTime() < 15 * 60000);
+      const envOutro = env && quem(env) !== meuEmail.split('@')[0];
       const minha = cargaAcompanhar ? l.find(c => c.id === cargaAcompanhar) : null;
-      let html = '';
-      if (fila) html = `<span class="pill p-aten">atualizando</span><span>O sistema está atualizando a base com o arquivo enviado por <b>${esc(quem(fila))}</b> às ${hhmm(fila.fila_em || fila.em)}. Leva alguns minutos; esta tela avisa quando terminar.</span>`;
-      else if (env) html = `<span class="pill p-aten">enviando</span><span><b>${esc(quem(env))}</b> está enviando o arquivo desde as ${hhmm(env.em)}. Aguarde terminar antes de importar de novo.</span>`;
-      box.innerHTML = html; box.style.display = html ? 'flex' : 'none';
       if (minha && minha.status === 'APLICADA') {
         const r = minha.resumo || {};
         $('barra').style.width = '100%';
         const mud = r.cp_novos != null ? ` (mudou: títulos +${Number(r.cp_novos).toLocaleString('pt-BR')} / −${Number(r.cp_removidos).toLocaleString('pt-BR')}, extrato +${Number(r.extrato_novos).toLocaleString('pt-BR')} / −${Number(r.extrato_removidos).toLocaleString('pt-BR')})` : '';
         $('lblProg').innerText = `Pronto em ${Math.round((Date.now() - t0Carga) / 1000)} s · contas a pagar ${Number(r.cp || 0).toLocaleString('pt-BR')} títulos${mud} · extrato até ${dbr(r.extrato_ate)} · venda até ${dbr(r.venda_ate)}`;
+        janelaCarga('ok', 'Base do financeiro atualizada', `Contas a pagar: <b>${Number(r.cp || 0).toLocaleString('pt-BR')}</b> títulos${mud}<br>Extrato até <b>${dbr(r.extrato_ate)}</b> · venda até <b>${dbr(r.venda_ate)}</b><br><br>Agora o Fluxo de caixa já está com os números novos.`, true);
         cargaAcompanhar = null;
       } else if (minha && minha.status === 'ERRO') {
         aviso('A atualização da base não foi concluída e nada foi alterado: ' + esc(minha.erro || 'erro no banco') + '. Envie o arquivo de novo.');
+        janelaCarga('erro', 'A atualização não foi concluída', `Nada foi alterado na base.<br><span style="font-size:12px;color:#64748b">${esc(minha.erro || 'erro no banco')}</span><br><br>Envie o arquivo de novo.`, true);
         $('lblProg').innerText = ''; $('btnEnviar').disabled = false; cargaAcompanhar = null;
-      }
+      } else if (fila) janelaCarga('andamento', 'O sistema está atualizando a base do financeiro', `Arquivo do Alpha7 enviado por <b>${esc(quem(fila))}</b> às ${hhmm(fila.fila_em || fila.em)}. Leva poucos minutos.`);
+      else if (envOutro) janelaCarga('andamento', `${esc(quem(env))} está enviando o arquivo do Alpha7`, `Desde as ${hhmm(env.em)}. Aguarde terminar antes de importar de novo.`);
+      else if (!enviandoAqui && $('janCarga') && !$('janCarga').querySelector('button')) janelaCarga();
       // bloqueia o botão enquanto outra carga está ativa (o banco também recusa)
-      if ($('btnEnviar') && lido) $('btnEnviar').disabled = !!(fila || (env && quem(env) !== meuEmail.split('@')[0]));
+      if ($('btnEnviar') && lido) $('btnEnviar').disabled = !!(fila || envOutro);
       acompanhar(!!(fila || env || cargaAcompanhar));
     }
 
