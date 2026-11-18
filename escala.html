@@ -621,7 +621,9 @@
       const { f, iso } = editando, ate = $('dAte').value;
       if (precisaPedir(tipoDia)) return pedirRetirada();
       // prazo (regra de 29/10/2026): líder e supervisor alteram a escala até 5 dias para trás; com 6 dias de atraso bloqueia (fale com o RH)
-      if (['LIDER', 'SUPERVISOR'].includes(perfil)) { const lim = addDias(hoje(), -5);
+      // (18/11/2026) liberação temporária: feriados de 02/11 e 15/11 podem ser acertados até 20/11 (mesma regra no banco: fn_feriado_liberado)
+      const ferLib = ['2026-11-02', '2026-11-15'].includes(iso) && hoje() <= '2026-11-20' && !ate;
+      if (['LIDER', 'SUPERVISOR'].includes(perfil) && !ferLib) { const lim = addDias(hoje(), -5);
         if (iso < lim) return alert(`Fora do prazo: a escala só pode ser alterada até 5 dias para trás (a partir de ${dbr(lim)}). Fale com o RH.`); }
       if (ate && ate < iso) return alert('"Repetir até" precisa ser depois do dia escolhido.');
       const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) if (!$('dMesmoDia').checked || dow(d) === dow(iso)) datas.push(d);
