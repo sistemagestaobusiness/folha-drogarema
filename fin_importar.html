@@ -122,6 +122,7 @@
       return res;
     }
 
+    const chaveCp = x => [x.credor, x.documento, x.parcela].map(v => norm(v)).join('|');
     function preparar(abas) {
       const out = { cp: [], extrato: [], venda: [], info: {} };
       if (abas.cp) {
@@ -136,7 +137,11 @@
             documento: txt(r[k.doc]), valor: num(r[k.valor]), credor: txt(r[k.credor]), unidade: txt(r[k.unid]), plano: txt(r[k.plano]),
             conta_pagadora: mc ? mc[1].replace(/[,;]/g, '').trim() : null, codigo_pagamento: txt(r[k.cod]), parcela: txt(r[k.parc]), descricao: txt(r[k.descr]), retiradas: retiradas.length ? retiradas : null }); }
         const vs = out.cp.map(x => x.vencimento).filter(Boolean).sort();
-        out.info.cp = { linhas: out.cp.length, de: vs[0], ate: vs[vs.length - 1], pendentes: out.cp.filter(x => x.status === 'Pendente').length };
+        // (18/11/2026, HO) chaves de todos os títulos do arquivo (para conferir os em aberto) e descarte do que já está fixo
+        out.chavesCp = new Set(out.cp.map(chaveCp));
+        const total = out.cp.length;
+        out.cp = out.cp.filter(x => !(x.status === 'Paga' && x.pagamento && x.pagamento <= fixo));
+        out.info.cp = { linhas: total, envia: out.cp.length, fixo: total - out.cp.length, de: vs[0], ate: vs[vs.length - 1], pendentes: out.cp.filter(x => x.status === 'Pendente').length };
       }
       if (abas.extrato) {
         const c = abas.extrato.col, L = abas.extrato.linhas;
@@ -177,7 +182,7 @@
 
     function mostrarLido(abas) {
       const i = lido.info, linhas = [];
-      if (i.cp) linhas.push(`<tr><td><b>${esc(abas.cp.nome)}</b> · contas a pagar</td><td class="n">${i.cp.linhas.toLocaleString('pt-BR')}</td><td>venc. ${dbr(i.cp.de)} a ${dbr(i.cp.ate)} · ${i.cp.pendentes.toLocaleString('pt-BR')} em aberto</td><td>troca a base inteira (o que já está fixo fica de fora)</td></tr>`);
+      if (i.cp) linhas.push(`<tr><td><b>${esc(abas.cp.nome)}</b> · contas a pagar</td><td class="n">${i.cp.linhas.toLocaleString('pt-BR')}</td><td>venc. ${dbr(i.cp.de)} a ${dbr(i.cp.ate)} · ${i.cp.pendentes.toLocaleString('pt-BR')} em aberto</td><td>a base passa a ser o arquivo (só o que mudou é gravado)${i.cp.fixo ? ` · ${i.cp.fixo.toLocaleString('pt-BR')} pagos do período fixo ignorados` : ''}</td></tr>`);
       else linhas.push('<tr><td><b>BASE CP</b></td><td class="n">-</td><td colspan="2" style="color: var(--verm-tx)">não veio no arquivo: o contas a pagar fica como estava</td></tr>');
       if (i.extrato) linhas.push(`<tr><td><b>${esc(abas.extrato.nome)}</b></td><td class="n">${i.extrato.linhas.toLocaleString('pt-BR')}</td><td>${dbr(i.extrato.de)} a ${dbr(i.extrato.ate)} · ${i.extrato.contas} contas</td><td>troca só os dias que vieram, conta por conta${i.extrato.fixo ? ` · ${i.extrato.fixo.toLocaleString('pt-BR')} linhas do período fixo ignoradas` : ''}</td></tr>`);
       if (i.venda) linhas.push(`<tr><td><b>${esc(abas.venda.nome)}</b> · venda por dia e loja</td><td class="n">${i.venda.linhas.toLocaleString('pt-BR')}</td><td>${dbr(i.venda.de)} a ${dbr(i.venda.ate)}</td><td>troca só os dias que vieram</td></tr>`);
@@ -206,6 +211,17 @@
     async function enviar() {
       if (!lido) return;
       $('btnEnviar').disabled = true; aviso('');
+      // (HO) título em aberto no sistema que não veio no arquivo sai do fluxo: avisa antes de enviar
+      if (lido.chavesCp && lido.cp.length) {
+        const { data: ab, error: eAb } = await _supabase.rpc('fn_fin_cp_abertos');
+        if (!eAb && Array.isArray(ab)) {
+          const sumiu = ab.filter(x => !lido.chavesCp.has(chaveCp(x)));
+          if (sumiu.length) {
+            const lista = sumiu.slice(0, 12).map(x => `• ${x.credor || '(sem fornecedor)'} · doc ${x.documento || '-'} · venc. ${dbr(x.vencimento)} · ${brl(x.valor)}`).join('\n');
+            if (!confirm(`${sumiu.length} título(s) em aberto no sistema não vieram neste arquivo e vão sair do fluxo de caixa:\n\n${lista}${sumiu.length > 12 ? '\n…' : ''}\n\nSe foram baixados ou excluídos no Alpha7, está certo. Se o arquivo veio com filtro errado, cancele e exporte de novo.\n\nContinuar a importação?`)) { $('btnEnviar').disabled = false; return; }
+          }
+        }
+      }
       t0Carga = Date.now();
       try {
         const { data: carga, error: e0 } = await _supabase.rpc('fn_fin_carga_iniciar', { p_arquivo: nomeArquivo });
@@ -295,7 +311,8 @@
       if (minha && minha.status === 'APLICADA') {
         const r = minha.resumo || {};
         $('barra').style.width = '100%';
-        $('lblProg').innerText = `Pronto em ${Math.round((Date.now() - t0Carga) / 1000)} s · contas a pagar ${Number(r.cp || 0).toLocaleString('pt-BR')} títulos · extrato até ${dbr(r.extrato_ate)} · venda até ${dbr(r.venda_ate)}`;
+        const mud = r.cp_novos != null ? ` (mudou: títulos +${Number(r.cp_novos).toLocaleString('pt-BR')} / −${Number(r.cp_removidos).toLocaleString('pt-BR')}, extrato +${Number(r.extrato_novos).toLocaleString('pt-BR')} / −${Number(r.extrato_removidos).toLocaleString('pt-BR')})` : '';
+        $('lblProg').innerText = `Pronto em ${Math.round((Date.now() - t0Carga) / 1000)} s · contas a pagar ${Number(r.cp || 0).toLocaleString('pt-BR')} títulos${mud} · extrato até ${dbr(r.extrato_ate)} · venda até ${dbr(r.venda_ate)}`;
         cargaAcompanhar = null;
       } else if (minha && minha.status === 'ERRO') {
         aviso('A atualização da base não foi concluída e nada foi alterado: ' + esc(minha.erro || 'erro no banco') + '. Envie o arquivo de novo.');
