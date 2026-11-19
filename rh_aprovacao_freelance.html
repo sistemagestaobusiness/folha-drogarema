@@ -10,6 +10,7 @@
   <script src="pendencias_core.js?v=7"></script>
   <style>@keyframes pontoPisca { 0% { box-shadow: 0 0 0 0 rgba(217,45,32,.75); } 70% { box-shadow: 0 0 0 6px rgba(217,45,32,0); } 100% { box-shadow: 0 0 0 0 rgba(217,45,32,0); } } .pontoPisca { animation: pontoPisca 1.1s ease-in-out infinite; }</style>
   <script src="escala_core.js"></script>
+  <script src="freelance_valor.js?v=1"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#F4F5F7] text-[#14181F] min-h-screen p-6 font-sans">
@@ -75,7 +76,7 @@
         <div class="text-[11px] font-bold text-slate-700 uppercase"><span id="apTipoTxt">1. Quem fez o freelance</span>: <span id="apFreela" class="text-indigo-700"></span></div>
         <div id="apSaldoFreela" class="text-[11px]"></div>
         <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Horas validadas</label>
-          <input type="number" id="apHoras" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
+          <input type="number" id="apHoras" step="0.5" min="0.5" oninput="valorTabelaAtualizar(true)" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
         <!-- PAGAMENTO EM DESTAQUE -->
         <div id="boxPagamento" class="rounded-xl border-2 p-3 space-y-2">
           <div class="text-[11px] font-black uppercase tracking-wide">💵 Como e quando será pago</div>
@@ -98,7 +99,8 @@
           <label id="lblCompensar" class="cursor-pointer"><input type="radio" name="apModo" value="COMPENSAR" onchange="atualizarModal()"> Compensar horas devidas (sem pagamento)</label>
         </div>
         <div id="boxValor"><label class="block text-[10px] font-bold text-slate-500 uppercase">Valor a pagar (R$) *</label>
-          <input type="number" id="apValor" step="0.01" min="0" placeholder="0,00" class="w-full border border-slate-300 rounded p-2 text-xs font-mono">
+          <input type="number" id="apValor" step="0.01" min="0" placeholder="0,00" oninput="valorTabelaAtualizar(false)" class="w-full border border-slate-300 rounded p-2 text-xs font-mono">
+          <p id="apTabela" class="hidden text-[11px] mt-1 rounded p-1.5"></p>
           <p id="apSugerido" class="hidden text-[10px] text-emerald-800 mt-1"></p></div>
         <div id="boxEventoPag"><label class="block text-[10px] font-bold text-slate-500 uppercase">Evento na folha *</label>
           <select id="apEventoPag" class="w-full border border-slate-300 rounded p-2 text-xs"></select></div>
@@ -121,7 +123,7 @@
           <input type="number" id="apHorasFalta" step="0.5" min="0.5" class="w-full border border-slate-300 rounded p-2 text-xs font-mono"></div>
       </div>
 
-      <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Observação do RH</label>
+      <div><label id="lblApObs" class="block text-[10px] font-bold text-slate-500 uppercase">Observação do RH</label>
         <textarea id="apObs" rows="2" class="w-full border border-slate-300 rounded p-2 text-xs"></textarea></div>
 
       <button id="btnAprovar" onclick="confirmarAprovacao()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs uppercase cursor-pointer">REGISTRAR E APROVAR ✅</button>
@@ -318,6 +320,7 @@
               </div>
               <div class="text-sm font-bold text-slate-900">${r.tipo_solicitacao === 'HORA_EXTRA' ? '<span class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">⏰ HORA EXTRA</span>' : '<span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black mr-1">🧑‍🤝‍🧑 FREELANCE</span>'}${esc(nome(r.funcionario_id))} <span class="text-[10px] font-normal text-slate-500">${esc(r.cargo_exercido)}</span> <span class="text-[10px] font-normal">${txtSaldo(r.funcionario_id)}</span></div>
               <div class="font-mono text-slate-600">${dataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b class="text-indigo-700">${fmtH(r.horas_trabalhadas)}</b></div>
+              <div>${FreelaValor.selo(r)}</div>
               <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(r.created_at)}</b>${r.contestado_em ? ` · 📣 contestado em <b>${dataHora(r.contestado_em)}</b>` : ''}${r.supervisor_em ? ` · supervisor em ${dataHora(r.supervisor_em)}` : ''}${r.rh_em ? ` · RH em ${dataHora(r.rh_em)}` : ''}</div>
               <div>${seloPagamento(r)}</div>
               <div><span class="bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'SEM MOTIVO')}</span>
@@ -450,6 +453,7 @@
         document.getElementById('apHorasFalta').value = r.horas_trabalhadas;
       }
       document.getElementById('apObs').value = '';
+      valorTabelaAtualizar(true);
       atualizarModal();
       document.getElementById('modalAprovar').classList.remove('hidden');
     }
@@ -478,8 +482,33 @@
       document.getElementById('boxBanco').classList.toggle('hidden', t !== 'BANCO_HORAS');
     }
 
+    // (19/11/2026, HU) valor de tabela do freelance (diária 7,5 h; menos = por hora). Valor diferente: justificativa obrigatória.
+    function valorTabelaRef() {
+      if (!atual || atual.tipo_solicitacao === 'HORA_EXTRA' || atual.motivo === 'COMPLEMENTO_JORNADA') return null;
+      const h = parseFloat(document.getElementById('apHoras').value) || 0;
+      return atual.valor_sugerido != null ? Number(atual.valor_sugerido) : FreelaValor.tabela(atual.cargo_exercido, h);
+    }
+    function valorTabelaAtualizar(preencher) {
+      const p = document.getElementById('apTabela'), ref = valorTabelaRef(), inp = document.getElementById('apValor');
+      if (ref === null) { p.classList.add('hidden'); document.getElementById('lblApObs').innerText = 'Observação do RH'; return; }
+      if (preencher) inp.value = ref.toFixed(2);
+      const h = parseFloat(document.getElementById('apHoras').value) || 0, v = parseFloat(inp.value);
+      const dif = !isNaN(v) && Math.abs(v - ref) >= 0.01;
+      const base = atual.valor_sugerido != null ? 'sugerido pelo supervisor' : h >= FreelaValor.BASE
+        ? `diária de ${esc(atual.cargo_exercido || '')} (7,5 h)` : `por hora: diária ${fmtR(FreelaValor.diaria(atual.cargo_exercido))} ÷ 7,5 × ${String(h).replace('.', ',')} h`;
+      p.className = 'text-[11px] mt-1 rounded p-1.5 ' + (dif ? 'bg-rose-50 border border-rose-300 text-rose-800 font-bold' : 'bg-emerald-50 border border-emerald-300 text-emerald-900');
+      p.innerHTML = `Tabela: <b>${fmtR(ref)}</b> (${base}).` + (dif ? ' Valor diferente da tabela: escreva a justificativa na observação (mínimo 15 letras). Fica registrado na Conduta do RH.' : '');
+      document.getElementById('lblApObs').innerHTML = dif ? 'Observação do RH · <span class="text-rose-700">JUSTIFICATIVA OBRIGATÓRIA (valor fora da tabela)</span>' : 'Observação do RH';
+    }
+
     async function confirmarAprovacao() {
       const modo = document.querySelector('input[name="apModo"]:checked').value;
+      const refTab = valorTabelaRef(), vInf = parseFloat(document.getElementById('apValor').value);
+      if (modo === 'PAGAR' && refTab !== null && !isNaN(vInf) && Math.abs(vInf - refTab) >= 0.01
+          && document.getElementById('apObs').value.replace(/[^A-Za-zÀ-ÿ]/g, '').length < 15) {
+        document.getElementById('apObs').focus();
+        return alert(`O valor informado (${fmtR(vInf)}) é diferente da tabela (${fmtR(refTab)}). Escreva a justificativa na observação (mínimo 15 letras).`);
+      }
       const trat = atual.funcionario_ausente_id ? ((document.querySelector('input[name="apTrat"]:checked') || {}).value || null) : null;
       if (atual.funcionario_ausente_id && !trat) return alert('Defina o tratamento de quem faltou.');
       const formaSel = document.getElementById('apForma').value;

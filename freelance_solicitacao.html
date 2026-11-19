@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
   <script src="escala_core.js"></script>
+  <script src="freelance_valor.js?v=1"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#F4F5F7] text-slate-800 min-h-screen p-6 font-sans">
@@ -437,7 +438,7 @@
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
     document.addEventListener('DOMContentLoaded', () => { const i = document.getElementById('inputData'); if (i) i.min = dataMinimaPedido(); });
 
-    function adicionarAoCarrinho() {
+    async function adicionarAoCarrinho() {
       const data = document.getElementById('inputData').value;
       const calc = calcularHoras();
       if (!data || !calc) { alert('Preencha a data e os horários (de 30 em 30 minutos).'); return; }
@@ -446,6 +447,12 @@
       if (usuario.perfil === 'GESTOR' ? data > DataMes.faixa('mes_seguinte')[1] && !DataMes.conferir(data, 'Data do serviço', 'mes_seguinte') : !DataMes.conferir(data, 'Data do serviço', 'mes_seguinte', 5)) return;   // até o fim do mês seguinte (regra de 30/10/2026)
       const choque = carrinho.find(c => c.data_servico === data && horariosSobrepoem(c.hora_inicio, c.hora_fim, calc.ini, calc.fim));
       if (choque) { alert(`Esta data já está na lista com horário que coincide (${choque.hora_inicio} às ${choque.hora_fim}). No mesmo dia só vale outro horário, ex.: 07:00–15:00 e 15:00–23:00.`); return; }
+      // (19/11/2026, HU) freelance no horário de trabalho da própria pessoa não entra (o banco também recusa)
+      const fSel = document.getElementById('selectFuncionario').value;
+      if (tipoAtual === 'FREELANCE' && fSel) {
+        const { data: msgTurno, error: eT } = await _supabase.rpc('fn_freelance_turno_conflito', { p_func: fSel, p_data: data, p_ini: calc.ini, p_fim: calc.fim });
+        if (!eT && msgTurno) { alert('🚫 ' + msgTurno); return; }
+      }
       if (alertaEscalaAtual && !confirm('Atenção (escala):\n\n' + alertaEscalaAtual + '\n\nIncluir esta data mesmo assim?')) return;
       carrinho.push({ id_temp: Date.now(), data_servico: data, hora_inicio: calc.ini, hora_fim: calc.fim, horas: calc.horas, intervalo: calc.intervalo, funcao: document.getElementById('selectFuncao').value });
       carrinho.sort((a, b) => a.data_servico.localeCompare(b.data_servico));
@@ -568,7 +575,7 @@
         <tr>
           <td class="p-2 font-mono font-bold">${formatarDataBR(c.data_servico)}</td>
           <td class="p-2 font-mono text-center">${c.hora_inicio} às ${c.hora_fim}</td>
-          <td class="p-2 font-mono font-bold text-center">${fmtHoras(c.horas)}<br><span class="text-[8px] text-slate-400">${c.funcao}</span></td>
+          <td class="p-2 font-mono font-bold text-center">${fmtHoras(c.horas)}<br><span class="text-[8px] text-slate-400">${c.funcao}</span>${tipoAtual === 'FREELANCE' ? `<br><span class="text-[8px] font-black ${c.horas >= FreelaValor.BASE ? 'text-emerald-700' : 'text-amber-700'}">${c.horas >= FreelaValor.BASE ? 'DIÁRIA' : 'POR HORA'}</span>` : ''}</td>
           <td class="p-2 text-center"><button onclick="removerDoCarrinho(${c.id_temp})" class="text-rose-500 font-bold cursor-pointer">X</button></td>
         </tr>`).join('');
     }
@@ -598,6 +605,16 @@
         return alert('Já existe solicitação ativa (freelance ou hora extra) para este colaborador no mesmo horário em: '
           + conflitos.map(e => `${formatarDataBR(e.data_servico)} (${String(e.hora_inicio).slice(0, 5)}–${String(e.hora_fim).slice(0, 5)})`).join(', ')
           + '\n\nNo mesmo dia é permitido outro horário que não coincida.');
+      }
+
+      // (19/11/2026, HU) confere cada data contra o turno da escala da pessoa antes de enviar
+      if (tipoAtual === 'FREELANCE') {
+        const turno = [];
+        for (const c of carrinho) {
+          const { data: m, error: eT } = await _supabase.rpc('fn_freelance_turno_conflito', { p_func: funcId, p_data: c.data_servico, p_ini: c.hora_inicio, p_fim: c.hora_fim });
+          if (!eT && m) turno.push(`${formatarDataBR(c.data_servico)} (${c.hora_inicio}–${c.hora_fim}): ${m}`);
+        }
+        if (turno.length) return alert('🚫 Pedido NÃO enviado. Freelance no horário de trabalho da pessoa não é permitido:\n\n' + turno.join('\n\n') + '\n\nTire essas datas da lista ou mude o horário para fora do turno.');
       }
 
       const btn = document.getElementById('btnSalvar');
@@ -701,6 +718,7 @@
               <div>
                 <div class="font-bold text-slate-800"><span class="${tp.badge} px-1.5 py-0.5 rounded text-[9px] font-black mr-1">${tp.icone} ${tp.rotulo}</span>${esc(nomeFunc(r.funcionario_id))} <span class="text-[10px] text-slate-400 font-normal">${esc(r.cargo_exercido)}</span></div>
                 <div class="font-mono text-[11px] text-slate-600 mt-0.5">${formatarDataBR(r.data_servico)} · ${r.hora_inicio ? r.hora_inicio.slice(0,5) : '--'} às ${r.hora_fim ? r.hora_fim.slice(0,5) : '--'} · <b>${fmtHoras(r.horas_trabalhadas)}</b> · ${esc(r.forma_pagamento)}</div>
+                <div class="mt-1">${FreelaValor.selo(r)}</div>
                 <div class="text-[10px] text-slate-500">📝 Solicitado em <b>${dataHora(r.created_at)}</b>${r.contestado_em ? ` · 📣 contestado em <b>${dataHora(r.contestado_em)}</b>` : ''}${r.supervisor_em ? ` · supervisor em ${dataHora(r.supervisor_em)}` : ''}${r.rh_em ? ` · RH em ${dataHora(r.rh_em)}` : ''}</div>
                 <div class="text-[11px] text-slate-500">${esc(r.loja_solicitante || '')} · ${esc(NOMES_MOTIVO[r.motivo] || r.motivo || 'sem motivo')}${r.funcionario_ausente_id ? ' · faltou: <b>' + esc(nomeFunc(r.funcionario_ausente_id)) + '</b>' : ''}</div>
               </div>

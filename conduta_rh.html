@@ -83,7 +83,7 @@
   <section class="card rola" style="margin-bottom: 10px"><table class="usu" id="usuarios"></table></section>
   <div id="lista"></div>
   <p class="nota">Fonte: a auditoria do banco (toda inclusão, alteração e exclusão fica gravada com o e-mail de quem fez, e não pode ser apagada pelas telas).
-    <b>Pontos de atenção</b>: exclusão, valor alterado, valor diferente do calculado, alteração em item já aprovado ou pago, lançamento em mês anterior ao aberto, mexer na própria ficha, duplicidade justificada, ação fora do horário (antes das 7h, depois das 20h ou domingo).
+    <b>Pontos de atenção</b>: exclusão, valor alterado, valor diferente do calculado, freelance pago fora da tabela, alteração em item já aprovado ou pago, lançamento em mês anterior ao aberto, mexer na própria ficha, duplicidade justificada, ação fora do horário (antes das 7h, depois das 20h ou domingo).
     Clique numa linha para ver todos os campos antes e depois.</p>
 
   <div class="modal" id="modal" onclick="if (event.target === this) this.style.display = 'none'"><div class="card" id="mCorpo"></div></div>
@@ -117,8 +117,8 @@
       tratado_horas: 'Horas', data: 'Data', data_servico: 'Data do serviço', hora_inicio: 'Início', hora_fim: 'Fim', valor_pago: 'Valor pago', forma_pagamento: 'Forma de pagamento',
       salario_base: 'Salário-base', salario_adicional: 'Salário adicional', cargo: 'Cargo', loja_id: 'Loja', data_contratacao: 'Admissão', data_rescisao: 'Rescisão',
       pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', perfil: 'Perfil', ativo: 'Ativo', valor_final: 'Valor final', natureza: 'Natureza',
-      valor_calculado: 'Valor calculado', entrada: 'Entrada', saida: 'Saída', dias: 'Dias', data_inicio: 'Início', horas: 'Horas', desconto_tipo: 'Desconto', codigo_contabil: 'Código contábil', funcionario_id: 'Funcionário', funcionario_ausente_id: 'Quem faltou', justificativa_valor: 'Justificativa do valor', observacao: 'Observação', observacao_rh: 'Observação do RH' };
-    const JUST = ['motivo_ajuste', 'justificativa', 'justificativa_valor', 'motivo', 'observacao_rh', 'cancelado_motivo', 'desconto_justif', 'liberado_motivo', 'pagamento_obs', 'motivo_recusa', 'observacao'];
+      valor_calculado: 'Valor calculado', entrada: 'Entrada', saida: 'Saída', dias: 'Dias', data_inicio: 'Início', horas: 'Horas', desconto_tipo: 'Desconto', codigo_contabil: 'Código contábil', funcionario_id: 'Funcionário', funcionario_ausente_id: 'Quem faltou', justificativa_valor: 'Justificativa do valor', observacao: 'Observação', observacao_rh: 'Observação do RH', valor_tabela: 'Valor de tabela', valor_justif: 'Justificativa (valor fora da tabela)' };
+    const JUST = ['motivo_ajuste', 'justificativa', 'justificativa_valor', 'valor_justif', 'motivo', 'observacao_rh', 'cancelado_motivo', 'desconto_justif', 'liberado_motivo', 'pagamento_obs', 'motivo_recusa', 'observacao'];
     const OCULTOS = ['id', 'created_at', 'criado_em', 'updated_at', 'atualizado_em', 'historico', 'ajustes', 'criado_por', 'tratado_em', 'tratado_por', 'decidido_em', 'decidido_por', 'rh_em', 'rh_por', 'supervisor_em', 'supervisor_por'];
     const DINHEIRO = /valor|salario|abatimento|adicional|desconto_valor|liquido/;
 
@@ -215,6 +215,8 @@
       if (r.operation === 'DELETE' && !['escala_dias', 'perfil_telas'].includes(r.table_name)) fl.push(['exclusão' + (mx ? '' : ' sem motivo'), '']);
       if (r.operation === 'UPDATE' && campos.some(c => /^(valor|valor_bruto|valor_final|valor_pago|abatimento_sigiloso|salario_base|salario_adicional)$/.test(c) && o[c] !== null && o[c] !== undefined && Number(o[c]) !== 0)) fl.push(['valor alterado', '']);   // de vazio para um valor é preenchimento, não alteração
       if (r.table_name === 'escala_faltas_desconto' && n.justificativa_valor && campos.includes('justificativa_valor')) fl.push(['valor diferente do calculado', '']);
+      // (19/11/2026, HU) freelance pago fora da tabela (diária 7,5 h / por hora): justificativa obrigatória do RH
+      if (r.table_name === 'freelance_solicitacoes' && n.valor_justif && campos.includes('valor_justif')) fl.push([`freelance fora da tabela (tabela ${brl(n.valor_tabela)}, pago ${brl(n.valor_pago)})`, '']);
       if (r.operation === 'UPDATE' && /^(APROVAD|PAGO|CONFIRM|LANCAD)/i.test(String(o.status || '')) && !campos.includes('status')) fl.push(['mexeu em item já aprovado/pago', '']);
       if (r.table_name === 'folha_itens' && compAberta && compNum(d.competencia) && compNum(d.competencia) < compAberta) fl.push(['mês anterior ao aberto', '']);
       if (u.funcionario_id && fid && u.funcionario_id === fid && r.table_name !== 'usuarios_sistema') fl.push(['na própria ficha', '']);
