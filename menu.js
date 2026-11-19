@@ -730,6 +730,49 @@
     document.body.appendChild(m);
   }
 
+  // (19/11/2026, HW) FREELANCE DEVOLVIDO PARA CORREÇÃO (estava no horário de trabalho): fn_freelance_erros_turno.
+  // Líder: janela em toda tela até corrigir (prazo 20/11); depois do prazo o supervisor recebe a mesma janela até o último ser corrigido.
+  // RH/Gestor: só a bolha no menu. Cada item tem "Corrigir" (janela do freelance_valor.js).
+  async function avisosFreelaTurno(abrirJanela) {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window) return;
+    const t0 = Date.now();
+    let its; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_freelance_erros_turno'); if (error || !data) return; its = data; } catch (e) { return; }
+    const lento = Date.now() - t0 > 8000;
+    const SPd = new Date().toLocaleString('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).slice(0, 10);
+    const prazo = its.length ? String(its[0].prazo_lider) : '';
+    const vencido = prazo && SPd > prazo;
+    const tela = pf === 'SUPERVISOR' ? 'supervisor_freelance.html' : pf === 'RH' || pf === 'GESTOR' ? 'rh_aprovacao_freelance.html' : 'freelance_solicitacao.html';
+    const it = document.querySelector(`#menuSistema a.it[data-menu="${tela}"]`);
+    if (it) { let b = it.querySelector('.bolha.fvt');
+      if (!its.length || (pf === 'SUPERVISOR' && !vencido)) { if (b) b.remove(); } else { if (!b) { b = document.createElement('span'); b.className = 'bolha fvt'; it.appendChild(b); }
+        b.style.background = '#dc2626'; b.style.color = '#fff'; b.title = 'Freelance devolvido para correção'; b.textContent = its.length;
+        const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto'); } }
+    const old = document.getElementById('fvtPopup'); if (old && !its.length) old.remove();
+    if (!abrirJanela || !its.length || old || lento || pf === 'RH' || pf === 'GESTOR' || (pf === 'SUPERVISOR' && !vencido)) return;
+    const chaveAdiar = 'fvtAdiar_' + pf + '_' + SPd;
+    try { if (Date.now() < Number(localStorage.getItem(chaveAdiar) || 0)) return; } catch (e) { }
+    try { if (!window.FreelaValor) await carregarScript('freelance_valor.js?v=2'); } catch (e) { return; }
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const dbr = d => String(d).slice(8, 10) + '/' + String(d).slice(5, 7);
+    const m = document.createElement('div'); m.id = 'fvtPopup';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:640px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit;border-top:8px solid #dc2626">
+      <div style="font-size:12px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.04em">🚫 Freelance no horário de trabalho</div>
+      <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${pf === 'LIDER' ? `${its.length} freelance(s) da sua loja DEVOLVIDO(S) PARA CORREÇÃO` : `${its.length} freelance(s) devolvido(s) ainda sem correção depois do prazo do líder (${dbr(prazo)})`}</div>
+      <div style="font-size:13px;color:#475569;margin:6px 0 12px">Estes freelances foram pedidos no mesmo horário em que a pessoa está na escala (horário pago pelo salário) e voltaram para a loja. Corrija conforme o que aconteceu de verdade no dia: o pedido volta para o supervisor e depois para o RH. Sem correção, não há pagamento.${pf === 'LIDER' ? ` <b>Prazo: ${dbr(prazo)}.</b> Depois disso o supervisor passa a corrigir junto com a loja.` : ''}</div>
+      ${its.map((x, i) => `<div style="border:2px solid #fca5a5;border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px;display:flex;gap:10px;align-items:center;justify-content:space-between">
+        <div><b>${dbr(x.data)} · ${esc(x.nome)}</b>${pf === 'LIDER' ? '' : ' · ' + esc(x.loja)}<div style="font-size:12px;color:#991b1b">freelance ${String(x.hora_inicio).slice(0, 5)}–${String(x.hora_fim).slice(0, 5)} · ${esc(String(x.msg).replace(/^.*a pessoa está/, 'a pessoa está').replace(/ \(horário.*$/, ''))}</div></div>
+        <button type="button" data-i="${i}" style="flex-shrink:0;background:#dc2626;color:#fff;border:0;border-radius:8px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">✏ Corrigir</button></div>`).join('')}
+      <div style="text-align:center;margin-top:8px;font-size:11.5px;color:#991b1b;font-weight:700">Este aviso aparece em toda tela até o último ser corrigido.</div>
+      <div style="text-align:center;margin-top:6px"><button type="button" data-adiar style="background:none;border:0;color:#64748b;font-size:11.5px;text-decoration:underline;cursor:pointer">continuar o que estou fazendo e corrigir em 30 min</button></div></div>`;
+    m.querySelector('[data-adiar]').onclick = () => { try { localStorage.setItem(chaveAdiar, String(Date.now() + 30 * 60000)); } catch (e) { } m.remove(); };
+    m.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { const x = its[Number(b.dataset.i)];
+      window.FreelaValor.aoCorrigir(() => { m.remove(); avisosFreelaTurno(true); }, window.ACESSO_CLI);
+      window.FreelaValor.corrigir(x.id, { id: x.id, nome: x.nome, data_servico: x.data, hora_inicio: x.hora_inicio, hora_fim: x.hora_fim, status: x.status, msg: x.msg }); });
+    document.body.appendChild(m);
+  }
+
   async function avisosMarketing() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'MARKETING', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('marketing_pedidos.html')) return;
@@ -1039,6 +1082,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(seVisivel(avisosMarketing), 300000); avisosTransferencias(true); setInterval(seVisivel(() => avisosTransferencias(false)), 60000); avisosRetaguarda(true); setInterval(seVisivel(() => avisosRetaguarda(false)), 300000); avisosRescisao(true); setInterval(seVisivel(() => avisosRescisao(false)), 300000); avisosFeriado(true); setInterval(seVisivel(() => avisosFeriado(false)), 300000); popupMarketing(); pendenciasMenu(); setInterval(seVisivel(pendenciasMenu), 300000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(seVisivel(avisosMarketing), 300000); avisosTransferencias(true); setInterval(seVisivel(() => avisosTransferencias(false)), 60000); avisosRetaguarda(true); setInterval(seVisivel(() => avisosRetaguarda(false)), 300000); avisosRescisao(true); setInterval(seVisivel(() => avisosRescisao(false)), 300000); avisosFeriado(true); setInterval(seVisivel(() => avisosFeriado(false)), 300000); avisosFreelaTurno(true); setInterval(seVisivel(() => avisosFreelaTurno(false)), 300000); popupMarketing(); pendenciasMenu(); setInterval(seVisivel(pendenciasMenu), 300000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
