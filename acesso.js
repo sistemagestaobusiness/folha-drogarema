@@ -406,7 +406,7 @@ if (!window.__alertTraduzido) {
       try { if (document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo(cli); } catch (e) { }
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {
-        const sm = document.createElement('script'); sm.src = 'menu.js?v=57'; (document.head || document.documentElement).appendChild(sm);
+        const sm = document.createElement('script'); sm.src = 'menu.js?v=58'; (document.head || document.documentElement).appendChild(sm);
       }
       const telas = new Set((data.telas || []).map(t => String(t).toLowerCase()));
       if (!telas.has(PAGINA)) {
@@ -469,7 +469,9 @@ document.addEventListener('wheel', function () {
       try { localStorage.setItem(CH, v); } catch (e) { }
       // abriu o sistema depois de uma atualização: renova o cache uma vez e recarrega sozinho (a tela pode ter vindo antiga)
       if (ant && ant !== v) { var j = 'versao_recarregou_' + v, ja = null; try { ja = sessionStorage.getItem(j); } catch (e) { }
-        if (!ja) { try { sessionStorage.setItem(j, '1'); } catch (e) { } renovar().then(function () { location.reload(); }); } }
+        if (!ja) { try { sessionStorage.setItem(j, '1'); } catch (e) { } renovar().then(function () { location.reload(); }); }
+        // (19/11/2026, HT) no 1º minuto o GitHub ainda pode entregar o arquivo antigo: renova de novo em 1 e 3 min (sem recarregar)
+        else { setTimeout(renovar, 60000); setTimeout(renovar, 180000); } }
       return;
     }
     if (v !== atual) barra(v); }); }

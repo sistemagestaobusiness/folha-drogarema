@@ -990,9 +990,13 @@
       verSetas();
       const on = bar.querySelector('.aba.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+    // (19/11/2026, HT) a aba abre com a versão do sistema no endereço (escala.html?vs=HS-...): versão nova = endereço novo,
+    // então o navegador e o GitHub não entregam a cópia guardada (até 10 min) da tela antiga
+    const comVersao = u => { let v = ''; try { v = localStorage.getItem('versao_sistema') || ''; } catch (e) { }
+      if (!v) return u; const [base, h] = String(u).split('#'); return base + (base.includes('?') ? '&' : '?') + 'vs=' + encodeURIComponent(v) + (h ? '#' + h : ''); };
     function ativar(t) {
       ativa = t;
-      if (!t.nativa && !t.frame) { t.frame = document.createElement('iframe'); t.frame.src = t.url; t.frame.title = t.titulo; area.appendChild(t.frame); }
+      if (!t.nativa && !t.frame) { t.frame = document.createElement('iframe'); t.frame.src = comVersao(t.url); t.frame.title = t.titulo; area.appendChild(t.frame); }
       desenhar();
     }
     function abrir(url, titulo) {
