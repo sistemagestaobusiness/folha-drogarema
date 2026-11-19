@@ -603,8 +603,8 @@
       $('dTitulo').innerText = `${DSEM[dow(iso)].toUpperCase()} ${dbr(iso)}`;
       $('dInfo').innerHTML = `<b>${esc(f.nome_registro)}</b> · hoje na escala: <b>${esc(r.tipo === 'TRABALHO' ? r.entrada + '–' + r.saida : (TIPOS[r.tipo] || {}).txt)}</b>${r.origem === 'DIA' ? ' (alterado no dia)' : r.origem === 'FREELA' ? ' (informado no freelance)' : ''}`;
       const ops = [['PADRAO', '↺ Padrão'], ['TRABALHO', '✓ Trabalha'], ['FOLGA', 'F Folga'], ['FALTA', 'FA Falta'], ['ATESTADO', 'AT Atestado'], ['AFASTADO', 'AF Afastado']];
-      tipoDia = r.origem === 'DIA' ? r.tipo : r.tipo === 'TRABALHO' ? 'FOLGA' : 'TRABALHO';
-      if (feriadoDe(iso) && TIPOS[r.tipo]) tipoDia = r.tipo;   // (19/11/2026, HS) feriado: abre com a escala como está, nunca em FOLGA sem querer
+      // (19/11/2026, HV) a janela abre SEMPRE com a escala como está (antes abria com o contrário: dia de trabalho vinha em FOLGA)
+      tipoDia = ops.some(o => o[0] === r.tipo) ? r.tipo : 'TRABALHO';
       $('dTipos').innerHTML = ops.map(([k, t]) => `<button data-t="${k}" onclick="escolherTipoDia('${k}')" class="tdia px-2 py-2 rounded-lg border font-bold cursor-pointer">${t}</button>`).join('');
       const p = padroes[f.id];
       $('dEntrada').value = r.entrada || (p ? hm(p.entrada) : ''); $('dSaida').value = r.saida || (p ? hm(p.saida) : '');
@@ -612,6 +612,7 @@
       $('dLoja').innerHTML = lojasOp.map(l => `<option value="${l.id}">${esc(l.nome_loja)}${l.id === f.loja_id ? ' (dele)' : ''}</option>`).join('');
       $('dLoja').value = r.loja || (f.loja_id === lojaSel ? f.loja_id : lojaSel);
       $('dAte').value = ''; $('dAte').min = iso; $('dObs').value = r.origem === 'DIA' ? (r.obs || '') : ''; $('dMesmoDia').checked = false;
+      editando.ini = retratoDia(tipoDia);
       // feriado: quem trabalha recebe folga compensatória ou hora extra 100%
       const fer = feriadoDe(iso), bx = $('dBoxFeriado');
       bx.classList.toggle('hidden', !fer);
@@ -654,8 +655,11 @@
         $('dBtnSalvar').innerText = pedir ? 'PEDIR RETIRADA (vai para aprovação)' : 'SALVAR';
         const bj = $('dJustRet'); if (bj) bj.closest('div').classList.toggle('hidden', !pedir); }
     }
+    // (HV) retrato da janela: SALVAR sem mudar nada só fecha (não grava uma alteração igual à escala)
+    function retratoDia(t) { return [t, $('dEntrada').value, $('dSaida').value, $('dLoja').value, $('dObs').value.trim()].join('|'); }
     async function salvarDia() {
       const { f, iso } = editando, ate = $('dAte').value;
+      if (!$('fMsg') && !ate && editando.ini && retratoDia(tipoDia) === editando.ini) { fechar('mDia'); return; }
       // (HS) feriado sem decisão: salvar "trabalha" no mesmo horário não muda nada; a decisão é nos botões do feriado
       if ($('fMsg') && tipoDia === 'TRABALHO' && !ate && editando.r.tipo === 'TRABALHO'
           && $('dEntrada').value === editando.r.entrada && $('dSaida').value === editando.r.saida) {
