@@ -392,12 +392,24 @@ if (!window.__alertTraduzido) {
           }
         }, 30000);
       }
+      // (23/11/2026, HX) segurança: o banco confere em toda chamada a rede da loja (Líder/Transferência) e os dois fatores
+      // (contas fortes). Aqui a janela principal registra o acesso (IP) e, se o banco bloquear, mostra o motivo no login.
+      const bloqueado = async (m) => {
+        const W = window.top !== window ? window.top : window;
+        if (/MFA_PENDENTE/.test(m)) { W.location.replace('login.html?mfa=1'); return; }
+        try { sessionStorage.setItem('motivo_bloqueio', String(m).replace(/^FORA_DA_LOJA:\s*/, '')); localStorage.removeItem('usuario_drogarema'); await cli.auth.signOut({ scope: 'local' }); } catch (e) { }
+        W.location.replace('login.html?rede=1');
+      };
+      if (window.top === window) {
+        try { const { data: st } = await cli.rpc('fn_acesso_registrar', { p_ua: navigator.userAgent.slice(0, 300) }); if (st && st.bloqueio) { await bloqueado(st.bloqueio); return; } } catch (e) { }
+      }
       let data, error;
       for (let i = 0; i < 4; i++) {   // (HN) lentidão do banco: tenta de novo antes de desistir
         ({ data, error } = await cli.rpc('fn_minhas_telas'));
         if (!error || !transitorio(error)) break;
         await new Promise(r => setTimeout(r, 2000 * (i + 1)));
       }
+      if (error && /FORA_DA_LOJA|MFA_PENDENTE/.test(error.message || '')) { await bloqueado(error.message); return; }
       if (error) { console.warn('Acesso por tela ainda não configurado:', error.message); liberar(); return; }
       if (!data || !data.perfil) { alert('Seu usuário não tem perfil ativo no sistema.'); location.replace('login.html'); return; }
       window.ACESSO = data; window.ACESSO.email = user.email; window.ACESSO_CLI = cli;
@@ -406,7 +418,7 @@ if (!window.__alertTraduzido) {
       try { if (document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo(cli); } catch (e) { }
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {
-        const sm = document.createElement('script'); sm.src = 'menu.js?v=59'; (document.head || document.documentElement).appendChild(sm);
+        const sm = document.createElement('script'); sm.src = 'menu.js?v=60'; (document.head || document.documentElement).appendChild(sm);
       }
       const telas = new Set((data.telas || []).map(t => String(t).toLowerCase()));
       if (!telas.has(PAGINA)) {

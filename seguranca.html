@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Segurança e acessos - Business</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fin_estilo.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="acesso.js"></script>
+  <style>
+    .cab2 { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 10px; }
+    .cab2 h1 { margin: 0; font-size: 19px; font-weight: 700; }
+    .cab2 .desc { flex: 1 1 320px; }
+    .grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    @media (max-width: 1000px) { .grade { grid-template-columns: 1fr; } }
+    .card h2 { font-size: 14px; margin: 0 0 4px; }
+    .card { padding: 12px 14px; }
+    .chave { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--linha); }
+    .chave:first-of-type { border-top: 0; }
+    .chave .t { font-weight: 600; font-size: 13px; } .chave .s { font-size: 11.5px; color: var(--sub); }
+    .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+    .pill.ok { background: var(--verde-bg); color: var(--verde-tx); } .pill.av { background: var(--amar-bg); color: var(--amar-tx); } .pill.ve { background: var(--verm-bg); color: var(--verm-tx); }
+    table.t { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.t th { text-align: left; font-size: 10.5px; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; }
+    table.t td { padding: 5px 8px; border-top: 1px solid var(--linha); vertical-align: top; }
+    table.t td.m { font-family: 'JetBrains Mono', monospace; }
+    tr.alerta td { background: #FEF3F2; } tr.visto td { background: #FAFAFA; color: var(--sub); }
+    .abas { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+    .abas button { border: 1px solid #D0D5DD; background: #fff; border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .abas button.on { background: var(--escuro); color: #fff; border-color: var(--escuro); }
+    .nota { font-size: 11.5px; color: var(--sub); margin-top: 8px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="cab2">
+    <h1>Segurança e acessos</h1>
+    <div class="desc">Quem entra no sistema, de qual internet e quando; rede das lojas (Líder e Transferência) e verificação em duas etapas (Gestor, RH, Financeiro e Supervisor). Só o Gestor vê esta tela.</div>
+    <button type="button" class="btn" onclick="carregar()">↻ Atualizar</button>
+  </div>
+  <div id="aviso" class="alerta verm" style="display:none"></div>
+
+  <div class="grade">
+    <section class="card">
+      <h2>Regras ligadas</h2>
+      <div class="chave"><div><div class="t">Rede das lojas · Líder e Transferência</div><div class="s">Bloquear = só entram pela internet cadastrada das lojas. Registrar = só anota de onde entram.</div></div>
+        <div><span id="redeModo" class="pill av">…</span> <button type="button" class="btn" id="btnRede" onclick="trocarRede()">…</button></div></div>
+      <div class="chave"><div><div class="t">Verificação em duas etapas (app autenticador)</div><div class="s">Para quem vale: NINGUEM, TODOS (Gestor, RH, Financeiro, Supervisor) ou e-mails separados por vírgula.</div></div>
+        <div style="display:flex;gap:6px;align-items:center"><input id="mfaPara" class="inp" style="width:260px"><button type="button" class="btn" onclick="salvarMfa()">Salvar</button></div></div>
+      <table class="t" style="margin-top:6px"><thead><tr><th>Conta forte</th><th>Perfil</th><th>App cadastrado</th></tr></thead><tbody id="mfaLista"></tbody></table>
+    </section>
+    <section class="card">
+      <h2>Internet das lojas (IP fixo)</h2>
+      <table class="t"><thead><tr><th>Loja</th><th>IP</th><th>Observação</th><th></th></tr></thead><tbody id="redes"></tbody></table>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        <select id="nLoja" class="inp"></select><input id="nIp" class="inp mono" placeholder="IP (ex.: 152.250.9.7)" style="width:150px">
+        <input id="nObs" class="inp" placeholder="observação" style="flex:1;min-width:120px"><button type="button" class="btn" onclick="salvarRede()">+ Incluir</button>
+      </div>
+      <div class="nota">Loja mudou de internet ou de operadora? Inclua o IP novo aqui antes de ligar o bloqueio, senão o Líder e a conta Transferência daquela loja ficam sem acesso.</div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Acessos (últimos 30 dias)</h2>
+    <div class="abas" id="abas"></div>
+    <div class="rola"><table class="t"><thead><tr><th>Dia</th><th>Quem</th><th>Perfil</th><th>Internet (IP)</th><th>Loja da rede</th><th>Entradas</th><th>Última</th><th>2 etapas</th><th>Alerta / bloqueio</th></tr></thead><tbody id="acessos"></tbody></table></div>
+    <div class="nota">Alertas: tentativa fora da loja, conta forte entrando por uma internet nova e acesso de madrugada (antes das 6h). O registro é feito a cada tela aberta na janela principal.</div>
+  </section>
+
+  <script>
+    const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const dbr = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '';
+    const hora = t => t ? new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    let D = null, A = [], aba = 'alertas';
+    const aviso = t => { $('aviso').style.display = t ? 'block' : 'none'; $('aviso').textContent = t || ''; };
+
+    async function carregar() {
+      aviso('');
+      const [{ data: d, error: e1 }, { data: a, error: e2 }, { data: lj }] = await Promise.all([
+        _supabase.rpc('fn_seguranca_dados'), _supabase.rpc('fn_acessos_alertas', { p_dias: 30 }),
+        _supabase.from('lojas').select('id, nome_loja').order('nome_loja')]);
+      if (e1 || e2) return aviso('Erro ao carregar: ' + ((e1 || e2).message));
+      D = d || {}; A = a || [];
+      const modo = (D.config || {}).rede_loja_modo || 'REGISTRAR';
+      $('redeModo').className = 'pill ' + (modo === 'BLOQUEAR' ? 'ok' : 'av'); $('redeModo').textContent = modo === 'BLOQUEAR' ? 'BLOQUEANDO' : 'SÓ REGISTRANDO';
+      $('btnRede').textContent = modo === 'BLOQUEAR' ? 'Voltar a só registrar' : 'Ligar o bloqueio';
+      $('mfaPara').value = (D.config || {}).mfa_exigir_para || 'NINGUEM';
+      $('mfaLista').innerHTML = (D.mfa || []).map(m => `<tr><td>${esc(m.email)}</td><td>${esc(m.perfil)}</td><td>${m.fator ? '<span class="pill ok">sim</span>' : '<span class="pill av">ainda não</span>'}</td></tr>`).join('');
+      $('redes').innerHTML = (D.redes || []).map(r => `<tr><td>${esc(r.loja)}</td><td class="m">${esc(r.ip)}</td><td>${esc(r.obs)}</td><td><button type="button" class="btn" onclick="excluirRede('${esc(r.ip)}')">excluir</button></td></tr>`).join('');
+      $('nLoja').innerHTML = (lj || []).filter(l => /^LOJA/i.test(l.nome_loja)).map(l => `<option value="${l.id}">${esc(l.nome_loja)}</option>`).join('');
+      render();
+    }
+    function render() {
+      const al = A.filter(x => x.alerta && !x.visto_em), bl = A.filter(x => x.bloqueio);
+      const grupos = [['alertas', 'Alertas novos', al], ['bloq', 'Bloqueados', bl], ['todos', 'Todos', A]];
+      $('abas').innerHTML = grupos.map(([k, t, l]) => `<button type="button" class="${aba === k ? 'on' : ''}" onclick="aba='${k}';render()">${t} <span class="mono">${l.length}</span></button>`).join('')
+        + (al.length ? ` <button type="button" onclick="marcarVistos()">✓ marcar alertas como vistos</button>` : '');
+      const lista = grupos.find(g => g[0] === aba)[2];
+      $('acessos').innerHTML = lista.map(x => `<tr class="${x.alerta && !x.visto_em ? 'alerta' : x.visto_em ? 'visto' : ''}">
+        <td class="m">${dbr(x.dia)}</td><td>${esc(x.email)}</td><td>${esc(x.perfil)}</td><td class="m">${esc(x.ip || '?')}</td><td>${esc(x.loja || '—')}</td>
+        <td class="m">${x.qtd}</td><td class="m">${hora(x.ultimo_em)}</td><td>${x.aal === 'aal2' ? '<span class="pill ok">sim</span>' : ''}</td>
+        <td>${x.bloqueio ? '<span class="pill ve">bloqueado</span> ' : ''}${esc(x.alerta || '')}${x.visto_em ? ' · visto' : ''}</td></tr>`).join('')
+        || '<tr><td colspan="9" style="text-align:center;color:var(--sub);padding:18px">Nada aqui.</td></tr>';
+    }
+    async function trocarRede() {
+      const modo = (D.config || {}).rede_loja_modo === 'BLOQUEAR' ? 'REGISTRAR' : 'BLOQUEAR';
+      if (modo === 'BLOQUEAR' && !confirm('Ligar o bloqueio: Líder e Transferência só entram pela internet das lojas cadastradas. Confirma?')) return;
+      const { error } = await _supabase.rpc('fn_seguranca_config', { p_chave: 'rede_loja_modo', p_valor: modo });
+      if (error) return aviso(error.message); carregar();
+    }
+    async function salvarMfa() {
+      const v = $('mfaPara').value.trim() || 'NINGUEM';
+      const { error } = await _supabase.rpc('fn_seguranca_config', { p_chave: 'mfa_exigir_para', p_valor: v });
+      if (error) return aviso(error.message); carregar();
+    }
+    async function salvarRede() {
+      const { error } = await _supabase.rpc('fn_loja_rede_salvar', { p_loja: $('nLoja').value, p_ip: $('nIp').value, p_obs: $('nObs').value, p_excluir: false });
+      if (error) return aviso(error.message); $('nIp').value = ''; $('nObs').value = ''; carregar();
+    }
+    async function excluirRede(ip) {
+      if (!confirm('Excluir o IP ' + ip + ' da lista das lojas?')) return;
+      const { error } = await _supabase.rpc('fn_loja_rede_salvar', { p_loja: null, p_ip: ip, p_obs: null, p_excluir: true });
+      if (error) return aviso(error.message); carregar();
+    }
+    async function marcarVistos() {
+      const ids = A.filter(x => x.alerta && !x.visto_em).map(x => x.id);
+      const { error } = await _supabase.rpc('fn_acessos_alerta_visto', { p_ids: ids });
+      if (error) return aviso(error.message); carregar();
+    }
+    carregar();
+  </script>
+</body>
+</html>

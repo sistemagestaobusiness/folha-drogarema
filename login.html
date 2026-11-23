@@ -17,6 +17,7 @@
     (async () => {
       // chegando pelo link do e-mail de recuperação (ou com erro do link): fica no login para definir a senha nova (28/10/2026)
       if (/type=recovery|error=|error_code=/.test(location.hash + location.search)) return;
+      if (/[?&](mfa|rede)=1/.test(location.search)) return;   // (HX) segurança: fica no login para o código ou para o aviso de rede
       try { sessionStorage.removeItem('abas_sistema'); } catch (e) { }   // (11/11/2026) abas abertas não passam para o próximo usuário
       if (!localStorage.getItem('usuario_drogarema')) return;
       try {
@@ -87,7 +88,7 @@
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-400 mb-1">NOVA SENHA PESSOAL</label>
-        <input type="password" id="novaSenha" required placeholder="Mínimo 6 caracteres"
+        <input type="password" id="novaSenha" required placeholder="10+ caracteres: Aa, número e símbolo"
           class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500">
       </div>
 
@@ -102,7 +103,7 @@
       <p class="text-[12px] text-slate-300">Link confirmado<span id="novaSenhaEmail"></span>. Escolha a sua nova senha.</p>
       <div>
         <label class="block text-xs font-semibold text-slate-400 mb-1">NOVA SENHA</label>
-        <input type="password" id="novaSenhaRec" required placeholder="Mínimo 6 caracteres" autocomplete="new-password"
+        <input type="password" id="novaSenhaRec" required placeholder="10+ caracteres: Aa, número e símbolo" autocomplete="new-password"
           class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500">
       </div>
       <div>
@@ -123,6 +124,8 @@
       <button onclick="alternarModo('primeiroAcesso')" id="linkPrimeiro" class="text-slate-400 hover:text-amber-400 cursor-pointer">🔑 Primeiro Acesso / Trocar Senha</button>
     </div>
 
+    <!-- MODO 5 (23/11/2026, HX): DOIS FATORES (código do app autenticador) -->
+    <div id="mfaBox" class="space-y-3 hidden"></div>
     <div id="mensagem" class="mt-4 text-center text-xs hidden"></div>
   </div>
 
@@ -147,6 +150,77 @@
       return 'index.html';
     }
 
+    // ---- (23/11/2026, HX) SEGURANÇA ----
+    // Senha: mínimo 10 caracteres com letra minúscula, maiúscula, número e símbolo (mesma regra do Supabase).
+    function senhaFraca(s) {
+      if (s.length < 10) return 'A senha precisa ter pelo menos 10 caracteres.';
+      if (!/[a-z]/.test(s) || !/[A-Z]/.test(s) || !/[0-9]/.test(s) || !/[^A-Za-z0-9]/.test(s))
+        return 'A senha precisa ter letra minúscula, letra MAIÚSCULA, número e símbolo (ex.: Drogarema@2026).';
+      return '';
+    }
+    // Depois da senha: registra o acesso, confere a rede da loja e pede o código do app autenticador quando exigido.
+    async function posLogin(email) {
+      let st = null;
+      try { const r = await _supabase.rpc('fn_acesso_registrar', { p_ua: navigator.userAgent.slice(0, 300) }); st = r.data; } catch (e) { }
+      if (st && st.bloqueio && /FORA_DA_LOJA/.test(st.bloqueio)) {
+        try { await _supabase.auth.signOut({ scope: 'local' }); localStorage.removeItem('usuario_drogarema'); } catch (e) { }
+        avisarRede(st.bloqueio.replace(/^FORA_DA_LOJA:\s*/, '')); return false;
+      }
+      if (st && st.precisa_mfa && st.aal !== 'aal2') { await telaMfa(email); return false; }
+      window.location.href = await destinoPorPerfil(email); return true;
+    }
+    function avisarRede(t) {
+      alternarModo('login');
+      msg.classList.remove('hidden'); msg.className = 'mt-4 text-center text-sm text-rose-300 font-semibold';
+      msg.innerText = '🔒 Acesso bloqueado: ' + (t || 'este usuário só entra pela internet das lojas Drogarema.') + ' Entre de um computador da loja. Dúvidas: fale com o Gestor.';
+      const btn = document.getElementById('btnEntrar'); if (btn) { btn.disabled = false; btn.innerText = 'ENTRAR NO SISTEMA'; }
+    }
+    async function telaMfa(email) {
+      const box = document.getElementById('mfaBox');
+      [formLogin, formRecuperar, formPrimeiro, formNovaSenha].forEach(f => f.classList.add('hidden'));
+      ['linkLogin', 'linkRecuperar', 'linkPrimeiro'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      box.classList.remove('hidden'); msg.classList.add('hidden');
+      box.innerHTML = '<p class="text-xs text-slate-400 text-center">Preparando a verificação...</p>';
+      let fatores = null;
+      try { const { data } = await _supabase.auth.mfa.listFactors(); fatores = data; } catch (e) { }
+      const verificado = ((fatores && fatores.totp) || []).find(f => f.status === 'verified');
+      let factorId = verificado ? verificado.id : null, qr = '', segredo = '';
+      if (!factorId) {
+        // primeiro cadastro: limpa tentativas antigas não concluídas e cria o fator novo
+        for (const f of ((fatores && fatores.all) || [])) if (f.status !== 'verified') { try { await _supabase.auth.mfa.unenroll({ factorId: f.id }); } catch (e) { } }
+        const { data, error } = await _supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Drogarema ' + new Date().toISOString().slice(0, 16) });
+        if (error) { box.innerHTML = '<p class="text-rose-400 text-sm">Erro ao preparar o código: ' + error.message + '</p>'; return; }
+        factorId = data.id; qr = data.totp.qr_code; segredo = data.totp.secret;
+      }
+      box.innerHTML = (verificado
+        ? '<p class="text-sm text-slate-200 font-semibold">🔐 Verificação em duas etapas</p><p class="text-xs text-slate-400">Abra o app autenticador no celular (Google Authenticator ou Microsoft Authenticator) e digite o código de 6 números de <b>Drogarema</b>.</p>'
+        : '<p class="text-sm text-slate-200 font-semibold">🔐 Ativar a verificação em duas etapas (obrigatória para o seu perfil)</p>'
+          + '<ol class="text-xs text-slate-300 list-decimal pl-4 space-y-1"><li>Instale no celular o <b>Google Authenticator</b> ou o <b>Microsoft Authenticator</b> (grátis).</li><li>No app, toque em <b>+</b> e em <b>ler código QR</b>, e aponte para o quadro abaixo.</li><li>Digite o código de 6 números que aparecer no app.</li></ol>'
+          + '<div class="bg-white rounded-lg p-2 w-48 mx-auto"><img src="' + qr + '" alt="QR" class="w-full"></div>'
+          + '<p class="text-[11px] text-slate-400 text-center">Sem câmera? Digite no app a chave: <span class="font-mono text-slate-200 select-all break-all">' + segredo + '</span></p>')
+        + '<input id="mfaCodigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-3 text-white text-2xl tracking-[.5em] text-center font-mono focus:outline-none focus:border-cyan-500">'
+        + '<button type="button" id="mfaOk" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 rounded text-sm cursor-pointer">CONFIRMAR CÓDIGO</button>'
+        + '<button type="button" id="mfaSair" class="w-full text-xs text-slate-400 hover:text-cyan-400 cursor-pointer">Sair e entrar com outro usuário</button>'
+        + '<div id="mfaMsg" class="text-center text-xs font-semibold"></div>';
+      const cod = document.getElementById('mfaCodigo'), ok = document.getElementById('mfaOk'), m2 = document.getElementById('mfaMsg');
+      cod.focus();
+      cod.addEventListener('keydown', ev => { if (ev.key === 'Enter') ok.click(); });
+      document.getElementById('mfaSair').onclick = async () => { try { await _supabase.auth.signOut({ scope: 'local' }); localStorage.removeItem('usuario_drogarema'); } catch (e) { } location.replace('login.html'); };
+      ok.onclick = async () => {
+        const c = cod.value.replace(/\D/g, '');
+        if (c.length !== 6) { m2.className = 'text-center text-xs font-semibold text-rose-400'; m2.innerText = 'Digite os 6 números do app.'; return; }
+        ok.disabled = true; ok.innerText = 'CONFERINDO...';
+        const { error } = await _supabase.auth.mfa.challengeAndVerify({ factorId, code: c });
+        if (error) {
+          ok.disabled = false; ok.innerText = 'CONFIRMAR CÓDIGO'; m2.className = 'text-center text-xs font-semibold text-rose-400';
+          m2.innerText = /invalid|expired|code/i.test(error.message) ? 'Código errado ou vencido. Espere o próximo código no app e tente de novo.' : 'Erro: ' + error.message; return;
+        }
+        m2.className = 'text-center text-xs font-semibold text-emerald-400'; m2.innerText = 'Código confirmado! Entrando...';
+        try { const { data: u } = await _supabase.auth.getUser(); if (u && u.user) localStorage.setItem('usuario_drogarema', JSON.stringify(u.user)); } catch (e) { }
+        try { await _supabase.rpc('fn_acesso_registrar', { p_ua: navigator.userAgent.slice(0, 300) }); } catch (e) { }
+        window.location.href = await destinoPorPerfil(email);
+      };
+    }
     const formLogin = document.getElementById('loginForm');
     const formRecuperar = document.getElementById('recuperarForm');
     const formPrimeiro = document.getElementById('primeiroAcessoForm');
@@ -215,8 +289,7 @@
           msg.className = 'mt-4 text-center text-xs text-emerald-400 font-semibold';
           msg.innerText = 'Sucesso! Redirecionando...';
           localStorage.setItem('usuario_drogarema', JSON.stringify(data.user));
-          const destino = await destinoPorPerfil(email);
-          setTimeout(() => { window.location.href = destino; }, 800);
+          await posLogin(email);
         }
       } catch (err) {
         msg.className = 'mt-4 text-center text-xs text-rose-500 font-semibold';
@@ -280,7 +353,7 @@
     formNovaSenha.addEventListener('submit', async (e) => {
       e.preventDefault();
       const s1 = document.getElementById('novaSenhaRec').value, s2 = document.getElementById('novaSenhaRec2').value;
-      if (s1.length < 6) return avisar('text-rose-500', 'A nova senha deve ter pelo menos 6 caracteres.');
+      if (senhaFraca(s1)) return avisar('text-rose-500', senhaFraca(s1));
       if (s1 !== s2) return avisar('text-rose-500', 'As duas senhas não são iguais.');
       const btn = document.getElementById('btnNovaSenha'); btn.disabled = true; btn.innerText = 'SALVANDO...';
       try {
@@ -291,10 +364,17 @@
         history.replaceState(null, '', location.pathname);
         avisar('text-emerald-400', 'Senha alterada! Entrando no sistema...');
         localStorage.setItem('usuario_drogarema', JSON.stringify(u.user));
-        const destino = await destinoPorPerfil(u.user.email);
-        setTimeout(() => { window.location.href = destino; }, 900);
+        await posLogin(u.user.email);
       } catch (err) { btn.disabled = false; btn.innerText = 'SALVAR NOVA SENHA E ENTRAR'; avisar('text-rose-500', 'Erro: ' + err.message); }
     });
+
+    // (HX) chegou pelo bloqueio de rede ou pedindo o código do app
+    (async () => {
+      if (/[?&]rede=1/.test(location.search)) { let t = ''; try { t = sessionStorage.getItem('motivo_bloqueio') || ''; sessionStorage.removeItem('motivo_bloqueio'); } catch (e) { } avisarRede(t); }
+      if (/[?&]mfa=1/.test(location.search)) {
+        try { const { data } = await _supabase.auth.getUser(); if (data && data.user) await telaMfa(data.user.email); } catch (e) { }
+      }
+    })();
 
     // 3. Ação de Trocar Senha no Primeiro Acesso
     formPrimeiro.addEventListener('submit', async (e) => {
@@ -310,9 +390,9 @@
       const senhaTemp = document.getElementById('senhaTemp').value;
       const novaSenha = document.getElementById('novaSenha').value;
 
-      if (novaSenha.length < 6) {
+      if (senhaFraca(novaSenha)) {
         msg.className = 'mt-4 text-center text-xs text-rose-500 font-semibold';
-        msg.innerText = 'A nova senha deve ter pelo menos 6 caracteres.';
+        msg.innerText = senhaFraca(novaSenha);
         btn.disabled = false;
         btn.innerText = 'SALVAR NOVA SENHA';
         return;
@@ -341,8 +421,7 @@
           msg.innerText = 'Senha alterada com sucesso! Entrando no sistema...';
           
           localStorage.setItem('usuario_drogarema', JSON.stringify(authData.user));
-          const destino = await destinoPorPerfil(email);
-          setTimeout(() => { window.location.href = destino; }, 1000);
+          await posLogin(email);
         }
       } catch (err) {
         msg.className = 'mt-4 text-center text-xs text-rose-500 font-semibold';

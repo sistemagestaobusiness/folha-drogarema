@@ -25,7 +25,7 @@
     ['Relatórios', [['relatorio_faltas.html', 'Relatório de faltas', '☷'], ['resumo_diretoria.html', 'Resumo da diretoria', '↗'], ['relatorio_quinto_dia.html', 'Pagamento do 5º dia útil', '$']]],
     ['Resultado das lojas', [['acompanhamento_loja.html', 'Acompanhamento', '◴'], ['resultado_loja.html', 'Resultado fechado', '◧'], ['fechamento_financeiro.html', 'Fechamento financeiro', '▣'], ['metas_console.html', 'Metas das lojas', '◎']]],
     ['Cadastros', [['funcionarios.html', 'Funcionários', '☺'], ['organograma.html', 'Organograma', '⌂'], ['empresas.html', 'Empresas e contas', '▥'], ['lojas.html', 'Lojas e setores', '⌂'], ['eventos.html', 'Tipos de eventos', '❖'], ['rubricas.html', 'Rubricas Alpha7', '⇆']]],
-    ['Segurança', [['conduta_rh.html', 'Conduta do RH', '◉'], ['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]],
+    ['Segurança', [['seguranca.html', 'Segurança e acessos', '🛡'], ['conduta_rh.html', 'Conduta do RH', '◉'], ['auditoria.html', 'Auditoria', '⚲'], ['perfis.html', 'Perfis e acessos', '⚿']]],
     ['Marketing', [['marketing_pedidos.html', 'Pedidos ao Marketing', '✎'], ['marketing_comunicados.html', 'Comunicados e enquetes', '✉']]],
     ['Entregas', [['motoboys_cadastro.html', 'Cadastro de motoboys', '☺'], ['motoboys.html', 'Motoboys', '➤'], ['motoboys_jacarei.html', 'Motoboys Jacareí', '➤'], ['transferencias.html', 'Transferências entre lojas', '⇄']]]
   ];
@@ -773,6 +773,18 @@
     document.body.appendChild(m);
   }
 
+  // (23/11/2026, HX) Gestor: número vermelho em "Segurança e acessos" com os alertas de acesso ainda não vistos
+  async function avisosSeguranca() {
+    if (String(window.ACESSO.perfil || '').toUpperCase() !== 'GESTOR' || !window.ACESSO_CLI || window.top !== window) return;
+    let n = 0; try { const { data, error } = await window.ACESSO_CLI.rpc('fn_acessos_alertas', { p_dias: 30 }); if (error) return; n = (data || []).filter(x => x.alerta && !x.visto_em).length; } catch (e) { return; }
+    const it = document.querySelector('#menuSistema a.it[data-menu="seguranca.html"]'); if (!it) return;
+    let b = it.querySelector('.bolha.seg');
+    if (!n) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('span'); b.className = 'bolha seg'; it.appendChild(b); }
+    b.style.background = '#dc2626'; b.style.color = '#fff'; b.title = 'Alertas de acesso para ver'; b.textContent = n;
+    const sec = it.closest('.sec'); if (sec) sec.classList.add('aberto');
+  }
+
   async function avisosMarketing() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['LIDER', 'MARKETING', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window || !telas.has('marketing_pedidos.html')) return;
@@ -1082,6 +1094,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(seVisivel(avisosMarketing), 300000); avisosTransferencias(true); setInterval(seVisivel(() => avisosTransferencias(false)), 60000); avisosRetaguarda(true); setInterval(seVisivel(() => avisosRetaguarda(false)), 300000); avisosRescisao(true); setInterval(seVisivel(() => avisosRescisao(false)), 300000); avisosFeriado(true); setInterval(seVisivel(() => avisosFeriado(false)), 300000); avisosFreelaTurno(true); setInterval(seVisivel(() => avisosFreelaTurno(false)), 300000); popupMarketing(); pendenciasMenu(); setInterval(seVisivel(pendenciasMenu), 300000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(seVisivel(avisosMarketing), 300000); avisosTransferencias(true); setInterval(seVisivel(() => avisosTransferencias(false)), 60000); avisosRetaguarda(true); setInterval(seVisivel(() => avisosRetaguarda(false)), 300000); avisosRescisao(true); setInterval(seVisivel(() => avisosRescisao(false)), 300000); avisosFeriado(true); setInterval(seVisivel(() => avisosFeriado(false)), 300000); avisosFreelaTurno(true); setInterval(seVisivel(() => avisosFreelaTurno(false)), 300000); avisosSeguranca(); setInterval(seVisivel(avisosSeguranca), 300000); popupMarketing(); pendenciasMenu(); setInterval(seVisivel(pendenciasMenu), 300000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
