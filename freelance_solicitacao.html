@@ -654,7 +654,10 @@
       atualizarTabelaCarrinho();
       document.getElementById('inputObs').value = '';
       limparCombo('selectFuncionario');
-      alert(`Solicitação de ${TIPOS[tipoAtual].rotulo} enviada! Ela aparece agora para o Supervisor e para o RH.`);
+      // (24/11/2026, HZ) pedido do supervisor já nasce aprovado por ele e vai direto ao RH
+      alert(usuario.perfil === 'SUPERVISOR'
+        ? `Solicitação de ${TIPOS[tipoAtual].rotulo} enviada já APROVADA por você (supervisor). Ela foi direto para o RH definir valor e data.`
+        : `Solicitação de ${TIPOS[tipoAtual].rotulo} enviada! Ela aparece agora para o Supervisor e para o RH.`);
       carregarHistorico();
     }
 
