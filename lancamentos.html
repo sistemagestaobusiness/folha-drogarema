@@ -1267,6 +1267,7 @@
     const TRAT_FREELA = { DESCONTO: 'desconto', BANCO_HORAS: 'banco de horas', ATESTADO: 'atestado', NENHUM: 'sem desconto' };
     let ocorrEscala = [], escalaSemTratamento = false;
     const dmEscala = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+    const hmTxtF = m => Math.floor(m / 60) + 'h' + (m % 60 ? String(m % 60).padStart(2, '0') : '');   // 200 -> 3h20 (IB)
     const nomeFuncEscala = id => (listaGlobalFuncionarios.find(f => String(f.id) === String(id)) || {}).nome_registro || '?';
     function situacaoOcorr(o) {
       if (o.trat) return 'OK';
@@ -1306,7 +1307,7 @@
       const [m, a] = competenciaRegraLancamento.split('/');
       const ini = `${a}-${m}-01`, fim = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);
       const [re, rf, rd] = await Promise.all([
-        _supabase.from('escala_dias').select('*').in('tipo', ['FALTA', 'ATESTADO']).gte('data', ini).lte('data', fim),
+        _supabase.from('escala_dias').select('*').or('tipo.in.(FALTA,ATESTADO),parcial_min.not.is.null').gte('data', ini).lte('data', fim),   // (IB) + ausência parcial
         _supabase.from('freelance_solicitacoes').select('id, funcionario_ausente_id, data_servico, motivo, status, tratamento_ausencia, loja_solicitante')
           .not('funcionario_ausente_id', 'is', null).gte('data_servico', ini).lte('data_servico', fim),
         // desconto de falta criado pela escala, aguardando o RH (SQL DI)
@@ -1322,7 +1323,7 @@
       const mapa = {};
       (re.data || []).forEach(d => {
         if (!('tratamento' in d)) escalaSemTratamento = true;
-        mapa[d.funcionario_id + '|' + d.data] = { fid: d.funcionario_id, data: d.data, tipo: d.tipo, origem: 'ESCALA', trat: d.tratamento, horas: d.tratado_horas, por: d.tratado_por, obs: d.observacao, doc: d.documento_id };
+        mapa[d.funcionario_id + '|' + d.data] = { fid: d.funcionario_id, data: d.data, tipo: d.parcial_min ? `AUSÊNCIA PARCIAL (${hmTxtF(d.parcial_min)})` : d.tipo, parcial: d.parcial_min || null, origem: 'ESCALA', trat: d.tratamento, horas: d.tratado_horas, por: d.tratado_por, obs: d.observacao, doc: d.documento_id };
       });
       (rf.data || []).filter(s => !['REJEITADA', 'CANCELADA'].includes(s.status)).forEach(s => {
         const k = s.funcionario_ausente_id + '|' + s.data_servico;
@@ -1478,7 +1479,9 @@
       const vtxt = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       return `<div class="bg-white border-2 border-rose-300 rounded p-1.5">⚠ ${cab} · <b class="text-rose-700">desconto aguardando o RH</b>`
         + (fd.gestor_obs ? `<div class="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 mt-0.5">✋ O Gestor não aprovou tirar o desconto: ${escaparHtml(fd.gestor_obs)} (${escaparHtml(fd.gestor_por || '')})</div>` : '')
-        + `<div class="text-[10px] text-slate-600 mt-0.5">Cálculo: salário-base ${fmtMoeda(fd.salario_base)} ÷ 30 = ${fmtMoeda(fd.valor_dia)} (1 dia)${Number(fd.valor_dsr) > 0 ? ' + DSR ' + fmtMoeda(fd.valor_dsr) : ' · DSR da semana já está em outra falta'} = <b>${fmtMoeda(v)}</b> · competência ${escaparHtml(fd.competencia)}${fd.marcado_por ? ' · marcado por ' + escaparHtml(fd.marcado_por) : ''}</div>`
+        + (fd.horas_min
+          ? `<div class="text-[10px] text-slate-600 mt-0.5">Ausência parcial: ${escaparHtml(fd.detalhe || '')}</div><div class="text-[10px] text-slate-600">Cálculo: ${hmTxtF(fd.horas_min)} × salário-base ${fmtMoeda(fd.salario_base)} ÷ 220 = <b>${fmtMoeda(v)}</b> (sem DSR) · competência ${escaparHtml(fd.competencia)}${fd.marcado_por ? ' · marcado por ' + escaparHtml(fd.marcado_por) : ''}</div>`
+          : `<div class="text-[10px] text-slate-600 mt-0.5">Cálculo: salário-base ${fmtMoeda(fd.salario_base)} ÷ 30 = ${fmtMoeda(fd.valor_dia)} (1 dia)${Number(fd.valor_dsr) > 0 ? ' + DSR ' + fmtMoeda(fd.valor_dsr) : ' · DSR da semana já está em outra falta'} = <b>${fmtMoeda(v)}</b> · competência ${escaparHtml(fd.competencia)}${fd.marcado_por ? ' · marcado por ' + escaparHtml(fd.marcado_por) : ''}</div>`)
         + `<div class="mt-1 flex flex-wrap items-end gap-1.5">`
         + `<label class="text-[10px] font-bold">Valor R$<br><input id="fdv_${id}" type="text" inputmode="decimal" value="${vtxt}" data-calc="${vtxt}" oninput="faltaValorMudou('${id}')" class="w-24 border border-slate-300 rounded px-1 py-0.5 text-[11px]"></label>`
         + `<label class="text-[10px] font-bold">Natureza<br><select id="fdn_${id}" class="border border-slate-300 rounded px-1 py-0.5 text-[11px]"><option value="">escolha…</option><option value="CONTABIL">Contábil (2060)</option><option value="NAO_CONTABIL">Não contábil (3003)</option></select></label>`
@@ -1540,9 +1543,10 @@ Motivo da recusa (fica no histórico):`) || '').trim();
       if (motivo.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('Recusa não feita: escreva o motivo.');
       let horas = null, documento = null;
       if (trat === 'BANCO_HORAS') {
-        let sug = 8;
-        if (ECL) { try { await ECL.garantir(data, data); const r = ECL.dia(fid, data, { previsto: true }); if (r.tipo === 'TRABALHO') sug = ECL.horasTurno(r, fid); } catch (e) { } }
-        const txt = await pedirTexto(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\nPela escala o turno era de ${String(sug).replace('.', ',')}h:`, String(sug).replace('.', ','));
+        let sug = 8; const oF = ocorrEscala.find(x => x.fd && x.fd.id === id);
+        if (oF && oF.fd.horas_min) sug = Math.round(oF.fd.horas_min / 60 * 100) / 100;   // (IB) ausência parcial: só as horas que faltaram
+        else if (ECL) { try { await ECL.garantir(data, data); const r = ECL.dia(fid, data, { previsto: true }); if (r.tipo === 'TRABALHO') sug = ECL.horasTurno(r, fid); } catch (e) { } }
+        const txt = await pedirTexto(`Horas que entram como DÉBITO no banco de horas (${dmEscala(data)}).\n${oF && oF.fd.horas_min ? 'Ausência parcial de ' + hmTxtF(oF.fd.horas_min) : 'Pela escala o turno era de ' + String(sug).replace('.', ',') + 'h'}:`, String(sug).replace('.', ','));
         if (txt === null) return;
         horas = parseFloat(String(txt).replace(',', '.'));
         if (!(horas > 0)) return alert('Horas inválidas.');

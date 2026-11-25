@@ -106,10 +106,11 @@
       <div id="dTiposTit" class="hidden text-[10px] font-bold uppercase text-slate-500">Ou altere a escala do dia</div>
       <div id="dTipos" class="grid grid-cols-3 gap-1.5"></div>
       <div id="dBoxHora" class="hidden grid grid-cols-2 gap-2">
-        <div><label class="lbl">Entrada</label><input type="time" id="dEntrada" class="inp font-mono"></div>
-        <div><label class="lbl">Saída</label><input type="time" id="dSaida" class="inp font-mono"></div>
+        <div><label class="lbl">Entrada</label><input type="time" id="dEntrada" class="inp font-mono" oninput="montarParcial()"></div>
+        <div><label class="lbl">Saída</label><input type="time" id="dSaida" class="inp font-mono" oninput="montarParcial()"></div>
         <div class="col-span-2"><label class="lbl">Trabalha na loja</label><select id="dLoja" class="inp"></select></div>
       </div>
+      <div id="dBoxParcial" class="hidden"></div>
       <div id="dBoxAtestado" class="hidden"></div>
       <div><label class="lbl">Repetir até (opcional)</label><input type="date" id="dAte" class="inp font-mono"><p class="text-[10px] text-slate-400">Ex.: atestado de 5 dias. Aplica o mesmo em todos os dias do intervalo.</p>
         <label class="flex items-center gap-1 mt-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" id="dMesmoDia" class="accent-slate-700"> só neste dia da semana (ex.: todas as terças até a data)</label></div>
@@ -304,7 +305,8 @@
       if (ex) {
         if (ex.tipo !== 'TRABALHO') { const pr = retiradaPendente(f.id, iso);
           return { tipo: ex.tipo, origem: 'DIA', obs: pr ? '⏳ retirada pedida' + (ex.observacao ? ' · ' + ex.observacao : '') : ex.observacao }; }
-        return { tipo: 'TRABALHO', entrada: hm(ex.entrada), saida: hm(ex.saida), loja: ex.loja_id || f.loja_id, origem: 'DIA', obs: ex.observacao };
+        return { tipo: 'TRABALHO', entrada: hm(ex.entrada), saida: hm(ex.saida), loja: ex.loja_id || f.loja_id, origem: 'DIA', obs: ex.observacao,
+                 parcial: ex.parcial_min || null, prevE: hm(ex.previsto_entrada), prevS: hm(ex.previsto_saida), parcMotivo: ex.parcial_motivo || '', trat: ex.tratamento || null };
       }
       const fl = freelas.find(s => s.funcionario_ausente_id === f.id && s.data_servico === iso && AUSENCIAS_FREELA[s.motivo]);
       if (fl) return { tipo: AUSENCIAS_FREELA[fl.motivo], origem: 'FREELA', obs: 'informado na solicitação de freelance' };
@@ -458,6 +460,7 @@
         selo = `<span class="tag-pg ${ok ? 'ok' : 'pend'}">${fer ? '100%' : 'HE'}${ok ? '' : '…'}</span>`;
         dica += `\n${fer ? 'Feriado pago como hora extra 100%' : 'Hora extra'}: ${hm(s.hora_inicio) || '?'} às ${hm(s.hora_fim) || '?'} · ${ok ? 'aprovada' : 'aguardando ' + (s.status === 'PENDENTE_SUPERVISOR' ? 'o supervisor' : 'o RH')}`;
       });
+      if (r.parcial) { selo = '<span class="tag-pg falta">½</span>'; dica += `\n⏱ Ausência parcial: ${hmTxt(r.parcial)} (previsto ${r.prevE}–${r.prevS}) · ${r.parcMotivo}${r.trat ? '\nTratado pelo RH: ' + r.trat.toLowerCase().replace('_', ' ') : '\nAguardando o RH (desconto, banco de horas ou abono)'}`; }
       if (p.dup) { selo = '<span class="tag-pg falta">2×</span>'; dica += `\n⚠ Também tem FREELANCE no mesmo horário (${hm(p.dup.hora_inicio)} às ${hm(p.dup.hora_fim)}): se era folga, marque F na escala; se estava escalada, o freelance não deveria existir`; }
       const fp = r.tipo === 'TRABALHO' && feriadoDe(iso) ? `data-fp="${p.f.id}_${iso}"` : '';
       const clic = p.extra ? '' : `onclick="abrirEdicao('${p.f.id}','${iso}')"`;
@@ -614,6 +617,7 @@
       $('dLoja').innerHTML = lojasOp.map(l => `<option value="${l.id}">${esc(l.nome_loja)}${l.id === f.loja_id ? ' (dele)' : ''}</option>`).join('');
       $('dLoja').value = r.loja || (f.loja_id === lojaSel ? f.loja_id : lojaSel);
       $('dAte').value = ''; $('dAte').min = iso; $('dObs').value = r.origem === 'DIA' ? (r.obs || '') : ''; $('dMesmoDia').checked = false;
+      $('dBoxParcial').innerHTML = ''; $('dBoxParcial').classList.add('hidden');
       editando.ini = retratoDia(tipoDia);
       // feriado: quem trabalha recebe folga compensatória ou hora extra 100%
       const fer = feriadoDe(iso), bx = $('dBoxFeriado');
@@ -642,6 +646,7 @@
       $('dTiposTit').classList.toggle('hidden', !fer);
       montarRetirada();
       escolherTipoDia(tipoDia);
+      editando.ini = retratoDia(tipoDia);   // (IB) depois de montar o quadro de ausência parcial
       $('mDia').classList.remove('hidden');
     }
     function escolherTipoDia(k) {
@@ -652,13 +657,46 @@
         b.className = `tdia px-2 py-2 rounded-lg border-2 font-bold cursor-pointer ${on ? (COR[b.dataset.t] || 'bg-slate-800 border-slate-800') + ' text-white ring-2 ring-offset-1 ring-slate-400 shadow' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'}`;
         b.innerHTML = (on ? '● ' : '') + b.innerHTML.replace(/^● /, ''); });
       $('dBoxHora').classList.toggle('hidden', k !== 'TRABALHO');
+      montarParcial();
       montarAtestado();
       if (editando) { const pedir = precisaPedir(k);
         $('dBtnSalvar').innerText = pedir ? 'PEDIR RETIRADA (vai para aprovação)' : 'SALVAR';
         const bj = $('dJustRet'); if (bj) bj.closest('div').classList.toggle('hidden', !pedir); }
     }
     // (HV) retrato da janela: SALVAR sem mudar nada só fecha (não grava uma alteração igual à escala)
-    function retratoDia(t) { return [t, $('dEntrada').value, $('dSaida').value, $('dLoja').value, $('dObs').value.trim()].join('|'); }
+    function retratoDia(t) { return [t, $('dEntrada').value, $('dSaida').value, $('dLoja').value, $('dObs').value.trim(), parcialEscolha() || '', ($('dParcMot') || {}).value || ''].join('|'); }
+    // ------------------------------------------------------------------
+    // (IB, 25/11/2026) AUSÊNCIA PARCIAL: "Trabalha" com horário menor que a escala, num dia que já chegou.
+    // Troca combinada = sem desconto. Saiu mais cedo / chegou atrasado = o RH decide (desconto de horas, banco de horas ou abono).
+    // Horas = jornada prevista − trabalhada (desconta o intervalo do padrão quando passa de 6h); valor no banco: horas × salário ÷ 220, sem DSR.
+    // ------------------------------------------------------------------
+    const hmTxt = m => Math.floor(m / 60) + 'h' + (m % 60 ? String(m % 60).padStart(2, '0') : '');
+    function jornadaMin(e, s, fid) {
+      if (!e || !s) return 0; const [a, b] = [e, s].map(t => +t.slice(0, 2) * 60 + +t.slice(3, 5));
+      let m = b - a; if (m <= 0) m += 1440; const p = padroes[fid];
+      if (m > 360) m -= (p && p.intervalo_min != null ? p.intervalo_min : 60); return Math.max(m, 0);
+    }
+    function previstoDia() {   // horário que estava na escala antes da ausência
+      const r = editando && editando.r; if (!r) return null;
+      if (r.parcial) return { e: r.prevE, s: r.prevS };
+      return r.tipo === 'TRABALHO' ? { e: r.entrada, s: r.saida } : null;
+    }
+    const parcialEscolha = () => { const el = document.querySelector('input[name="dParc"]:checked'); return el ? el.value : null; };
+    function montarParcial() {
+      const bx = $('dBoxParcial'); if (!bx || !editando) return;
+      const { f, iso, r } = editando, pv = previstoDia();
+      const falta = (tipoDia === 'TRABALHO' && pv && iso <= hoje()) ? jornadaMin(pv.e, pv.s, f.id) - jornadaMin($('dEntrada').value, $('dSaida').value, f.id) : 0;
+      if (falta <= 0) { bx.classList.add('hidden'); bx.dataset.min = ''; return; }
+      const antes = parcialEscolha() || (r.parcial ? 'AUSENCIA' : ''), mot = $('dParcMot') ? $('dParcMot').value : (r.parcMotivo || '');
+      bx.dataset.min = falta;
+      bx.innerHTML = `<div class="bg-rose-50 border border-rose-300 rounded-lg p-2.5 space-y-1.5">
+        <div class="font-black text-rose-900">⏱ O horário ficou ${hmTxt(falta)} menor que a escala (${esc(pv.e)}–${esc(pv.s)}). O que aconteceu?</div>
+        <label class="flex items-start gap-1.5 cursor-pointer"><input type="radio" name="dParc" value="TROCA" ${antes === 'TROCA' ? 'checked' : ''} onchange="montarParcial()" class="mt-0.5"><span><b>Troca de horário combinada</b> · sem desconto</span></label>
+        <label class="flex items-start gap-1.5 cursor-pointer"><input type="radio" name="dParc" value="AUSENCIA" ${antes === 'AUSENCIA' ? 'checked' : ''} onchange="montarParcial()" class="mt-0.5"><span><b>Saiu mais cedo / chegou atrasado</b> · vai para o RH decidir: desconto de ${hmTxt(falta)}, banco de horas ou abono (atestado)</span></label>
+        <div id="dParcBox" class="${antes === 'AUSENCIA' ? '' : 'hidden'}"><label class="lbl">Motivo (obrigatório)</label><input id="dParcMot" class="inp" maxlength="200" placeholder="ex.: saiu às 14h passando mal" value="${esc(mot)}"></div>
+        ${r.trat ? `<div class="text-[10px] font-bold text-rose-800">Já tratado pelo RH (${esc(r.trat.toLowerCase().replace('_', ' '))}): para mudar o horário, o RH precisa desfazer em Lançamentos.</div>` : ''}</div>`;
+      bx.classList.remove('hidden');
+    }
     async function salvarDia() {
       const { f, iso } = editando, ate = $('dAte').value;
       if (!$('fMsg') && !ate && editando.ini && retratoDia(tipoDia) === editando.ini) { fechar('mDia'); return; }
@@ -677,9 +715,20 @@
       const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) if (!$('dMesmoDia').checked || dow(d) === dow(iso)) datas.push(d);
       if (datas.length > 62) return alert('No máximo 62 dias de uma vez.');
       if (tipoDia === 'TRABALHO' && (!$('dEntrada').value || !$('dSaida').value)) return alert('Informe entrada e saída.');
+      // (IB) horário menor que a escala num dia que já chegou: precisa dizer se foi troca combinada ou ausência
+      let motParcial = null;
+      if (tipoDia === 'TRABALHO' && !$('dBoxParcial').classList.contains('hidden')) {
+        const esc2 = parcialEscolha();
+        if (!esc2) return alert(`O horário ficou ${hmTxt(+$('dBoxParcial').dataset.min)} menor que a escala.\n\nEscolha no quadro vermelho: troca de horário combinada (sem desconto) ou saiu mais cedo / chegou atrasado (vai para o RH).`);
+        if (esc2 === 'AUSENCIA') {
+          motParcial = ($('dParcMot').value || '').trim();
+          if (motParcial.replace(/[^A-Za-zÀ-ú]/g, '').length < 5) return alert('Escreva o motivo da ausência (ex.: saiu às 14h passando mal).');
+          if (ate) return alert('Ausência parcial é marcada um dia por vez: deixe "Repetir até" vazio.');
+        }
+      }
       const { error } = await _supabase.rpc('fn_escala_dia', { p_funcionario: f.id, p_datas: datas, p_tipo: tipoDia,
         p_entrada: tipoDia === 'TRABALHO' ? $('dEntrada').value : null, p_saida: tipoDia === 'TRABALHO' ? $('dSaida').value : null,
-        p_loja: tipoDia === 'TRABALHO' ? $('dLoja').value : null, p_obs: $('dObs').value.trim() || null });
+        p_loja: tipoDia === 'TRABALHO' ? $('dLoja').value : null, p_obs: $('dObs').value.trim() || null, p_parcial_motivo: motParcial });
       if (error) return alert(String(error.message).startsWith('RETIRADA_PEDIR:')
         ? String(error.message).replace('RETIRADA_PEDIR: ', '') + '\n\nAbra o dia sozinho (sem "Repetir até") para pedir a retirada.' : 'Erro: ' + error.message);
       // atestado: o arquivo vai junto (prazo de 5 dias após o 1º dia; caso extremo com foto)

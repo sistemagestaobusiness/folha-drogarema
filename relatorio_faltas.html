@@ -97,7 +97,7 @@
       if (!a) return;
       const ini = `${a}-${String(m).padStart(2, '0')}-01`, fim = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10), comp = `${String(m).padStart(2, '0')}/${a}`;
       const [re, rs, rd] = await Promise.all([
-        _supabase.from('escala_dias').select('*').in('tipo', ['FALTA', 'ATESTADO']).gte('data', ini).lte('data', fim),
+        _supabase.from('escala_dias').select('*').or('tipo.in.(FALTA,ATESTADO),parcial_min.not.is.null').gte('data', ini).lte('data', fim),   // (IB) + ausência parcial
         _supabase.from('freelance_solicitacoes').select('id, funcionario_id, funcionario_ausente_id, data_servico, motivo, status, tratamento_ausencia, loja_id, loja_solicitante, solicitante_email, created_at, supervisor_por, supervisor_em, rh_por, rh_em, folha_item_falta_id, cancelado_por, cancelado_em, cancelado_motivo')
           .not('funcionario_ausente_id', 'is', null).gte('data_servico', ini).lte('data_servico', fim),
         _supabase.from('vw_atestados_conferencia').select('id, funcionario_id, data_referencia, solicitacao_id, conferencia_status, conferido_por, conferido_em, enviado_por, enviado_em')
@@ -119,7 +119,7 @@
       (re.data || []).forEach(d => {
         const k = d.funcionario_id + '|' + d.data;
         const doc = d.documento_id ? docs.find(x => x.id === d.documento_id) : null;
-        mapa[k] = { fid: d.funcionario_id, data: d.data, loja: d.loja_id || (funcs[d.funcionario_id] || {}).loja_id, tipo: d.tipo.toLowerCase(), passos: [], alertas: [] };
+        mapa[k] = { fid: d.funcionario_id, data: d.data, loja: d.loja_id || (funcs[d.funcionario_id] || {}).loja_id, tipo: d.parcial_min ? 'ausência parcial (' + Math.floor(d.parcial_min / 60) + 'h' + (d.parcial_min % 60 ? String(d.parcial_min % 60).padStart(2, '0') : '') + ')' : d.tipo.toLowerCase(), passos: [], alertas: [] };
         const o = mapa[k];
         o.passos.push(`📅 marcado na escala${d.criado_por ? ' por ' + esc(d.criado_por) : ''}${d.criado_em ? ' em ' + dh(d.criado_em) : ''}${d.observacao ? ' · <i>' + esc(d.observacao) + '</i>' : ''}`);
         if (!d.tratamento) o.etapa = 'A_LANCAR';
