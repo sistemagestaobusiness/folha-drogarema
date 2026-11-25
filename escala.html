@@ -166,6 +166,7 @@
     };
     const AUSENCIAS_FREELA = { FALTA_DIA: 'FALTA', ATESTADO: 'ATESTADO', AUSENCIA: 'FALTA' };
 
+    let prazoLiberado = false;   // (IA, 25/11/2026) liberação do prazo de 5 dias por usuário, só no dia liberado (escala_prazo_liberacao)
     let perfil = null, minhaLoja = null, lojas = [], lojaSel = null, podeEditar = false, feriados = [];
     // feriado do dia para a loja aberta (vazio = todas as lojas)
     const feriadoDe = iso => (feriados.find(x => x.data === iso && (!x.loja_id || x.loja_id === lojaSel)) || {}).nome || '';
@@ -209,6 +210,7 @@
       if (!user) { location.href = 'login.html'; return; }
       const { data: u } = await rpcRetentar(_supabase, 'fn_meu_usuario');
       perfil = u ? u.perfil : null; minhaLoja = u ? u.loja_id : null;
+      try { const { data: lib } = await _supabase.rpc('fn_escala_prazo_liberado'); prazoLiberado = lib === true; } catch (e) { }
       $('lblUsuario').innerText = (user.email || '').toLowerCase(); $('lblPerfil').innerText = perfil || 'SEM PERFIL';
       if (!['LIDER', 'SUPERVISOR', 'RH', 'GESTOR'].includes(perfil)) {
         $('avisoSemAcesso').innerText = perfil ? 'Seu perfil não tem acesso a esta tela.' : 'Não foi possível conferir o seu acesso agora (internet lenta ou instável). Recarregue a página; se continuar, avise o administrador.'; $('avisoSemAcesso').classList.remove('hidden'); $('btnSair').classList.remove('hidden'); return;
@@ -669,7 +671,7 @@
       // prazo (regra de 29/10/2026): líder e supervisor alteram a escala até 5 dias para trás; com 6 dias de atraso bloqueia (fale com o RH)
       // (18/11/2026) liberação temporária: feriados de 02/11 e 15/11 podem ser acertados até 20/11 (mesma regra no banco: fn_feriado_liberado)
       const ferLib = ['2026-11-02', '2026-11-15'].includes(iso) && hoje() <= FER_LIBERADO_ATE && !ate;
-      if (['LIDER', 'SUPERVISOR'].includes(perfil) && !ferLib) { const lim = addDias(hoje(), -5);
+      if (['LIDER', 'SUPERVISOR'].includes(perfil) && !ferLib && !prazoLiberado) { const lim = addDias(hoje(), -5);
         if (iso < lim) return alert(`Fora do prazo: a escala só pode ser alterada até 5 dias para trás (a partir de ${dbr(lim)}). Fale com o RH.`); }
       if (ate && ate < iso) return alert('"Repetir até" precisa ser depois do dia escolhido.');
       const datas = []; for (let d = iso; d <= (ate || iso); d = addDias(d, 1)) if (!$('dMesmoDia').checked || dow(d) === dow(iso)) datas.push(d);
