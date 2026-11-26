@@ -747,7 +747,7 @@
 
    async function carregarFuncionariosGeral() {
       // Adicionado o campo salario_base na consulta
-      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base, salario_adicional, adicional_caixa, cargo, loja_id, status').order('nome_registro');
+      const { data, error } = await _supabase.from('funcionarios').select('id, nome_registro, cnpj, salario_base, salario_adicional, adicional_caixa, cargo, loja_id, status, sem_registro, codigo_contabil').order('nome_registro');
       if (!error) {
         listaGlobalFuncionarios = data || [];
       }
@@ -2329,6 +2329,15 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
         document.getElementById('inputRubrica').focus();
         return;
       }
+      // (26/11/2026) TRAVA: sem o código da contabilidade no cadastro (sem registro, ou registrado aguardando o código),
+      // o lançamento só aceita evento NÃO CONTÁBIL. Obriga a atualizar o cadastro antes de lançar contábil.
+      { const fSR = (listaGlobalFuncionarios || []).find(f => f.id === funcionario_id);
+        if (fSR && !String(fSR.codigo_contabil || '').trim() && String(eventoSel.natureza_do_evento || '').toUpperCase() === 'CONTABIL' && !(idEdicao && itemTravado(idEdicao))) {
+          alert(fSR.sem_registro === true
+            ? `🔒 ${fSR.nome_registro} é SEM REGISTRO (cadastro): só aceita evento NÃO CONTÁBIL.\n\nO evento ${eventoSel.codigo_evento} - ${eventoSel.descricao_do_evento} é contábil. Escolha o evento não contábil equivalente.`
+            : `🔒 ${fSR.nome_registro} está sem o CÓDIGO DA CONTABILIDADE no cadastro: só aceita evento NÃO CONTÁBIL.\n\nO evento ${eventoSel.codigo_evento} - ${eventoSel.descricao_do_evento} é contábil.\n• Registrado: peça o código à contabilidade e grave em "Envio à contabilidade" (clique em "sem código"); depois lance.\n• Sem registro: marque "Sem registro" no cadastro (aba Contrato) e use o evento não contábil.`);
+          document.getElementById('inputRubrica').focus(); return;
+        } }
       // tipo do lançamento = tipo do evento (não há escolha manual)
       if (!idEdicao || !itemTravado(idEdicao)) {
         if (!['PROVENTO', 'DESCONTO'].includes(eventoSel.tipo_evento)) { alert(`O evento ${eventoSel.codigo_evento} está sem tipo (crédito/débito) no cadastro de eventos. Corrija o cadastro antes de lançar.`); return; }

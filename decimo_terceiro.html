@@ -206,7 +206,9 @@
         _supabase.from('tipos_eventos').select('codigo_evento, descricao_do_evento, decimo_papel, pagamento_extra_tipo').not('decimo_papel', 'is', null)
       ]);
       lojas = rl.data || [];
-      (re.data || []).forEach(e => { eventos[e.decimo_papel + (e.decimo_papel === 'COMPENSACAO' ? '_' + e.pagamento_extra_tipo : '')] = `${e.codigo_evento} - ${e.descricao_do_evento}`; });
+      // (26/11/2026) parcelas: 2063/2064 (registrado, contábil) e 2075/2076 (sem registro, não contábil) com o mesmo papel: mostra os dois
+      (re.data || []).sort((x, y) => x.codigo_evento - y.codigo_evento).forEach(e => { const k = e.decimo_papel + (e.decimo_papel === 'COMPENSACAO' ? '_' + e.pagamento_extra_tipo : '');
+        eventos[k] = eventos[k] && /^PARCELA/.test(k) ? `${eventos[k]} (sem registro: ${e.codigo_evento})` : (eventos[k] || `${e.codigo_evento} - ${e.descricao_do_evento}`); });
       $('evAnt').innerText = eventos.ANTECIPACAO || '(evento de antecipação)';
       $('evParc').innerText = [eventos.PARCELA1, eventos.PARCELA2].filter(Boolean).join(' / ');
       $('evComp').innerText = eventos.COMPENSACAO_DECIMO_TERCEIRO || '-';

@@ -115,6 +115,14 @@
           <div class="md:col-span-2"><label class="lbl">Data-base das férias</label><input type="date" id="ferias_data_base" class="inp font-mono"></div>
           <div class="md:col-span-4 flex items-end"><p class="text-[10px] text-slate-400 pb-2">Preencha só se o período aquisitivo for diferente da admissão (ex.: transferência entre empresas, acordo). Em branco, as férias contam da admissão. <a href="ferias.html" class="text-emerald-700 font-bold hover:underline">🏖 abrir férias</a></p></div>
           <div class="md:col-span-3"><label class="lbl">Cargo *</label><select id="cargo" required onchange="atualizarCaixa()" class="inp font-bold"></select></div>
+          <div class="md:col-span-6"><label class="lbl">Registro em carteira *</label>
+            <select id="sem_registro" class="inp font-bold" onchange="avisoRegistro()">
+              <option value="">escolha…</option>
+              <option value="false">REGISTRADO · vai para a contabilidade</option>
+              <option value="true">SEM REGISTRO · só eventos não contábeis</option>
+            </select>
+            <p id="avisoRegistroTx" class="text-[10px] text-slate-400 mt-0.5">Obrigatório. Sem registro: salário só no "salário adicional" (2001) e todos os eventos não contábeis (ex.: farmácia 2034); Lançamentos avisa e a Conferência do fechamento marca em vermelho qualquer evento contábil.</p></div>
+          <div class="md:col-span-6"></div>
           <div class="md:col-span-3"><label class="lbl">Salário base (R$) *</label><input type="number" step="0.01" min="0" id="salario_base" class="inp font-mono">
             <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2024 DIAS NORMAIS (contábil). Sem registro: deixe em branco e preencha só o salário adicional.</p></div>
           <div class="md:col-span-3"><label class="lbl">Salário adicional - acordo (R$)</label><input type="number" step="0.01" min="0" id="salario_adicional" class="inp font-mono">
@@ -436,6 +444,7 @@
         if (el.type === 'checkbox') el.checked = !!v; else el.value = v ?? '';
       });
       $('matricula').value = atual ? (atual.matricula || '') : '';
+      $('sem_registro').value = atual && atual.sem_registro != null ? String(atual.sem_registro) : '';   // (26/11/2026)
       // cargo antigo que não está na lista: mantém como opção
       if (atual && atual.cargo && !cargos.some(c => c.nome === atual.cargo)) {
         $('cargo').insertAdjacentHTML('beforeend', `<option value="${esc(atual.cargo)}">${esc(atual.cargo)} (fora da lista)</option>`); $('cargo').value = atual.cargo;
@@ -514,6 +523,12 @@
 
     // trava contra gravar a mesma ficha 2 vezes (duplo clique / Enter): em 14/10 a ficha da Maria Eduarda foi criada em dobro (regra de 28/10/2026)
     let salvandoFicha = false;
+    function avisoRegistro() {
+      const v = $('sem_registro').value, el = $('avisoRegistroTx');
+      el.className = 'text-[10px] mt-0.5 ' + (v === 'true' ? 'font-bold text-amber-700' : 'text-slate-400');
+      if (v === 'true' && Number($('salario_base').value) > 0) el.innerText = '⚠ Sem registro: tire o salário base (2024 é contábil) e use o salário adicional (2001).';
+      else el.innerText = 'Obrigatório. Sem registro: salário só no "salário adicional" (2001) e todos os eventos não contábeis (ex.: farmácia 2034); Lançamentos avisa e a Conferência do fechamento marca em vermelho qualquer evento contábil.';
+    }
     async function salvarFicha(e) {
       e.preventDefault();
       if (salvandoFicha) return;
@@ -530,6 +545,8 @@
         payload[c] = v;
       });
       payload.cpf = payload.cpf ? mascaraCpf(payload.cpf) : null;
+      // (26/11/2026) registrado × sem registro: obrigatório (freelance é sempre sem registro; sócio fica fora)
+      payload.sem_registro = $('sem_registro').value === '' ? null : $('sem_registro').value === 'true';
       // campos obrigatórios: avisa o que falta e em qual aba (freelance não precisa de admissão nem salário)
       const freela = String(payload.cargo || '').includes('FREELANCE');
       // sócios (cargos "só gestor"): servem para o organograma; não exigem salário nem empresa de registro
@@ -541,16 +558,22 @@
         // sem registro (só salário "por fora"): o salário base contábil pode ficar em branco
         ...(freela || socio || payload.salario_adicional > 0 ? [] : [['salario_base', 'contrato', 'Salário base (ou o salário adicional, se não for registrado)']]),
         ...(freela || socio ? [] : [['empresa_id', 'lotacao', 'Empresa de registro']]),
-        ['loja_id', 'lotacao', 'Loja / setor onde trabalha']
+        ['loja_id', 'lotacao', 'Loja / setor onde trabalha'],
+        ...(freela || socio ? [] : [['sem_registro', 'contrato', 'Registro em carteira (registrado ou sem registro)']])
       ];
+      if (freela && payload.sem_registro == null) payload.sem_registro = true;
       const ABA = { pessoal: 'Pessoal', contrato: 'Contrato', lotacao: 'Lotação e acesso' };
-      const faltando = OBRIG.filter(([c]) => c === 'salario_base' ? !(payload[c] > 0) : !payload[c]);
+      const faltando = OBRIG.filter(([c]) => c === 'salario_base' ? !(payload[c] > 0) : c === 'sem_registro' ? payload[c] == null : !payload[c]);
       document.querySelectorAll('.inp').forEach(el => el.classList.remove('!border-rose-500', 'ring-2', 'ring-rose-200'));
       if (faltando.length) {
         faltando.forEach(([c]) => $(c).classList.add('!border-rose-500', 'ring-2', 'ring-rose-200'));
         trocarAba(faltando[0][1]);
         $(faltando[0][0]).focus();
         return alert('Para salvar, preencha:\n\n' + faltando.map(([, a, t]) => `• ${t} (aba ${ABA[a]})`).join('\n'));
+      }
+      if (payload.sem_registro === true && payload.salario_base > 0) {
+        trocarAba('contrato'); $('salario_base').focus();
+        return alert('SEM REGISTRO com salário base preenchido.\n\nO salário base vai todo mês no 2024 DIAS NORMAIS, que é contábil. Para quem não tem registro, deixe o salário base em branco e use o "Salário adicional" (2001, não contábil).');
       }
       if (payload.cpf) {
         const dup = funcs.find(f => f.cpf && f.cpf.replace(/\D/g, '') === payload.cpf.replace(/\D/g, '') && f.id !== $('fId').value);

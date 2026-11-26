@@ -208,7 +208,7 @@
     if (veTudo) {
       try {
         const [rfu, rlo] = await Promise.all([
-          cli.from('funcionarios').select('id, nome_registro, cargo, status, cpf, empresa_id, salario_base, data_contratacao, pix_chave, banco, loja_id').eq('status', 'ATIVO'),
+          cli.from('funcionarios').select('id, nome_registro, cargo, status, cpf, empresa_id, salario_base, data_contratacao, pix_chave, banco, loja_id, sem_registro').eq('status', 'ATIVO'),
           cli.from('lojas').select('id, nome_loja')]);
         const lojaN = {}; ok(rlo).forEach(l => lojaN[l.id] = l.nome_loja);
         const semCod = new Set(confLinhas.filter(l => l.categoria === 'COD_CONTABIL').map(l => l.funcionario_id));
@@ -216,6 +216,7 @@
           const cargo = String(f.cargo || '').toUpperCase();
           if (cargo.startsWith('FREELANCE') || cargo.startsWith('SOCIO')) return;
           const crit = [], obs = [];
+          if (f.sem_registro == null) crit.push('registrado ou sem registro');
           if (!String(f.cpf || '').trim()) crit.push('CPF');
           if (!f.empresa_id) crit.push('empresa de registro');
           if (!Number(f.salario_base)) crit.push('salário');
