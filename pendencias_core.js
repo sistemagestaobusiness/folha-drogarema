@@ -17,6 +17,7 @@
   const FERIAS_CRIT = 15, FERIAS_ATEN = 30;
   const FERIAS_CONTROLE_DESDE = '2027-01-01';   // etapas de férias (RH e ciência do supervisor) só a partir de 2027
   const H = 3600000;
+  const FARMACIA_AVISO_PARA = ['alexandre.bezerra@businessacf.com.br'];   // (26/11/2026) consumo farmácia é com o Alexandre: aviso só na tela dele, a partir do dia 25
 
   const hojeIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const diasAte = iso => Math.round((new Date(String(iso).slice(0, 10) + 'T12:00:00') - new Date(hojeIso() + 'T12:00:00')) / 86400000);
@@ -158,9 +159,11 @@
     if (rab && rab.count) add({ assunto: 'outros', com: 'LIDER', tela: 'abatimentos.html', titulo: 'Abatimentos', sub: '', detalhe: `${rab.count} aguardando o líder da loja`, nivel: 'info', foraHa: 0 });
 
     // ---- conferência do fechamento (RH e Gestor): vermelhos da competência aberta
+    let confLinhas = [];
     if (veTudo && compStr) {
       try {
         const r = await cli.rpc('fn_conferencia', { p_comp: compStr });
+        confLinhas = ok(r);
         const verm = ok(r).filter(l => l.gravidade === 'VERMELHO').length;
         if (verm) add({ assunto: 'folha', com: 'RH', tela: 'conferencia_fechamento.html', titulo: `Conferência do fechamento ${compStr}`, sub: '',
           detalhe: `${verm} item(ns) vermelho(s) para resolver ou justificar`, nivel: 'atencao', foraHa: 0, contaMenu: verm });
@@ -183,6 +186,60 @@
             if (faltam) add({ assunto: 'gestor', com: 'GESTOR', tela: 'fechamento_financeiro.html', titulo: `Bônus de faturamento ${compStr}`, sub: '',
               detalhe: `${faltam} bônus (2015) ainda não lançado(s): no Fechamento financeiro, clique em lançar o bônus`, nivel: 'atencao', foraHa: 0, contaMenu: faltam });
           }
+        }
+      } catch (e) { }
+    }
+
+    // ---- (26/11/2026) adicional noturno pela escala: a revisão e o lançamento são na tela própria (noturno_lote.html), aqui só o aviso
+    if (veTudo && compStr) {
+      try {
+        const rn = await cli.rpc('fn_noturno_lote_previa', { p_comp: compStr });
+        const sem = ok(rn).filter(x => Number(x.horas_escala) > 0 && !x.ja_lancado);
+        if (sem.length) {
+          const h = sem.reduce((a, x) => a + Number(x.horas_escala), 0);
+          add({ assunto: 'folha', com: 'RH', tela: 'noturno_lote.html', titulo: `Adicional noturno pela escala ${compStr}`, sub: '',
+            detalhe: `${sem.length} pessoa(s) com ${String(Math.round(h * 100) / 100).replace('.', ',')} h noturnas na escala e nenhum adicional lançado · revisar e confirmar (vai para a contabilidade)`,
+            nivel: 'atencao', foraHa: 0, contaMenu: sem.length });
+        }
+      } catch (e) { }
+    }
+
+    // ---- (26/11/2026) cadastros a corrigir (ao longo do mês): o que trava a folha, a contabilidade ou o pagamento
+    if (veTudo) {
+      try {
+        const [rfu, rlo] = await Promise.all([
+          cli.from('funcionarios').select('id, nome_registro, cargo, status, cpf, empresa_id, salario_base, data_contratacao, pix_chave, banco, loja_id').eq('status', 'ATIVO'),
+          cli.from('lojas').select('id, nome_loja')]);
+        const lojaN = {}; ok(rlo).forEach(l => lojaN[l.id] = l.nome_loja);
+        const semCod = new Set(confLinhas.filter(l => l.categoria === 'COD_CONTABIL').map(l => l.funcionario_id));
+        ok(rfu).forEach(f => {
+          const cargo = String(f.cargo || '').toUpperCase();
+          if (cargo.startsWith('FREELANCE') || cargo.startsWith('SOCIO')) return;
+          const crit = [], obs = [];
+          if (!String(f.cpf || '').trim()) crit.push('CPF');
+          if (!f.empresa_id) crit.push('empresa de registro');
+          if (!Number(f.salario_base)) crit.push('salário');
+          if (!f.data_contratacao) crit.push('admissão');
+          if (semCod.has(f.id)) crit.push('código da contabilidade');
+          if (!String(f.pix_chave || '').trim() && !String(f.banco || '').trim()) obs.push('PIX ou banco');
+          if (!crit.length && !obs.length) return;
+          add({ assunto: 'cadastro_fix', com: 'RH', tela: 'funcionarios.html', titulo: `Cadastro · ${titulo(curto(f.nome_registro))}`, sub: lojaN[f.loja_id] || '',
+            detalhe: 'falta: ' + crit.concat(obs).join(', ') + (crit.includes('código da contabilidade') ? ' (pedir à contabilidade antes do envio)' : ''),
+            nivel: crit.length ? 'atencao' : 'info', foraHa: 0 });
+        });
+      } catch (e) { }
+    }
+
+    // ---- (26/11/2026) consumo farmácia: só para o Alexandre, a partir do dia 25 do mês da competência aberta, até a importação
+    if (perfil === 'GESTOR' && compStr) {
+      try {
+        const { data: ud } = await cli.auth.getUser();
+        const email = String((ud && ud.user && ud.user.email) || '').toLowerCase();
+        const [mm, aa] = compStr.split('/'), dia25 = `${aa}-${mm}-25`;
+        if (FARMACIA_AVISO_PARA.includes(email) && hojeIso() >= dia25) {
+          const rq = await cli.from('folha_itens').select('id', { count: 'exact', head: true }).eq('competencia', compStr).or('rubrica.like.3018%,rubrica.like.2034%');
+          if (!rq.error && !rq.count) add({ assunto: 'gestor', com: 'GESTOR', tela: 'importar_consumo_farmacia.html', titulo: `Consumo farmácia ${compStr}`, sub: '',
+            detalhe: 'Gerar no Alpha7 o arquivo do convênio (desconto em folha) e importar: vai para a contabilidade', nivel: 'critico', foraHa: 0, contaMenu: 1 });
         }
       } catch (e) { }
     }

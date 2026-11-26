@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="pendencias_core.js?v=7"></script>
+  <script src="pendencias_core.js?v=8"></script>
   <script src="cronograma.js?v=2"></script>
   <style>
     :root { --fundo: #F4F5F7; --card: #FFFFFF; --borda: #E3E6EB; --linha: #EEF0F3; --txt: #14181F; --sub: #5B6472; --escuro: #12161C; --ouro: #C69560;
@@ -88,7 +88,7 @@
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const MESES = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
     const ASSUNTOS = [
-      ['gestor', 'Aguardando a sua aprovação'], ['freelance', 'Freelance e hora extra'], ['falta', 'Faltas da escala'], ['ferias', 'Férias'], ['cadastro', 'Cadastro de pessoa nova'],
+      ['gestor', 'Aguardando a sua aprovação'], ['freelance', 'Freelance e hora extra'], ['falta', 'Faltas da escala'], ['ferias', 'Férias'], ['cadastro', 'Cadastro de pessoa nova'], ['cadastro_fix', 'Cadastros a corrigir'],
       ['atestados', 'Atestados'], ['holerites', 'Holerites'], ['folha', 'Folha do mês'], ['datas', 'Próximas datas'], ['outros', 'Outros']
     ];
     const QUEM = { RH: 'RH', SUPERVISOR: 'Supervisor', LIDER: 'Líderes', GESTOR: 'Gestor' };
@@ -120,7 +120,7 @@
       if (perfil === 'GESTOR') await desenharGestor(); else desenharPessoal();
       // cronograma da folha (regra de 28/10/2026): prazos do mês, o que falta e as confirmações
       if (cron) $('conteudo').insertAdjacentHTML('afterbegin', `<section class="card bloco"><div style="padding:16px 20px 6px"><h2 style="margin:0;font-size:15px;font-weight:700">📅 Cronograma da folha</h2>
-        <div class="desc">Adiantamento dia 15 · início do fechamento dia 25 · envio à contabilidade dia 28 (para os ajustes voltarem prontos em 30/01) · VT no último dia útil · comissões do Gestor no 1º dia útil. A folha do período aberto fica aqui até as etapas dela serem feitas. Dia que não é útil antecipa. Aviso obrigatório a partir de 3 dias úteis antes, até a etapa estar feita.</div></div>${Cronograma.tabela(cron, perfil)}</section>`);
+        <div class="desc">Adiantamento dia 15 · início do fechamento dia 25 · envio à contabilidade dia 28 (para os ajustes voltarem prontos em 30/01) · VT lançado no dia 26 (pago no último dia útil; antecipado para ir à contabilidade, ajustes até o fechamento) · comissões do Gestor no 1º dia útil. A folha do período aberto fica aqui até as etapas dela serem feitas. Dia que não é útil antecipa. Aviso obrigatório a partir de 3 dias úteis antes, até a etapa estar feita.</div></div>${Cronograma.tabela(cron, perfil)}</section>`);
       if (perfil === 'RH') competenciaTrabalho();
     }
 
