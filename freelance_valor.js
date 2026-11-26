@@ -4,6 +4,10 @@
 // Menos de 7,5 h = proporcional por hora (diária / 7,5 × horas). Mesma conta do banco (fn_freelance_valor_tabela).
 // Usado nas telas do líder (Solicitação), do supervisor e do RH.
 // =====================================================================
+(function(){ if (document.getElementById('cssOvl')) return; const st = document.createElement('style'); st.id = 'cssOvl';
+    // (26/11/2026) janelas por cima da tela: em monitor pequeno a janela rola e o botão de confirmar sempre aparece
+    st.textContent = '[data-ovl]{overflow-y:auto!important;align-items:flex-start!important}[data-ovl]>*{margin-top:auto;margin-bottom:auto;flex-shrink:0}';
+    (document.head || document.documentElement).appendChild(st); })();
 (function () {
   const BASE = 7.5;
   const diaria = cargo => {
@@ -63,7 +67,7 @@
     const dbr = d => String(d).slice(8, 10) + '/' + String(d).slice(5, 7) + '/' + String(d).slice(0, 4);
     const old = document.getElementById('fvCorr'); if (old) old.remove();
     const m = document.createElement('div'); m.id = 'fvCorr';
-    m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
     const op = (v, t, d) => `<label style="display:block;border:2px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer"><input type="radio" name="fvAc" value="${v}" style="margin-right:6px"><b>${t}</b><div style="font-size:11.5px;color:#64748b;margin-left:20px">${d}</div></label>`;
     m.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px;border-top:8px solid #dc2626;font-size:13px;color:#0f172a">
       <div style="font-weight:800;font-size:16px">✏ Corrigir freelance devolvido (horário de trabalho)</div>

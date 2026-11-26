@@ -52,7 +52,7 @@ window.pedirTexto = window.pedirTexto || function (mensagem, inicial, opcoes) {
   return new Promise(resolve => {
     const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fundo = document.createElement('div');
-    fundo.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(16,24,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif';
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(16,24,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px;overflow-y:auto;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif';
     const longo = /motivo|justific|explique|observa|o que há/i.test(String(mensagem));
     fundo.innerHTML = `<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:520px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.35);padding:18px 18px 14px">
       <div style="font-size:13.5px;color:#1e293b;line-height:1.5;white-space:pre-wrap;max-height:50vh;overflow:auto">${esc(mensagem)}</div>
@@ -127,7 +127,7 @@ window.DiaUtil = window.DiaUtil || {
     const diaAnt = SEM[this._d(ant).getDay()];
     return new Promise(resolve => {
       const f = document.createElement('div');
-      f.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(16,24,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:70px 16px;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif';
+      f.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(16,24,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:70px 16px;overflow-y:auto;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif';
       f.innerHTML = `<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.35);overflow:hidden">
         <div style="background:#B54708;color:#fff;padding:12px 18px;font-weight:800;font-size:15px">📅 ${this._br(iso)} é ${mot}</div>
         <div style="padding:14px 18px;font-size:13.5px;color:#1e293b;line-height:1.5">Nesse dia não há pagamento. O dia útil anterior é <b>${diaAnt}, ${this._br(ant)}</b>.<br><span style="font-size:12px;color:#475569">Pagar antes não tem problema; pagar depois é atraso.</span></div>
@@ -418,7 +418,7 @@ if (!window.__alertTraduzido) {
       try { if (document.querySelector('input[data-mes-corrente="periodo"]')) window.DataMes.carregarPeriodo(cli); } catch (e) { }
       // menu lateral único (as duas telas de importação ficam com o visual próprio)
       if (!['importar_alpha7.html', 'importar_consumo_farmacia.html'].includes(PAGINA)) {
-        const sm = document.createElement('script'); sm.src = 'menu.js?v=62'; (document.head || document.documentElement).appendChild(sm);
+        const sm = document.createElement('script'); sm.src = 'menu.js?v=63'; (document.head || document.documentElement).appendChild(sm);
       }
       const telas = new Set((data.telas || []).map(t => String(t).toLowerCase()));
       if (!telas.has(PAGINA)) {

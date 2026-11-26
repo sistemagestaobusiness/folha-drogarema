@@ -7,6 +7,10 @@
 // - Uniformiza fundo e fonte.
 // Para incluir uma tela nova no menu: acrescentar em GRUPOS.
 // =====================================================================
+(function(){ if (document.getElementById('cssOvl')) return; const st = document.createElement('style'); st.id = 'cssOvl';
+    // (26/11/2026) janelas por cima da tela: em monitor pequeno a janela rola e o botão de confirmar sempre aparece
+    st.textContent = '[data-ovl]{overflow-y:auto!important;align-items:flex-start!important}[data-ovl]>*{margin-top:auto;margin-bottom:auto;flex-shrink:0}';
+    (document.head || document.documentElement).appendChild(st); })();
 (function () {
   if (window.__menuSistema || !window.ACESSO) return; window.__menuSistema = true;
   const PAGINA = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
@@ -258,7 +262,7 @@
       if (!pend.length) return;
       const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       const m = document.createElement('div'); m.id = 'avisoLiderModal';
-      m.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+      m.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
       let i = 0;
       const mostrar = () => {
         const a = pend[i];
@@ -289,7 +293,7 @@
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const RX = /https?:\/\/[^\s<>"']+/g;
     const m = document.createElement('div'); m.id = 'mktPopup';
-    m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
     let i = 0;
     const btn = 'border:0;border-radius:10px;padding:9px 12px;font-weight:700;font-size:12.5px;cursor:pointer';
     const mostrar = () => {
@@ -424,7 +428,7 @@
       const chave = mostrar.map(p => p.tela + p.qtd + '|' + p.total).join(';'); if (visto === chave) return;
       const brl = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       const m = document.createElement('div'); m.id = 'adiantGestorModal';
-      m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+      m.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
       m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:540px;width:100%;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.35);font-family:inherit">
         <div style="background:#dc2626;color:#fff;padding:16px 22px;font-weight:800;font-size:16px">⚠️ Pagamentos aguardando a sua aprovação</div>
         <div style="padding:18px 22px;font-size:14px;color:#0f172a;line-height:1.5">
@@ -593,7 +597,7 @@
     if (!abrirJanela || !ch.length || document.getElementById('transfPopup')) return;
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const m = document.createElement('div'); m.id = 'transfPopup';
-    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
     m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
       <div style="font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.04em">📥 Transferências chegando na Loja ${esc(r.loja)}</div>
       <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${ch.length} transferência(s) aguardando a confirmação de recebimento</div>
@@ -623,7 +627,7 @@
     const brl = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const cs = r.conferencias || [];
     const m = document.createElement('div'); m.id = 'retPopup';
-    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
     m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
       <div style="font-size:12px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.04em">💰 Conferência de retaguarda</div>
       <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">Sua ciência é necessária</div>
@@ -652,7 +656,7 @@
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const urg = (r.itens || []).filter(x => x.urgente);
     const m = document.createElement('div'); m.id = 'rescPopup';
-    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
     m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit">
       <div style="font-size:12px;font-weight:700;color:#be123c;text-transform:uppercase;letter-spacing:.04em">✂ Rescisão</div>
       <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${urg.length} pendência(s) de rescisão para resolver</div>
@@ -710,7 +714,7 @@
     const titulo = pf === 'LIDER' ? `${its.length} pessoa(s) da sua loja na escala do feriado sem decisão`
       : pf === 'SUPERVISOR' ? `Feriado: ${its.length} pessoa(s) sem decisão há 3 dias ou mais` : `Feriado: ${its.length} pessoa(s) sem decisão no prazo final ou vencido`;
     const m = document.createElement('div'); m.id = 'ferPopup';
-    m.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
     m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:600px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit;border-top:8px solid ${corPior}">
       <div style="font-size:12px;font-weight:800;color:${corPior};text-transform:uppercase;letter-spacing:.04em">🎉 Feriado · decisão na escala</div>
       <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${titulo}</div>
@@ -756,7 +760,7 @@
     const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const dbr = d => String(d).slice(8, 10) + '/' + String(d).slice(5, 7);
     const m = document.createElement('div'); m.id = 'fvtPopup';
-    m.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:16px'; m.setAttribute('data-ovl', '');
     m.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:640px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit;border-top:8px solid #dc2626">
       <div style="font-size:12px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.04em">🚫 Freelance no horário de trabalho</div>
       <div style="font-size:17px;font-weight:800;color:#0f172a;margin-top:6px">${pf === 'LIDER' ? `${its.length} freelance(s) da sua loja DEVOLVIDO(S) PARA CORREÇÃO` : `${its.length} freelance(s) devolvido(s) ainda sem correção depois do prazo do líder (${dbr(prazo)})`}</div>
