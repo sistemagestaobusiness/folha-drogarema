@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
-  <script src="fluxo_core.js?v=6"></script>
+  <script src="fluxo_core.js?v=7"></script>
   <script src="fin_carga_aviso.js?v=1"></script>
   <style>
     .fc { border-collapse: separate; border-spacing: 0; font-size: 12px; width: 100%; }
@@ -253,7 +253,7 @@
       const a = +iso.slice(0, 4);
       if (!_fer[a]) { const p = pascoa(a), m = {}; Object.entries(FIXOS).forEach(([k, v]) => m[a + '-' + k] = v);
         m[FluxoCore.somaDia(p, -48)] = 'Carnaval'; m[FluxoCore.somaDia(p, -47)] = 'Carnaval'; m[FluxoCore.somaDia(p, -2)] = 'Sexta-feira Santa'; m[FluxoCore.somaDia(p, 60)] = 'Corpus Christi'; _fer[a] = m; }
-      return _fer[a][iso] || null;
+      return _fer[a][iso] || (iso.slice(5) === '12-31' ? 'Sem expediente bancário' : null);   // (26/11/2026) 31/12 sem movimentação bancária
     }
     // colunas: dias do mês (diário) ou 12 meses corridos (mensal)
     function colunas() {
@@ -442,7 +442,9 @@
       if (pIni <= pFim) buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Paga').gte('pagamento', pIni).lte('pagamento', pFim)).order('pagamento').order('id')));
       const fIni = ini > hoje ? ini : hoje;
       if (fIni <= fim) {
-        buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Pendente').gte('venc_util', fIni).lte('venc_util', fim)).order('venc_util').order('id')));
+        // (26/11/2026) vencimento em dia sem banco (31/12, feriado) entra no próximo dia com banco: busca alguns dias antes e filtra pela data do fluxo
+        buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Pendente').gte('venc_util', FluxoCore.somaDia(fIni, -6)).lte('venc_util', fim)).order('venc_util').order('id'))
+          .then(l => l.filter(t => t.venc_util >= hoje && FluxoCore.diaBanco(t.venc_util) >= fIni && FluxoCore.diaBanco(t.venc_util) <= fim)));
         buscas.push(tudoTabela(() => filtroPlano(_supabase.from('fin_cp').select(sel).eq('status', 'Paga').gte('pagamento', fIni).lte('pagamento', fim)).order('pagamento').order('id')));
       }
       // (05/11/2026) títulos vencidos e ainda em aberto entram no dia de hoje da projeção (não somem do fluxo)
@@ -452,7 +454,7 @@
       try { lista = (await Promise.all(buscas)).flat(); } catch (e) { $('mCorpo').innerHTML = `<div class="alerta verm" style="margin: 12px 16px">${esc(e.message || e)}</div>`; return; }
       const grupoDe = p => { const c = cad.categorias[p]; return c && c.grupo ? c.grupo : 'SEM GRUPO'; };
       lista = lista.filter(t => !(cad.categorias[t.plano] || {}).fora_do_fluxo && (!eGrupo || grupoDe(t.plano || '') === chave));
-      const dataFluxo = t => t.status === 'Paga' ? t.pagamento : (t.venc_util < hoje ? hoje : t.venc_util);
+      const dataFluxo = t => t.status === 'Paga' ? t.pagamento : (t.venc_util < hoje ? hoje : FluxoCore.diaBanco(t.venc_util));
       lista.sort((a, b) => dataFluxo(a) < dataFluxo(b) ? -1 : dataFluxo(a) > dataFluxo(b) ? 1 : Number(b.valor) - Number(a.valor));
       const tot = lista.reduce((a, t) => a + Number(t.valor || 0), 0);
       // previsões digitadas no período
@@ -466,7 +468,7 @@
       if (temFixo) h += `<div class="alerta neutro" style="margin: 8px 16px"><span class="ponto aten"></span><span>Até ${dbr(fixo)} o fluxo guarda só o total por dia (período fixo): os títulos desses dias não aparecem aqui.</span></div>`;
       h += lista.length ? `<table class="t"><thead><tr><th>Data no fluxo</th><th>Situação</th><th>Vencimento</th><th>Credor</th><th>Descrição</th><th>Documento</th><th>Parc.</th><th>Loja</th>${eGrupo ? '<th>Plano de contas</th>' : ''}<th>Conta pagadora</th><th class="n">Valor</th></tr></thead><tbody>${lista.map(t => `<tr>
           <td class="mono">${dbr(dataFluxo(t))}</td><td>${t.status === 'Paga' ? '<span class="pill p-ok">Paga</span>' : t.venc_util < hoje ? '<span class="pill p-crit">Vencido em aberto</span>' : '<span class="pill p-info">Em aberto</span>'}</td>
-          <td class="mono">${dbr(t.vencimento)}${t.venc_util && t.venc_util !== t.vencimento ? ' <span class="desc">(útil ' + dbr(t.venc_util).slice(0, 5) + ')</span>' : ''}</td>
+          <td class="mono">${dbr(t.vencimento)}${t.venc_util && (t.status === 'Pendente' ? FluxoCore.diaBanco(t.venc_util) : t.venc_util) !== t.vencimento ? ' <span class="desc">(útil ' + dbr(t.status === 'Pendente' ? FluxoCore.diaBanco(t.venc_util) : t.venc_util).slice(0, 5) + ')</span>' : ''}</td>
           <td class="cr">${esc(t.credor || '')}</td><td class="ds">${esc(t.descricao || '')}</td><td class="mono">${esc(t.documento || '')}</td><td>${esc(t.parcela || '')}</td><td>${esc(t.unidade || '')}</td>
           ${eGrupo ? `<td class="pl" title="${esc(t.plano || '')}">${esc(curto(t.plano))}</td>` : ''}<td>${esc(t.conta_pagadora || '')}</td><td class="n">${brl(t.valor)}</td></tr>`).join('')}</tbody></table>`
         : '<div class="desc" style="padding: 14px 16px">Nenhum título do Alpha7 neste período.</div>';

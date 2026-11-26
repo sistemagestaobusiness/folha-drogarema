@@ -14,6 +14,20 @@
   const dow = iso => dataDe(iso).getDay();   // 0 domingo … 6 sábado
   const dia = iso => +iso.slice(8, 10);
   const media = l => l.length ? l.reduce((a, b) => a + b, 0) / l.length : 0;
+  // (26/11/2026) dia sem banco: fim de semana, feriado nacional (fixos + Carnaval, Sexta-feira Santa, Corpus Christi) e 31/12
+  // (último dia do ano não tem movimentação bancária). O que cairia nesses dias vai para o próximo dia com banco.
+  function pascoa(a) { const b = a % 19, c = Math.floor(a / 100), d = a % 100, e = Math.floor(c / 4), f = c % 4, g = Math.floor((c + 8) / 25), h = Math.floor((c - g + 1) / 3),
+    i = (19 * b + c - e - h + 15) % 30, k = Math.floor(d / 4), l = d % 4, m = (32 + 2 * f + 2 * k - i - l) % 7, n = Math.floor((b + 11 * i + 22 * m) / 451), mes = Math.floor((i + m - 7 * n + 114) / 31), dd = ((i + m - 7 * n + 114) % 31) + 1;
+    return `${a}-${String(mes).padStart(2, '0')}-${String(dd).padStart(2, '0')}`; }
+  const FIXOS_BANCO = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25', '12-31'];
+  const _mov = {};
+  function semBanco(iso) {
+    const w = dow(iso); if (w === 0 || w === 6) return true;
+    if (FIXOS_BANCO.includes(iso.slice(5))) return true;
+    const a = +iso.slice(0, 4); if (!_mov[a]) { const p = pascoa(a); _mov[a] = [somaDia(p, -48), somaDia(p, -47), somaDia(p, -2), somaDia(p, 60)]; }
+    return _mov[a].includes(iso);
+  }
+  const diaBanco = iso => { let d = iso; for (let k = 0; k < 10 && semBanco(d); k++) d = somaDia(d, 1); return d; };
 
   // ---- venda prevista (regra de 21/10/2026, conservadora)
   //  base: dias 08/20 = média desses dias nos últimos 3 meses; demais = menor entre média e mediana
@@ -156,7 +170,8 @@
       const entPrev = passado ? 0 : (e.previsoes['entrada|' + iso] || 0);
       const w = dow(iso);
       const projetado = !comExtrato;
-      const ajuste = projetado ? (w === 1 ? e.ajusteSegunda : (w >= 2 && w <= 5 ? e.ajusteUtil : 0)) : 0;
+      const fechado = semBanco(iso);   // (26/11/2026) sem banco: a venda acumula para o próximo dia com banco e não tem ajuste
+      const ajuste = projetado && !fechado ? (w === 1 || (w >= 2 && semBanco(somaDia(iso, -1))) ? e.ajusteSegunda : e.ajusteUtil) : 0;
       const totPag = Object.values(grupos).reduce((a, g) => a + g.tot, 0) + totPrevG;   // o ajuste reduz a venda, não entra nos pagamentos (21/10/2026)
       // saldo
       const saldoReal = comExtrato ? contasFluxo.reduce((a, c) => a + (s[c] || 0), 0) : null;
@@ -164,7 +179,7 @@
       let saldoPrev = null;
       if (comExtrato) { saldoProj = saldoReal; vendaFds = venda || 0; }
       else if (saldoProj !== null) {
-        if (w === 0 || w === 6) { saldoProj += entPrev - totPag; vendaFds += venda || 0; }
+        if (fechado) { saldoProj += entPrev - totPag; vendaFds += venda || 0; }
         else { saldoProj += vendaFds - ajuste + entPrev - totPag; vendaFds = venda || 0; }
         saldoPrev = saldoProj;
       }
@@ -176,5 +191,5 @@
     return { dias, ultExt, ultVenda };
   }
 
-  global.FluxoCore = { montar, vendaPrevista, somaDia, isoDe, dow };
+  global.FluxoCore = { montar, vendaPrevista, somaDia, isoDe, dow, semBanco, diaBanco };
 })(typeof window !== 'undefined' ? window : globalThis);
