@@ -70,6 +70,18 @@
     <table class="t"><tbody id="tbTotais"></tbody></table>
   </section>
 
+  <!-- (26/11/2026) conferência simples: saldo de cada conta dia a dia, para bater com o extrato do banco -->
+  <details id="boxConf" style="margin-top: 14px" ontoggle="if (this.open) abrirConf()">
+    <summary class="desc" style="cursor: pointer; padding: 6px 2px">🔎 Conferir saldo por conta, dia a dia (bater com o extrato do banco)</summary>
+    <div style="padding: 6px 2px">
+      <div class="desc" style="margin: 2px 0 4px">Extrato por dia útil · <span style="color: var(--verm)">✗</span> = dia sem extrato da conta (pedir a atualização ao Alpha7)</div>
+      <div style="overflow-x: auto; margin-bottom: 12px"><table id="tbGrade" style="border-collapse: collapse; font-size: 11px; font-family: 'JetBrains Mono', monospace"></table></div>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px">
+        <select id="cConta" class="inp" onchange="desenharConf()" style="min-width: 260px"></select><span id="cInfo" class="desc"></span></div>
+      <table class="t" style="font-size: 12.5px"><thead><tr><th>Dia</th><th class="n">Saldo anterior</th><th class="n">Créditos</th><th class="n">Débitos</th><th class="n">Saldo do dia</th><th></th></tr></thead><tbody id="tbConf"></tbody></table>
+    </div>
+  </details>
+
   <script>
     const _supabase = supabase.createClient('https://jmetpmdnaxwabeccimgg.supabase.co', 'sb_publishable_hAUmVXDFrzRg5R1xGx_CoQ_bgct2D6k');
     const $ = id => document.getElementById(id);
@@ -119,6 +131,7 @@
         titUni = {}; titLista = {}; rt.data.forEach(t => { if (cats[t.plano] && cats[t.plano].fora_do_fluxo) return; const o = titUni[t.unidade] = titUni[t.unidade] || { pago: 0, pend: 0 };
           o[t.status === 'Paga' ? 'pago' : 'pend'] += Number(t.valor || 0); (titLista[t.unidade] = titLista[t.unidade] || []).push(t); });
         desenhar();
+        if ($('boxConf').open) abrirConf();
       } catch (e) { aviso('Não foi possível carregar os saldos: ' + esc(e.message || e)); }
     }
 
@@ -219,6 +232,52 @@
       }
       carregar();
     });
+
+    // ---- conferência por conta, dia a dia (26/11/2026): saldo anterior + créditos − débitos = saldo do dia (pelo extrato importado)
+    const FER_NAC = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'];
+    let resumoExt = null, resumoRef = null;
+    async function abrirConf() {
+      if (!calc) return;
+      const ini = ref.slice(0, 8) + '01', fim = FluxoCore.somaDia(ref, -1);
+      if (resumoRef !== ref) {
+        $('tbConf').innerHTML = '<tr><td colspan="6" class="desc">carregando…</td></tr>';
+        try { const l = await rpcTudo('fn_fin_extrato_resumo', { p_ini: ini, p_fim: fim }); resumoExt = {}; l.forEach(r => resumoExt[r.data + '|' + r.conta] = r); resumoRef = ref; }
+        catch (e) { $('tbConf').innerHTML = `<tr><td colspan="6" class="neg">${esc(e.message || e)}</td></tr>`; return; }
+      }
+      const sel = $('cConta'), atual = sel.value;
+      const lista = contas.filter(c => c.ativa).sort((a, b) => (b.no_fluxo - a.no_fluxo) || String(a.banco).localeCompare(String(b.banco)) || String(a.empresa).localeCompare(String(b.empresa)));
+      sel.innerHTML = lista.map(c => `<option value="${esc(c.conta)}">${esc(c.banco || '')} · ${c.no_fluxo ? 'Loja ' : ''}${esc(c.empresa || '')} · ${esc(c.conta)}</option>`).join('');
+      if (atual && lista.some(c => c.conta === atual)) sel.value = atual;
+      // (26/11/2026) quadro de dias úteis × contas: ✓ tem extrato · ✗ não tem
+      { const ate = calc.ultExt && calc.ultExt < ref ? calc.ultExt : FluxoCore.somaDia(ref, -1), dias = [];
+        for (let iso = ref.slice(0, 8) + '01'; iso <= ate; iso = FluxoCore.somaDia(iso, 1)) { const w = FluxoCore.dow(iso); if (w >= 1 && w <= 5 && !FER_NAC.includes(iso.slice(5))) dias.push(iso); }
+        const st = 'padding: 1px 4px; text-align: center; white-space: nowrap';
+        $('tbGrade').innerHTML = `<tr><td></td>${dias.map(d => `<td style="${st}; color: var(--sub)">${d.slice(8)}</td>`).join('')}</tr>`
+          + lista.map(c => { const falta = dias.filter(d => !(resumoExt || {})[d + '|' + c.conta]).length;
+            return `<tr><td style="padding: 1px 8px 1px 0; white-space: nowrap; font-family: Inter, sans-serif">${esc(c.banco || '')} ${c.no_fluxo ? 'L' : ''}${esc(c.empresa || '')} <span style="color: var(--sub)">${esc(c.conta)}</span>${falta ? ` <b style="color: var(--verm)">${falta}</b>` : ''}</td>`
+              + dias.map(d => (resumoExt || {})[d + '|' + c.conta] ? `<td style="${st}; color: #98A2B3" title="${dbr(d)} · ${resumoExt[d + '|' + c.conta].qtd} lanç.">✓</td>` : `<td style="${st}; color: var(--verm); font-weight: 700" title="${dbr(d)} · sem extrato">✗</td>`).join('') + '</tr>'; }).join(''); }
+      desenharConf();
+    }
+    function desenharConf() {
+      const c = $('cConta').value; if (!c || !calc) return;
+      const ini = ref.slice(0, 8) + '01', ate = calc.ultExt && calc.ultExt < ref ? calc.ultExt : FluxoCore.somaDia(ref, -1);
+      const saldoEm = iso => { const d = calc.dias.find(x => x.iso === iso && x.saldoContas); return d ? (d.saldoContas[c] || 0) : null; };
+      let ant = null; { const a = calc.dias.filter(x => x.saldoContas && x.iso < ini).pop(); if (a) ant = a.saldoContas[c] || 0; }
+      let h = '', falta = 0;
+      for (let iso = ini; iso <= ate; iso = FluxoCore.somaDia(iso, 1)) {
+        const r = (resumoExt || {})[iso + '|' + c], sd = saldoEm(iso), w = FluxoCore.dow(iso), util = w >= 1 && w <= 5 && !FER_NAC.includes(iso.slice(5));
+        if (!r && !util) { if (sd !== null) ant = sd; continue; }
+        const cr = r ? Number(r.credito) : 0, db = r ? Number(r.debito) : 0;
+        const conta = ant === null ? null : ant + cr - db, difere = sd !== null && conta !== null && Math.abs(conta - sd) > 0.01;
+        if (!r) falta++;
+        h += `<tr${!r ? ' style="background: #FEF3F2"' : ''}><td>${dbr(iso)} <span class="desc">${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][w]}</span></td>
+          <td class="n ${cls(ant)}">${brl(ant)}</td><td class="n">${cr ? brl(cr) : '–'}</td><td class="n">${db ? '− ' + brl(db) : '–'}</td><td class="n ${cls(sd)}"><b>${brl(sd)}</b></td>
+          <td class="desc">${!r ? '<b class="neg">sem extrato</b>' : r.qtd + ' lanç.'}${difere ? ' · saldo informado' : ''}</td></tr>`;
+        if (sd !== null) ant = sd;
+      }
+      $('tbConf').innerHTML = h || '<tr><td colspan="6" class="desc">Nada no período.</td></tr>';
+      $('cInfo').innerHTML = `${dbr(ini)} a ${dbr(ate)} · extrato importado até ${dbr(calc.ultExt)}${falta ? ` · <b class="neg">${falta} dia(s) útil(eis) sem extrato</b>` : ''}`;
+    }
 
     (async () => { const { data: { user } } = await _supabase.auth.getUser(); if (!user) { location.href = 'login.html'; return; } $('fRef').value = hoje; $('fRef').max = hoje; carregar(); })();
   </script>
