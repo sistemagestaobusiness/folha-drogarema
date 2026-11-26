@@ -122,7 +122,9 @@
               <option value="true">SEM REGISTRO · só eventos não contábeis</option>
             </select>
             <p id="avisoRegistroTx" class="text-[10px] text-slate-400 mt-0.5">Obrigatório. Sem registro: salário só no "salário adicional" (2001) e todos os eventos não contábeis (ex.: farmácia 2034); Lançamentos avisa e a Conferência do fechamento marca em vermelho qualquer evento contábil.</p></div>
-          <div class="md:col-span-6"></div>
+          <div class="md:col-span-6"><label class="lbl">Cargo de confiança</label>
+            <label class="flex items-start gap-2 text-xs font-bold text-slate-700 mt-1 cursor-pointer"><input type="checkbox" id="cargo_confianca" class="mt-0.5">
+              <span>Cargo de confiança: feriado trabalhado <u>não</u> gera hora extra nem folga compensatória<span class="block text-[10px] font-normal text-slate-400">A escala não cobra decisão no feriado (como o farmacêutico com adicional fixo). Freelance continua normal.</span></span></label></div>
           <div class="md:col-span-3"><label class="lbl">Salário base (R$) *</label><input type="number" step="0.01" min="0" id="salario_base" class="inp font-mono">
             <p class="text-[10px] text-slate-400 mt-0.5">Lançado todo mês no evento 2024 DIAS NORMAIS (contábil). Sem registro: deixe em branco e preencha só o salário adicional.</p></div>
           <div class="md:col-span-3"><label class="lbl">Salário adicional - acordo (R$)</label><input type="number" step="0.01" min="0" id="salario_adicional" class="inp font-mono">
@@ -238,11 +240,11 @@
     // Campos da ficha que vão direto para a tabela funcionarios
     const CAMPOS = ['nome_registro','data_nascimento','cpf','rg','estado_civil','email','celular','cep','endereco','numero','complemento',
       'bairro','cidade','uf','usuario_alpha7','observacoes','data_contratacao','data_rescisao','cargo','salario_base','salario_adicional','acordo_base_13_ferias',
-      'adicional_caixa','ferias_data_base','organograma_funcao','empresa_id','loja_id','periodo_trabalho','lider_loja','email_acesso','pix_tipo','pix_chave','banco','agencia','conta','tipo_conta'];
+      'adicional_caixa','ferias_data_base','organograma_funcao','empresa_id','loja_id','periodo_trabalho','lider_loja','email_acesso','pix_tipo','pix_chave','banco','agencia','conta','tipo_conta','cargo_confianca'];
     const MAIUSCULAS = ['nome_registro','rg','endereco','numero','complemento','bairro','cidade','uf','usuario_alpha7'];
     const ROTULO_CAMPO = { nome_registro: 'Nome', cargo: 'Cargo', salario_base: 'Salário base', salario_adicional: 'Salário adicional', acordo_base_13_ferias: 'Acordo base férias/13º', adicional_caixa: 'Adicional de caixa',
       data_contratacao: 'Admissão', organograma_funcao: 'Função no organograma', ferias_data_base: 'Data-base das férias', data_rescisao: 'Rescisão', status: 'Status', empresa_id: 'Empresa', loja_id: 'Loja', periodo_trabalho: 'Período',
-      lider_loja: 'Líder da loja', email_acesso: 'E-mail de acesso', pix_tipo: 'Tipo PIX', pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', tipo_conta: 'Tipo de conta', cpf: 'CPF' };
+      lider_loja: 'Líder da loja', email_acesso: 'E-mail de acesso', pix_tipo: 'Tipo PIX', pix_chave: 'Chave PIX', banco: 'Banco', agencia: 'Agência', conta: 'Conta', tipo_conta: 'Tipo de conta', cpf: 'CPF', cargo_confianca: 'Cargo de confiança' };
 
     let perfisLista = [], telasLista = [], perfilTelas = [], telasExtras = [], meuEmail = '';
     let perfil = null, funcs = [], empresas = [], lojas = [], cargos = [], usuarios = [], pendencias = [], atual = null;

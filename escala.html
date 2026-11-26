@@ -626,7 +626,7 @@
         const farma = temFixoFeriado(f);
         bx.innerHTML = `<div class="bg-fuchsia-50 border border-fuchsia-300 rounded-lg p-2.5 space-y-2">
           <div class="font-black text-fuchsia-900">🎉 FERIADO: ${esc(fer)}</div>
-          ${farma ? '<div class="text-[11px] text-slate-600">Farmacêutico com adicional fixo de feriado: não gera folga compensatória nem hora extra.</div>'
+          ${farma ? `<div class="text-[11px] text-slate-600">${/FARMAC/i.test((f.cargo || '') + ' ' + (f.organograma_funcao || '')) ? 'Farmacêutico com adicional fixo de feriado' : 'Cargo de confiança (cadastro)'}: não gera folga compensatória nem hora extra.</div>`
           : r.tipo !== 'TRABALHO' ? (/^DISPENSADO NO FERIADO/i.test(r.obs || '')
               ? `<div class="text-[11px] text-fuchsia-900"><b>🏠 Dispensado pela loja</b> (sem hora extra e sem folga compensatória).<div class="text-slate-600">${esc(String(r.obs).replace(/^DISPENSADO NO FERIADO:\s*/i, ''))}</div><div class="text-[10px] text-slate-500 mt-1">Para desfazer: escolha "Padrão" e salve.</div></div>`
               : '<div class="text-[11px] text-slate-600">Pela escala, a pessoa não trabalha neste feriado.</div>')
