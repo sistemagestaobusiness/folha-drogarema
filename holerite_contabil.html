@@ -17,7 +17,7 @@
     <div class="cab-sis flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 border-b border-slate-200">
       <div>
         <h1 class="tit-sis text-xl font-bold text-slate-900">⇩ Holerite contábil × sistema</h1>
-        <p class="text-xs text-slate-500">O holerite que a contabilidade devolve tem de bater com o que está lançado no sistema. Diferença trava o envio ao Financeiro (5º dia útil) e o fechamento; não trava o envio à contabilidade.</p>
+        <p class="text-xs text-slate-500">O holerite que a contabilidade devolve tem de estar 100% lançado no sistema. Diferença trava o envio ao Financeiro (5º dia útil) e o fechamento; não trava o envio à contabilidade.</p>
       </div>
       <div class="text-right"><span id="lblUsuario" class="block text-[11px] font-bold text-slate-700">-</span><span id="lblPerfil" class="block text-[10px] text-slate-400 font-mono">-</span></div>
     </div>
@@ -46,7 +46,7 @@
       <p class="text-[11px] text-slate-500 leading-relaxed">
         Comparação pelo <b>valor</b> e pela <b>relação do evento</b> (o nome não precisa ser igual: "I.N.S.S." = 3020 INSS, "IMPOSTO DE RENDA" = 2070 IRPF).
         Empréstimo: cada contrato é comparado com o seu lançamento, pelo valor da parcela. Ficam fora: rescisão (termo próprio), 13º e 13º antecipado e pagamento de férias líquido.
-        Férias (transição até 2027): diferença aparece só como alerta. O quadro "Comparado com o mês anterior" usa o holerite contábil do mês anterior (ou, se ele não foi enviado, os lançamentos do sistema daquele mês). Subir de novo o holerite da mesma competência <b>substitui</b> o anterior e refaz a conferência (sem duplicar).
+        <b>O holerite contábil tem de estar 100% lançado</b> (férias inclusive): o envio ao Financeiro só libera quando tudo bater ou o Gestor aprovar a diferença. O quadro "Comparado com o mês anterior" usa o holerite contábil do mês anterior (ou, se ele não foi enviado, os lançamentos do sistema daquele mês). Subir de novo o holerite da mesma competência <b>substitui</b> o anterior e refaz a conferência (sem duplicar).
       </p>
     </div>
   </div>
@@ -67,6 +67,9 @@
     const comp = () => { const [a, m] = $('fMes').value.split('-'); return `${m}/${a}`; };
     let perfil = null, linhas = [], arquivo = null, historico = [], justs = {}, retorno = [], eventos = [], leitura = null, mes = [], justsMes = {};
 
+    // eventos que têm tela própria: o botão leva para a tela (não lança direto)
+    const TELA_PROPRIA = { '3019': ['vale_transporte.html', 'Vale transporte'], '2025': ['adiantamento.html', 'Adiantamento salarial'], '2074': ['adiantamento.html', 'Adiantamento salarial'],
+      '3000': ['planos.html', 'Planos'], '3025': ['planos.html', 'Planos'], '3041': ['planos.html', 'Planos'] };
     const ST = {
       OK: ['✓ igual', 'bg-emerald-100 text-emerald-800'],
       DIFERENTE: ['✗ valor diferente', 'bg-red-100 text-red-700'],
@@ -126,11 +129,12 @@
         : `<b class="text-orange-700">Holerite contábil de ${esc(c)} ainda não foi enviado.</b><div class="text-[11px] text-slate-500">Quando a contabilidade devolver, suba aqui o PDF dos recibos de pagamento (o mesmo arquivo que vem dela).</div>`;
 
       const pend = l => l.status !== 'OK' && !justs[l.funcionario_id + '|' + l.chave];
-      const bloq = linhas.filter(l => pend(l) && !l.ferias), fer = linhas.filter(l => pend(l) && l.ferias), ok = linhas.filter(l => l.status === 'OK').length;
+      // (27/11/2026) holerite contábil 100% lançado: tudo trava o Financeiro, inclusive férias; o Gestor pode aprovar a diferença
+      const bloq = linhas.filter(l => pend(l)), fer = linhas.filter(l => pend(l) && l.ferias), ok = linhas.filter(l => l.status === 'OK').length;
       const jst = linhas.filter(l => l.status !== 'OK' && justs[l.funcionario_id + '|' + l.chave]).length;
       const kpi = (t, v, cl) => `<div class="bg-white rounded-xl px-3 py-2"><div class="text-[10px] font-bold text-slate-500 uppercase">${t}</div><div class="text-lg font-black ${cl || ''}">${v}</div></div>`;
       $('kpis').innerHTML = arquivo ? kpi('Holerites', arquivo.holerites || 0) + kpi('Lançamentos iguais', ok, 'text-emerald-700') + kpi('Travando o Financeiro', bloq.length, bloq.length ? 'text-red-600' : 'text-emerald-700')
-        + kpi('Férias (só alerta)', fer.length, fer.length ? 'text-amber-700' : '') + kpi('Justificados', jst, 'text-slate-700') : '';
+        + kpi('Deles, de férias', fer.length, fer.length ? 'text-amber-700' : '') + kpi('Justificados', jst, 'text-slate-700') : '';
 
       // impostos do mês anterior ainda não lançados (lançar pelo holerite)
       $('boxRetorno').innerHTML = retorno.length ? `<div class="bg-white rounded-xl overflow-hidden"><div class="px-4 py-2.5 border-b border-slate-100"><b class="text-[13px]">Impostos do mês anterior ainda não lançados</b>
@@ -149,7 +153,7 @@
         const ls = grupos[k], f = ls[0];
         return `<div class="bg-white rounded-xl overflow-hidden">
           <div class="px-4 py-2 flex flex-wrap items-center gap-2 border-b border-slate-100"><b class="text-[13px] text-slate-900">${esc(f.nome || '?')}</b>
-            <span class="text-[10px] text-slate-400">código contábil ${esc(f.cod_func || '-')}</span>${ls.some(l => l.ferias) ? '<span class="chip bg-amber-100 text-amber-800">férias · só alerta</span>' : ''}
+            <span class="text-[10px] text-slate-400">código contábil ${esc(f.cod_func || '-')}</span>${ls.some(l => l.ferias) ? '<span class="chip bg-amber-100 text-amber-800">férias</span>' : ''}
             ${f.funcionario_id ? `<a href="lancamentos.html?func=${encodeURIComponent(f.funcionario_id)}" class="ml-auto text-[11px] font-bold text-sky-700 underline">abrir Lançamentos</a>` : `<a href="funcionarios.html" class="ml-auto text-[11px] font-bold text-sky-700 underline">abrir Funcionários</a>`}</div>
           <table class="w-full text-xs"><tr class="text-[10px] text-slate-400 text-left"><th class="px-4 py-1 font-bold">Holerite da contabilidade</th><th class="px-2 py-1 text-right font-bold">Valor</th><th class="px-2 py-1 font-bold">Sistema</th><th class="px-2 py-1 text-right font-bold">Valor</th><th class="px-2 py-1 font-bold">Situação</th><th class="px-4 py-1"></th></tr>
           ${ls.map(l => linha(l)).join('')}</table></div>`;
@@ -158,12 +162,13 @@
 
     function linha(l) {
       const j = justs[l.funcionario_id + '|' + l.chave], st = ST[l.status] || [l.status, ''];
-      const chip = l.status === 'OK' ? st : j ? ['✓ justificado', 'bg-emerald-100 text-emerald-800'] : l.ferias ? [st[0] + ' (férias)', 'bg-amber-100 text-amber-800'] : st;
+      const chip = l.status === 'OK' ? st : j ? ['✓ aprovado pelo Gestor', 'bg-emerald-100 text-emerald-800'] : st;
       const dif = l.contab_valor != null && l.sist_valor != null ? ` <span class="text-[10px] ${Math.abs(l.contab_valor - l.sist_valor) >= 0.01 ? 'text-red-600' : 'text-slate-400'}">(dif. ${num(l.sist_valor - l.contab_valor)})</span>` : '';
       let acao = '';
       if (l.status !== 'OK') {
-        if (l.status === 'SO_CONTAB' && ['3020', '2070', '2038'].includes(l.grupo) && l.funcionario_id)
+        if (l.status === 'SO_CONTAB' && /^\d+$/.test(l.grupo) && !TELA_PROPRIA[l.grupo] && l.funcionario_id)
           acao += `<button onclick="lancar('${l.funcionario_id}','${l.grupo}')" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2 py-1 text-[10px] font-bold cursor-pointer whitespace-nowrap">Lançar pelo holerite</button> `;
+        else if (l.status === 'SO_CONTAB' && TELA_PROPRIA[l.grupo]) acao += `<a href="${TELA_PROPRIA[l.grupo][0]}" class="text-[10px] font-bold text-sky-700 underline">lançar na tela ${TELA_PROPRIA[l.grupo][1]}</a> `;
         if (l.status === 'SEM_MAPA' && perfil === 'GESTOR') {
           const cod = String(l.grupo).replace('?', '');
           acao += `<div class="flex gap-1 items-center"><select id="m_${cod}" class="inp !py-1 !w-44 text-[11px]"><option value="">corresponde a…</option>${eventos.map(e => `<option value="${e.codigo_evento}">${e.codigo_evento} ${esc(e.descricao_do_evento)}</option>`).join('')}<option value="IGNORAR">ignorar este código</option></select>
@@ -186,15 +191,15 @@
       if (!arquivo || !mes.length) { $('boxMes').innerHTML = ''; return; }
       const fn = $('fNome').value.trim().toUpperCase();
       const ls = mes.filter(l => !fn || String(l.nome || '').toUpperCase().includes(fn)).sort((a, b) => String(a.nome).localeCompare(String(b.nome)) || String(a.grupo).localeCompare(String(b.grupo)));
-      const pend = mes.filter(l => l.status !== 'NOVO' && !l.ferias && !justsMes[l.funcionario_id + '|' + l.chave]).length;
+      const pend = mes.filter(l => l.status !== 'NOVO' && !justsMes[l.funcionario_id + '|' + l.chave]).length;
       $('boxMes').innerHTML = `<div class="bg-white rounded-xl overflow-hidden"><div class="px-4 py-2.5 border-b border-slate-100"><b class="text-[13px]">Comparado com o mês anterior</b>
           <span class="text-[11px] text-slate-500"> · base: ${esc(mes[0].base_anterior)} · INSS, IRPF, contribuição, VT, salário, planos, adicional de caixa e empréstimos · o que faltou ou mudou mais de 20% (e mais de R$ 10) precisa de aprovação do Gestor</span>
           ${pend ? `<span class="chip bg-red-100 text-red-700 ml-1">${pend} aguardando aprovação</span>` : '<span class="chip bg-emerald-100 text-emerald-800 ml-1">nada pendente</span>'}</div>
         <table class="w-full text-xs"><tr class="text-[10px] text-slate-400 text-left"><th class="px-4 py-1">Funcionário</th><th class="px-2 py-1">Evento</th><th class="px-2 py-1 text-right">Mês anterior</th><th class="px-2 py-1 text-right">Este mês</th><th class="px-2 py-1">Situação</th><th class="px-4 py-1"></th></tr>
         ${ls.map(l => { const j = justsMes[l.funcionario_id + '|' + l.chave], st = ST_MES[l.status] || [l.status, ''];
-          const chip = j ? ['✓ aprovado', 'bg-emerald-100 text-emerald-800'] : l.ferias && l.status !== 'NOVO' ? [st[0] + ' (férias)', 'bg-amber-100 text-amber-800'] : st;
+          const chip = j ? ['✓ aprovado', 'bg-emerald-100 text-emerald-800'] : l.ferias && l.status !== 'NOVO' ? [st[0] + ' (férias)', st[1]] : st;
           let acao = '';
-          if (l.status !== 'NOVO' && !l.ferias) {
+          if (l.status !== 'NOVO') {
             if (perfil === 'GESTOR') { const id = 'jm_' + btoa(unescape(encodeURIComponent(l.funcionario_id + '|' + l.chave))).replace(/[^A-Za-z0-9]/g, '');
               acao = `<div class="flex gap-1"><input id="${id}" class="inp !py-1 text-[11px]" placeholder="aprovação do Gestor: motivo (mín. 10 letras)" value="${esc(j ? j.justificativa : '')}">
                 <button onclick="justificarMes('${l.funcionario_id}','${esc(l.chave)}','${id}')" class="bg-slate-800 text-white rounded px-2 py-1 text-[10px] font-bold cursor-pointer">Aprovar</button></div>`; }
