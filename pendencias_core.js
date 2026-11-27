@@ -167,6 +167,10 @@
         const verm = ok(r).filter(l => l.gravidade === 'VERMELHO').length;
         if (verm) add({ assunto: 'folha', com: 'RH', tela: 'conferencia_fechamento.html', titulo: `Conferência do fechamento ${compStr}`, sub: '',
           detalhe: `${verm} item(ns) vermelho(s) para resolver ou justificar`, nivel: 'atencao', foraHa: 0, contaMenu: verm });
+        // (27/11/2026) INSS, IRPF, contribuição assistencial e VT 3%: valor vem da contabilidade; pendente até lançar, sem bloquear o envio
+        const cr = ok(r).filter(l => l.categoria === 'CONTAB_RETORNO').length;
+        if (cr) add({ assunto: 'folha', com: 'RH', tela: 'conferencia_fechamento.html', titulo: `Descontos da contabilidade a lançar ${compStr}`, sub: '',
+          detalhe: `${cr} funcionário(s) com INSS, IRPF, contribuição assistencial ou VT 3% no mês anterior ainda sem lançamento (valor do holerite da contabilidade)`, nivel: 'info', foraHa: 0, contaMenu: cr });
       } catch (e) { }
     }
 
