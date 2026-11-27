@@ -170,9 +170,9 @@
         // (27/11/2026) impostos que a contabilidade calcula e holerite contábil × sistema: não travam a contabilidade, travam o Financeiro (5º dia útil)
         const fin = ok(r).filter(l => l.gravidade === 'FINANCEIRO');
         if (fin.length) {
-          const naoEnv = fin.some(l => l.categoria === 'HOLERITE' && l.chave === 'NAO_ENVIADO'), cr = fin.filter(l => l.categoria === 'CONTAB_RETORNO').length, hol = fin.filter(l => l.categoria === 'HOLERITE' && l.chave !== 'NAO_ENVIADO').length;
+          const naoEnv = fin.some(l => l.categoria === 'HOLERITE' && l.chave === 'NAO_ENVIADO'), cr = fin.filter(l => l.categoria === 'CONTAB_RETORNO').length, hol = fin.filter(l => ['HOLERITE', 'HOLERITE_MES'].includes(l.categoria) && l.chave !== 'NAO_ENVIADO').length;
           add({ assunto: 'folha', com: 'RH', tela: 'holerite_contabil.html', titulo: `Antes do Financeiro ${compStr}`, sub: '',
-            detalhe: [naoEnv ? 'subir o holerite contábil quando a contabilidade devolver' : '', cr ? `${cr} pessoa(s) com INSS/IRPF/contribuição/VT do mês anterior sem lançar` : '', hol ? `${hol} diferença(s) entre o holerite contábil e o sistema` : ''].filter(Boolean).join(' · ')
+            detalhe: [naoEnv ? 'subir o holerite contábil quando a contabilidade devolver' : '', cr ? `${cr} pessoa(s) com INSS/IRPF/contribuição/VT do mês anterior sem lançar` : '', hol ? `${hol} diferença(s) do holerite contábil (com o sistema ou com o mês anterior)` : ''].filter(Boolean).join(' · ')
               + ' (trava o envio ao Financeiro e o fechamento)', nivel: naoEnv && !cr && !hol ? 'info' : 'atencao', foraHa: 0, contaMenu: fin.length });
         }
       } catch (e) { }

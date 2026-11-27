@@ -58,7 +58,7 @@
   <div class="kpis" id="kpis"></div>
   <section class="card pend" id="pend" style="display: none"></section>
   <section class="card rola" style="max-height: 64vh; overflow: auto"><table class="q" id="tab"><tbody><tr><td>Carregando…</td></tr></tbody></table></section>
-  <p class="nota">Lançamentos de natureza <b>contábil</b> da competência, sem o salário (eventos 2000 – Salário e 2024 – Dias normais), por empresa e funcionário.
+  <p class="nota">Lançamentos de natureza <b>contábil</b> da competência, sem o salário (eventos 2000 – Salário e 2024 – Dias normais) e sem o que a contabilidade calcula e devolve no holerite (INSS, IRRF, contribuição assistencial, empréstimos, reflexos de DSR e 13º: conferidos na tela Holerite contábil), por empresa e funcionário.
     Mesmo evento no mês para a mesma pessoa vem somado numa linha. <b>Crédito</b> = provento, <b>débito</b> = desconto.
     Código contábil, código do empregado e código da empresa vêm do cadastro: clique num código (ou em “sem código”) para gravar ou corrigir.
     Eventos marcados <span class="horas">HORAS</span> a contabilidade recebe em horas (adicional noturno, faltas): o Excel traz o valor em reais e a referência, para a contabilidade conferir as horas.
@@ -83,6 +83,10 @@
     const RESCISAO_EV = /RESCIS|INDENIZ/;
     let rescisao = {};   // funcionario_id → eventos de rescisão do mês
     const ehEmprestimo = ev => EMPRESTIMO.test(String((ev || {}).descricao_do_evento || '').toUpperCase());
+    // (27/11/2026, Alexandre) o que a contabilidade calcula vem DELA para nós (holerite contábil) e não vai no arquivo nem aparece aqui:
+    // INSS, IRRF/IRPF, contribuição assistencial, empréstimos, reflexos de DSR e 13º salário — a conferência é feita na tela Holerite contábil
+    const VEM_DA_CONTAB = /INSS|IRRF|IRPF|CONTRIBUI|REFLEXO|\bDSR\b|EMPREST|EMP\.|CRED\. TRAB|CONSIG|\b13\b|13º|DECIMO|DÉCIMO/;
+    const vemDaContab = ev => VEM_DA_CONTAB.test(String((ev || {}).descricao_do_evento || '').toUpperCase());
 
     function aviso(t) { $('aviso').innerHTML = t ? `<span class="ponto"></span><span>${t}</span>` : ''; $('aviso').style.display = t ? 'flex' : 'none'; }
     async function tudo(q) { let out = [], de = 0; for (;;) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; de += 1000; } }
@@ -138,7 +142,7 @@
           if (e && RESCISAO_EV.test(String(e.descricao_do_evento || '').toUpperCase())) (rescisao[i.funcionario_id] = rescisao[i.funcionario_id] || []).push(c + ' - ' + e.descricao_do_evento); });
         li.forEach(i => {
           const cod = (String(i.rubrica || '').match(/^\s*(\d+)/) || [])[1]; const ev = eventos[cod];
-          if (!ev || ev.natureza_do_evento !== 'CONTABIL' || SALARIO.includes(cod)) return;
+          if (!ev || ev.natureza_do_evento !== 'CONTABIL' || SALARIO.includes(cod) || vemDaContab(ev)) return;
           const k = i.funcionario_id + '|' + cod;
           const o = soma[k] || (soma[k] = { fid: i.funcionario_id, cod, valor: 0, n: 0, refs: new Set(), horas: 0, semHoras: 0 });
           // horas gravadas no lançamento (adicional noturno "NOTURNO 22,5H", hora extra 100% "HE100 8H"): a contabilidade recebe em horas

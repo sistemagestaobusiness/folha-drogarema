@@ -41,11 +41,12 @@
 
       <div id="kpis" class="grid grid-cols-2 sm:grid-cols-5 gap-2"></div>
       <div id="boxRetorno"></div>
+      <div id="boxMes"></div>
       <div id="lista" class="space-y-2"></div>
       <p class="text-[11px] text-slate-500 leading-relaxed">
         Comparação pelo <b>valor</b> e pela <b>relação do evento</b> (o nome não precisa ser igual: "I.N.S.S." = 3020 INSS, "IMPOSTO DE RENDA" = 2070 IRPF).
         Empréstimo: cada contrato é comparado com o seu lançamento, pelo valor da parcela. Ficam fora: rescisão (termo próprio), 13º e 13º antecipado e pagamento de férias líquido.
-        Férias (transição até 2027): diferença aparece só como alerta. Subir de novo o holerite da mesma competência <b>substitui</b> o anterior e refaz a conferência (sem duplicar).
+        Férias (transição até 2027): diferença aparece só como alerta. O quadro "Comparado com o mês anterior" usa o holerite contábil do mês anterior (ou, se ele não foi enviado, os lançamentos do sistema daquele mês). Subir de novo o holerite da mesma competência <b>substitui</b> o anterior e refaz a conferência (sem duplicar).
       </p>
     </div>
   </div>
@@ -64,7 +65,7 @@
     const num = v => v == null ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const dh = v => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     const comp = () => { const [a, m] = $('fMes').value.split('-'); return `${m}/${a}`; };
-    let perfil = null, linhas = [], arquivo = null, historico = [], justs = {}, retorno = [], eventos = [], leitura = null;
+    let perfil = null, linhas = [], arquivo = null, historico = [], justs = {}, retorno = [], eventos = [], leitura = null, mes = [], justsMes = {};
 
     const ST = {
       OK: ['✓ igual', 'bg-emerald-100 text-emerald-800'],
@@ -98,11 +99,13 @@
 
     async function carregar() {
       const c = comp();
-      const [ra, rc, rj, rf] = await Promise.all([
+      const [ra, rc, rj, rf, rm, rjm] = await Promise.all([
         _supabase.from('holerite_contabil_arquivos').select('*').eq('competencia', c).order('enviado_em', { ascending: false }),
         _supabase.rpc('fn_holerite_comparar', { p_comp: c }),
         _supabase.from('conferencia_justificativas').select('*').eq('competencia', c).eq('categoria', 'HOLERITE'),
-        _supabase.rpc('fn_conferencia', { p_comp: c })
+        _supabase.rpc('fn_conferencia', { p_comp: c }),
+        _supabase.rpc('fn_holerite_vs_anterior', { p_comp: c }),
+        _supabase.from('conferencia_justificativas').select('*').eq('competencia', c).eq('categoria', 'HOLERITE_MES')
       ]);
       if (ra.error || rc.error) { $('aviso').innerText = 'Não foi possível carregar: ' + traduzirErro((ra.error || rc.error).message); $('aviso').classList.remove('hidden'); return; }
       $('aviso').classList.add('hidden');
@@ -110,6 +113,8 @@
       linhas = rc.data || [];
       justs = {}; (rj.data || []).forEach(j => justs[j.funcionario_id + '|' + j.chave] = j);
       retorno = (rf.data || []).filter(l => l.categoria === 'CONTAB_RETORNO');
+      mes = rm.error ? [] : (rm.data || []);
+      justsMes = {}; (rjm.data || []).forEach(j => justsMes[j.funcionario_id + '|' + j.chave] = j);
       render();
     }
 
@@ -133,6 +138,7 @@
           <table class="w-full text-xs">${retorno.map(l => `<tr class="border-b border-slate-50"><td class="px-4 py-1.5 w-64 font-bold">${esc(l.nome)}</td><td class="px-2 py-1.5 text-[11px]">${esc(l.detalhe)}${l.justificativa ? `<div class="text-emerald-700 text-[10px]">✓ ${esc(l.justificativa)}</div>` : ''}</td>
             <td class="px-4 py-1.5 w-80 text-right">${botoesRetorno(l)}</td></tr>`).join('')}</table></div>` : '';
 
+      renderMes();
       const fn = $('fNome').value.trim().toUpperCase(), so = $('fSoDif').checked;
       const vis = linhas.filter(l => (!fn || String(l.nome || '').toUpperCase().includes(fn)) && (!so || l.status !== 'OK'));
       if (!arquivo) { $('lista').innerHTML = ''; return; }
@@ -172,6 +178,38 @@
       return `<tr class="border-t border-slate-50 align-top"><td class="px-4 py-1.5">${esc(l.contab_desc || '—')}</td><td class="px-2 py-1.5 text-right font-mono">${num(l.contab_valor)}</td>
         <td class="px-2 py-1.5">${esc(l.sist_desc || '—')}</td><td class="px-2 py-1.5 text-right font-mono">${num(l.sist_valor)}${dif}</td>
         <td class="px-2 py-1.5"><span class="chip ${chip[1]}">${chip[0]}</span></td><td class="px-4 py-1.5 w-80">${acao}</td></tr>`;
+    }
+
+    // (27/11/2026) holerite deste mês × mês anterior: evento fixo que faltou ou valor com grande diferença = aprovação manual do Gestor
+    const ST_MES = { FALTOU_NO_MES: ['faltou neste mês', 'bg-red-100 text-red-700'], VARIACAO: ['grande diferença', 'bg-red-100 text-red-700'], NOVO: ['novo neste mês', 'bg-sky-100 text-sky-800'] };
+    function renderMes() {
+      if (!arquivo || !mes.length) { $('boxMes').innerHTML = ''; return; }
+      const fn = $('fNome').value.trim().toUpperCase();
+      const ls = mes.filter(l => !fn || String(l.nome || '').toUpperCase().includes(fn)).sort((a, b) => String(a.nome).localeCompare(String(b.nome)) || String(a.grupo).localeCompare(String(b.grupo)));
+      const pend = mes.filter(l => l.status !== 'NOVO' && !l.ferias && !justsMes[l.funcionario_id + '|' + l.chave]).length;
+      $('boxMes').innerHTML = `<div class="bg-white rounded-xl overflow-hidden"><div class="px-4 py-2.5 border-b border-slate-100"><b class="text-[13px]">Comparado com o mês anterior</b>
+          <span class="text-[11px] text-slate-500"> · base: ${esc(mes[0].base_anterior)} · INSS, IRPF, contribuição, VT, salário, planos, adicional de caixa e empréstimos · o que faltou ou mudou mais de 20% (e mais de R$ 10) precisa de aprovação do Gestor</span>
+          ${pend ? `<span class="chip bg-red-100 text-red-700 ml-1">${pend} aguardando aprovação</span>` : '<span class="chip bg-emerald-100 text-emerald-800 ml-1">nada pendente</span>'}</div>
+        <table class="w-full text-xs"><tr class="text-[10px] text-slate-400 text-left"><th class="px-4 py-1">Funcionário</th><th class="px-2 py-1">Evento</th><th class="px-2 py-1 text-right">Mês anterior</th><th class="px-2 py-1 text-right">Este mês</th><th class="px-2 py-1">Situação</th><th class="px-4 py-1"></th></tr>
+        ${ls.map(l => { const j = justsMes[l.funcionario_id + '|' + l.chave], st = ST_MES[l.status] || [l.status, ''];
+          const chip = j ? ['✓ aprovado', 'bg-emerald-100 text-emerald-800'] : l.ferias && l.status !== 'NOVO' ? [st[0] + ' (férias)', 'bg-amber-100 text-amber-800'] : st;
+          let acao = '';
+          if (l.status !== 'NOVO' && !l.ferias) {
+            if (perfil === 'GESTOR') { const id = 'jm_' + btoa(unescape(encodeURIComponent(l.funcionario_id + '|' + l.chave))).replace(/[^A-Za-z0-9]/g, '');
+              acao = `<div class="flex gap-1"><input id="${id}" class="inp !py-1 text-[11px]" placeholder="aprovação do Gestor: motivo (mín. 10 letras)" value="${esc(j ? j.justificativa : '')}">
+                <button onclick="justificarMes('${l.funcionario_id}','${esc(l.chave)}','${id}')" class="bg-slate-800 text-white rounded px-2 py-1 text-[10px] font-bold cursor-pointer">Aprovar</button></div>`; }
+            else acao = j ? `<span class="text-[10px] text-emerald-700">✓ ${esc(j.justificativa)} · ${esc(j.justificado_por || '')}</span>` : '<span class="text-[10px] text-slate-500">aguardando o Gestor</span>';
+          }
+          return `<tr class="border-t border-slate-50 align-top"><td class="px-4 py-1.5 font-bold">${esc(l.nome)}</td><td class="px-2 py-1.5">${esc(l.descricao || l.grupo)}</td>
+            <td class="px-2 py-1.5 text-right font-mono">${num(l.valor_anterior)}</td><td class="px-2 py-1.5 text-right font-mono">${num(l.valor_atual)}</td>
+            <td class="px-2 py-1.5"><span class="chip ${chip[1]}">${chip[0]}</span></td><td class="px-4 py-1.5 w-80">${acao}</td></tr>`; }).join('')}</table></div>`;
+    }
+    async function justificarMes(fid, chave, inp) {
+      const t = ($(inp).value || '').trim();
+      if (t.length < 10) return alert('Motivo com no mínimo 10 letras.');
+      const { error } = await _supabase.rpc('fn_conferencia_justificar', { p_comp: comp(), p_categoria: 'HOLERITE_MES', p_func: fid, p_chave: chave, p_texto: t });
+      if (error) return alert('Não foi possível salvar: ' + traduzirErro(error.message));
+      await carregar();
     }
 
     function botoesRetorno(l) {
