@@ -67,7 +67,8 @@
 
     const CATS = {
       FIXOS:        ['Fixos do mês anterior não lançados', 'Quem tinha lançamento fixo no mês anterior e ainda não tem neste mês (INSS, IRPF, contribuição assistencial e VT 3% ficam no quadro "Descontos que vêm da contabilidade").', 'lancamentos.html', 'Para cada evento: <b>Lançar</b> (abre Lançamentos com o valor do mês anterior) ou, se acabou, justifique a linha.'],
-      CONTAB_RETORNO: ['Descontos que vêm da contabilidade', 'INSS, IRPF, contribuição assistencial e VT 3% de quem teve o desconto no mês anterior e ainda não tem neste mês. O valor vem do holerite da contabilidade: não bloqueia o envio, fica pendente até lançar.', 'lancamentos.html', 'Quando a contabilidade devolver os holerites, lance o valor de cada um em Lançamentos.'],
+      CONTAB_RETORNO: ['Impostos que vêm da contabilidade', 'INSS, IRPF, contribuição assistencial e VT 3% de quem teve o desconto no mês anterior e ainda não tem neste mês. Não trava o envio à contabilidade; trava o envio ao Financeiro (5º dia útil) até lançar com o valor do holerite contábil.', 'holerite_contabil.html', 'Quando a contabilidade devolver, suba o holerite contábil e use "Lançar pelo holerite" (ou lance em Lançamentos). Se a pessoa não teve o desconto neste mês, justifique.'],
+      HOLERITE:     ['Holerite contábil × sistema', 'O holerite que a contabilidade devolveu tem de bater com o que está lançado: valor diferente, falta lançar, lançamento que não está no holerite ou holerite sem cadastro. Trava o envio ao Financeiro; férias (transição até 2027) é só alerta.', 'holerite_contabil.html', 'Abra a tela Holerite contábil, corrija o lançamento (ou o cadastro) e atualize. Diferença que estiver certa: só o Gestor justifica.'],
       SALARIO:      ['Salário diferente do cadastro', 'Salário (evento 2024 – Dias normais) lançado com valor diferente do salário-base do cadastro: proporcional, falta, admissão ou erro?', 'lancamentos.html', 'Abra Lançamentos e corrija o 2024 Dias normais; se o valor diferente estiver certo (admissão, rescisão, falta), justifique.'],
       DUPLICADO:    ['Evento lançado mais de uma vez', 'Evento que só pode existir uma vez no mês (salário, INSS, IRPF, plano, alimentação, combustível, adicionais).', 'lancamentos.html', 'Abra Lançamentos e exclua o lançamento repetido (com motivo).'],
       FALTA:        ['Falta na escala sem desconto nem abono', 'Falta registrada na escala do mês sem desconto de falta/DSR e sem abono.', 'relatorio_faltas.html', 'No Relatório de faltas, desconte, abone (com atestado) ou mande para o banco de horas.'],
@@ -134,25 +135,30 @@
       if (a === 'conf') render(); else renderAprov();
     }
 
-    const cor = g => ({ VERMELHO: 'bg-red-100 text-red-700', AMARELO: 'bg-amber-100 text-amber-800', JUSTIFICADO: 'bg-emerald-100 text-emerald-800', INFO: 'bg-slate-100 text-slate-600' }[g] || '');
-    const rot = g => ({ VERMELHO: 'resolver', AMARELO: 'conferir', JUSTIFICADO: '✓ justificado', INFO: 'info' }[g] || g);
+    const cor = g => ({ VERMELHO: 'bg-red-100 text-red-700', FINANCEIRO: 'bg-orange-100 text-orange-800', AMARELO: 'bg-amber-100 text-amber-800', JUSTIFICADO: 'bg-emerald-100 text-emerald-800', INFO: 'bg-slate-100 text-slate-600' }[g] || '');
+    const rot = g => ({ VERMELHO: 'resolver', FINANCEIRO: 'trava o Financeiro', AMARELO: 'conferir', JUSTIFICADO: '✓ justificado', INFO: 'info' }[g] || g);
+    // (27/11/2026) FINANCEIRO = não trava o envio à contabilidade, trava o envio ao Financeiro (5º dia útil) e o fechamento
+    const podeJust = l => ['VERMELHO', 'FINANCEIRO', 'JUSTIFICADO'].includes(l.gravidade) && l.categoria !== 'PENDENCIA' && l.funcionario_id && (l.categoria !== 'HOLERITE' || perfil === 'GESTOR');
 
     function render() {
       const fn = $('fNome').value.trim().toUpperCase(), so = $('fSoPend').checked;
-      const vis = linhas.filter(l => (!fn || String(l.nome || '').toUpperCase().includes(fn)) && (!so || ['VERMELHO', 'AMARELO'].includes(l.gravidade)));
+      const vis = linhas.filter(l => (!fn || String(l.nome || '').toUpperCase().includes(fn)) && (!so || ['VERMELHO', 'FINANCEIRO', 'AMARELO'].includes(l.gravidade)));
+      const fin = linhas.filter(l => l.gravidade === 'FINANCEIRO').length;
       const verm = linhas.filter(l => l.gravidade === 'VERMELHO').length, amar = linhas.filter(l => l.gravidade === 'AMARELO').length, just = linhas.filter(l => l.gravidade === 'JUSTIFICADO').length;
       $('resumo').className = 'rounded-xl px-4 py-3 text-sm font-bold ' + (verm ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200');
-      $('resumo').innerHTML = verm ? `⚠ ${verm} item(ns) vermelho(s) para resolver ou justificar antes de fechar ${comp()} · ${amar} para conferir · ${just} justificado(s)`
-        : `✓ Nenhum vermelho em ${comp()}. ${amar} item(ns) para conferir · ${just} justificado(s). A folha pode ser fechada.`;
+      $('resumo').innerHTML = (verm ? `⚠ ${verm} item(ns) vermelho(s) para resolver ou justificar antes de enviar à contabilidade e fechar ${comp()} · ${amar} para conferir · ${just} justificado(s)`
+        : `✓ Nenhum vermelho em ${comp()}: pode enviar à contabilidade. ${amar} item(ns) para conferir · ${just} justificado(s).`)
+        + (fin ? `<div class="mt-1 text-orange-800">⏳ ${fin} item(ns) travando o envio ao Financeiro (5º dia útil) e o fechamento: impostos e holerite contábil.</div>` : '');
+      if (!verm && fin) $('resumo').className = 'rounded-xl px-4 py-3 text-sm font-bold bg-orange-50 text-emerald-800 border border-orange-200';
       $('secoes').innerHTML = Object.keys(CATS).map(cat => {
         const ls = vis.filter(l => l.categoria === cat), todas = linhas.filter(l => l.categoria === cat);
         if (!todas.length) return '';
-        const v = todas.filter(l => l.gravidade === 'VERMELHO').length;
+        const v = todas.filter(l => ['VERMELHO', 'FINANCEIRO'].includes(l.gravidade)).length;
         const [tit, desc, tela, como] = CATS[cat];
         const extra = cat === 'FIXOS' && v ? `<button onclick="importarFixos()" class="ml-auto bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5 text-[11px] font-bold cursor-pointer">📥 Importar fixos de todos (${v})</button>` : `<a href="${tela}" class="ml-auto text-[11px] font-bold text-sky-700 underline">abrir tela</a>`;
         return `<div class="bg-white rounded-xl overflow-hidden">
           <div class="px-4 py-2.5 flex flex-wrap items-center gap-2 border-b border-slate-100">
-            <b class="text-slate-900 text-[13px]">${tit}</b><span class="text-[11px] font-bold ${v ? 'text-red-600' : 'text-slate-400'}">${todas.length} · ${v} vermelho(s)</span>${extra}
+            <b class="text-slate-900 text-[13px]">${tit}</b><span class="text-[11px] font-bold ${v ? 'text-red-600' : 'text-slate-400'}">${todas.length} · ${v} a resolver</span>${extra}
             <div class="w-full text-[11px] text-slate-500">${desc}</div>
             ${como && v ? `<div class="w-full text-[11px] text-sky-800 bg-sky-50 rounded px-2 py-1"><b>O que fazer:</b> ${como}</div>` : ''}</div>
           ${ls.length ? `<table class="w-full text-xs">${ls.map(l => {
@@ -160,7 +166,7 @@
             return `<tr class="border-b border-slate-50 align-top"><td class="px-4 py-1.5 w-56"><div class="font-bold text-slate-800">${esc(l.nome || '-')}</div><div class="text-[10px] text-slate-400">${esc(l.nome_loja || '')}</div>${empresaDe[l.funcionario_id] ? `<div class="text-[10px] text-sky-700" title="Empresa de registro (em Lançamentos, escolha esta empresa)">🏢 ${esc(empresaDe[l.funcionario_id])}</div>` : ''}</td>
               <td class="px-2 py-1.5 text-[11px] text-slate-700">${l.categoria === 'FIXOS' && l.gravidade === 'VERMELHO' ? chipsFixos(l) : esc(l.detalhe)}${l.justificativa ? `<div class="text-[10px] text-emerald-700 mt-0.5">✓ ${esc(l.justificativa)} · ${esc(l.justificado_por || '')}</div>` : ''}</td>
               <td class="px-2 py-1.5 w-24"><span class="px-2 py-0.5 rounded font-bold text-[10px] ${cor(l.gravidade)}">${rot(l.gravidade)}</span></td>
-              <td class="px-4 py-1.5 w-72">${['VERMELHO', 'JUSTIFICADO'].includes(l.gravidade) && l.categoria !== 'PENDENCIA' ? `<div class="flex gap-1"><input id="j_${k}" class="inp !py-1 text-[11px]" placeholder="justificativa (mín. 10 letras)" value="${esc(digitado[k] ?? l.justificativa ?? '')}" oninput="digitado['${k}']=this.value">
+              <td class="px-4 py-1.5 w-72">${podeJust(l) ? `<div class="flex gap-1"><input id="j_${k}" class="inp !py-1 text-[11px]" placeholder="justificativa (mín. 10 letras)" value="${esc(digitado[k] ?? l.justificativa ?? '')}" oninput="digitado['${k}']=this.value">
                 <button onclick="justificar('${l.categoria}','${l.funcionario_id}','${esc(l.chave || '')}','j_${k}')" class="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-3 py-1 text-[11px] font-bold cursor-pointer whitespace-nowrap">Salvar</button></div>` : ''}</td></tr>`; }).join('')}</table>`
             : '<div class="px-4 py-2 text-[11px] text-slate-400">Nada pendente nesta categoria.</div>'}
         </div>`;
@@ -203,7 +209,7 @@
         const c = (r.match(/^\s*(\d+)/) || [])[1]; if (!c) return `<div>${esc(r)}</div>`;
         const v = anteriores[l.funcionario_id + '|' + c];
         const url = `lancamentos.html?func=${encodeURIComponent(l.funcionario_id)}&evento=${c}&valor=${v != null ? v.toFixed(2) : ''}&ref=${encodeURIComponent(ant)}&fixo=1`;
-        return `<div class="flex items-center gap-2 py-0.5"><span class="flex-1">${esc(r)}${v != null ? ` <span class="text-slate-400">· ${ant}: R$ ${num(v)}</span>` : ''}${c === '3020' ? ' <span class="text-amber-700">(valor do holerite contábil)</span>' : ''}</span>
+        return `<div class="flex items-center gap-2 py-0.5"><span class="flex-1">${esc(r)}${v != null ? ` <span class="text-slate-400">· ${ant}: R$ ${num(v)}</span>` : ''}</span>
           <a href="${url}" class="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2 py-0.5 text-[10px] font-bold no-underline">Lançar →</a></div>`;
       }).join('');
     }

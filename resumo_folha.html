@@ -886,6 +886,16 @@
     async function abrirEnvio() {
       // (06/11/2026) recarrega os lançamentos do banco antes de enviar: a aba aberta há horas não pode mandar valor antigo
       await processarDadosBanco();
+      // (27/11/2026) antes do Financeiro: impostos com o valor do holerite e holerite contábil idêntico ao sistema (o banco também confere)
+      try { const { data: cf } = await _supabase.rpc('fn_conferencia', { p_comp: competenciaRegra });
+        const fin = (cf || []).filter(l => l.gravidade === 'FINANCEIRO');
+        if (fin.length) { const cats = {}; fin.forEach(l => cats[l.categoria] = (cats[l.categoria] || 0) + 1);
+          return alert(`🚫 Ainda não dá para enviar ao Financeiro: ${fin.length} item(ns) pendente(s) na Conferência do fechamento.\n\n`
+            + (cats.CONTAB_RETORNO ? `• ${cats.CONTAB_RETORNO} pessoa(s) com INSS/IRPF/contribuição/VT do mês anterior sem lançar\n` : '')
+            + (cats.HOLERITE ? `• ${cats.HOLERITE} item(ns) do holerite contábil que não batem com o sistema (ou holerite ainda não enviado)\n` : '')
+            + (cats.VT ? `• ${cats.VT} desconto(s) de VT não contábil pendente(s)\n` : '')
+            + `\nResolva na tela "Holerite contábil" (diferença que estiver certa: o Gestor justifica).`); }
+      } catch (e) { }
       const foto = fotoAtual();
       const neg = foto.filter(i => i.liquido < 0), dinMaior = foto.filter(i => i.dinheiro > i.liquido && i.liquido >= 0);
       if (dinMaior.length) return alert('Dinheiro maior que o líquido para: ' + dinMaior.map(i => i.nome).join(', ') + '. Corrija a coluna Dinheiro antes de enviar.');

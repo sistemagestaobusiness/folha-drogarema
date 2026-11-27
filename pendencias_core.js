@@ -167,10 +167,14 @@
         const verm = ok(r).filter(l => l.gravidade === 'VERMELHO').length;
         if (verm) add({ assunto: 'folha', com: 'RH', tela: 'conferencia_fechamento.html', titulo: `Conferência do fechamento ${compStr}`, sub: '',
           detalhe: `${verm} item(ns) vermelho(s) para resolver ou justificar`, nivel: 'atencao', foraHa: 0, contaMenu: verm });
-        // (27/11/2026) INSS, IRPF, contribuição assistencial e VT 3%: valor vem da contabilidade; pendente até lançar, sem bloquear o envio
-        const cr = ok(r).filter(l => l.categoria === 'CONTAB_RETORNO').length;
-        if (cr) add({ assunto: 'folha', com: 'RH', tela: 'conferencia_fechamento.html', titulo: `Descontos da contabilidade a lançar ${compStr}`, sub: '',
-          detalhe: `${cr} funcionário(s) com INSS, IRPF, contribuição assistencial ou VT 3% no mês anterior ainda sem lançamento (valor do holerite da contabilidade)`, nivel: 'info', foraHa: 0, contaMenu: cr });
+        // (27/11/2026) impostos que a contabilidade calcula e holerite contábil × sistema: não travam a contabilidade, travam o Financeiro (5º dia útil)
+        const fin = ok(r).filter(l => l.gravidade === 'FINANCEIRO');
+        if (fin.length) {
+          const naoEnv = fin.some(l => l.categoria === 'HOLERITE' && l.chave === 'NAO_ENVIADO'), cr = fin.filter(l => l.categoria === 'CONTAB_RETORNO').length, hol = fin.filter(l => l.categoria === 'HOLERITE' && l.chave !== 'NAO_ENVIADO').length;
+          add({ assunto: 'folha', com: 'RH', tela: 'holerite_contabil.html', titulo: `Antes do Financeiro ${compStr}`, sub: '',
+            detalhe: [naoEnv ? 'subir o holerite contábil quando a contabilidade devolver' : '', cr ? `${cr} pessoa(s) com INSS/IRPF/contribuição/VT do mês anterior sem lançar` : '', hol ? `${hol} diferença(s) entre o holerite contábil e o sistema` : ''].filter(Boolean).join(' · ')
+              + ' (trava o envio ao Financeiro e o fechamento)', nivel: naoEnv && !cr && !hol ? 'info' : 'atencao', foraHa: 0, contaMenu: fin.length });
+        }
       } catch (e) { }
     }
 

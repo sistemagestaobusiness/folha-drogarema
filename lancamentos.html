@@ -1004,7 +1004,7 @@
       const valorDig = parseFloat(valorEl.value) || 0, dsrV = Math.round(valorDig * dd.dsrDias / dd.uteis * 100) / 100;
       const evDsr = listaGlobalEventos.find(e => Number(e.codigo_evento) === codDsr);
       txt.innerHTML = h > 0 ? `${h.toLocaleString('pt-BR')} h × ${brl(sal)} / 220 × 2 (hora + 100%) = <b>${brl(valor)}</b> · vai em horas para a contabilidade (0200)<br>`
-          + `DSR (${codDsr}${evDsr ? ' ' + escaparHtml(evDsr.descricao_do_evento) : ''}) = valor × ${dd.dsrDias} / ${dd.uteis} <span class="text-orange-500">(${dd.domingos} domingo(s) + ${dd.feriados} feriado(s) / dias úteis de ${competenciaRegraLancamento})</span> = <b>${brl(dsrV)}</b> · lançado junto, automático`
+          + `DSR (${codDsr}${evDsr ? ' ' + escaparHtml(evDsr.descricao_do_evento) : ''}) = valor × ${dd.dsrDias} / ${dd.uteis} <span class="text-orange-500">(${dd.domingos} domingo(s) + ${dd.feriados} feriado(s) / dias úteis de ${competenciaRegraLancamento})</span> = <b>${brl(dsrV)}</b> · o DSR do mês é recalculado sozinho com o total das horas extras`
         : 'Informe as horas: o valor e o DSR são calculados.';
       const difere = h > 0 && Math.abs((parseFloat(valorEl.value) || 0) - valor) > 0.009;
       document.getElementById('boxJustHE').classList.toggle('hidden', !difere);
@@ -2590,7 +2590,7 @@ O lançamento sai da folha e a falta volta a aguardar o RH. Motivo:`) || '').tri
       }
       if (!idEdicao) await oferecerDesconto13(eventoSel, valorFinal, funcionario_id, vencimentoPag);
       if (noturno) await lancarDsrNoturno(funcionario_id, valorFinal, noturno);
-      if (he100dsr && he100dsr.codDsr) await lancarDsrNoturno(funcionario_id, valorFinal, he100dsr);
+      // (27/11/2026) DSR da hora extra (2067→2056, 2029→2068): o banco recalcula sozinho uma linha por mês com o total das horas extras
       window.__lancGravou = true;
       cancelarEdicao();
       carregarLancamentosNovo();
