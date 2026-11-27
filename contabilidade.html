@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="fin_estilo.css?v=1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=4"></script>
   <script src="cronograma.js?v=2"></script>
   <style>
     .barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
@@ -417,6 +418,7 @@
     }
 
     iniciar();
+    if (window.FolhaCalc) FolhaCalc.vigiar(_supabase, () => carregar());   // (27/11/2026) ao vivo
   </script>
 </body>
 </html>

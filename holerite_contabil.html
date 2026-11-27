@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=4"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="holerite_core.js?v=1"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -98,6 +99,7 @@
       eventos = (ev || []).filter(e => e.status !== 'Inativo');
       $('conteudo').classList.remove('hidden');
       await carregar();
+      if (window.FolhaCalc) FolhaCalc.vigiar(_supabase, () => carregar());   // ao vivo: lançamento corrigido em outra tela atualiza aqui
     }
 
     async function carregar() {
@@ -156,7 +158,7 @@
             <span class="text-[10px] text-slate-400">código contábil ${esc(f.cod_func || '-')}</span>${ls.some(l => l.ferias) ? '<span class="chip bg-amber-100 text-amber-800">férias</span>' : ''}
             ${f.funcionario_id ? `<a href="lancamentos.html?func=${encodeURIComponent(f.funcionario_id)}" class="ml-auto text-[11px] font-bold text-sky-700 underline">abrir Lançamentos</a>` : `<a href="funcionarios.html" class="ml-auto text-[11px] font-bold text-sky-700 underline">abrir Funcionários</a>`}</div>
           <table class="w-full text-xs"><tr class="text-[10px] text-slate-400 text-left"><th class="px-4 py-1 font-bold">Holerite da contabilidade</th><th class="px-2 py-1 text-right font-bold">Valor</th><th class="px-2 py-1 font-bold">Sistema</th><th class="px-2 py-1 text-right font-bold">Valor</th><th class="px-2 py-1 font-bold">Situação</th><th class="px-4 py-1"></th></tr>
-          ${ls.map(l => linha(l)).join('')}</table></div>`;
+          ${ls.slice().sort((a, b) => (b.grupo === 'LIQ') - (a.grupo === 'LIQ')).map(l => linha(l)).join('')}</table></div>`;
       }).join('') : `<div class="bg-white rounded-xl p-8 text-center text-emerald-700 font-bold">✓ Tudo o que está no holerite contábil bate com o sistema${so ? ' (desmarque "só o que não bate" para ver tudo)' : ''}.</div>`;
     }
 

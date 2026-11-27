@@ -868,11 +868,20 @@
     bar.innerHTML = `<span class="pisca"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Fechamento ${comp}: ${conf.contaMenu || ''} pendência(s) vermelha(s) para lançar ou justificar antes de fechar a folha</span><a href="conferencia_fechamento.html">Resolver na Conferência →</a>`;
   }
 
+  // (27/11/2026) pendências do menu ao vivo: o banco grava um sinal a cada lançamento, aprovação ou pagamento (folha_sinal) e o menu recalcula em segundos
+  function pendenciasAoVivo() {
+    const pf = String(window.ACESSO.perfil || '').toUpperCase();
+    if (!['RH', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || window.top !== window) return;
+    let t = null;
+    try { window.ACESSO_CLI.channel('menu_sinal_' + Math.random().toString(36).slice(2))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'folha_sinal' }, () => { clearTimeout(t); t = setTimeout(() => { if (!document.hidden) pendenciasMenu(); }, 3000); })
+      .subscribe(); } catch (e) { }
+  }
   async function pendenciasMenu() {
     const pf = String(window.ACESSO.perfil || '').toUpperCase();
     if (!['RH', 'SUPERVISOR', 'GESTOR'].includes(pf) || !window.ACESSO_CLI || !telas.has('pendencias.html')) return;
     try {
-      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=9');
+      if (!window.Pendencias) await carregarScript('pendencias_core.js?v=11');
       const r = await window.Pendencias.carregar(window.ACESSO_CLI, pf);
       const meus = r.itens.filter(i => i.com === pf && !i.semMenu && i.nivel !== 'info');
       const por = {};
@@ -1098,6 +1107,6 @@
 
   const iniciar = () => {
     if (EM_ABA) { abasNoFrame(); padronizar(); setTimeout(padronizar, 700); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); return; }
-    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(seVisivel(avisosMarketing), 300000); avisosTransferencias(true); setInterval(seVisivel(() => avisosTransferencias(false)), 60000); avisosRetaguarda(true); setInterval(seVisivel(() => avisosRetaguarda(false)), 300000); avisosRescisao(true); setInterval(seVisivel(() => avisosRescisao(false)), 300000); avisosFeriado(true); setInterval(seVisivel(() => avisosFeriado(false)), 300000); avisosFreelaTurno(true); setInterval(seVisivel(() => avisosFreelaTurno(false)), 300000); avisosSeguranca(); setInterval(seVisivel(avisosSeguranca), 300000); popupMarketing(); pendenciasMenu(); setInterval(seVisivel(pendenciasMenu), 300000); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
+    montar(); if (!CELULAR && window.innerWidth > 900) abas(); padronizar(); setTimeout(padronizar, 700); telaCheia(); avisosLider(); adiantamentoGestor(); holeritePendente(); cobrancaAprovacoes(); cienciaSupervisor(); avisosMarketing(); setInterval(seVisivel(avisosMarketing), 300000); avisosTransferencias(true); setInterval(seVisivel(() => avisosTransferencias(false)), 60000); avisosRetaguarda(true); setInterval(seVisivel(() => avisosRetaguarda(false)), 300000); avisosRescisao(true); setInterval(seVisivel(() => avisosRescisao(false)), 300000); avisosFeriado(true); setInterval(seVisivel(() => avisosFeriado(false)), 300000); avisosFreelaTurno(true); setInterval(seVisivel(() => avisosFreelaTurno(false)), 300000); avisosSeguranca(); setInterval(seVisivel(avisosSeguranca), 300000); popupMarketing(); pendenciasMenu(); setInterval(seVisivel(pendenciasMenu), 300000); pendenciasAoVivo(); cronogramaAvisos(); ajustarCelular(); setTimeout(ajustarCelular, 800); setTimeout(ajustarCelular, 3000); limparCabecalho(); setTimeout(limparCabecalho, 600); setTimeout(limparCabecalho, 2500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

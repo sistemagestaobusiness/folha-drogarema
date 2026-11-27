@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="acesso.js"></script>
+  <script src="folha_calc.js?v=4"></script>
   <script src="pendencias_core.js?v=11"></script>
   <script src="cronograma.js?v=2"></script>
   <style>
@@ -110,6 +111,8 @@
       document.title = (perfil === 'GESTOR' ? 'Central de pendências' : 'Pendências') + ' - Business';
       await carregar();
       setInterval(carregar, 120000);
+      // (27/11/2026) ao vivo: qualquer lançamento, aprovação ou pagamento atualiza esta tela na hora
+      if (window.FolhaCalc) FolhaCalc.vigiar(_supabase, () => carregar());
     }
 
     async function carregar() {
